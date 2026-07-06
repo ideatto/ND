@@ -105,3 +105,14 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ────────────────────────────────────────────────────────────
+# 팀 규칙: 외부 에셋 보관소 (누워서 돈벌기 / 6팀)
+# _ExternalPackages 는 외부 에셋을 import 하는 위치다.
+#   - 각 팀원이 TeamDrive의 동일한 .unitypackage 를 로컬에서 직접 import 한다.
+#   - 내부 파일/.meta 는 저장소에 올리지 않는다(용량·중복 방지).
+#   - .gitkeep 만 남겨 폴더 구조 자체는 clone 시 유지한다.
+#   - 수정이 필요하면 원본이 아니라 _Project/VendorOverrides 로 복사해 수정한다(이 폴더는 추적함).
+/[Aa]ssets/_ExternalPackages/*
+!/[Aa]ssets/_ExternalPackages/.gitkeep
+# ────────────────────────────────────────────────────────────
