@@ -1,26 +1,45 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
 public class TradeResultData
 {
-    public bool isSuccess;
-    public string routeID;
-    public string startTownID;
-    public string destinationTownID;
+    public bool IsSuccess;
+    public string TradeId;
+    public string RouteId;
+    public string FromTownId;
+    public string ToTownId;
 
-    public int totalPurchaseCost;
-    public int totalSellRevenue;
-    public int foodCost;
-    public int mercenaryCost;
-    public int lossAmount;
-    public int netProfit;
+    public int TotalPurchaseCost;
+    public int TotalSellRevenue;
+    public int FoodCost;
+    public int MercenaryCost;
+    public int LossAmount;
+    public int NetProfit;
 
-    public int eventProfitAndLoss;
+    public int EventProfitAndLoss;
 
-    public TradeItemBundle[] lossItem;
+    public TradeItemBundle[] LossItem;
 
-    public float durabilityLoss;
+    public float DurabilityLoss;
 
-    public RouteEvent failureReason;
-    public string[] resultMessages;
+    public RouteEvent FailureReason;
+    public List<TradeResultMessageData> Messages = new List<TradeResultMessageData>();
+}
+
+[System.Serializable]
+public class TradeResultMessageData
+{
+    public TradeResultMessageType Type;
+    public string MessageCode;
+    public string MessageText;
+}
+
+public enum TradeResultMessageType
+{
+    Info,
+    Warning,
+    Error,
+    Success,
+    Failure
 }

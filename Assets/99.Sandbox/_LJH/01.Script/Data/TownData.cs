@@ -4,31 +4,19 @@ using UnityEngine;
 public class TownData : ScriptableObject
 {
     [Header("Town_Default_Info")]
-    [SerializeField] private string townID;
+    [SerializeField] private string townId;
     [SerializeField] private string displayName;
     [SerializeField] private Sprite icon;
+
+    [Header("Town_Unlocked_Default")]
+    [SerializeField] private bool unlockedByDefault = false;
 
     [Header("Town_Description")]
     [TextArea(3, 10)]
     [SerializeField] private string description;
 
-    [Header("Town_TradeItem_Info")]
-    [SerializeField] private TradeItemData[] tradeItems;
-
-    [Header("Town_TradeItem_Draft_Animal_Info")]
-    [SerializeField] private TradeItemData[] draftAnimalItems;
-
-    //[Header("Town_Caravan_Info")]
-    //[SerializeField] private CaravanData[] caravans;
-
-    //[Header("Town_Hireable_Mercenary_Info")]
-    //[SerializeField] private MercenaryData[] hireableMercenaries;
-
-    [Header("Town_localSpecialty_Info")]
-    [SerializeField] private TradeItemData[] localSpecialtyItems;
-
-    [Header("Town_Trade_Info")]
-    [SerializeField] private float itemRenewalCycle;
+    [Header("Town_Market_Info")]
+    [SerializeField] private MarketData market;
 
     [Header("Town_Available_Route_Info")]
     [SerializeField] private RouteData[] availableRoutes;
@@ -38,15 +26,12 @@ public class TownData : ScriptableObject
     [SerializeField] private float maximumContributionLimit;
 
     #region
-    public string TownID => townID;
+    public string TownId => townId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
+    public bool UnlockedByDefault => unlockedByDefault;
     public string Description => description;
-
-    public TradeItemData[] TradeItems => tradeItems;
-    public TradeItemData[] DraftAnimalItems => draftAnimalItems;
-    public TradeItemData[] LocalSpecialtyItems => localSpecialtyItems;
-    public float ItemRenewalCycle => itemRenewalCycle;
+    public MarketData Market => market;
     public RouteData[] AvailableRoutes => availableRoutes;
     public bool CanContribute => canContribute;
     public float MaximumContributionLimit => maximumContributionLimit;

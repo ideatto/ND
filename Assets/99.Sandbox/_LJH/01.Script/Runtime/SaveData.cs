@@ -1,4 +1,3 @@
-using JetBrains.Annotations;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,61 +6,63 @@ public sealed class SaveData
 {
     public const int CurrentVersion = 1;
 
-    public int version = CurrentVersion;
-    public long lastSavedUtcTicks;
+    public int Version = CurrentVersion;
+    public long LastSavedUtcTicks;
     
-    public PlayerSaveData player = new PlayerSaveData();
-    public CaravanSaveData caravan = new CaravanSaveData();
-    public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
-    public WorldSaveData world = new WorldSaveData();
-    public TutorialSaveData tutorial = new TutorialSaveData();
+    public PlayerSaveData Player = new PlayerSaveData();
+    public CaravanSaveData Caravan = new CaravanSaveData();
+    public TradeProgressSaveData TradeProgress = new TradeProgressSaveData();
+    public WorldSaveData World = new WorldSaveData();
+    public TutorialSaveData Tutorial = new TutorialSaveData();
 }
 
 [System.Serializable]
 public sealed class  PlayerSaveData
 {
-    public string currentTownId;
+    public string CurrentTownId;
 
-    public int tradingCurrency = 1000;
-    public int developmentCurrency;
+    public int TradingCurrency = 1000;
+    public int DevelopmentCurrency;
 }
 
 [System.Serializable]
 public sealed class CaravanSaveData
 {
-    public float maxLoad;
-    public float currentLoad;
+    public float MaxLoad;
+    public float CurrentLoad;
 
-    public float currentDurability;
+    public float CurrentDurability;
 
-    public List<TradeItemBundle> inventory = new List<TradeItemBundle>();
+    public List<TradeItemBundle> Inventory = new List<TradeItemBundle>();
 }
 
 [System.Serializable]
 public sealed class TradeProgressSaveData
 {
-    public string activeTradeId = string.Empty;
-    public TradeProgressState state;
-    public long tradeStartUtcTick;
-    public long expectedTradeEndUtcTick;
+    public string ActiveTradeId = string.Empty;
+    public string ActiveRouteId = string.Empty;
+    public TradeProgressState State;
+    public long TradeStartUtcTick;
+    public long ExpectedTradeEndUtcTick;
 }
 
 [System.Serializable]
 public sealed class WorldSaveData
 {
-    public int currentSeason = (int)Season.Summer;
-    public int currentDisaster = (int)Disaster.None;
+    public string CurrentSeason = "summer";
+    public string CurrentDisaster = string.Empty;
 
-    public List<string> unlockedTownIds = new List<string>();
-    public List<string> completedRouteIds = new List<string>();
+    public List<string> UnlockedTownIds = new List<string>();
+    public List<string> UnlockedRouteIds = new List<string>();
+    public List<string> CompletedRouteIds = new List<string>();
 }
 
 [System.Serializable]
 public sealed class TutorialSaveData
 {
-    public bool isCompleted;
-    public bool isSkipped;
-    public int stepIndex;
+    public bool IsCompleted;
+    public bool IsSkipped;
+    public int StepIndex;
 }
 
 public enum TradeProgressState
