@@ -28,27 +28,14 @@ public class CaravanSaveData
     public int MaxLoad;
     public int CurrentLoad;
 
-    public List<InventoryItemSaveData> Inventory = new List<InventoryItemSaveData>();
+    public List<TradeItemStackData> Inventory = new List<TradeItemStackData>();
 }
 
 [Serializable]
-public class InventoryItemSaveData
-{
-    public string ItemId;
-    public int Quantity;
-}
-
-[Serializable]
-public class TradeProgressSaveData
+public class TradeProgressSaveData : TradeRecordData
 {
     public TradeProgressState State;
 
-    public string TradeId;
-    public string RouteId;
-    public string FromTownId;
-    public string ToTownId;
-
-    public int StartedDay;
     public int EstimatedCompleteDay;
 }
 

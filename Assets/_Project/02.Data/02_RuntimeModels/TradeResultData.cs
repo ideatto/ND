@@ -2,15 +2,20 @@ using System;
 using System.Collections.Generic;
 
 [Serializable]
-public class TradeResultData
+public class TradeRecordData
 {
     public string TradeId;
     public string RouteId;
     public string FromTownId;
     public string ToTownId;
 
-    public bool IsSuccess;
     public int StartedDay;
+}
+
+[Serializable]
+public class TradeResultData : TradeRecordData
+{
+    public bool IsSuccess;
     public int CompletedDay;
 
     public int TotalBuyCost;
@@ -22,11 +27,15 @@ public class TradeResultData
 }
 
 [Serializable]
-public class TradeResultItemData
+public class TradeItemStackData
 {
     public string ItemId;
     public int Quantity;
+}
 
+[Serializable]
+public class TradeResultItemData : TradeItemStackData
+{
     public int BuyPrice;
     public int SellPrice;
     public int Profit;
