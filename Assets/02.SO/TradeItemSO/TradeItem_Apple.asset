@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: TradeItem_Apple
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemID: 
-  displayName: 
+  displayName: "\uC0AC\uACFC"
   icon: {fileID: 0}
-  description: 
+  description: "\uBE68\uAC04\uC0C9 \uC0AC\uACFC"
   rarity: 0
   category: 0
   defaultPrice: 0
@@ -23,19 +23,28 @@ MonoBehaviour:
   canStack: 0
   maxCount: 0
   seasonInfluenced: 0
-  influencedBySpring: 0
-  springPrice: 0
-  influencedBySummer: 0
-  summerPrice: 0
-  influencedByAutumn: 0
-  autumnPrice: 0
-  influencedByWinter: 0
-  winterPrice: 0
+  seasonInfluenceData:
+  - season: 0
+    isInfluenced: 0
+    influencePrice: 0
+  - season: 1
+    isInfluenced: 0
+    influencePrice: 0
+  - season: 2
+    isInfluenced: 0
+    influencePrice: 0
+  - season: 3
+    isInfluenced: 0
+    influencePrice: 0
   disasterInfluenced: 0
-  influencedByDrought: 0
-  droughtPrice: 0
-  influencedByFlood: 0
-  floodPrice: 0
-  influencedByPlague: 0
-  plaguePrice: 0
+  disasterInfluenceData:
+  - disaster: 0
+    isInfluence: 0
+    influencePrice: 0
+  - disaster: 1
+    isInfluence: 0
+    influencePrice: 0
+  - disaster: 2
+    isInfluence: 0
+    influencePrice: 0
   localSpecialty: 0

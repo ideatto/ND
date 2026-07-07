@@ -6,4 +6,6 @@ public enum TradeItemCategory
     Material,
     Valueable,
     Luxury_Goods,
+    Caravans,
+    Draft_Animals
 }
