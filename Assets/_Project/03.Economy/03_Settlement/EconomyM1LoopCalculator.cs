@@ -29,7 +29,7 @@ namespace ND.Economy
                 {
                     new SoldItemInput
                     {
-                        TradeItemId = input.PriceInput.TradeItemId,
+                        ItemId = input.PriceInput.ItemId,
                         Quantity = input.PriceInput.Quantity,
                         TotalBuyPrice = priceResult.TotalBuyPrice,
                         TotalSellPrice = priceResult.TotalSellPrice

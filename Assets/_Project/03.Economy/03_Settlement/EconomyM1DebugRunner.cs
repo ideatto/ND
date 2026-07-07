@@ -9,7 +9,7 @@ namespace ND.Economy
 
         [Header("Trade")]
         [SerializeField] private string tradeId = "scene_debug_trade";
-        [SerializeField] private string tradeItemId = "apple";
+        [SerializeField] private string ItemId = "apple";
         [SerializeField] private string fromTownId = "town_start";
         [SerializeField] private string toTownId = "town_trade_01";
         [SerializeField] private string routeId = "route_01";
@@ -72,7 +72,7 @@ namespace ND.Economy
             {
                 PriceInput = new PriceCalculationInput
                 {
-                    TradeItemId = tradeItemId,
+                    ItemId = ItemId,
                     FromTownId = fromTownId,
                     ToTownId = toTownId,
                     RouteId = routeId,

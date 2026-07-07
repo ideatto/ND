@@ -20,7 +20,7 @@ namespace ND.Economy.Editor
         {
             PriceCalculationResult result = PriceCalculator.Calculate(new PriceCalculationInput
             {
-                TradeItemId = "apple",
+                ItemId = "apple",
                 FromTownId = "town_start",
                 ToTownId = "town_trade_01",
                 RouteId = "route_01",
@@ -47,7 +47,7 @@ namespace ND.Economy.Editor
                 {
                     new SoldItemInput
                     {
-                        TradeItemId = "apple",
+                        ItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = 500,
                         TotalSellPrice = 700
@@ -135,7 +135,7 @@ namespace ND.Economy.Editor
                 {
                     new SoldItemInput
                     {
-                        TradeItemId = "apple",
+                        ItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = 500,
                         TotalSellPrice = 700
@@ -171,7 +171,7 @@ namespace ND.Economy.Editor
             {
                 PriceInput = new PriceCalculationInput
                 {
-                    TradeItemId = "apple",
+                    ItemId = "apple",
                     FromTownId = "town_start",
                     ToTownId = "town_trade_01",
                     RouteId = "route_01",
