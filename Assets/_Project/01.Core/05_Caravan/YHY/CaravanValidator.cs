@@ -9,9 +9,10 @@
 //  · 검사 4가지 : ① 마차 없음  ② 견인 동물 수 부족  ③ 적재량 초과  ④ 무역품 없음
 //  · 반환값 DepartureValidationResult = 마일스톤의 "출발 불가 원인" 값
 //                                       → UI & Data(이종현님)에게 넘길 데이터.
-//  · static 클래스라 씬/오브젝트에 붙이지 않는다.
+//  · 적재량은 Core 소유 CaravanCalculator.GetCurrentLoad()로 계산한다(계산 로직 일원화).
+//  · null 상단이 들어와도 예외 없이 canDepart=false로 안전하게 반환한다.
+//  · static 클래스 / UnityEngine 의존 없음 → 순수 로직 테스트 가능.
 //    호출은  CaravanValidator.Validate(상단)  형태로 한다.
-//  · M0 완료 기준 "누락 구성과 적재량 초과를 코드에서 판별한다" 를 충족한다.
 //
 // [주의]   데이터(CaravanData)는 공용 데이터라 정의 소유자는 UI & Data(이종현님).
 //          지금 필드는 확정 전 "임시 초안"이며, 최종 확정되면 데이터만 교체한다.
@@ -23,8 +24,9 @@ using System.Collections.Generic;
 public enum DepartureBlockReason
 {
     NoWagon,          // 마차 없음
-    NotEnoughAnimals, // 견인 동물 수 부족
-    Overloaded,       // 적재량 초과
+    NotEnoughAnimals, // 견인 동물 수 부족 (minAnimals 미만)
+    TooManyAnimals,   // 견인 동물 수 초과 (maxAnimals 초과) → 출발 불가
+    Overloaded,       // 물리 상한(maxLoad) 초과 → 출발 불가
     NoCargo           // 실은 무역품 없음
 }
 
@@ -45,6 +47,14 @@ public static class CaravanValidator
     {
         DepartureValidationResult result = new DepartureValidationResult();
 
+        // ⓪ null 방어: 상단 자체가 없으면 출발 불가(사유 없음). NRE 방지.
+        //    (플레이 중엔 발생하지 않는 프로그래밍 오류 상황이므로 사유 목록엔 넣지 않는다)
+        if (caravan == null)
+        {
+            result.canDepart = false;
+            return result;
+        }
+
         // ① 마차 없음
         if (caravan.wagon == null)
         {
@@ -52,12 +62,19 @@ public static class CaravanValidator
         }
         else
         {
-            // ② 견인 동물 수 부족 (마차가 있어야 최소 필요 수를 알 수 있음)
+            // ② 견인 동물 수 검사 (마차가 있어야 최소/최대를 알 수 있음)
+            //    부족: minAnimals 미만 → 출발 불가
+            //    초과: maxAnimals 초과 → 출발 불가.
+            //          정상적으론 UI가 max까지만 붙이게 막지만, Core는 안전장치로 여기서도 막는다.
             if (caravan.animals.Count < caravan.wagon.minAnimals)
                 result.reasons.Add(DepartureBlockReason.NotEnoughAnimals);
+            else if (caravan.animals.Count > caravan.wagon.maxAnimals)
+                result.reasons.Add(DepartureBlockReason.TooManyAnimals);
 
-            // ③ 적재량 초과 (현재 적재 무게 > 마차 최대 적재량)
-            if (caravan.GetCurrentLoad() > caravan.wagon.maxLoad)
+            // ③ 물리 상한 초과 → 출발 불가 (현재 무게 > maxLoad).
+            //    참고: overLoad(기준선) 초과는 여기서 막지 않는다. 그건 출발은 되되
+            //    TravelCalculator에서 속도만 감소시킨다. 여기서 막는 건 maxLoad(물리 상한)뿐.
+            if (CaravanCalculator.GetCurrentLoad(caravan) > caravan.wagon.maxLoad)
                 result.reasons.Add(DepartureBlockReason.Overloaded);
         }
 

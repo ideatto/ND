@@ -220,7 +220,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1412006888}
-  - component: {fileID: 1412006887}
+  - component: {fileID: 1412006889}
   m_Layer: 0
   m_Name: CaravanTest
   m_TagString: Untagged
@@ -228,18 +228,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1412006887
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1412006886}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7079ba83c3eaa944bba6828b3f91763f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CaravanValidatorTest
 --- !u!4 &1412006888
 Transform:
   m_ObjectHideFlags: 0
@@ -255,6 +243,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1412006889
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1412006886}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a1a43b2a36038dd4a9647f5dd645641e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TradeRunTest
+  caravan:
+    wagon:
+      wagonName: "\uAE30\uBCF8 \uC218\uB808"
+      overLoad: 0
+      maxLoad: 100
+      minAnimals: 2
+      maxAnimals: 0
+      speedModifier: 0
+    animals:
+    - animalName: "\uB9D0"
+      foodPerHour: 0
+    - animalName: "\uB9D0"
+      foodPerHour: 0
+    mercenaries: []
+    cargo:
+    - item:
+        id: wheat
+        itemName: "\uBC00"
+        weight: 5
+        basePrice: 10
+      quantity: 5
+    foodAmount: 10
+    foodUnitWeight: 1
+    state: 0
+    currentDistanceKm: 0
+    totalSeconds: 0
+    progress01: 0
+    settlementClaimed: 0
+    runCargoLost: 0
+    runFoodLost: 0
+    runFatalReason: 0
+  distanceKm: 100
+  cargoLossAtSecond: -1
+  cargoLossAmount: 2
+  foodLossAtSecond: -1
+  foodLossAmount: 5
+  fatalAtSecond: -1
 --- !u!1 &1895532411
 GameObject:
   m_ObjectHideFlags: 0
