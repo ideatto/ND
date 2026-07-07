@@ -4,12 +4,10 @@ using UnityEngine;
 public class DisasterInfluenceData
 {
     [SerializeField] private Disaster disaster;
-    [SerializeField] private float addPrice;
-    [SerializeField] private float subtractPrice;
+    [SerializeField] private float priceFluctuationRatio;
 
     #region
     public Disaster Disaster => disaster;
-    public float AddPrice => addPrice;
-    public float SubtractPrice => subtractPrice;
+    public float PriceFluctuationRatio => priceFluctuationRatio;
     #endregion
 }

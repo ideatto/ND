@@ -23,9 +23,6 @@ public class RouteData : ScriptableObject
     [SerializeField] private RouteEventData[] routeEvents;
     [SerializeField] private int maxEventCount;
 
-    [Header("Route_Lock_Info")]
-    [SerializeField] private bool isLocked;
-
     #region
     public string RouteID => routeID;
     public TownData StartTown => startTown;
@@ -37,6 +34,5 @@ public class RouteData : ScriptableObject
     public float RiskLevel => riskLevel;
     public RouteEventData[] RouteEvents => routeEvents;
     public int MaxEventCount => maxEventCount;
-    public bool IsLocked => isLocked;
     #endregion
 }

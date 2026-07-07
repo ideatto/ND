@@ -33,17 +33,9 @@ public class TownData : ScriptableObject
     [Header("Town_Available_Route_Info")]
     [SerializeField] private RouteData[] availableRoutes;
 
-    [Header("Town_Maximum_Donation_Limit")]
-    [SerializeField] private bool canDonate;
-    [SerializeField] private int maximumDonationLimit;
-
     [Header("Town_Maximum_Contribution_Info")]
     [SerializeField] private bool canContribute;
     [SerializeField] private float maximumContributionLimit;
-
-    [Header("Town_Maximum_Development_Info")]
-    [SerializeField] private bool canDevelop;
-    [SerializeField] private int maximumDevelopmentLevel;
 
     #region
     public string TownID => townID;
@@ -56,11 +48,7 @@ public class TownData : ScriptableObject
     public TradeItemData[] LocalSpecialtyItems => localSpecialtyItems;
     public float ItemRenewalCycle => itemRenewalCycle;
     public RouteData[] AvailableRoutes => availableRoutes;
-    public bool CanDonate => canDonate;
-    public int MaximumDonationLimit => maximumDonationLimit;
     public bool CanContribute => canContribute;
     public float MaximumContributionLimit => maximumContributionLimit;
-    public bool CanDevelop => canDevelop;
-    public int MaximumDevelopmentLevel => maximumDevelopmentLevel;
     #endregion
 }
