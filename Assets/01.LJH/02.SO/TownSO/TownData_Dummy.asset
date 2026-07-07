@@ -10,14 +10,20 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f32ce7dc35c28ff42affbb4305649f6f, type: 3}
-  m_Name: TownData_TownName
+  m_Name: TownData_Dummy
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townID: 
-  displayName: 
+  displayName: "\uB354\uBBF8 \uB3C4\uC2DC"
+  icon: {fileID: 0}
+  description: Dummy Town
   tradeItems: []
   draftAnimalItems: []
   localSpecialtyItems: []
   itemRenewalCycle: 0
+  availableRoutes: []
+  canDonate: 0
   maximumDonationLimit: 0
+  canContribute: 0
   maximumContributionLimit: 0
+  canDevelop: 0
   maximumDevelopmentLevel: 0

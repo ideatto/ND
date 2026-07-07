@@ -4,7 +4,7 @@ public enum TradeItemCategory
 {
     Food,
     Material,
-    Valueable,
+    Valuable,
     Luxury_Goods,
     Caravans,
     Draft_Animals

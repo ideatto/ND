@@ -10,14 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
-  m_Name: TradeItem_Apple
+  m_Name: TradeItem_Dummy
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemID: 
-  displayName: "\uC0AC\uACFC"
+  displayName: "\uB354\uBBF8 \uC544\uC774\uD15C"
   icon: {fileID: 0}
-  description: "\uBE68\uAC04\uC0C9 \uC0AC\uACFC"
+  description: Dummy Item
   rarity: 0
-  category: 0
+  category: 1
   defaultPrice: 0
   weight: 0
   canStack: 0
@@ -26,25 +26,32 @@ MonoBehaviour:
   seasonInfluenceData:
   - season: 0
     isInfluenced: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   - season: 1
     isInfluenced: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   - season: 2
     isInfluenced: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   - season: 3
     isInfluenced: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   disasterInfluenced: 0
   disasterInfluenceData:
   - disaster: 0
     isInfluence: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   - disaster: 1
     isInfluence: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   - disaster: 2
     isInfluence: 0
-    influencePrice: 0
+    addPrice: 0
+    subtractPrice: 0
   localSpecialty: 0
