@@ -25,5 +25,7 @@ public class GameManager : MonoBehaviour
 
         // 씬이 바뀌어도 이 오브젝트를 파괴하지 않도록 설정한다
         DontDestroyOnLoad(gameObject);
+
+        Debug.Log("[GameManager] 로드 완료");
     }
 }

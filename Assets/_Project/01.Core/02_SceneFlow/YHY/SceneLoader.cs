@@ -21,6 +21,8 @@ public class SceneLoader : MonoBehaviour
         }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        Debug.Log("[SceneLoader] 로드 완료");
     }
 
     /// <summary>
