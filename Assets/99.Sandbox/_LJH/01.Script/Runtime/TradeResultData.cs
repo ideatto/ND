@@ -4,35 +4,46 @@ using UnityEngine;
 [System.Serializable]
 public class TradeResultData
 {
-    public bool IsSuccess;
-    public string TradeId;
-    public string RouteId;
-    public string FromTownId;
-    public string ToTownId;
+    public bool isSuccess;
 
-    public int TotalPurchaseCost;
-    public int TotalSellRevenue;
-    public int FoodCost;
-    public int MercenaryCost;
-    public int LossAmount;
-    public int NetProfit;
+    public string tradeId;
+    public string routeId;
+    public string fromTownId;
+    public string toTownId;
 
-    public int EventProfitAndLoss;
+    public int totalPurchaseCost;
+    public int totalSellRevenue;
+    public int foodCost;
+    public int mercenaryCost;
+    public int eventProfitAndLoss;
 
-    public TradeItemBundle[] LossItem;
+    public int lossAmount;
+    public int netProfit;
 
-    public float DurabilityLoss;
+    public TradeItemBundle[] lossItems;
 
-    public RouteEvent FailureReason;
-    public List<TradeResultMessageData> Messages = new List<TradeResultMessageData>();
+    public float durabilityLoss;
+
+    public FailureReason failureReason;
+    public List<TradeResultMessageData> messages = new List<TradeResultMessageData>();
+}
+
+public enum FailureReason
+{
+    None,
+    FoodShortage,
+    DurabilityBroken,
+    CombatDefeat,
+    GiveUp,
+    Unknown
 }
 
 [System.Serializable]
 public class TradeResultMessageData
 {
-    public TradeResultMessageType Type;
-    public string MessageCode;
-    public string MessageText;
+    public TradeResultMessageType type;
+    public string messageCode;
+    public string messageText;
 }
 
 public enum TradeResultMessageType

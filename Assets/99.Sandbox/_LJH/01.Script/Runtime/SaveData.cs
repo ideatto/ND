@@ -6,63 +6,63 @@ public sealed class SaveData
 {
     public const int CurrentVersion = 1;
 
-    public int Version = CurrentVersion;
-    public long LastSavedUtcTicks;
+    public int version = CurrentVersion;
+    public long lastSavedUtcTicks;
     
-    public PlayerSaveData Player = new PlayerSaveData();
-    public CaravanSaveData Caravan = new CaravanSaveData();
-    public TradeProgressSaveData TradeProgress = new TradeProgressSaveData();
-    public WorldSaveData World = new WorldSaveData();
-    public TutorialSaveData Tutorial = new TutorialSaveData();
+    public PlayerSaveData player = new PlayerSaveData();
+    public CaravanSaveData caravan = new CaravanSaveData();
+    public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
+    public WorldSaveData world = new WorldSaveData();
+    public TutorialSaveData tutorial = new TutorialSaveData();
 }
 
 [System.Serializable]
 public sealed class  PlayerSaveData
 {
-    public string CurrentTownId;
+    public string currentTownId;
 
-    public int TradingCurrency = 1000;
-    public int DevelopmentCurrency;
+    public int tradingCurrency = 1000;
+    public int developmentCurrency;
 }
 
 [System.Serializable]
 public sealed class CaravanSaveData
 {
-    public float MaxLoad;
-    public float CurrentLoad;
+    public float maxLoad;
+    public float currentLoad;
 
-    public float CurrentDurability;
+    public float currentDurability;
 
-    public List<TradeItemBundle> Inventory = new List<TradeItemBundle>();
+    public List<TradeItemBundle> inventory = new List<TradeItemBundle>();
 }
 
 [System.Serializable]
 public sealed class TradeProgressSaveData
 {
-    public string ActiveTradeId = string.Empty;
-    public string ActiveRouteId = string.Empty;
-    public TradeProgressState State;
-    public long TradeStartUtcTick;
-    public long ExpectedTradeEndUtcTick;
+    public string activeTradeId = string.Empty;
+    public string activeRouteId = string.Empty;
+    public TradeProgressState state;
+    public long tradeStartUtcTick;
+    public long expectedTradeEndUtcTick;
 }
 
 [System.Serializable]
 public sealed class WorldSaveData
 {
-    public string CurrentSeason = "summer";
-    public string CurrentDisaster = string.Empty;
+    public string currentSeason = "summer";
+    public string currentDisaster = string.Empty;
 
-    public List<string> UnlockedTownIds = new List<string>();
-    public List<string> UnlockedRouteIds = new List<string>();
-    public List<string> CompletedRouteIds = new List<string>();
+    public List<string> unlockedTownIds = new List<string>();
+    public List<string> unlockedRouteIds = new List<string>();
+    public List<string> completedRouteIds = new List<string>();
 }
 
 [System.Serializable]
 public sealed class TutorialSaveData
 {
-    public bool IsCompleted;
-    public bool IsSkipped;
-    public int StepIndex;
+    public bool isCompleted;
+    public bool isSkipped;
+    public int stepIndex;
 }
 
 public enum TradeProgressState
