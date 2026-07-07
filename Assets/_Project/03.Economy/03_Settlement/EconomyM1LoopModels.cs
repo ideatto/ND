@@ -10,9 +10,11 @@ namespace ND.Economy
         public string TradeId = string.Empty;
         public int FoodCost;
         public int MercenaryCost;
-        public int AccidentLoss;
+        public int CartRepairCost;
+        public int LostItemValue;
+        public int EventProfit;
+        public int EventLoss;
         public int LoanRepayment;
-        public int EventAdjustment;
         public int DevelopmentCurrencyReward;
         public bool PurchaseGrowth;
         public GrowthPurchaseInput GrowthPurchaseInput = new GrowthPurchaseInput();

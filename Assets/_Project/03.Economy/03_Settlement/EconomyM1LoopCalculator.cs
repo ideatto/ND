@@ -37,9 +37,11 @@ namespace ND.Economy
                 },
                 FoodCost = input.FoodCost,
                 MercenaryCost = input.MercenaryCost,
-                AccidentLoss = input.AccidentLoss,
+                CartRepairCost = input.CartRepairCost,
+                LostItemValue = input.LostItemValue,
+                EventProfit = input.EventProfit,
+                EventLoss = input.EventLoss,
                 LoanRepayment = input.LoanRepayment,
-                EventAdjustment = input.EventAdjustment,
                 DevelopmentCurrencyReward = input.DevelopmentCurrencyReward
             });
 

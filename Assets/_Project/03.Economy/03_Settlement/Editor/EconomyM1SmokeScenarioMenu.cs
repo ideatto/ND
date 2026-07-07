@@ -29,5 +29,20 @@ namespace ND.Economy.Editor
                 + $"WalletDevCurrency: {result.GrowthCurrencyApply.After.DevelopmentCurrency}, "
                 + $"MaxLoadBonus: {result.RuntimeStats.MaxLoadBonus}");
         }
+
+        [MenuItem("ND/Economy/Run All M1 Economy Checks")]
+        public static void RunAllChecks()
+        {
+            try
+            {
+                EconomyM1SmokeScenarioTests.RunAll();
+                Debug.Log("[Economy M1 Checks] Success");
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError("[Economy M1 Checks] Failed: " + exception.Message);
+                throw;
+            }
+        }
     }
 }
