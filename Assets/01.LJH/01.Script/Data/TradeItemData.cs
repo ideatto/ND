@@ -15,8 +15,12 @@ public class TradeItemData : ScriptableObject
     [Header("Item_Trade_Info")]
     [SerializeField] private TradeItemRarity rarity;
     [SerializeField] private TradeItemCategory category;
-    [SerializeField] private int defaultPrice;
+    [SerializeField] private int defaultPurchasePrice;
+    [SerializeField] private int defaultSellPrice;
     [SerializeField] private float weight;
+
+    [Header("Item_Consumable_Info")]
+    [SerializeField] private bool isConsumable;
 
     [Header("Item_Stack_Info")]
     [SerializeField] private bool canStack;
@@ -33,18 +37,21 @@ public class TradeItemData : ScriptableObject
     [Header("Local_Trade_Info")]
     [SerializeField] private bool localSpecialty;
 
-
+    #region
     public string ItemID => itemID;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
     public string Description => description;
     public TradeItemRarity Rarity => rarity;
     public TradeItemCategory Category => category;
-    public int DefaultPrice => defaultPrice;
+    public int DefaultPurchasePrice => defaultPurchasePrice;
+    public int DefaultSellPrice => defaultSellPrice;
     public float Weight => weight;
+    public bool IsConsumable => isConsumable;
     public bool CanStack => canStack;
     public int MaxCount => maxCount;
     public bool SeasonInfluenced => seasonInfluenced;
     public bool DisasterInfluenced => disasterInfluenced;
     public bool LocalSpecialty => localSpecialty;
+    #endregion
 }

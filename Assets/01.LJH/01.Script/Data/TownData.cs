@@ -45,6 +45,7 @@ public class TownData : ScriptableObject
     [SerializeField] private bool canDevelop;
     [SerializeField] private int maximumDevelopmentLevel;
 
+    #region
     public string TownID => townID;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
@@ -61,4 +62,5 @@ public class TownData : ScriptableObject
     public float MaximumContributionLimit => maximumContributionLimit;
     public bool CanDevelop => canDevelop;
     public int MaximumDevelopmentLevel => maximumDevelopmentLevel;
+    #endregion
 }

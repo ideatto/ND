@@ -5,8 +5,8 @@ public class RouteData : ScriptableObject
 {
     [Header("Route_Default_Info")]
     [SerializeField] private string routeID;
-    [SerializeField] private string startTownID;
-    [SerializeField] private string destinationTownID;
+    [SerializeField] private TownData startTown;
+    [SerializeField] private TownData destinationTown;
     [SerializeField] private string displayName;
 
     [Header("Route_Travel_Info")]
@@ -26,9 +26,10 @@ public class RouteData : ScriptableObject
     [Header("Route_Lock_Info")]
     [SerializeField] private bool isLocked;
 
+    #region
     public string RouteID => routeID;
-    public string StartTownID => startTownID;
-    public string DestinationTownID => destinationTownID;
+    public TownData StartTown => startTown;
+    public TownData DestinationTown => destinationTown;
     public string DisplayName => displayName;
     public float Distance => distance;
     public float DefaultElapsedTime => defaultElapsedTime;
@@ -37,4 +38,5 @@ public class RouteData : ScriptableObject
     public RouteEventData[] RouteEvents => routeEvents;
     public int MaxEventCount => maxEventCount;
     public bool IsLocked => isLocked;
+    #endregion
 }
