@@ -7,18 +7,15 @@ EditorBuildSettings:
   m_Scenes:
   - enabled: 1
     path: Assets/_Project/07.Scenes/01_Boot/Boot.unity
-    guid: b3f5c20c843d2394bbd9c2a1ad2b8d83
+    guid: c5c39dcaefcd71b4db35bb9e922f7dee
   - enabled: 1
     path: Assets/_Project/07.Scenes/02_Title/Title.unity
-    guid: c67010eb49babea488efca7c2e507c84
-  - enabled: 0
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    guid: 549e3b8b8e59e5b44a7d963a42bcf932
   - enabled: 1
     path: Assets/_Project/07.Scenes/03_Loading/Loading.unity
-    guid: 3a45c2e78a28fc94992d785d3281f845
+    guid: 4b02b5901fa44064baee32543a2c4312
   - enabled: 1
     path: Assets/_Project/07.Scenes/04_InGame/InGame.unity
-    guid: 9eb3a48a731c981458c2d21c0c794be4
+    guid: 8b749529777b573478de81938523b354
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
