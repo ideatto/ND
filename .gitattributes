@@ -97,6 +97,29 @@ Packages/packages-lock.json linguist-generated
 *.stl                   lfs
 *.ztl                   lfs
 
+# Modern 3D formats
+*.glb                   lfs
+
+# Texture and large image formats
+*.dds                   lfs
+*.ktx                   lfs
+*.ktx2                  lfs
+*.basis                 lfs
+*.psb                   lfs
+
+
+# Additional audio and video formats
+*.aac                   lfs
+*.flac                  lfs
+*.m4a                   lfs
+*.webm                  lfs
+
+# Native and mobile plugin binaries
+*.dylib                 lfs
+*.aar                   lfs
+*.jar                   lfs
+
+
 # Audio
 *.aif                   lfs
 *.aiff                  lfs
@@ -169,3 +192,24 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# Unity binary asset exception
+LightingData.asset      lfs
+
+# Text-based but usually generated 3D data
+*.gltf                  lfs
+
+# 2D source art
+*.kra                   lfs
+*.clip                  lfs
+*.ase                   lfs
+*.aseprite              lfs
+*.xcf                   lfs
+*.ai                    lfs
+*.afdesign              lfs
+*.afphoto               lfs
+
+# Substance 3D source files
+*.spp                   lfs
+*.sbs                   lfs
+*.sbsar                 lfs
