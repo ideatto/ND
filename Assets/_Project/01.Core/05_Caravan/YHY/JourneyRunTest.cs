@@ -9,11 +9,22 @@
 // [쓰는 법] (Play 모드) 우클릭 "샘플 상단 채우기" → 값 조정 → 우클릭 "무역 출발"
 // =============================================================================
 
+using System;                 
 using System.Collections;
 using UnityEngine;
+using ND.Framework;          
 
 public class JourneyRunTest : MonoBehaviour
 {
+    // 시간을 '실제 시각'으로 잰다. (테스트용으로 서비스 하나 생성)
+    private GameTimeService timeService = new GameTimeService();
+    private DateTime tradeStartUtc;   // 출발한 실제 시각
+
+    [Header("시간 정보 (Play 중 표시)")]
+    [SerializeField] private string TradeStartTime = "-";
+    [SerializeField] private string TradeEndTime = "-";
+    [SerializeField] private string ElapsedTime = "-";
+
     [Header("상단 구성 (우클릭 '샘플 상단 채우기')")]
     public CaravanData caravan = new CaravanData();
 
@@ -49,21 +60,30 @@ public class JourneyRunTest : MonoBehaviour
         Debug.Log($"[식량] 필요 {needFood:0.#} / 실은 {caravan.foodAmount}" +
                   (needFood > caravan.foodAmount ? "  ⚠ 부족 — 도중 실패 가능" : ""));
 
+        tradeStartUtc = timeService.CurrentUtc;   // ← 추가: 지금 시각을 출발 시각으로
+
+        TradeStartTime = tradeStartUtc.ToString("HH:mm:ss");
+
+        DateTime endUtc = timeService.CalculateTradeEnd(tradeStartUtc, TimeSpan.FromSeconds(caravan.totalSeconds));
+        TradeEndTime = endUtc.ToString("HH:mm:ss");
+
         StopAllCoroutines();
         StartCoroutine(RunTrade());
     }
 
     private IEnumerator RunTrade()
     {
-        float elapsed = 0f;
         int lastPrintedSec = 0;
         bool cargoDone = false, foodDone = false;
         int totalSecInt = Mathf.Max(1, Mathf.CeilToInt(caravan.totalSeconds));
 
         while (caravan.state == JourneyState.Traveling)
         {
-            elapsed += Time.deltaTime;
+            // 출발 시각부터 지금까지 '실제로' 흐른 초 (deltaTime 누적 대신)
+            float elapsed = (float)(timeService.CurrentUtc - tradeStartUtc).TotalSeconds;
             int elapsedSec = (int)elapsed;
+
+            ElapsedTime = elapsed.ToString("0.0") + "초";
 
             float progress = (caravan.totalSeconds > 0f) ? elapsed / caravan.totalSeconds : 1f;
             JourneyRunner.SetProgress(caravan, progress);   // 여기서 식량 소진 자동 체크됨
