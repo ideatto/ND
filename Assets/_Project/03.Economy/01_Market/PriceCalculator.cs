@@ -6,7 +6,7 @@ namespace ND.Economy
     public static class PriceCalculator
     {
         public const string ErrorNone = "";
-        public const string ErrorInvalidItemId = "INVALID_TRADE_ITEM_ID";
+        public const string ErrorInvalidTradeItemId = "INVALID_TRADE_ITEM_ID";
         public const string ErrorInvalidTownId = "INVALID_TOWN_ID";
         public const string ErrorInvalidRouteId = "INVALID_ROUTE_ID";
         public const string ErrorInvalidQuantity = "INVALID_QUANTITY";
@@ -24,7 +24,7 @@ namespace ND.Economy
                 return result;
             }
 
-            result.ItemId = input.ItemId;
+            result.TradeItemId = input.TradeItemId;
             result.Quantity = input.Quantity;
 
             float buyPrice = input.BaseBuyPrice;
@@ -47,12 +47,12 @@ namespace ND.Economy
         {
             if (input == null)
             {
-                return ErrorInvalidItemId;
+                return ErrorInvalidTradeItemId;
             }
 
-            if (string.IsNullOrWhiteSpace(input.ItemId))
+            if (string.IsNullOrWhiteSpace(input.TradeItemId))
             {
-                return ErrorInvalidItemId;
+                return ErrorInvalidTradeItemId;
             }
 
             if (string.IsNullOrWhiteSpace(input.FromTownId) || string.IsNullOrWhiteSpace(input.ToTownId))

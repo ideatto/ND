@@ -22,7 +22,7 @@ namespace ND.Economy
         {
             PriceCalculationResult priceResult = PriceCalculator.Calculate(new PriceCalculationInput
             {
-                ItemId = "apple",
+                TradeItemId = "apple",
                 FromTownId = "town_start",
                 ToTownId = "town_trade_01",
                 RouteId = "route_01",
@@ -50,7 +50,7 @@ namespace ND.Economy
                 {
                     new SoldItemInput
                     {
-                        ItemId = "apple",
+                        TradeItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = priceResult.TotalBuyPrice,
                         TotalSellPrice = priceResult.TotalSellPrice

@@ -22,7 +22,7 @@ namespace ND.Economy
     [Serializable]
     public sealed class SoldItemInput
     {
-        public string ItemId = string.Empty;
+        public string TradeItemId = string.Empty;
         public int Quantity;
         public int TotalBuyPrice;
         public int TotalSellPrice;

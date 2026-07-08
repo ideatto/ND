@@ -13,6 +13,7 @@ namespace ND.Economy.Editor
             GrowthPurchaseCalculator_FailsWhenCurrencyIsNotEnough();
             CurrencyWallet_AppliesSettlementAndGrowthPurchase();
             EconomyM1LoopCalculator_ExecutesPriceSettlementCurrencyGrowthAndRuntimeStats();
+            EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase();
             EconomyM1SmokeScenario_Run_Succeeds();
         }
 
@@ -20,7 +21,7 @@ namespace ND.Economy.Editor
         {
             PriceCalculationResult result = PriceCalculator.Calculate(new PriceCalculationInput
             {
-                ItemId = "apple",
+                TradeItemId = "apple",
                 FromTownId = "town_start",
                 ToTownId = "town_trade_01",
                 RouteId = "route_01",
@@ -47,7 +48,7 @@ namespace ND.Economy.Editor
                 {
                     new SoldItemInput
                     {
-                        ItemId = "apple",
+                        TradeItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = 500,
                         TotalSellPrice = 700
@@ -135,7 +136,7 @@ namespace ND.Economy.Editor
                 {
                     new SoldItemInput
                     {
-                        ItemId = "apple",
+                        TradeItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = 500,
                         TotalSellPrice = 700
@@ -171,7 +172,7 @@ namespace ND.Economy.Editor
             {
                 PriceInput = new PriceCalculationInput
                 {
-                    ItemId = "apple",
+                    TradeItemId = "apple",
                     FromTownId = "town_start",
                     ToTownId = "town_trade_01",
                     RouteId = "route_01",
@@ -208,6 +209,44 @@ namespace ND.Economy.Editor
             CheckEqual(1150, result.FinalCurrencyState.TradeMoney, "Loop final TradeMoney");
             CheckEqual(0, result.FinalCurrencyState.DevelopmentCurrency, "Loop final DevelopmentCurrency");
             CheckEqual(10, result.RuntimeStats.MaxLoadBonus, "Loop MaxLoadBonus");
+        }
+
+        private static void EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase()
+        {
+            EconomyM1LoopResult result = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
+            {
+                PriceInput = new PriceCalculationInput
+                {
+                    TradeItemId = "apple",
+                    FromTownId = "town_start",
+                    ToTownId = "town_trade_01",
+                    RouteId = "route_01",
+                    Quantity = 5,
+                    BaseBuyPrice = 100,
+                    BaseSellPrice = 140
+                },
+                CurrencyState = new CurrencyState
+                {
+                    TradeMoney = 1000,
+                    DevelopmentCurrency = 1
+                },
+                TradeId = "m1_growth_level_guard_trade",
+                FoodCost = 50,
+                DevelopmentCurrencyReward = 1,
+                PurchaseGrowth = true,
+                PlayerGrowthLevel = 1,
+                GrowthPurchaseInput = new GrowthPurchaseInput
+                {
+                    GrowthId = "growth_load_01",
+                    MaxLevel = 1,
+                    CostDevelopmentCurrency = 1
+                }
+            });
+
+            Check(!result.Success, "M1 loop should fail when saved growth level is already max.");
+            CheckEqual("GrowthPurchaseFailed:" + GrowthPurchaseError.AlreadyMaxLevel, result.ErrorCode, "Loop growth max error");
+            CheckEqual(GrowthPurchaseError.AlreadyMaxLevel, result.GrowthPurchase.Error, "Loop growth purchase error");
+            CheckEqual(1, result.GrowthPurchase.PreviousLevel, "Loop previous growth level");
         }
 
         private static void EconomyM1SmokeScenario_Run_Succeeds()

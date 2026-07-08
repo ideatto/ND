@@ -44,7 +44,7 @@ namespace ND.Economy
     [Serializable]
     public sealed class PriceCalculationInput
     {
-        public string ItemId = string.Empty;
+        public string TradeItemId = string.Empty;
         public string FromTownId = string.Empty;
         public string ToTownId = string.Empty;
         public string RouteId = string.Empty;
@@ -75,7 +75,7 @@ namespace ND.Economy
     [Serializable]
     public sealed class PriceCalculationResult
     {
-        public string ItemId = string.Empty;
+        public string TradeItemId = string.Empty;
         public int Quantity;
         public int UnitBuyPrice;
         public int UnitSellPrice;

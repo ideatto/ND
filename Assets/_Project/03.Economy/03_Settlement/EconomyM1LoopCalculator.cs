@@ -29,7 +29,7 @@ namespace ND.Economy
                 {
                     new SoldItemInput
                     {
-                        ItemId = input.PriceInput.ItemId,
+                        TradeItemId = input.PriceInput.TradeItemId,
                         Quantity = input.PriceInput.Quantity,
                         TotalBuyPrice = priceResult.TotalBuyPrice,
                         TotalSellPrice = priceResult.TotalSellPrice
@@ -65,8 +65,7 @@ namespace ND.Economy
 
             if (input.PurchaseGrowth)
             {
-                GrowthPurchaseInput growthInput = input.GrowthPurchaseInput ?? new GrowthPurchaseInput();
-                growthInput.DevelopmentCurrencyBefore = workingCurrency.DevelopmentCurrency;
+                GrowthPurchaseInput growthInput = BuildGrowthPurchaseInput(input, workingCurrency.DevelopmentCurrency);
 
                 growthPurchase = GrowthPurchaseCalculator.Purchase(growthInput);
                 if (!growthPurchase.Success)
@@ -111,6 +110,20 @@ namespace ND.Economy
                 GrowthCurrencyApply = growthCurrencyApply,
                 RuntimeStats = runtimeStats,
                 FinalCurrencyState = workingCurrency.Clone()
+            };
+        }
+
+        private static GrowthPurchaseInput BuildGrowthPurchaseInput(EconomyM1LoopInput input, int developmentCurrencyBefore)
+        {
+            GrowthPurchaseInput source = input.GrowthPurchaseInput ?? new GrowthPurchaseInput();
+
+            return new GrowthPurchaseInput
+            {
+                GrowthId = source.GrowthId,
+                CurrentLevel = input.PlayerGrowthLevel,
+                MaxLevel = source.MaxLevel,
+                DevelopmentCurrencyBefore = developmentCurrencyBefore,
+                CostDevelopmentCurrency = source.CostDevelopmentCurrency
             };
         }
 

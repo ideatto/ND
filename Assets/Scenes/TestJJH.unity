@@ -119,7 +119,86 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &2010714351
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2010714353}
+  - component: {fileID: 2010714352}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2010714352
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2010714351}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4760a9045b527b746a962e3e64324ff1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Economy.EconomyM1DebugRunner
+  runOnStart: 1
+  tradeId: scene_debug_trade
+  tradeItemId: apple
+  fromTownId: town_start
+  toTownId: town_trade_01
+  routeId: route_01
+  quantity: 1
+  baseBuyPrice: 100
+  baseSellPrice: 140
+  tradeMoney: 1000
+  developmentCurrency: 0
+  foodCost: 50
+  mercenaryCost: 0
+  cartRepairCost: 0
+  lostItemValue: 0
+  eventProfit: 0
+  eventLoss: 0
+  loanRepayment: 0
+  developmentCurrencyReward: 1
+  purchaseGrowth: 1
+  growthId: growth_load_01
+  playerGrowthLevel: 0
+  caravanGrowthLevel: 0
+  growthMaxLevel: 1
+  growthCostDevelopmentCurrency: 1
+  lastSuccess: 0
+  lastErrorCode: 
+  lastTotalBuyPrice: 0
+  lastTotalSellPrice: 0
+  lastNetProfit: 0
+  lastTradeMoney: 0
+  lastDevelopmentCurrency: 0
+  lastMaxLoadBonus: 0
+  lastSpeedMultiplier: 1
+--- !u!4 &2010714353
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2010714351}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
-  m_Roots: []
+  m_Roots:
+  - {fileID: 2010714353}
