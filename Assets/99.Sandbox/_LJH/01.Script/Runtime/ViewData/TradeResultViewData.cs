@@ -9,14 +9,15 @@ public class TradeResultViewData
     public string fromTownName;
     public string toTownName;
 
-    public int totalPurchaseCost;
-    public int totalSellRevenue;
-    public int foodCost;
-    public int mercenaryCost;
-    public int eventProfitAndLoss;
+    public long itemPurchaseCost;
+    public long itemSellRevenue;
+    public long foodCost;
+    public long mercenaryCost;
+    public long eventProfit;
+    public long eventLoss;
 
-    public int lossAmount;
-    public int netProfit;
+    public long lossAmount;
+    public long netProfit;
 
     public string failureReasonText;
 

@@ -12,9 +12,9 @@ public class RouteEventData
     public float eventValue;
 
     public RewardType eventRewardType;
-    public float eventReward;
-    public float minReward;
-    public float maxReward;
+    public long eventReward;
+    public long minReward;
+    public long maxReward;
 }
 
 public enum RewardType

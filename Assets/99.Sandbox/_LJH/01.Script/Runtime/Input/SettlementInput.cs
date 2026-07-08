@@ -10,13 +10,13 @@ public class SettlementInput
 
     public List<SoldItemInput> soldItems = new List<SoldItemInput>();
 
-    public int tradeMoneyBefore;
-    public int foodCost;
-    public int mercenaryCost;
-    public int cartRepairCost;
-    public int lostItemValue;
-    public int eventProfit;
-    public int eventLoss;
-    public int loanRepayment;
-    public int developmentCurrencyReward;
+    public long tradeMoneyBefore;
+    public long foodCost;
+    public long mercenaryCost;
+    public long cartRepairCost;
+    public long lostItemValue;
+    public long eventProfit;
+    public long eventLoss;
+    public long loanRepayment;
+    public long developmentCurrencyReward;
 }

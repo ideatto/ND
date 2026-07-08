@@ -20,8 +20,8 @@ public sealed class  PlayerSaveData
 {
     public string currentTownId;
 
-    public int tradingCurrency = 1000;
-    public int developmentCurrency;
+    public long tradingCurrency = 1000;
+    public long developmentCurrency;
 }
 
 [System.Serializable]

@@ -15,8 +15,8 @@ public class TradeItemData : ScriptableObject
     [Header("Item_Trade_Info")]
     [SerializeField] private TradeItemRarity rarity;
     [SerializeField] private TradeItemCategory category;
-    [SerializeField] private int baseBuyPrice;
-    [SerializeField] private int baseSellPrice;
+    [SerializeField] private long baseBuyPrice;
+    [SerializeField] private long baseSellPrice;
     [SerializeField] private float weight;
 
     [Header("Item_Consumable_Info")]
@@ -40,8 +40,8 @@ public class TradeItemData : ScriptableObject
     public string Description => description;
     public TradeItemRarity Rarity => rarity;
     public TradeItemCategory Category => category;
-    public int BaseBuyPrice => Mathf.Max(0, baseBuyPrice);
-    public int BaseSellPrice => Mathf.Max(0, baseSellPrice);
+    public long BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;
+    public long BaseSellPrice => baseSellPrice >= 0 ? baseSellPrice : 0;
     public float Weight => Mathf.Max(0, weight);
     public bool IsConsumable => isConsumable;
     public bool CanStack => canStack;

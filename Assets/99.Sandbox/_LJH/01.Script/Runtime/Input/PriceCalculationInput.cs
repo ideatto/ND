@@ -8,8 +8,8 @@ public class PriceCalculationInput
     public string toTownId;
 
     public int quantity;
-    public int baseBuyPrice;
-    public int baseSellPrice;
+    public long baseBuyPrice;
+    public long baseSellPrice;
 
     public Season season;
     public Disaster disaster;
@@ -22,6 +22,6 @@ public class PriceCalculationInput
     public List<PriceModifierInput> modifiers = new List<PriceModifierInput>();
 
     public int Quantity => quantity >= 0 ? quantity : 0;
-    public int BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;
-    public int BaseSellPrice => baseSellPrice >= 0 ? baseSellPrice : 0;
+    public long BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;
+    public long BaseSellPrice => baseSellPrice >= 0 ? baseSellPrice : 0;
 }

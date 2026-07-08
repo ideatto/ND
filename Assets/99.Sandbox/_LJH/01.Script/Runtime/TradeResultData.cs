@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 [System.Serializable]
 public class TradeResultData
@@ -10,16 +11,17 @@ public class TradeResultData
     public string fromTownId;
     public string toTownId;
 
-    public int totalPurchaseCost;
-    public int totalSellRevenue;
-    public int foodCost;
-    public int mercenaryCost;
-    public int eventProfitAndLoss;
+    public long itemPurchaseCost;
+    public long itemSellRevenue;
+    public long foodCost;
+    public long mercenaryCost;
+    public long eventProfit;
+    public long eventLoss;
 
-    public int lossAmount;
-    public int netProfit;
+    public long lossAmount;
+    public long netProfit;
 
-    public List<TradeItemBundle> lossItems = new List<TradeItemBundle>();
+    public TradeItemBundle[] lossItems;
 
     public float durabilityLoss;
 

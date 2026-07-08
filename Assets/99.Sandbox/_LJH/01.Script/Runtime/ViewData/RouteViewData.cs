@@ -13,8 +13,8 @@ public class RouteViewData
 
     public float distance;
     public float estimatedTime;
-    public int foodCost;
-    public int mercenaryCost;
+    public int requiredFoodQuantity;
+    public int requiredMercenaryPower;
     public float riskLevel;
 
     public bool isUnlocked;

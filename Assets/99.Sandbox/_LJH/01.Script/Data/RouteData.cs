@@ -17,8 +17,8 @@ public class RouteData : ScriptableObject
     [SerializeField] private float defaultElapsedTime;
 
     [Header("Route_Base_Cost")]
-    [SerializeField] private int baseFoodCost;
-    [SerializeField] private int baseMercenaryCost;
+    [SerializeField] private int baseRequiredFoodQuantity;
+    [SerializeField] private int baseRequiredMercenaryPower;
 
     [Header("Route_Risk_Info")]
     [SerializeField] private float baseRiskLevel;
@@ -39,8 +39,8 @@ public class RouteData : ScriptableObject
     public float Distance => Mathf.Max(0f, distance);
     public bool UnlockedByDefault => unlockedByDefault;
     public float DefaultElapsedTime => Mathf.Max(0f, defaultElapsedTime);
-    public int BaseFoodCost => Mathf.Max(0, baseFoodCost);
-    public int BaseMercenaryCost => Mathf.Max(0, baseMercenaryCost);
+    public int BaseRequiredFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
+    public int BaseRequiredMercenaryPower => Mathf.Max(0, baseRequiredMercenaryPower);
     public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);
     public RouteEventData[] RouteEvents => routeEvents != null ? (RouteEventData[])routeEvents.Clone() : new RouteEventData[0];
     public int MaxEventCount => Mathf.Max(0, maxEventCount);

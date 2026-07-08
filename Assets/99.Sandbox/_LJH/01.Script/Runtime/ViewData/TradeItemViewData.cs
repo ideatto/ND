@@ -8,8 +8,8 @@ public class TradeItemViewData
     public Sprite icon;
     public string description;
 
-    public int purchasePrice;
-    public int sellPrice;
+    public long purchasePrice;
+    public long sellPrice;
     public int ownedAmount;
     public int selectedAmount;
 
