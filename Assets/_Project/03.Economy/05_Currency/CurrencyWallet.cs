@@ -24,8 +24,8 @@ namespace ND.Economy
             CurrencyState before = state.Clone();
             CurrencyState after = state.Clone();
 
-            after.TradeMoney = Math.Max(0, settlement.TradeMoneyAfter);
-            after.DevelopmentCurrency = Math.Max(0, after.DevelopmentCurrency + settlement.DevelopmentCurrencyReward);
+            after.TradeMoney = Math.Max(0L, settlement.TradeMoneyAfter);
+            after.DevelopmentCurrency = Math.Max(0L, after.DevelopmentCurrency + settlement.DevelopmentCurrencyReward);
 
             Copy(after, state);
 
@@ -53,7 +53,7 @@ namespace ND.Economy
             CurrencyState before = state.Clone();
             CurrencyState after = state.Clone();
 
-            after.DevelopmentCurrency = Math.Max(0, growthPurchase.DevelopmentCurrencyAfter);
+            after.DevelopmentCurrency = Math.Max(0L, growthPurchase.DevelopmentCurrencyAfter);
 
             Copy(after, state);
 

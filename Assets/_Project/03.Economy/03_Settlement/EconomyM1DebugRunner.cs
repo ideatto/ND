@@ -9,27 +9,27 @@ namespace ND.Economy
 
         [Header("Trade")]
         [SerializeField] private string tradeId = "scene_debug_trade";
-        [SerializeField] private string ItemId = "apple";
+        [SerializeField] private string tradeItemId = "apple";
         [SerializeField] private string fromTownId = "town_start";
         [SerializeField] private string toTownId = "town_trade_01";
         [SerializeField] private string routeId = "route_01";
         [SerializeField] private int quantity = 5;
-        [SerializeField] private int baseBuyPrice = 100;
-        [SerializeField] private int baseSellPrice = 140;
+        [SerializeField] private long baseBuyPrice = 100L;
+        [SerializeField] private long baseSellPrice = 140L;
 
         [Header("Currency")]
-        [SerializeField] private int tradeMoney = 1000;
-        [SerializeField] private int developmentCurrency;
+        [SerializeField] private long tradeMoney = 1000L;
+        [SerializeField] private long developmentCurrency;
 
         [Header("Settlement")]
-        [SerializeField] private int foodCost = 50;
-        [SerializeField] private int mercenaryCost;
-        [SerializeField] private int cartRepairCost;
-        [SerializeField] private int lostItemValue;
-        [SerializeField] private int eventProfit;
-        [SerializeField] private int eventLoss;
-        [SerializeField] private int loanRepayment;
-        [SerializeField] private int developmentCurrencyReward = 1;
+        [SerializeField] private long foodCost = 50L;
+        [SerializeField] private long mercenaryCost;
+        [SerializeField] private long cartRepairCost;
+        [SerializeField] private long lostItemValue;
+        [SerializeField] private long eventProfit;
+        [SerializeField] private long eventLoss;
+        [SerializeField] private long loanRepayment;
+        [SerializeField] private long developmentCurrencyReward = 1L;
 
         [Header("Growth")]
         [SerializeField] private bool purchaseGrowth = true;
@@ -37,16 +37,16 @@ namespace ND.Economy
         [SerializeField] private int playerGrowthLevel;
         [SerializeField] private int caravanGrowthLevel;
         [SerializeField] private int growthMaxLevel = 1;
-        [SerializeField] private int growthCostDevelopmentCurrency = 1;
+        [SerializeField] private long growthCostDevelopmentCurrency = 1L;
 
         [Header("Last Result")]
         [SerializeField] private bool lastSuccess;
         [SerializeField] private string lastErrorCode = string.Empty;
-        [SerializeField] private int lastTotalBuyPrice;
-        [SerializeField] private int lastTotalSellPrice;
-        [SerializeField] private int lastNetProfit;
-        [SerializeField] private int lastTradeMoney;
-        [SerializeField] private int lastDevelopmentCurrency;
+        [SerializeField] private long lastTotalBuyPrice;
+        [SerializeField] private long lastTotalSellPrice;
+        [SerializeField] private long lastNetProfit;
+        [SerializeField] private long lastTradeMoney;
+        [SerializeField] private long lastDevelopmentCurrency;
         [SerializeField] private int lastMaxLoadBonus;
         [SerializeField] private float lastSpeedMultiplier = 1f;
 
@@ -72,7 +72,7 @@ namespace ND.Economy
             {
                 PriceInput = new PriceCalculationInput
                 {
-                    ItemId = ItemId,
+                    TradeItemId = tradeItemId,
                     FromTownId = fromTownId,
                     ToTownId = toTownId,
                     RouteId = routeId,

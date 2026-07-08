@@ -13,6 +13,7 @@ namespace ND.Economy.Editor
             GrowthPurchaseCalculator_FailsWhenCurrencyIsNotEnough();
             CurrencyWallet_AppliesSettlementAndGrowthPurchase();
             EconomyM1LoopCalculator_ExecutesPriceSettlementCurrencyGrowthAndRuntimeStats();
+            EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase();
             EconomyM1SmokeScenario_Run_Succeeds();
         }
 
@@ -20,7 +21,7 @@ namespace ND.Economy.Editor
         {
             PriceCalculationResult result = PriceCalculator.Calculate(new PriceCalculationInput
             {
-                ItemId = "apple",
+                TradeItemId = "apple",
                 FromTownId = "town_start",
                 ToTownId = "town_trade_01",
                 RouteId = "route_01",
@@ -30,11 +31,11 @@ namespace ND.Economy.Editor
             });
 
             Check(result.IsValid, "Price result should be valid: " + result.ErrorCode);
-            CheckEqual(100, result.UnitBuyPrice, "UnitBuyPrice");
-            CheckEqual(140, result.UnitSellPrice, "UnitSellPrice");
-            CheckEqual(500, result.TotalBuyPrice, "TotalBuyPrice");
-            CheckEqual(700, result.TotalSellPrice, "TotalSellPrice");
-            CheckEqual(200, result.ExpectedGrossProfit, "ExpectedGrossProfit");
+            CheckEqual(100L, result.UnitBuyPrice, "UnitBuyPrice");
+            CheckEqual(140L, result.UnitSellPrice, "UnitSellPrice");
+            CheckEqual(500L, result.TotalBuyPrice, "TotalBuyPrice");
+            CheckEqual(700L, result.TotalSellPrice, "TotalSellPrice");
+            CheckEqual(200L, result.ExpectedGrossProfit, "ExpectedGrossProfit");
         }
 
         private static void SettlementCalculator_ReturnsExpectedM1Settlement()
@@ -47,7 +48,7 @@ namespace ND.Economy.Editor
                 {
                     new SoldItemInput
                     {
-                        ItemId = "apple",
+                        TradeItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = 500,
                         TotalSellPrice = 700
@@ -58,12 +59,12 @@ namespace ND.Economy.Editor
                 DevelopmentCurrencyReward = 1
             });
 
-            CheckEqual(700, result.TotalRevenue, "TotalRevenue");
-            CheckEqual(550, result.TotalExpense, "TotalExpense");
-            CheckEqual(200, result.GrossTradeProfit, "GrossTradeProfit");
-            CheckEqual(150, result.NetProfit, "NetProfit");
-            CheckEqual(1150, result.TradeMoneyAfter, "TradeMoneyAfter");
-            CheckEqual(1, result.DevelopmentCurrencyReward, "DevelopmentCurrencyReward");
+            CheckEqual(700L, result.TotalRevenue, "TotalRevenue");
+            CheckEqual(550L, result.TotalExpense, "TotalExpense");
+            CheckEqual(200L, result.GrossTradeProfit, "GrossTradeProfit");
+            CheckEqual(150L, result.NetProfit, "NetProfit");
+            CheckEqual(1150L, result.TradeMoneyAfter, "TradeMoneyAfter");
+            CheckEqual(1L, result.DevelopmentCurrencyReward, "DevelopmentCurrencyReward");
             Check(!result.IsBankrupt, "Settlement should not be bankrupt.");
             CheckEqual(5, result.Entries.Count, "Entries.Count");
         }
@@ -80,7 +81,7 @@ namespace ND.Economy.Editor
             CheckEqual(1f, result.CombatPowerMultiplier, "CombatPowerMultiplier");
             CheckEqual(0.5f, result.LossLimitRate, "LossLimitRate");
             CheckEqual(1f, result.RiskMultiplier, "RiskMultiplier");
-            CheckEqual(0, result.MinRecoveryTradeMoney, "MinRecoveryTradeMoney");
+            CheckEqual(0L, result.MinRecoveryTradeMoney, "MinRecoveryTradeMoney");
         }
 
         private static void GrowthPurchaseCalculator_SpendsDevelopmentCurrency()
@@ -98,8 +99,8 @@ namespace ND.Economy.Editor
             CheckEqual(GrowthPurchaseError.None, result.Error, "GrowthPurchaseError");
             CheckEqual(0, result.PreviousLevel, "PreviousLevel");
             CheckEqual(1, result.NewLevel, "NewLevel");
-            CheckEqual(1, result.CostDevelopmentCurrency, "CostDevelopmentCurrency");
-            CheckEqual(0, result.DevelopmentCurrencyAfter, "DevelopmentCurrencyAfter");
+            CheckEqual(1L, result.CostDevelopmentCurrency, "CostDevelopmentCurrency");
+            CheckEqual(0L, result.DevelopmentCurrencyAfter, "DevelopmentCurrencyAfter");
         }
 
         private static void GrowthPurchaseCalculator_FailsWhenCurrencyIsNotEnough()
@@ -116,7 +117,7 @@ namespace ND.Economy.Editor
             Check(!result.Success, "Growth purchase should fail.");
             CheckEqual(GrowthPurchaseError.NotEnoughDevelopmentCurrency, result.Error, "GrowthPurchaseError");
             CheckEqual(0, result.NewLevel, "NewLevel");
-            CheckEqual(0, result.DevelopmentCurrencyAfter, "DevelopmentCurrencyAfter");
+            CheckEqual(0L, result.DevelopmentCurrencyAfter, "DevelopmentCurrencyAfter");
         }
 
         private static void CurrencyWallet_AppliesSettlementAndGrowthPurchase()
@@ -135,7 +136,7 @@ namespace ND.Economy.Editor
                 {
                     new SoldItemInput
                     {
-                        ItemId = "apple",
+                        TradeItemId = "apple",
                         Quantity = 5,
                         TotalBuyPrice = 500,
                         TotalSellPrice = 700
@@ -148,8 +149,8 @@ namespace ND.Economy.Editor
             CurrencyApplyResult settlementApply = CurrencyWallet.ApplySettlement(state, settlement);
 
             Check(settlementApply.Success, "Settlement apply should succeed: " + settlementApply.ErrorCode);
-            CheckEqual(1150, state.TradeMoney, "TradeMoney after settlement");
-            CheckEqual(1, state.DevelopmentCurrency, "DevelopmentCurrency after settlement");
+            CheckEqual(1150L, state.TradeMoney, "TradeMoney after settlement");
+            CheckEqual(1L, state.DevelopmentCurrency, "DevelopmentCurrency after settlement");
 
             GrowthPurchaseResult growthPurchase = GrowthPurchaseCalculator.Purchase(new GrowthPurchaseInput
             {
@@ -161,8 +162,8 @@ namespace ND.Economy.Editor
             CurrencyApplyResult growthApply = CurrencyWallet.ApplyGrowthPurchase(state, growthPurchase);
 
             Check(growthApply.Success, "Growth apply should succeed: " + growthApply.ErrorCode);
-            CheckEqual(1150, state.TradeMoney, "TradeMoney after growth");
-            CheckEqual(0, state.DevelopmentCurrency, "DevelopmentCurrency after growth");
+            CheckEqual(1150L, state.TradeMoney, "TradeMoney after growth");
+            CheckEqual(0L, state.DevelopmentCurrency, "DevelopmentCurrency after growth");
         }
 
         private static void EconomyM1LoopCalculator_ExecutesPriceSettlementCurrencyGrowthAndRuntimeStats()
@@ -171,7 +172,7 @@ namespace ND.Economy.Editor
             {
                 PriceInput = new PriceCalculationInput
                 {
-                    ItemId = "apple",
+                    TradeItemId = "apple",
                     FromTownId = "town_start",
                     ToTownId = "town_trade_01",
                     RouteId = "route_01",
@@ -198,16 +199,54 @@ namespace ND.Economy.Editor
             });
 
             Check(result.Success, "M1 loop should succeed: " + result.ErrorCode);
-            CheckEqual(500, result.PriceResult.TotalBuyPrice, "Loop TotalBuyPrice");
-            CheckEqual(700, result.PriceResult.TotalSellPrice, "Loop TotalSellPrice");
-            CheckEqual(150, result.Settlement.NetProfit, "Loop NetProfit");
-            CheckEqual(1150, result.SettlementCurrencyApply.After.TradeMoney, "Loop settlement TradeMoney");
+            CheckEqual(500L, result.PriceResult.TotalBuyPrice, "Loop TotalBuyPrice");
+            CheckEqual(700L, result.PriceResult.TotalSellPrice, "Loop TotalSellPrice");
+            CheckEqual(150L, result.Settlement.NetProfit, "Loop NetProfit");
+            CheckEqual(1150L, result.SettlementCurrencyApply.After.TradeMoney, "Loop settlement TradeMoney");
             Check(result.GrowthPurchase.Success, "Loop growth purchase should succeed.");
             CheckEqual(1, result.GrowthPurchase.NewLevel, "Loop NewLevel");
-            CheckEqual(0, result.GrowthCurrencyApply.After.DevelopmentCurrency, "Loop DevelopmentCurrency");
-            CheckEqual(1150, result.FinalCurrencyState.TradeMoney, "Loop final TradeMoney");
-            CheckEqual(0, result.FinalCurrencyState.DevelopmentCurrency, "Loop final DevelopmentCurrency");
+            CheckEqual(0L, result.GrowthCurrencyApply.After.DevelopmentCurrency, "Loop DevelopmentCurrency");
+            CheckEqual(1150L, result.FinalCurrencyState.TradeMoney, "Loop final TradeMoney");
+            CheckEqual(0L, result.FinalCurrencyState.DevelopmentCurrency, "Loop final DevelopmentCurrency");
             CheckEqual(10, result.RuntimeStats.MaxLoadBonus, "Loop MaxLoadBonus");
+        }
+
+        private static void EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase()
+        {
+            EconomyM1LoopResult result = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
+            {
+                PriceInput = new PriceCalculationInput
+                {
+                    TradeItemId = "apple",
+                    FromTownId = "town_start",
+                    ToTownId = "town_trade_01",
+                    RouteId = "route_01",
+                    Quantity = 5,
+                    BaseBuyPrice = 100,
+                    BaseSellPrice = 140
+                },
+                CurrencyState = new CurrencyState
+                {
+                    TradeMoney = 1000,
+                    DevelopmentCurrency = 1
+                },
+                TradeId = "m1_growth_level_guard_trade",
+                FoodCost = 50,
+                DevelopmentCurrencyReward = 1,
+                PurchaseGrowth = true,
+                PlayerGrowthLevel = 1,
+                GrowthPurchaseInput = new GrowthPurchaseInput
+                {
+                    GrowthId = "growth_load_01",
+                    MaxLevel = 1,
+                    CostDevelopmentCurrency = 1
+                }
+            });
+
+            Check(!result.Success, "M1 loop should fail when saved growth level is already max.");
+            CheckEqual("GrowthPurchaseFailed:" + GrowthPurchaseError.AlreadyMaxLevel, result.ErrorCode, "Loop growth max error");
+            CheckEqual(GrowthPurchaseError.AlreadyMaxLevel, result.GrowthPurchase.Error, "Loop growth purchase error");
+            CheckEqual(1, result.GrowthPurchase.PreviousLevel, "Loop previous growth level");
         }
 
         private static void EconomyM1SmokeScenario_Run_Succeeds()
@@ -215,10 +254,10 @@ namespace ND.Economy.Editor
             EconomyM1SmokeResult result = EconomyM1SmokeScenario.Run();
 
             Check(result.Success, "Smoke scenario should succeed: " + result.ErrorMessage);
-            CheckEqual(500, result.PriceResult.TotalBuyPrice, "Smoke TotalBuyPrice");
-            CheckEqual(700, result.PriceResult.TotalSellPrice, "Smoke TotalSellPrice");
-            CheckEqual(150, result.Settlement.NetProfit, "Smoke NetProfit");
-            CheckEqual(1150, result.Settlement.TradeMoneyAfter, "Smoke TradeMoneyAfter");
+            CheckEqual(500L, result.PriceResult.TotalBuyPrice, "Smoke TotalBuyPrice");
+            CheckEqual(700L, result.PriceResult.TotalSellPrice, "Smoke TotalSellPrice");
+            CheckEqual(150L, result.Settlement.NetProfit, "Smoke NetProfit");
+            CheckEqual(1150L, result.Settlement.TradeMoneyAfter, "Smoke TradeMoneyAfter");
             Check(result.SettlementCurrencyApply.Success, "Smoke settlement currency apply should succeed.");
             Check(result.GrowthPurchase.Success, "Smoke growth purchase should succeed.");
             Check(result.GrowthCurrencyApply.Success, "Smoke growth currency apply should succeed.");
