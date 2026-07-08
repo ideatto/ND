@@ -8,6 +8,9 @@ An idle trading management simulation set in a fantasy world, where trading citi
 
 Idle Game, Trading Management Simulation
 
+**Document updated:** 2026-07-08  
+**Save-system update scope:** First-build save stability and auto-save policy; second-build HMAC integrity protection
+
 ---
 
 ## First Build Goals
@@ -455,7 +458,7 @@ Loans function as a safety mechanism that prevents players from becoming unable 
 
 ### 14) Offline Progression, Saving, and Loading
 
-The first build verifies time calculation and data recovery, which are core technical risks in an idle game.
+The first build verifies time calculation, save-file integrity, and data recovery, which are core technical risks in an idle game.
 
 #### Minimum Implementation Scope
 
@@ -468,16 +471,41 @@ The first build verifies time calculation and data recovery, which are core tech
 * Save city donations and development levels
 * Save wagon durability
 * Save loan state
-* Auto-save
 * JSON-based loading
 * Calculate elapsed offline time
 * Automatically settle completed trade journeys
+
+#### Save Stability and Recovery
+
+* Do not overwrite the current main save file directly.
+* Write new save data to a temporary file first.
+* Validate the temporary save before replacing the main save.
+* Preserve the previous valid main save as a backup file.
+* Store the save-data version, save sequence number, and save timestamp.
+* On startup, inspect the main, temporary, and backup save files.
+* Load the newest valid candidate according to its save sequence number.
+* Do not immediately delete a corrupted save or overwrite it with default data.
+* Offer a new-game transition only when all available save candidates are invalid.
+
+#### Auto-Save Policy
+
+* Mark save data as changed when persistent gameplay state is modified.
+* Check for dirty save data every 10 seconds and save only when changes exist.
+* Save immediately when a critical state is confirmed, including trade departure, settlement completion, progression purchases, donations, investments, and loans.
+* Do not save immediately for temporary UI selections, previews, or unconfirmed inputs.
+* Coalesce repeated save requests into a single operation.
+* Prevent two save operations from writing at the same time.
+* Attempt to save when the application is paused or closed normally, but do not rely only on shutdown callbacks.
 
 #### Success Criteria
 
 * Progress is restored after closing and relaunching the game.
 * Trade completion during offline time is determined accurately.
 * The progression states of multiple caravans can be saved individually.
+* A valid main, temporary, or backup save can be selected and restored after an interrupted write.
+* Corrupted save files are preserved for diagnosis and do not automatically erase the last valid progress.
+* Auto-save does not write repeatedly when no persistent state has changed.
+* Critical state transitions are saved without waiting for the regular 10-second interval.
 * Basic defensive handling exists for system time changes or abnormal termination.
 
 ---
@@ -641,6 +669,8 @@ The first build is considered complete when all of the following conditions are 
 * One new region can be unlocked through investment in an unexplored area.
 * The player can recover from bankruptcy through a loan or minimum-funds guarantee.
 * Trade progression is restored after the game is closed.
+* Interrupted or corrupted saves can recover from the newest valid main, temporary, or backup file.
+* Auto-save records critical confirmed state changes and avoids unnecessary writes when no persistent data has changed.
 * The Boot → Title → Loading → InGame → Title flow functions correctly.
 * The first trade journey can be completed through the tutorial.
 * The mascot is used in the tutorial or settlement screen.
@@ -751,6 +781,26 @@ The second build expands the core systems validated in the first build and devel
 * Economic change logs
 * Tutorial replay
 * Mascot notification settings
+
+---
+
+### 7) Save Data Protection
+
+* Apply an HMAC-based integrity check to detect save-data modification.
+* Verify the HMAC before accepting and deserializing the protected payload.
+* Treat an HMAC mismatch as an invalid save candidate and continue recovery using another valid candidate when available.
+* Do not store the HMAC secret as a plain-text string literal in the game code.
+* Obtain or construct the secret through a platform-secure storage mechanism, a build-time injection process, or another separated key-management layer appropriate to the target platform.
+* Keep save protection separate from JSON serialization and physical file storage.
+* Preserve compatibility with the first-build main, temporary, and backup recovery flow.
+* Document that client-side HMAC raises the cost of casual save editing but does not provide absolute protection against reverse engineering.
+
+#### Success Criteria
+
+* Modified payloads fail integrity verification.
+* Valid protected saves continue to load through the existing recovery flow.
+* The serializer, HMAC protector, validator, and file-storage responsibilities can be tested independently.
+* The HMAC secret is not committed as a readable plain-text literal in the source repository.
 
 ---
 
@@ -1106,6 +1156,8 @@ The following features will be reevaluated for workload and impact after the cor
 
 ### 27) Saving and Loading
 
+#### Persistent Gameplay Data
+
 * Player currency
 * Development currency
 * Caravan states
@@ -1119,6 +1171,38 @@ The following features will be reevaluated for workload and impact after the cor
 * Loans
 * Tutorial progress
 * Option settings
+
+#### Save Metadata
+
+* Save-data version
+* Monotonically increasing save sequence number
+* UTC save timestamp
+* Payload validation information
+
+#### Save Stability and Recovery
+
+* Write new data to a temporary save instead of overwriting the main save directly.
+* Validate the temporary save before promotion.
+* Preserve the previous valid main save as a backup.
+* Inspect the main, temporary, and backup candidates during loading.
+* Select the newest valid candidate by save sequence number.
+* Preserve corrupted candidates for diagnosis rather than immediately deleting or overwriting them.
+* Request a new game only when every available candidate is invalid.
+
+#### Auto-Save Behavior
+
+* Use a dirty flag so unchanged data is not written repeatedly.
+* Check for pending changes every 10 seconds.
+* Save immediately after confirmed critical state transitions.
+* Exclude temporary UI selections and previews from immediate saves.
+* Merge repeated save requests and serialize only one write operation at a time.
+* Attempt a final save on pause and normal shutdown without treating those callbacks as the only protection against data loss.
+
+#### Second-Build Protection
+
+* Add HMAC-based save-data modification detection.
+* Keep HMAC protection separate from serialization and file storage.
+* Do not store the HMAC secret as a plain-text string literal in source code.
 
 ---
 
@@ -1335,3 +1419,22 @@ Players may change the system clock to complete trade journeys instantly or repe
 * Limit the maximum duration of offline rewards
 * Log abnormal time changes
 * Expand to server time or external time verification when necessary
+
+---
+
+### 11) Save Corruption and Excessive Auto-Save Writes
+
+#### Risk
+
+Directly overwriting one JSON file can destroy the latest valid progress if the application closes during the write. Saving every input immediately can also cause unnecessary disk writes, overlapping operations, and partially confirmed gameplay states to be persisted.
+
+#### Alternative
+
+* Use temporary, main, and backup save candidates.
+* Validate a temporary save before replacing the main save.
+* Store a save sequence number and load the newest valid candidate.
+* Use a dirty flag and write only when persistent state has changed.
+* Save critical confirmed state transitions immediately.
+* Coalesce repeated non-critical save requests.
+* Allow only one file-write operation at a time.
+* Preserve invalid files for diagnosis and prompt for a new game only when all candidates fail validation.
