@@ -51,6 +51,7 @@ namespace ND.Framework
                     return CreateNewGameData();
                 }
 
+                NormalizeData(data);
                 FrameworkLog.Info($"Save data loaded. Version: {data.version}");
                 return data;
             }
@@ -71,6 +72,7 @@ namespace ND.Framework
 
             try
             {
+                NormalizeData(data);
                 data.version = SaveData.CurrentVersion;
                 data.lastSavedUtcTicks = DateTime.UtcNow.Ticks;
 
@@ -90,6 +92,39 @@ namespace ND.Framework
             {
                 File.Delete(savePath);
                 FrameworkLog.Info("Save data reset.");
+            }
+        }
+
+        private static void NormalizeData(SaveData data)
+        {
+            if (data.player == null)
+            {
+                data.player = new PlayerSaveData();
+            }
+
+            if (data.caravan == null)
+            {
+                data.caravan = new CaravanSaveData();
+            }
+
+            if (data.caravan.inventory == null)
+            {
+                data.caravan.inventory = new System.Collections.Generic.List<TradeItemBundleSaveData>();
+            }
+
+            if (data.tradeProgress == null)
+            {
+                data.tradeProgress = new TradeProgressSaveData();
+            }
+
+            if (data.world == null)
+            {
+                data.world = new WorldSaveData();
+            }
+
+            if (data.tutorial == null)
+            {
+                data.tutorial = new TutorialSaveData();
             }
         }
     }

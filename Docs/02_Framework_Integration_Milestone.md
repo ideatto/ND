@@ -23,7 +23,7 @@
 - 중복 보상 방지
 - 시간 역행 감지
 - 통합용 디버그 명령
-- develop 통합 안정성
+- `Dev2` 통합 안정성
 - RC 빌드와 제출 백업
 
 담당하지 않는 항목:
@@ -49,7 +49,7 @@
 - 저장 데이터 버전 필드
 - 공용 로그
 - 시간 배속
-- 무역 즉시 완료
+- 무역 즉시 완료 요청 이벤트
 - 통합용 샘플 씬
 
 ### 완료 기준
@@ -79,14 +79,14 @@
 - 정산 화면 진입
 - 정산 종료 후 준비 상태 전환
 - 새 게임 기본 데이터 초기화
-- develop 브랜치에서 매일 통합 빌드
+- `Dev2` 브랜치에서 매일 통합 빌드
 
 ### 완료 기준
 
 - 무역 출발 후 정상적으로 완료된다.
 - 화면 상태와 런타임 상태가 어긋나지 않는다.
 - 정산 종료 후 다음 무역으로 복귀한다.
-- develop 브랜치가 실행 가능한 상태를 유지한다.
+- `Dev2` 브랜치가 실행 가능한 상태를 유지한다.
 
 ### 일정 지연 시 축소
 
@@ -211,12 +211,12 @@
 - [ ] `GameTimeService`
 - [ ] `SaveService`
 - [ ] `SceneFlowService`
-- [ ] `AutoSave`
+- [ ] `AutoSave` (M3에서 전체 구현)
 - [ ] `LoadCompleted`
 - [ ] `TradeOfflineCompleted`
 - [ ] `TimeRollbackDetected`
 - [ ] `ResetSaveData`
-- [ ] `CompleteTradeImmediately`
+- [ ] `CompleteTradeRequested` (즉시 완료 기능은 무역 시스템과 InGame 씬 준비 후 구현)
 - [ ] `SetTimeScale`
 - [ ] `ForceSeason`
 - [ ] `ForceDisaster`
@@ -226,7 +226,7 @@
 
 # 5. 통합 체크리스트
 
-- [ ] develop 브랜치가 매일 빌드된다.
+- [ ] `Dev2` 브랜치가 매일 빌드된다.
 - [ ] 공용 매니저가 중복되지 않는다.
 - [ ] 씬 이동 중 입력이 중복 처리되지 않는다.
 - [ ] 동일 무역 보상이 한 번만 지급된다.
