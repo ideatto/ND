@@ -28,9 +28,9 @@
 - 압축 파일, 폰트, 네이티브 라이브러리, PDF 등
 - `UnityYAMLMerge`를 사용하기 위한 Unity YAML 병합 속성
 
-따라서 파일 전체를 새로 교체할 필요는 없습니다. 다만 최근 Unity 프로젝트에서 자주 사용하는 일부 형식과 Unity 바이너리 `.asset` 예외 처리가 빠져 있습니다.
+따라서 파일 전체를 새로 교체할 필요는 없습니다. 최근 Unity 프로젝트에서 자주 사용하는 일부 형식과 Unity 바이너리 `.asset` 예외 규칙은 현재 `.gitattributes`에 반영되어 있습니다.
 
-### 보완이 필요한 핵심 항목
+### 현재 보완되어 있는 핵심 항목
 
 1. 최신 3D 교환 형식
    - `.glb`
@@ -60,27 +60,21 @@
    - NavMeshData
    - 일부 베이크 데이터와 플러그인 생성 데이터
 
-현재 저장소에는 `LightingData.asset`에 대해 LFS 규칙을 적용합니다.
-
-기존 바이너리 처리 규칙:
-
-```gitattributes
-LightingData.asset binary
-```
-
-베이크된 조명 데이터를 저장소에서 관리한다면 다음처럼 LFS로 전환하는 편이 일반적으로 안전합니다.
+현재 저장소에는 베이크된 조명 데이터인 `LightingData.asset`에 대해 LFS 규칙을 적용합니다.
 
 ```gitattributes
 LightingData.asset lfs
 ```
 
+이전 문서에서 언급하던 `LightingData.asset binary` 규칙은 현재 기준이 아닙니다. 베이크된 조명 데이터를 저장소에서 관리할 경우 현재처럼 LFS 포인터로 추적하는 구성이 기준입니다.
+
 > 주의: `*.asset lfs`를 추가하면 안 됩니다. 대부분의 Unity `.asset` 파일은 텍스트 YAML이며 Git diff와 병합의 이점을 받을 수 있습니다. 바이너리 `.asset`만 파일명 또는 폴더 경로로 선별해야 합니다.
 
 ---
 
-## 3. 현재 파일에 추가할 권장 규칙
+## 3. 현재 파일에 반영된 권장 규칙
 
-현재 `.gitattributes`의 **LFS 관련 규칙 아래쪽**, 특히 일반 `*.asset unity-yaml` 규칙보다 뒤에 추가합니다. 더 구체적인 예외 규칙은 파일 아래쪽에 두는 것이 안전합니다.
+현재 `.gitattributes`의 **LFS 관련 규칙 아래쪽**, 특히 일반 `*.asset unity-yaml` 규칙보다 뒤에 다음 규칙들이 반영되어 있습니다. 더 구체적인 예외 규칙은 파일 아래쪽에 두는 것이 안전합니다.
 
 ### 3.1 기본 권장 추가 항목
 
@@ -428,7 +422,7 @@ git lfs migrate import --everything --include="*.glb,*.psd,*.wav"
 - 작업 중인 브랜치와 Pull Request를 먼저 정리합니다.
 - 팀원 전원에게 작업 중단 시간을 공유합니다.
 - 강제 push 이후 팀원은 새로 clone하는 방식을 권장합니다.
-- `main`, `dev` 같은 보호 브랜치의 강제 push 설정을 확인합니다.
+- `main`, `Dev2` 같은 보호 브랜치의 강제 push 설정을 확인합니다.
 
 단순히 새 확장자를 추가하는 상황에서는 이력 재작성을 사용하지 않습니다.
 

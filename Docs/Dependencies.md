@@ -2,7 +2,7 @@
 
 > 외부 에셋(.unitypackage)은 Git에 올리지 않는다. 대신 **여기에 기록**해서
 > 팀원이 새 PC에서도 프로젝트를 똑같이 재현할 수 있게 한다.
-> (정책 상세: `Docs/GitIgnore_에셋정책.md`)
+> (정책 상세: `Docs/GitIgnore_Asset_Policy.md`)
 
 ## 기록 규칙
 
