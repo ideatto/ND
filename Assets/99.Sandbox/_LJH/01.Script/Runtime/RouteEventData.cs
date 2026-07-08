@@ -16,3 +16,16 @@ public class RouteEventData
     public float minReward;
     public float maxReward;
 }
+
+public enum RewardType
+{
+    None,
+    TradingCurrency,
+    DevelopmentCurrency
+}
+
+public enum RouteEvent
+{
+    Combat,
+    Lucky
+}
