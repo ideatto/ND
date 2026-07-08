@@ -60,7 +60,9 @@
    - NavMeshData
    - 일부 베이크 데이터와 플러그인 생성 데이터
 
-현재 파일 마지막의 다음 규칙은 `LightingData.asset`을 바이너리로만 취급하며 LFS에는 넣지 않습니다.
+현재 저장소에는 `LightingData.asset`에 대해 LFS 규칙을 적용합니다.
+
+기존 바이너리 처리 규칙:
 
 ```gitattributes
 LightingData.asset binary
