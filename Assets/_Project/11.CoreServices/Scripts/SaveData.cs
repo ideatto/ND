@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ND.Framework
 {
@@ -11,6 +12,7 @@ namespace ND.Framework
         public long lastSavedUtcTicks;
         public PlayerSaveData player = new PlayerSaveData();
         public CaravanSaveData caravan = new CaravanSaveData();
+        public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
         public WorldSaveData world = new WorldSaveData();
         public TutorialSaveData tutorial = new TutorialSaveData();
     }
@@ -18,6 +20,7 @@ namespace ND.Framework
     [Serializable]
     public sealed class PlayerSaveData
     {
+        public string currentTownId = string.Empty;
         public int tradingCurrency = 1000;
         public int developmentCurrency;
     }
@@ -25,10 +28,29 @@ namespace ND.Framework
     [Serializable]
     public sealed class CaravanSaveData
     {
+        public float maxLoad;
+        public float currentLoad;
+        public float currentDurability;
+        public List<TradeItemBundleSaveData> inventory = new List<TradeItemBundleSaveData>();
+    }
+
+    [Serializable]
+    public sealed class TradeItemBundleSaveData
+    {
+        public string itemId = string.Empty;
+        public int quantity;
+        public int purchaseUnitPrice;
+        public int sellUnitPrice;
+    }
+
+    [Serializable]
+    public sealed class TradeProgressSaveData
+    {
         public string activeTradeId = string.Empty;
-        public long tradeStartUtcTicks;
-        public long expectedTradeEndUtcTicks;
-        public bool hasPendingSettlement;
+        public string activeRouteId = string.Empty;
+        public TradeProgressState state;
+        public long tradeStartUtcTick;
+        public long expectedTradeEndUtcTick;
     }
 
     [Serializable]
@@ -44,5 +66,15 @@ namespace ND.Framework
         public bool isCompleted;
         public bool isSkipped;
         public int stepIndex;
+    }
+
+    public enum TradeProgressState
+    {
+        None,
+        Preparing,
+        Traveling,
+        SettlementPending,
+        Completed,
+        Failed
     }
 }
