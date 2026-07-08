@@ -5,8 +5,8 @@ public class RouteData : ScriptableObject
 {
     [Header("Route_Default_Info")]
     [SerializeField] private string routeId;
-    [SerializeField] private string fromTownId;
-    [SerializeField] private string toTownId;
+    [SerializeField] private TownData fromTown;
+    [SerializeField] private TownData toTown;
     [SerializeField] private string displayName;
 
     [Header("Route_Unlocked_Default")]
@@ -29,8 +29,8 @@ public class RouteData : ScriptableObject
 
     #region
     public string RouteId => routeId;
-    public string FromTownId => fromTownId;
-    public string ToTownId => toTownId;
+    public TownData FromTown => fromTown;
+    public TownData ToTown => toTown;
     public string DisplayName => displayName;
     public float Distance => distance;
     public bool UnlockedByDefault => unlockedByDefault;

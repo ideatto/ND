@@ -10,15 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f32ce7dc35c28ff42affbb4305649f6f, type: 3}
-  m_Name: TownData_Dummy
+  m_Name: Town_BaseCamp
   m_EditorClassIdentifier: Assembly-CSharp::TownData
-  townId: dummytown
-  displayName: "\uB354\uBBF8 \uB3C4\uC2DC"
+  townId: basecamp
+  displayName: "\uBCA0\uC774\uC2A4 \uCEA0\uD504"
   icon: {fileID: 0}
   unlockedByDefault: 1
-  description: Dummy Town
-  market: {fileID: 11400000, guid: 53ff6f350e87d224aac61db15be826f9, type: 2}
-  availableRoutes:
-  - {fileID: 11400000, guid: a3fd1e2028afb94498ff4141e2c92419, type: 2}
+  description: 
+  market: {fileID: 0}
+  availableRoutes: []
   canContribute: 0
   maximumContributionLimit: 0

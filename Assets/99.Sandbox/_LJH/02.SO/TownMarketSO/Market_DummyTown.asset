@@ -12,8 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7df7a3265402c9043839408fb7059f03, type: 3}
   m_Name: Market_DummyTown
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
-  itemMaxQuantity: 0
+  marketId: dummytownmarket
+  itemMaxQuantity: 6
   itemRenewalCycle: 0
-  tradeItems: []
+  tradeItems:
+  - {fileID: 11400000, guid: 02746aa21cff0444c8a866e27b6f957f, type: 2}
   draftAnimalItems: []
   localSpecialtyItems: []

@@ -12,46 +12,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
   m_Name: TradeItem_Dummy
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
-  itemID: 
+  itemId: dummyItem
   displayName: "\uB354\uBBF8 \uC544\uC774\uD15C"
   icon: {fileID: 0}
   description: Dummy Item
   rarity: 0
   category: 1
-  defaultPrice: 0
+  baseBuyPrice: 10
+  baseSellPrice: 8
   weight: 0
+  isConsumable: 0
   canStack: 0
   maxCount: 0
-  seasonInfluenced: 0
-  seasonInfluenceData:
-  - season: 0
-    isInfluenced: 0
-    addPrice: 0
-    subtractPrice: 0
-  - season: 1
-    isInfluenced: 0
-    addPrice: 0
-    subtractPrice: 0
-  - season: 2
-    isInfluenced: 0
-    addPrice: 0
-    subtractPrice: 0
-  - season: 3
-    isInfluenced: 0
-    addPrice: 0
-    subtractPrice: 0
-  disasterInfluenced: 0
-  disasterInfluenceData:
-  - disaster: 0
-    isInfluence: 0
-    addPrice: 0
-    subtractPrice: 0
-  - disaster: 1
-    isInfluence: 0
-    addPrice: 0
-    subtractPrice: 0
-  - disaster: 2
-    isInfluence: 0
-    addPrice: 0
-    subtractPrice: 0
+  modified: 0
+  modifiers: []
   localSpecialty: 0

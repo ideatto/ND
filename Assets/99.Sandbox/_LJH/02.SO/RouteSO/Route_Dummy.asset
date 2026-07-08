@@ -12,14 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d6ca5c35337d5bd4594d2809d4a7c844, type: 3}
   m_Name: Route_Dummy
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
-  routeID: 
-  startTownID: 
-  destinationTownID: 
-  displayName: Dummy Route
-  distance: 0
-  defaultElapsedTime: 0
-  recommendedFoodQuantity: 0
-  riskLevel: 0
+  routeId: dummyroute
+  fromTownId: basecamp
+  toTownId: dummytown
+  displayName: "\uB354\uBBF8 \uB8E8\uD2B8"
+  unlockedByDefault: 1
+  distance: 1
+  defaultElapsedTime: 1
+  baseFoodCost: 0
+  baseMercenaryCost: 0
+  baseRiskLevel: 0
   routeEvents: []
   maxEventCount: 0
-  isLocked: 0
