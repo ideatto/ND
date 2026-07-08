@@ -136,37 +136,37 @@ namespace ND.Economy
             CurrencyApplyResult growthCurrencyApply,
             CoreRuntimeStatModifier runtimeStats)
         {
-            if (priceResult.UnitBuyPrice != 100)
+            if (priceResult.UnitBuyPrice != 100L)
             {
                 return "Expected unit buy price 100.";
             }
 
-            if (priceResult.UnitSellPrice != 140)
+            if (priceResult.UnitSellPrice != 140L)
             {
                 return "Expected unit sell price 140.";
             }
 
-            if (priceResult.TotalBuyPrice != 500)
+            if (priceResult.TotalBuyPrice != 500L)
             {
                 return "Expected total buy price 500.";
             }
 
-            if (priceResult.TotalSellPrice != 700)
+            if (priceResult.TotalSellPrice != 700L)
             {
                 return "Expected total sell price 700.";
             }
 
-            if (settlement.NetProfit != 150)
+            if (settlement.NetProfit != 150L)
             {
                 return "Expected net profit 150.";
             }
 
-            if (settlement.TradeMoneyAfter != 1150)
+            if (settlement.TradeMoneyAfter != 1150L)
             {
                 return "Expected trade money after settlement 1150.";
             }
 
-            if (settlement.DevelopmentCurrencyReward != 1)
+            if (settlement.DevelopmentCurrencyReward != 1L)
             {
                 return "Expected development currency reward 1.";
             }
@@ -176,12 +176,12 @@ namespace ND.Economy
                 return "Expected settlement currency apply success.";
             }
 
-            if (settlementCurrencyApply.After.TradeMoney != 1150)
+            if (settlementCurrencyApply.After.TradeMoney != 1150L)
             {
                 return "Expected currency state trade money 1150 after settlement.";
             }
 
-            if (settlementCurrencyApply.After.DevelopmentCurrency != 1)
+            if (settlementCurrencyApply.After.DevelopmentCurrency != 1L)
             {
                 return "Expected currency state development currency 1 after settlement.";
             }
@@ -196,7 +196,7 @@ namespace ND.Economy
                 return "Expected growth level 1.";
             }
 
-            if (growthPurchase.DevelopmentCurrencyAfter != 0)
+            if (growthPurchase.DevelopmentCurrencyAfter != 0L)
             {
                 return "Expected development currency after growth purchase 0.";
             }
@@ -206,12 +206,12 @@ namespace ND.Economy
                 return "Expected growth currency apply success.";
             }
 
-            if (growthCurrencyApply.After.TradeMoney != 1150)
+            if (growthCurrencyApply.After.TradeMoney != 1150L)
             {
                 return "Expected currency state trade money to stay 1150 after growth purchase.";
             }
 
-            if (growthCurrencyApply.After.DevelopmentCurrency != 0)
+            if (growthCurrencyApply.After.DevelopmentCurrency != 0L)
             {
                 return "Expected currency state development currency 0 after growth purchase.";
             }

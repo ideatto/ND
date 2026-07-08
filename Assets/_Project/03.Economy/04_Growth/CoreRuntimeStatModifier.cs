@@ -13,7 +13,7 @@ namespace ND.Economy
         public float CombatPowerMultiplier = 1f;
         public float LossLimitRate = 0.5f;
         public float RiskMultiplier = 1f;
-        public int MinRecoveryTradeMoney;
+        public long MinRecoveryTradeMoney;
 
         public static CoreRuntimeStatModifier Default()
         {
@@ -30,7 +30,7 @@ namespace ND.Economy
             CombatPowerMultiplier = Math.Max(0.1f, CombatPowerMultiplier);
             LossLimitRate = Math.Max(0f, Math.Min(1f, LossLimitRate));
             RiskMultiplier = Math.Max(0f, RiskMultiplier);
-            MinRecoveryTradeMoney = Math.Max(0, MinRecoveryTradeMoney);
+            MinRecoveryTradeMoney = Math.Max(0L, MinRecoveryTradeMoney);
         }
     }
 }

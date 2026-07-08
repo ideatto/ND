@@ -24,8 +24,8 @@ namespace ND.Economy
     {
         public string TradeItemId = string.Empty;
         public int Quantity;
-        public int TotalBuyPrice;
-        public int TotalSellPrice;
+        public long TotalBuyPrice;
+        public long TotalSellPrice;
     }
 
     [Serializable]
@@ -33,15 +33,15 @@ namespace ND.Economy
     {
         public string TradeId = string.Empty;
         public List<SoldItemInput> SoldItems = new List<SoldItemInput>();
-        public int TradeMoneyBefore;
-        public int FoodCost;
-        public int MercenaryCost;
-        public int CartRepairCost;
-        public int LostItemValue;
-        public int EventProfit;
-        public int EventLoss;
-        public int LoanRepayment;
-        public int DevelopmentCurrencyReward;
+        public long TradeMoneyBefore;
+        public long FoodCost;
+        public long MercenaryCost;
+        public long CartRepairCost;
+        public long LostItemValue;
+        public long EventProfit;
+        public long EventLoss;
+        public long LoanRepayment;
+        public long DevelopmentCurrencyReward;
     }
 
     [Serializable]
@@ -49,7 +49,7 @@ namespace ND.Economy
     {
         public SettlementEntryType EntryType;
         public string DisplayNameKey = string.Empty;
-        public int Amount;
+        public long Amount;
         public bool IsPositive;
         public string SourceId = string.Empty;
     }
@@ -58,14 +58,14 @@ namespace ND.Economy
     public sealed class SettlementBreakdown
     {
         public string TradeId = string.Empty;
-        public int TotalRevenue;
-        public int TotalExpense;
-        public int GrossTradeProfit;
-        public int NetProfit;
-        public int TradeMoneyAfter;
-        public int DevelopmentCurrencyReward;
+        public long TotalRevenue;
+        public long TotalExpense;
+        public long GrossTradeProfit;
+        public long NetProfit;
+        public long TradeMoneyAfter;
+        public long DevelopmentCurrencyReward;
         public List<SettlementEntry> Entries = new List<SettlementEntry>();
         public bool IsBankrupt;
-        public int MinimumRecoveryMoney;
+        public long MinimumRecoveryMoney;
     }
 }

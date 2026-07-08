@@ -4,7 +4,7 @@ namespace ND.Economy
 {
     public static class SettlementCalculator
     {
-        public static SettlementBreakdown Calculate(SettlementInput input, int minimumRecoveryMoney = 0)
+        public static SettlementBreakdown Calculate(SettlementInput input, long minimumRecoveryMoney = 0L)
         {
             if (input == null)
             {
@@ -14,12 +14,12 @@ namespace ND.Economy
             SettlementBreakdown result = new SettlementBreakdown
             {
                 TradeId = input.TradeId,
-                DevelopmentCurrencyReward = Math.Max(0, input.DevelopmentCurrencyReward),
-                MinimumRecoveryMoney = Math.Max(0, minimumRecoveryMoney)
+                DevelopmentCurrencyReward = Math.Max(0L, input.DevelopmentCurrencyReward),
+                MinimumRecoveryMoney = Math.Max(0L, minimumRecoveryMoney)
             };
 
-            int itemPurchaseCost = 0;
-            int itemSaleRevenue = 0;
+            long itemPurchaseCost = 0L;
+            long itemSaleRevenue = 0L;
 
             if (input.SoldItems != null)
             {
@@ -31,18 +31,18 @@ namespace ND.Economy
                         continue;
                     }
 
-                    itemPurchaseCost += Math.Max(0, soldItem.TotalBuyPrice);
-                    itemSaleRevenue += Math.Max(0, soldItem.TotalSellPrice);
+                    itemPurchaseCost += Math.Max(0L, soldItem.TotalBuyPrice);
+                    itemSaleRevenue += Math.Max(0L, soldItem.TotalSellPrice);
                 }
             }
 
-            int foodCost = Math.Max(0, input.FoodCost);
-            int mercenaryCost = Math.Max(0, input.MercenaryCost);
-            int cartRepairCost = Math.Max(0, input.CartRepairCost);
-            int lostItemValue = Math.Max(0, input.LostItemValue);
-            int eventProfit = Math.Max(0, input.EventProfit);
-            int eventLoss = Math.Max(0, input.EventLoss);
-            int loanRepayment = Math.Max(0, input.LoanRepayment);
+            long foodCost = Math.Max(0L, input.FoodCost);
+            long mercenaryCost = Math.Max(0L, input.MercenaryCost);
+            long cartRepairCost = Math.Max(0L, input.CartRepairCost);
+            long lostItemValue = Math.Max(0L, input.LostItemValue);
+            long eventProfit = Math.Max(0L, input.EventProfit);
+            long eventLoss = Math.Max(0L, input.EventLoss);
+            long loanRepayment = Math.Max(0L, input.LoanRepayment);
 
             result.TotalRevenue = itemSaleRevenue + eventProfit;
             result.TotalExpense = itemPurchaseCost
@@ -76,7 +76,7 @@ namespace ND.Economy
             SettlementBreakdown result,
             SettlementEntryType entryType,
             string displayNameKey,
-            int amount,
+            long amount,
             bool isPositive,
             string sourceId)
         {
@@ -92,7 +92,7 @@ namespace ND.Economy
             SettlementBreakdown result,
             SettlementEntryType entryType,
             string displayNameKey,
-            int amount,
+            long amount,
             bool isPositive,
             string sourceId)
         {
@@ -100,7 +100,7 @@ namespace ND.Economy
             {
                 EntryType = entryType,
                 DisplayNameKey = displayNameKey,
-                Amount = Math.Max(0, amount),
+                Amount = Math.Max(0L, amount),
                 IsPositive = isPositive,
                 SourceId = sourceId
             });

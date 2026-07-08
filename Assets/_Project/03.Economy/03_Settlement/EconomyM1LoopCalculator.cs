@@ -113,7 +113,7 @@ namespace ND.Economy
             };
         }
 
-        private static GrowthPurchaseInput BuildGrowthPurchaseInput(EconomyM1LoopInput input, int developmentCurrencyBefore)
+        private static GrowthPurchaseInput BuildGrowthPurchaseInput(EconomyM1LoopInput input, long developmentCurrencyBefore)
         {
             GrowthPurchaseInput source = input.GrowthPurchaseInput ?? new GrowthPurchaseInput();
 

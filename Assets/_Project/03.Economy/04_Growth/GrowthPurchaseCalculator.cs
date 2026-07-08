@@ -13,7 +13,7 @@ namespace ND.Economy
 
             int maxLevel = Math.Max(1, input.MaxLevel);
             int currentLevel = Math.Max(0, input.CurrentLevel);
-            int cost = input.CostDevelopmentCurrency;
+            long cost = input.CostDevelopmentCurrency;
 
             if (currentLevel >= maxLevel)
             {
@@ -51,8 +51,8 @@ namespace ND.Economy
                 Error = error,
                 PreviousLevel = input != null ? Math.Max(0, input.CurrentLevel) : 0,
                 NewLevel = input != null ? Math.Max(0, input.CurrentLevel) : 0,
-                CostDevelopmentCurrency = input != null ? Math.Max(0, input.CostDevelopmentCurrency) : 0,
-                DevelopmentCurrencyAfter = input != null ? Math.Max(0, input.DevelopmentCurrencyBefore) : 0
+                CostDevelopmentCurrency = input != null ? Math.Max(0L, input.CostDevelopmentCurrency) : 0L,
+                DevelopmentCurrencyAfter = input != null ? Math.Max(0L, input.DevelopmentCurrencyBefore) : 0L
             };
         }
     }

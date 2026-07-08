@@ -11,8 +11,8 @@ namespace ND.Economy
 
             return new CurrencyState
             {
-                TradeMoney = saveData.player.tradingCurrency,
-                DevelopmentCurrency = saveData.player.developmentCurrency
+                TradeMoney = ReadCurrencyField(saveData.player, "tradingCurrency"),
+                DevelopmentCurrency = ReadCurrencyField(saveData.player, "developmentCurrency")
             };
         }
 
@@ -23,8 +23,8 @@ namespace ND.Economy
                 return;
             }
 
-            saveData.player.tradingCurrency = currencyState.TradeMoney;
-            saveData.player.developmentCurrency = currencyState.DevelopmentCurrency;
+            WriteCurrencyField(saveData.player, "tradingCurrency", currencyState.TradeMoney);
+            WriteCurrencyField(saveData.player, "developmentCurrency", currencyState.DevelopmentCurrency);
         }
 
         public static PriceCalculationInput ToPriceCalculationInput(
@@ -59,13 +59,13 @@ namespace ND.Economy
             global::RouteData route,
             int quantity,
             string tradeId,
-            int developmentCurrencyReward,
+            long developmentCurrencyReward,
             bool purchaseGrowth,
             string growthId,
             int playerGrowthLevel,
             int caravanGrowthLevel,
             int growthMaxLevel = 1,
-            int growthCostDevelopmentCurrency = 1)
+            long growthCostDevelopmentCurrency = 1L)
         {
             return new EconomyM1LoopInput
             {
@@ -92,6 +92,48 @@ namespace ND.Economy
                 PlayerGrowthLevel = playerGrowthLevel,
                 CaravanGrowthLevel = caravanGrowthLevel
             };
+        }
+
+        private static long ReadCurrencyField(object target, string fieldName)
+        {
+            if (target == null)
+            {
+                return 0L;
+            }
+
+            System.Reflection.FieldInfo field = target.GetType().GetField(fieldName);
+            if (field == null)
+            {
+                return 0L;
+            }
+
+            object value = field.GetValue(target);
+            return value == null ? 0L : System.Convert.ToInt64(value);
+        }
+
+        private static void WriteCurrencyField(object target, string fieldName, long value)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            System.Reflection.FieldInfo field = target.GetType().GetField(fieldName);
+            if (field == null)
+            {
+                return;
+            }
+
+            if (field.FieldType == typeof(long))
+            {
+                field.SetValue(target, value);
+                return;
+            }
+
+            if (field.FieldType == typeof(int))
+            {
+                field.SetValue(target, value > int.MaxValue ? int.MaxValue : value < int.MinValue ? int.MinValue : (int)value);
+            }
         }
     }
 }

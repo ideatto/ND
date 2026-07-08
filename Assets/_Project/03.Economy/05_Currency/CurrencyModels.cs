@@ -5,8 +5,8 @@ namespace ND.Economy
     [Serializable]
     public sealed class CurrencyState
     {
-        public int TradeMoney;
-        public int DevelopmentCurrency;
+        public long TradeMoney;
+        public long DevelopmentCurrency;
 
         public CurrencyState Clone()
         {
