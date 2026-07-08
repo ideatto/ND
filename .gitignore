@@ -150,3 +150,4 @@ crashlytics-build.properties
 # - Commit the imported dependency once, subject to its license and repository size
 # - Use a separately versioned embedded/local package
 #
+/[Aa]ssets/_ExternalPackages/**

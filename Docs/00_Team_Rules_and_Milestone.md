@@ -6,11 +6,11 @@
 
 개별 담당자의 상세 일정은 다음 문서에서 확인한다.
 
-1. `01_Core_Gameplay_마일스톤.md`
-2. `02_Framework_Integration_마일스톤.md`
-3. `03_UI_Data_마일스톤.md`
-4. `04_Content_Tools_마일스톤.md`
-5. `05_Progression_System_마일스톤.md`
+1. `01_Core_Gameplay_Milestone.md`
+2. `02_Framework_Integration_Milestone.md`
+3. `03_UI_Data_Milestone.md`
+4. `04_Content_Tools_Milestone.md`
+5. `05_Progression_System_Milestone.md`
 
 ---
 
