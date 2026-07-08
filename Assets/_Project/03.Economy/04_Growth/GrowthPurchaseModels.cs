@@ -17,8 +17,8 @@ namespace ND.Economy
         public string GrowthId = string.Empty;
         public int CurrentLevel;
         public int MaxLevel = 1;
-        public int DevelopmentCurrencyBefore;
-        public int CostDevelopmentCurrency = 1;
+        public long DevelopmentCurrencyBefore;
+        public long CostDevelopmentCurrency = 1L;
     }
 
     [Serializable]
@@ -29,7 +29,7 @@ namespace ND.Economy
         public GrowthPurchaseError Error;
         public int PreviousLevel;
         public int NewLevel;
-        public int CostDevelopmentCurrency;
-        public int DevelopmentCurrencyAfter;
+        public long CostDevelopmentCurrency;
+        public long DevelopmentCurrencyAfter;
     }
 }

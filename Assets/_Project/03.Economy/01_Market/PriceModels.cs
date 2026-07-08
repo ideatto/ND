@@ -44,13 +44,13 @@ namespace ND.Economy
     [Serializable]
     public sealed class PriceCalculationInput
     {
-        public string ItemId = string.Empty;
+        public string TradeItemId = string.Empty;
         public string FromTownId = string.Empty;
         public string ToTownId = string.Empty;
         public string RouteId = string.Empty;
         public int Quantity;
-        public int BaseBuyPrice;
-        public int BaseSellPrice;
+        public long BaseBuyPrice;
+        public long BaseSellPrice;
         public string SeasonId = string.Empty;
         public string DisasterId = string.Empty;
         public List<string> ActiveEventIds = new List<string>();
@@ -69,19 +69,19 @@ namespace ND.Economy
         public PriceModifierTarget Target;
         public PriceModifierOperation Operation;
         public float Value;
-        public int AmountDelta;
+        public long AmountDelta;
     }
 
     [Serializable]
     public sealed class PriceCalculationResult
     {
-        public string ItemId = string.Empty;
+        public string TradeItemId = string.Empty;
         public int Quantity;
-        public int UnitBuyPrice;
-        public int UnitSellPrice;
-        public int TotalBuyPrice;
-        public int TotalSellPrice;
-        public int ExpectedGrossProfit;
+        public long UnitBuyPrice;
+        public long UnitSellPrice;
+        public long TotalBuyPrice;
+        public long TotalSellPrice;
+        public long ExpectedGrossProfit;
         public List<PriceModifierBreakdown> Modifiers = new List<PriceModifierBreakdown>();
         public bool IsValid;
         public string ErrorCode = string.Empty;

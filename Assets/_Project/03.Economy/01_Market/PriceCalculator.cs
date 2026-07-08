@@ -6,7 +6,7 @@ namespace ND.Economy
     public static class PriceCalculator
     {
         public const string ErrorNone = "";
-        public const string ErrorInvalidItemId = "INVALID_TRADE_ITEM_ID";
+        public const string ErrorInvalidTradeItemId = "INVALID_TRADE_ITEM_ID";
         public const string ErrorInvalidTownId = "INVALID_TOWN_ID";
         public const string ErrorInvalidRouteId = "INVALID_ROUTE_ID";
         public const string ErrorInvalidQuantity = "INVALID_QUANTITY";
@@ -24,11 +24,11 @@ namespace ND.Economy
                 return result;
             }
 
-            result.ItemId = input.ItemId;
+            result.TradeItemId = input.TradeItemId;
             result.Quantity = input.Quantity;
 
-            float buyPrice = input.BaseBuyPrice;
-            float sellPrice = input.BaseSellPrice;
+            double buyPrice = input.BaseBuyPrice;
+            double sellPrice = input.BaseSellPrice;
 
             ApplyModifiers(input.Modifiers, ref buyPrice, ref sellPrice, result.Modifiers);
 
@@ -47,12 +47,12 @@ namespace ND.Economy
         {
             if (input == null)
             {
-                return ErrorInvalidItemId;
+                return ErrorInvalidTradeItemId;
             }
 
-            if (string.IsNullOrWhiteSpace(input.ItemId))
+            if (string.IsNullOrWhiteSpace(input.TradeItemId))
             {
-                return ErrorInvalidItemId;
+                return ErrorInvalidTradeItemId;
             }
 
             if (string.IsNullOrWhiteSpace(input.FromTownId) || string.IsNullOrWhiteSpace(input.ToTownId))
@@ -80,8 +80,8 @@ namespace ND.Economy
 
         private static void ApplyModifiers(
             List<PriceModifierInput> modifiers,
-            ref float buyPrice,
-            ref float sellPrice,
+            ref double buyPrice,
+            ref double sellPrice,
             List<PriceModifierBreakdown> breakdowns)
         {
             if (modifiers == null || modifiers.Count == 0)
@@ -94,8 +94,8 @@ namespace ND.Economy
             for (int i = 0; i < modifiers.Count; i++)
             {
                 PriceModifierInput modifier = modifiers[i];
-                int beforeBuy = ClampFinalPrice(buyPrice);
-                int beforeSell = ClampFinalPrice(sellPrice);
+                long beforeBuy = ClampFinalPrice(buyPrice);
+                long beforeSell = ClampFinalPrice(sellPrice);
 
                 if (modifier.Target == PriceModifierTarget.BuyPrice || modifier.Target == PriceModifierTarget.Both)
                 {
@@ -107,9 +107,9 @@ namespace ND.Economy
                     sellPrice = ApplyModifierValue(sellPrice, modifier.Operation, modifier.Value);
                 }
 
-                int afterBuy = ClampFinalPrice(buyPrice);
-                int afterSell = ClampFinalPrice(sellPrice);
-                int amountDelta = 0;
+                long afterBuy = ClampFinalPrice(buyPrice);
+                long afterSell = ClampFinalPrice(sellPrice);
+                long amountDelta = 0L;
 
                 if (modifier.Target == PriceModifierTarget.BuyPrice)
                 {
@@ -142,7 +142,7 @@ namespace ND.Economy
             return left.ModifierType.CompareTo(right.ModifierType);
         }
 
-        private static float ApplyModifierValue(float price, PriceModifierOperation operation, float value)
+        private static double ApplyModifierValue(double price, PriceModifierOperation operation, float value)
         {
             switch (operation)
             {
@@ -157,9 +157,9 @@ namespace ND.Economy
             }
         }
 
-        private static int ClampFinalPrice(float price)
+        private static long ClampFinalPrice(double price)
         {
-            return Math.Max(1, (int)Math.Round(price, MidpointRounding.AwayFromZero));
+            return Math.Max(1L, (long)Math.Round(price, MidpointRounding.AwayFromZero));
         }
     }
 }
