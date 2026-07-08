@@ -51,6 +51,7 @@ public class imsiWagonData
 public class imsiAnimalData
 {
     public string animalName;  // 동물 이름
+    public float speed = 1f;   // 이동 속도 배수 (말=1 기준 / 당나귀=0.5 / 타조=1.5)
     public float foodPerKm;    // 1Km당 식량 소모(연료 개념). 예: 0.1 → 100Km에 10 소모
     // TODO(M1 이후): 종류별 특성(속도·적재보너스)은 여기 필드가 생기면 반영.
     //               당나귀 느림/적재↑, 말 중간, 타조 빠름/적재↓ 를 한 묶음으로 설계.
