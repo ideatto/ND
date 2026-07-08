@@ -75,8 +75,15 @@ public static class CaravanCalculator
     /// <summary>[미정 자리 — 1.0] 동물 종류별 속도. imsiAnimalData.speed 생기면 반영.</summary>
     public static float GetAnimalTypeSpeed(List<imsiAnimalData> animals)
     {
-        // TODO: 당나귀 느림/타조 빠름. 평균/합산 규칙 정해서 반영.
-        return 1f;
+        if (animals == null || animals.Count == 0) return 1f;
+
+        float sum = 0f;
+        int count = 0;
+        foreach (imsiAnimalData a in animals)
+        {
+            if (a != null) { sum += a.speed; count++; }
+        }
+        return count > 0 ? sum / count : 1f;   // 동물들 속도의 '평균'
     }
 
     /// <summary>[미정 자리] 마차 속도 보정. speedModifier 0/미설정이면 1.0(중립).</summary>
