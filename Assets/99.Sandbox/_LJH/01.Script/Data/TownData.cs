@@ -25,7 +25,7 @@ public class TownData : ScriptableObject
     [SerializeField] private bool canContribute;
     [SerializeField] private float maximumContributionLimit;
 
-    #region
+    #region Public Properties
     public string TownId => townId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;

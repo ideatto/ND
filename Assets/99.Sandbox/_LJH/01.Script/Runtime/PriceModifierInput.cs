@@ -1,5 +1,3 @@
-using UnityEngine;
-
 [System.Serializable]
 public class PriceModifierInput
 {
@@ -22,7 +20,7 @@ public enum Operation
 {
     None,
     Add,
-    Subtraction,
+    Subtract,
     Percent
 }
 

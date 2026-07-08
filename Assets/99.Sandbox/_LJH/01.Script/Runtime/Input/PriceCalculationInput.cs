@@ -11,8 +11,8 @@ public class PriceCalculationInput
     public int baseBuyPrice;
     public int baseSellPrice;
 
-    public int seasonId;
-    public int disasterId;
+    public Season season;
+    public Disaster disaster;
     public List<string> activeEventIds = new List<string>();
 
     public int playerGrowthLevel;
@@ -20,4 +20,8 @@ public class PriceCalculationInput
     public int oversupplyLevel;
 
     public List<PriceModifierInput> modifiers = new List<PriceModifierInput>();
+
+    public int Quantity => quantity >= 0 ? quantity : 0;
+    public int BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;
+    public int BaseSellPrice => baseSellPrice >= 0 ? baseSellPrice : 0;
 }

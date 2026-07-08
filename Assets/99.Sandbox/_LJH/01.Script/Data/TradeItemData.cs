@@ -33,7 +33,7 @@ public class TradeItemData : ScriptableObject
     [Header("Local_Trade_Info")]
     [SerializeField] private bool localSpecialty;
 
-    #region
+    #region Public Properties
     public string ItemId => itemId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
@@ -47,7 +47,7 @@ public class TradeItemData : ScriptableObject
     public bool CanStack => canStack;
     public int MaxCount => Mathf.Max(1, maxCount);
     public bool Modified => modified;
-    public PriceModifierInput[] Modifiers => modifiers;
+    public PriceModifierInput[] Modifiers => modifiers != null ? (PriceModifierInput[])modifiers.Clone() : new PriceModifierInput[0];
     public bool LocalSpecialty => localSpecialty;
     #endregion
 }

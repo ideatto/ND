@@ -77,17 +77,17 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var lockedRouteViewData = new RouteViewData
         {
-            routeId = route.RouteId,
-            displayName = route.DisplayName,
-            fromTownId = route.FromTownId,
-            fromTownName = route.FromTownName,
-            toTownId = route.ToTownId,
-            toTownName = route.ToTownName,
-            distance = route.Distance,
-            estimatedTime = route.DefaultElapsedTime,
-            foodCost = route.BaseFoodCost,
-            mercenaryCost = route.BaseMercenaryCost,
-            riskLevel = route.BaseRiskLevel,
+            routeId = routeViewData.routeId,
+            displayName = routeViewData.displayName,
+            fromTownId = routeViewData.fromTownId,
+            fromTownName = routeViewData.fromTownName,
+            toTownId = routeViewData.toTownId,
+            toTownName = routeViewData.toTownName,
+            distance = routeViewData.distance,
+            estimatedTime = routeViewData.estimatedTime,
+            foodCost = routeViewData.foodCost,
+            mercenaryCost = routeViewData.mercenaryCost,
+            riskLevel = routeViewData.riskLevel,
             isUnlocked = false,
             canSelect = false,
             disabledReason = "Route is not unlocked yet."
@@ -113,9 +113,25 @@ public class DataViewDataSmokeTest : MonoBehaviour
         };
 
         Debug.Log($"Town: {townViewData.displayName} / Unlocked: {townViewData.isUnlocked} / Current: {townViewData.isCurrentTown} / CanSelect: {townViewData.canSelect}");
+        Debug.Assert(townViewData.townId == town.TownId, "Smoke Test failed: townId mismatch.");
+        Debug.Assert(townViewData.isCurrentTown, "Smoke Test failed: current town should be true.");
+
         Debug.Log($"Item: {itemViewData.displayName} / Buy: {itemViewData.purchasePrice} / Sell: {itemViewData.sellPrice}");
+        Debug.Assert(itemViewData.itemId == item.ItemId, "Smoke Test failed: itemId mismatch.");
+        Debug.Assert(itemViewData.purchasePrice >= 0 && itemViewData.sellPrice >= 0, "Smoke Test failed: item prices should not be negative.");
+
         Debug.Log($"Route: {routeViewData.displayName} / From: {routeViewData.fromTownName} / To: {routeViewData.toTownName} / CanSelect: {routeViewData.canSelect}");
+        Debug.Assert(routeViewData.routeId == route.RouteId, "Smoke Test failed: routeId mismatch.");
+        Debug.Assert(routeViewData.canSelect == route.UnlockedByDefault, "Smoke Test failed: route select state mismatch.");
+
         Debug.Log($"Locked Route: {lockedRouteViewData.displayName} / CanSelect: {lockedRouteViewData.canSelect} / Reason: {lockedRouteViewData.disabledReason}");
+        Debug.Assert(!lockedRouteViewData.canSelect, "Smoke Test failed: locked route should not be selectable.");
+        Debug.Assert(!string.IsNullOrEmpty(lockedRouteViewData.disabledReason), "Smoke Test failed: locked route needs disabledReason.");
+
         Debug.Log($"Result Message: [{result.messages[0].type}] {result.messages[0].messageCode} / {result.messages[0].messageText}");
+        Debug.Assert(result.messages.Count > 0, "Smoke Test failed: result messages should not be empty.");
+        Debug.Assert(result.failureReason == FailureReason.FoodShortage, "Smoke Test failed: failureReason mismatch.");
+
+        Debug.Log("ViewData Smoke Test PASSED.");
     }
 }

@@ -1,11 +1,9 @@
-using UnityEngine;
-
 public enum TradeItemCategory
 {
     Food,
     Material,
     Valuable,
-    Luxury_Goods,
+    LuxuryGoods,
     Caravans,
-    Draft_Animals
+    DraftAnimals
 }

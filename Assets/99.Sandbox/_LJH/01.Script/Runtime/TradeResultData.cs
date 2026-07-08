@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEngine;
 
 [System.Serializable]
 public class TradeResultData
@@ -20,7 +19,7 @@ public class TradeResultData
     public int lossAmount;
     public int netProfit;
 
-    public TradeItemBundle[] lossItems;
+    public List<TradeItemBundle> lossItems = new List<TradeItemBundle>();
 
     public float durabilityLoss;
 

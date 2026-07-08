@@ -1,9 +1,7 @@
-using UnityEngine;
-
 public enum Disaster
 {
-    None,
-    Drought,
-    Flood,
-    Plague
+    None = 0,
+    Drought = 1,
+    Flood = 2,
+    Plague = 3
 }

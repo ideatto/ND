@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEngine;
 
 [System.Serializable]
 public sealed class SaveData
@@ -49,8 +48,8 @@ public sealed class TradeProgressSaveData
 [System.Serializable]
 public sealed class WorldSaveData
 {
-    public int currentSeason = (int)Season.Summer;
-    public int currentDisaster = (int)Disaster.None;
+    public Season currentSeason = Season.Summer;
+    public Disaster currentDisaster = Disaster.None;
 
     public List<string> unlockedTownIds = new List<string>();
     public List<string> unlockedRouteIds = new List<string>();

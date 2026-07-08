@@ -27,7 +27,7 @@ public class RouteData : ScriptableObject
     [SerializeField] private RouteEventData[] routeEvents;
     [SerializeField] private int maxEventCount;
 
-    #region
+    #region Public Properties
     public string RouteId => routeId;
     public TownData FromTown => fromTown;
     public TownData ToTown => toTown;
@@ -42,7 +42,7 @@ public class RouteData : ScriptableObject
     public int BaseFoodCost => Mathf.Max(0, baseFoodCost);
     public int BaseMercenaryCost => Mathf.Max(0, baseMercenaryCost);
     public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);
-    public RouteEventData[] RouteEvents => routeEvents;
+    public RouteEventData[] RouteEvents => routeEvents != null ? (RouteEventData[])routeEvents.Clone() : new RouteEventData[0];
     public int MaxEventCount => Mathf.Max(0, maxEventCount);
     #endregion
 }
