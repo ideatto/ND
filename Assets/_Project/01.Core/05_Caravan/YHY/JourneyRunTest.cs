@@ -12,7 +12,8 @@
 using System;                 
 using System.Collections;
 using UnityEngine;
-using ND.Framework;          
+using ND.Framework;
+using ND.Economy;
 
 public class JourneyRunTest : MonoBehaviour
 {
@@ -116,6 +117,19 @@ public class JourneyRunTest : MonoBehaviour
                 lastPrintedSec = elapsedSec;
             }
 
+            if (JourneyRunner.IsArrived(caravan) || caravan.runFatalReason != JourneyFailureReason.None)
+            {
+                JourneyResultData result = JourneyRunner.Settle(caravan);
+                PrintResult(result);
+
+                if (result != null && result.grade != JourneyResultGrade.Failed)   // ← 추가
+                    LogEconomyResult(caravan);                                     // ← 추가: 성공이면 판매가 계산
+
+                JourneyRunner.ClaimSettlement(caravan);
+                JourneyRunner.ResetToPrepare(caravan);
+                yield break;
+            }
+
             // 도착 또는 실패 → 정산
             if (JourneyRunner.IsArrived(caravan) || caravan.runFatalReason != JourneyFailureReason.None)
             {
@@ -128,6 +142,33 @@ public class JourneyRunTest : MonoBehaviour
 
             yield return null;
         }
+    }
+    // [임시] 도착 성공 시 cargo 상품을 정헌 계산기에 넣어 판매가/순이익을 콘솔에 표시.
+    //        cargo 없는 값(계절·재화 등)은 임시. 나중에 SO/정헌 값으로 교체.
+    private void LogEconomyResult(CaravanData caravan)
+    {
+        if (caravan.cargo.Count == 0 || caravan.cargo[0].item == null) return;
+
+        var input = new EconomyM1LoopInput();
+        // cargo에서 진짜로 (첫 상품)
+        input.PriceInput.ItemId = caravan.cargo[0].item.id;
+        input.PriceInput.Quantity = caravan.cargo[0].quantity;
+        input.PriceInput.BaseBuyPrice = caravan.cargo[0].item.basePrice;
+        input.PriceInput.BaseSellPrice = caravan.cargo[0].item.basePrice;
+        // 나머지 [임시]
+        input.TradeId = "trade_test";
+        input.PriceInput.RouteId = "route_01";
+        input.PriceInput.SeasonId = "summer";
+        input.CurrencyState.TradeMoney = 1000;
+        input.FoodCost = 20;
+        input.PriceInput.FromTownId = "town_A";   // [임시] 추가
+        input.PriceInput.ToTownId = "town_B";   // [임시] 추가
+
+        var r = EconomyM1LoopCalculator.Execute(input);
+        if (r.Success)
+            Debug.Log($"[정산] {caravan.cargo[0].item.itemName} {caravan.cargo[0].quantity}개 → 판매가 {r.PriceResult.TotalSellPrice} / 순이익 {r.Settlement.NetProfit}");
+        else
+            Debug.Log($"[정산] 계산 실패: {r.ErrorCode}");
     }
 
     private void PrintResult(JourneyResultData r)
@@ -161,4 +202,6 @@ public class JourneyRunTest : MonoBehaviour
 
         Debug.Log("[상단] 샘플 채움. foodAmount를 낮추거나 foodLossAtSecond를 켜면 식량 부족 실패 확인.");
     }
+
+
 }
