@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ND.Framework
 {
-    public sealed class GameTimeService
+    public sealed class GameTimeService : IGameTimeProvider
     {
         public float TimeScale { get; private set; } = 1f;
         public DateTime CurrentUtc => DateTime.UtcNow;

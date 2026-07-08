@@ -12,6 +12,8 @@ namespace ND.Framework
         public ISaveService SaveService { get; private set; }
         public SceneFlowService SceneFlow { get; private set; }
         public FrameworkDebugCommands DebugCommands { get; private set; }
+        public TradeProgressRecorder TradeProgressRecorder { get; private set; }
+        public TradeStartService TradeStart { get; private set; }
         public SaveData CurrentSaveData { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -80,6 +82,8 @@ namespace ND.Framework
             SaveService = new JsonSaveService();
             SceneFlow = new SceneFlowService();
             DebugCommands = new FrameworkDebugCommands(GameTime);
+            TradeProgressRecorder = new TradeProgressRecorder(GameTime);
+            TradeStart = new TradeStartService(() => CurrentSaveData, SaveService, TradeProgressRecorder);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
 
             FrameworkLog.Info("FrameworkRoot initialized.");
