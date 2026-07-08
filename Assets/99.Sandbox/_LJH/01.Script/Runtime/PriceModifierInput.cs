@@ -3,19 +3,12 @@ using UnityEngine;
 [System.Serializable]
 public class PriceModifierInput
 {
-    [SerializeField] private ModifierType priceModifierType;
-    [SerializeField] private string sourceId;
-    [SerializeField] private Target priceModifierTarget;
-    [SerializeField] private Operation priceModifierOperation;
-    [SerializeField] private float value;
-
-    #region
-    public ModifierType PriceModifierType => priceModifierType;
-    public string SourceId => sourceId;
-    public Target PriceModifierTarget => priceModifierTarget;
-    public Operation PriceModifierOperation => priceModifierOperation;
-    public float Value => value;
-    #endregion
+    public ModifierType priceModifierType;
+    public string sourceId;
+    public string displayName;
+    public Target priceModifierTarget;
+    public Operation priceModifierOperation;
+    public float value;
 }
 
 public enum Target

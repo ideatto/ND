@@ -26,8 +26,8 @@ public class MarketData : ScriptableObject
 
     #region
     public string MarketId => marketId;
-    public int ItemMaxQuantity => itemMaxQuantity;
-    public float ItemRenwalCycle => itemRenewalCycle;
+    public int ItemMaxQuantity => Mathf.Max(0, itemMaxQuantity);
+    public float ItemRenewalCycle => Mathf.Max(0f, itemRenewalCycle);
     public TradeItemData[] TradeItems => tradeItems;
     public TradeItemData[] DraftAnimalItems => draftAnimalItems;
     public TradeItemData[] LocalSpecialtyItems => localSpecialtyItems;

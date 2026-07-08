@@ -15,6 +15,12 @@ public class DataViewDataSmokeTest : MonoBehaviour
             return;
         }
 
+        if (route.FromTown == null || route.ToTown == null)
+        {
+            Debug.LogError("Smoke Test failed: route FromTown or ToTown is not assigned.");
+            return;
+        }
+
         var saveData = new SaveData();
         saveData.player.currentTownId = town.TownId;
 
@@ -31,7 +37,9 @@ public class DataViewDataSmokeTest : MonoBehaviour
             icon = town.Icon,
             description = town.Description,
             isUnlocked = saveData.world.unlockedTownIds.Contains(town.TownId),
-            isCurrentTown = saveData.player.currentTownId == town.TownId
+            isCurrentTown = saveData.player.currentTownId == town.TownId,
+            canSelect = saveData.world.unlockedTownIds.Contains(town.TownId),
+            disabledReason = string.Empty
         };
 
         var itemViewData = new TradeItemViewData
@@ -53,10 +61,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             routeId = route.RouteId,
             displayName = route.DisplayName,
-            fromTownId = route.FromTown.TownId,
-            fromTownName = route.FromTown.DisplayName,
-            toTownId = route.ToTown.TownId,
-            toTownName = route.ToTown.DisplayName,
+            fromTownId = route.FromTownId,
+            fromTownName = route.FromTownName,
+            toTownId = route.ToTownId,
+            toTownName = route.ToTownName,
             distance = route.Distance,
             estimatedTime = route.DefaultElapsedTime,
             foodCost = route.BaseFoodCost,
@@ -71,10 +79,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             routeId = route.RouteId,
             displayName = route.DisplayName,
-            fromTownId = route.FromTown.TownId,
-            fromTownName = route.FromTown.DisplayName,
-            toTownId = route.ToTown.TownId,
-            toTownName = route.ToTown.DisplayName,
+            fromTownId = route.FromTownId,
+            fromTownName = route.FromTownName,
+            toTownId = route.ToTownId,
+            toTownName = route.ToTownName,
             distance = route.Distance,
             estimatedTime = route.DefaultElapsedTime,
             foodCost = route.BaseFoodCost,
@@ -90,8 +98,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             isSuccess = false,
             tradeId = "trade_test_001",
             routeId = route.RouteId,
-            fromTownId = route.FromTown.TownId,
-            toTownId = route.ToTown.TownId,
+            fromTownId = route.FromTownId,
+            toTownId = route.ToTownId,
             failureReason = FailureReason.FoodShortage,
             messages =
             {
@@ -104,7 +112,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
              }
         };
 
-        Debug.Log($"Town: {townViewData.displayName} / Unlocked: {townViewData.isUnlocked} / Current: {townViewData.isCurrentTown}");
+        Debug.Log($"Town: {townViewData.displayName} / Unlocked: {townViewData.isUnlocked} / Current: {townViewData.isCurrentTown} / CanSelect: {townViewData.canSelect}");
         Debug.Log($"Item: {itemViewData.displayName} / Buy: {itemViewData.purchasePrice} / Sell: {itemViewData.sellPrice}");
         Debug.Log($"Route: {routeViewData.displayName} / From: {routeViewData.fromTownName} / To: {routeViewData.toTownName} / CanSelect: {routeViewData.canSelect}");
         Debug.Log($"Locked Route: {lockedRouteViewData.displayName} / CanSelect: {lockedRouteViewData.canSelect} / Reason: {lockedRouteViewData.disabledReason}");

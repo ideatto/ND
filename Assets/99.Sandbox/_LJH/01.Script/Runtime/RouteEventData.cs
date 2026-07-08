@@ -3,23 +3,18 @@ using UnityEngine;
 [System.Serializable]
 public class RouteEventData
 {
-    [SerializeField] private RouteEvent routeEvent;
+    public RouteEvent routeEvent;
+    public string routeEventId;
+    public string displayName;
+    [TextArea(2, 4)]
+    public string description;
 
-    [SerializeField] private float eventValue;
+    public float eventValue;
 
-    [SerializeField] private RewardType eventRewardType;
-    [SerializeField] private float eventReward;
-    [SerializeField] private float minReward;
-    [SerializeField] private float maxReward;
-
-    #region
-    public RouteEvent RouteEvent => routeEvent;
-    public float EventValue => eventValue;
-    public RewardType EventRewardType => eventRewardType;
-    public float EventReward => eventReward;
-    public float MinReward => minReward;
-    public float MaxReward => maxReward;
-    #endregion
+    public RewardType eventRewardType;
+    public float eventReward;
+    public float minReward;
+    public float maxReward;
 }
 
 public enum RewardType

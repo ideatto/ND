@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Route_Dummy
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
   routeId: dummyroute
-  fromTownId: basecamp
-  toTownId: dummytown
+  fromTown: {fileID: 11400000, guid: dedcb317d8ab97d43bee3c540ffd717e, type: 2}
+  toTown: {fileID: 11400000, guid: 2b94a9733de040b4383c1bcfc427585f, type: 2}
   displayName: "\uB354\uBBF8 \uB8E8\uD2B8"
   unlockedByDefault: 1
   distance: 1

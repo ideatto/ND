@@ -31,14 +31,18 @@ public class RouteData : ScriptableObject
     public string RouteId => routeId;
     public TownData FromTown => fromTown;
     public TownData ToTown => toTown;
+    public string FromTownId => fromTown != null ? fromTown.TownId : string.Empty;
+    public string FromTownName => fromTown != null ? fromTown.DisplayName : string.Empty;
+    public string ToTownId => toTown != null ? toTown.TownId : string.Empty;
+    public string ToTownName => toTown != null ? toTown.DisplayName : string.Empty;
     public string DisplayName => displayName;
-    public float Distance => distance;
+    public float Distance => Mathf.Max(0f, distance);
     public bool UnlockedByDefault => unlockedByDefault;
-    public float DefaultElapsedTime => defaultElapsedTime;
-    public int BaseFoodCost => baseFoodCost;
-    public int BaseMercenaryCost => baseMercenaryCost;
-    public float BaseRiskLevel => baseRiskLevel;
+    public float DefaultElapsedTime => Mathf.Max(0f, defaultElapsedTime);
+    public int BaseFoodCost => Mathf.Max(0, baseFoodCost);
+    public int BaseMercenaryCost => Mathf.Max(0, baseMercenaryCost);
+    public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);
     public RouteEventData[] RouteEvents => routeEvents;
-    public int MaxEventCount => maxEventCount;
+    public int MaxEventCount => Mathf.Max(0, maxEventCount);
     #endregion
 }

@@ -45,7 +45,7 @@ public class TradeItemData : ScriptableObject
     public float Weight => Mathf.Max(0, weight);
     public bool IsConsumable => isConsumable;
     public bool CanStack => canStack;
-    public int MaxCount => maxCount;
+    public int MaxCount => Mathf.Max(1, maxCount);
     public bool Modified => modified;
     public PriceModifierInput[] Modifiers => modifiers;
     public bool LocalSpecialty => localSpecialty;

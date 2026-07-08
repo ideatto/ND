@@ -10,4 +10,6 @@ public class TownViewData
 
     public bool isUnlocked;
     public bool isCurrentTown;
+    public bool canSelect;
+    public string disabledReason;
 }

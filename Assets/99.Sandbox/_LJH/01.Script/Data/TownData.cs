@@ -34,6 +34,6 @@ public class TownData : ScriptableObject
     public MarketData Market => market;
     public RouteData[] AvailableRoutes => availableRoutes;
     public bool CanContribute => canContribute;
-    public float MaximumContributionLimit => maximumContributionLimit;
+    public float MaximumContributionLimit => Mathf.Max(0, maximumContributionLimit);
     #endregion
 }

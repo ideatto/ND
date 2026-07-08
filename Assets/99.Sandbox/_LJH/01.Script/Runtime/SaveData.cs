@@ -49,8 +49,8 @@ public sealed class TradeProgressSaveData
 [System.Serializable]
 public sealed class WorldSaveData
 {
-    public string currentSeason = "summer";
-    public string currentDisaster = string.Empty;
+    public int currentSeason = (int)Season.Summer;
+    public int currentDisaster = (int)Disaster.None;
 
     public List<string> unlockedTownIds = new List<string>();
     public List<string> unlockedRouteIds = new List<string>();
