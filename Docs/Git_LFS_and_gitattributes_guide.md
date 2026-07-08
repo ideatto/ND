@@ -60,7 +60,7 @@
    - NavMeshData
    - 일부 베이크 데이터와 플러그인 생성 데이터
 
-현재 저장소에는 `LightingData.asset`에 대해 바이너리 처리 규칙과 LFS 규칙이 함께 존재합니다.
+현재 저장소에는 `LightingData.asset`에 대해 LFS 규칙을 적용합니다.
 
 기존 바이너리 처리 규칙:
 
@@ -68,13 +68,11 @@
 LightingData.asset binary
 ```
 
-권장 LFS 처리 규칙:
+베이크된 조명 데이터를 저장소에서 관리한다면 다음처럼 LFS로 전환하는 편이 일반적으로 안전합니다.
 
 ```gitattributes
 LightingData.asset lfs
 ```
-
-베이크된 조명 데이터를 저장소에서 관리한다면 `LightingData.asset lfs` 규칙을 최종 기준으로 삼는 편이 일반적으로 안전합니다. 다만 실제 `.gitattributes` 정리는 팀 합의 후 중복 규칙을 제거하는 별도 변경으로 처리합니다.
 
 > 주의: `*.asset lfs`를 추가하면 안 됩니다. 대부분의 Unity `.asset` 파일은 텍스트 YAML이며 Git diff와 병합의 이점을 받을 수 있습니다. 바이너리 `.asset`만 파일명 또는 폴더 경로로 선별해야 합니다.
 
