@@ -17,7 +17,7 @@ using System.Collections.Generic;
 [Serializable]
 public class CargoEntry
 {
-    public TradeItemData item;  // 어떤 무역품인지
+    public imsiTradeItemData item;  // 어떤 무역품인지
     public int quantity;        // 몇 개 실었는지
 }
 
@@ -26,9 +26,9 @@ public class CargoEntry
 public class CaravanData
 {
     // ── 구성 (준비 단계에서 채움) ──────────────────────────────
-    public WagonData wagon;                                              // 마차 (1대)
-    public List<AnimalData> animals = new List<AnimalData>();            // 견인 동물 목록
-    public List<MercenaryData> mercenaries = new List<MercenaryData>();  // 용병 목록
+    public imsiWagonData wagon;                                              // 마차 (1대)
+    public List<imsiAnimalData> animals = new List<imsiAnimalData>();            // 견인 동물 목록
+    public List<imsiMercenaryData> mercenaries = new List<imsiMercenaryData>();  // 용병 목록
     public List<CargoEntry> cargo = new List<CargoEntry>();             // 적재한 무역품 목록
     public int foodAmount;                                              // 실은 식량 수량
     public float foodUnitWeight = 1f;                                   // 식량 1개당 무게

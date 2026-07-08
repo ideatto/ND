@@ -15,7 +15,7 @@ using System;
 
 /// <summary>무역품 하나의 데이터 (초안)</summary>
 [Serializable]
-public class TradeItemData
+public class imsiTradeItemData
 {
     public string id;        // 아이템 구분용 ID
     public string itemName;  // 이름
@@ -25,7 +25,7 @@ public class TradeItemData
 
 /// <summary>마차 데이터 (초안)</summary>
 [Serializable]
-public class WagonData
+public class imsiWagonData
 {
     public string wagonName;     // 마차 이름
 
@@ -48,7 +48,7 @@ public class WagonData
 
 /// <summary>견인 동물 데이터 (초안)</summary>
 [Serializable]
-public class AnimalData
+public class imsiAnimalData
 {
     public string animalName;  // 동물 이름
     public float foodPerKm;    // 1Km당 식량 소모(연료 개념). 예: 0.1 → 100Km에 10 소모
@@ -58,7 +58,7 @@ public class AnimalData
 
 /// <summary>용병 데이터 (초안)</summary>
 [Serializable]
-public class MercenaryData
+public class imsiMercenaryData
 {
     public string mercName;     // 용병 이름
     public int combatPower;     // 전투력 → 약탈 판정에 사용 예정

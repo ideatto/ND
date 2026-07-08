@@ -130,12 +130,12 @@ public class JourneyRunTest : MonoBehaviour
     {
         caravan = new CaravanData();
         // 마차: 동물 최소 1 ~ 최대 5 / overLoad 30(속도 100% 한계) / maxLoad 60(출발 불가)
-        caravan.wagon = new WagonData { wagonName = "기본 마차", overLoad = 30f, maxLoad = 60f, minAnimals = 1, maxAnimals = 5 };
+        caravan.wagon = new imsiWagonData { wagonName = "기본 마차", overLoad = 30f, maxLoad = 60f, minAnimals = 1, maxAnimals = 5 };
         // 동물: foodPerKm 0.1 = 1Km당 0.1 소모. 2마리 → Km당 0.2 소모.
-        caravan.animals.Add(new AnimalData { animalName = "말", foodPerKm = 0.1f });
-        caravan.animals.Add(new AnimalData { animalName = "말", foodPerKm = 0.1f });
+        caravan.animals.Add(new imsiAnimalData { animalName = "말", foodPerKm = 0.1f });
+        caravan.animals.Add(new imsiAnimalData { animalName = "말", foodPerKm = 0.1f });
 
-        TradeItemData wheat = new TradeItemData { id = "wheat", itemName = "밀", weight = 5f, basePrice = 10 };
+        imsiTradeItemData wheat = new imsiTradeItemData { id = "wheat", itemName = "밀", weight = 5f, basePrice = 10 };
         caravan.cargo.Add(new CargoEntry { item = wheat, quantity = 5 });
         caravan.foodAmount = 30;   // 100Km 필요 20(0.2×100) < 30 → 성공. 20 밑으로 줄이면 도중 식량 고갈.
 

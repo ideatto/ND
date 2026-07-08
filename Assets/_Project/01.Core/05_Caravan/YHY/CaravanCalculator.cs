@@ -72,15 +72,15 @@ public static class CaravanCalculator
         return factor;
     }
 
-    /// <summary>[미정 자리 — 1.0] 동물 종류별 속도. AnimalData.speed 생기면 반영.</summary>
-    public static float GetAnimalTypeSpeed(List<AnimalData> animals)
+    /// <summary>[미정 자리 — 1.0] 동물 종류별 속도. imsiAnimalData.speed 생기면 반영.</summary>
+    public static float GetAnimalTypeSpeed(List<imsiAnimalData> animals)
     {
         // TODO: 당나귀 느림/타조 빠름. 평균/합산 규칙 정해서 반영.
         return 1f;
     }
 
     /// <summary>[미정 자리] 마차 속도 보정. speedModifier 0/미설정이면 1.0(중립).</summary>
-    public static float GetWagonSpeedModifier(WagonData wagon)
+    public static float GetWagonSpeedModifier(imsiWagonData wagon)
     {
         if (wagon != null && wagon.speedModifier > 0f) return wagon.speedModifier;
         return 1f;
@@ -122,7 +122,7 @@ public static class CaravanCalculator
         if (caravan == null) return 0f;
 
         float perKm = 0f;
-        foreach (AnimalData a in caravan.animals)
+        foreach (imsiAnimalData a in caravan.animals)
         {
             if (a != null) perKm += a.foodPerKm;
         }
