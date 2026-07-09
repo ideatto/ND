@@ -36,6 +36,11 @@ namespace ND.Framework
 
             var progress = saveData.tradeProgress;
             var normalizedTradeId = tradeId ?? string.Empty;
+            if (string.IsNullOrEmpty(normalizedTradeId))
+            {
+                FrameworkLog.Warning("Trade start time was not recorded because trade ID is empty.");
+                return false;
+            }
 
             if (expectedDuration < TimeSpan.Zero)
             {

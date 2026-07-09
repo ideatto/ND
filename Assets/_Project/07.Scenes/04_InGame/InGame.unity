@@ -581,7 +581,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+  m_Color: {r: 0.8113208, g: 0.18752226, b: 0.18752226, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1291,7 +1291,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+  m_Color: {r: 0.1966002, g: 0.8867924, b: 0.20145284, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1818,7 +1818,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+  m_Color: {r: 1, g: 0.9499881, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -2999,6 +2999,7 @@ MonoBehaviour:
       minAnimals: 0
       maxAnimals: 0
       speedModifier: 0
+      maxDurability: 100
     animals: []
     mercenaries: []
     cargo: []
@@ -3012,6 +3013,12 @@ MonoBehaviour:
     runCargoLost: 0
     runFoodLost: 0
     runFatalReason: 0
+    currentDurability: 0
+    runDurabilityLost: 0
+    runBattlesFought: 0
+    runFoodDepleted: 0
+    runFoodDepletedProgress: 0
+    starveGraceSeconds: 0
 --- !u!4 &1768299109
 Transform:
   m_ObjectHideFlags: 0

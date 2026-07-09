@@ -35,7 +35,7 @@ namespace ND.Framework
         {
             LastRecordSucceeded = false;
 
-            var result = JourneyRunner.TryDepart(caravan, distanceKm);
+            var result = CaravanValidator.Validate(caravan);
             if (!result.canDepart)
             {
                 return result;
@@ -44,11 +44,12 @@ namespace ND.Framework
             if (tradeProgressRecorder == null)
             {
                 FrameworkLog.Warning("Trade start time was not recorded because trade progress recorder is null.");
-                return result;
+                return CreateFrameworkBlockedResult();
             }
 
             var saveData = getCurrentSaveData != null ? getCurrentSaveData() : null;
-            var expectedDuration = TimeSpan.FromSeconds(Math.Max(0f, caravan.totalSeconds));
+            var expectedSeconds = CaravanCalculator.GetTravelSeconds(caravan, distanceKm);
+            var expectedDuration = TimeSpan.FromSeconds(Math.Max(0f, expectedSeconds));
 
             LastRecordSucceeded = tradeProgressRecorder.RecordStartedTrade(
                 saveData,
@@ -56,18 +57,27 @@ namespace ND.Framework
                 routeId,
                 expectedDuration);
 
-            if (LastRecordSucceeded && saveData != null)
+            if (!LastRecordSucceeded)
+            {
+                return CreateFrameworkBlockedResult();
+            }
+
+            result = JourneyRunner.TryDepart(caravan, distanceKm);
+            if (!result.canDepart)
+            {
+                FrameworkLog.Warning("Trade start was recorded but Core departure failed during final validation.");
+                return result;
+            }
+
+            if (saveData != null)
             {
                 clearSettlementCache?.Invoke();
                 CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             }
 
-            if (LastRecordSucceeded)
-            {
-                inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
-            }
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
 
-            if (LastRecordSucceeded && saveImmediately)
+            if (saveImmediately)
             {
                 if (saveService == null)
                 {
@@ -79,6 +89,11 @@ namespace ND.Framework
             }
 
             return result;
+        }
+
+        private static DepartureValidationResult CreateFrameworkBlockedResult()
+        {
+            return new DepartureValidationResult { canDepart = false };
         }
     }
 }
