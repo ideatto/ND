@@ -36,6 +36,7 @@ namespace ND.Framework
                 basePrice = 10
             };
             caravan.cargo.Add(new CargoEntry { item = item, quantity = 5 });
+            caravan.currentDurability = caravan.wagon.maxDurability;
 
             FrameworkLog.Info("Sample caravan filled for trade start debug.");
         }
@@ -139,6 +140,72 @@ namespace ND.Framework
         {
             caravan.foodAmount = 1;
             FrameworkLog.Info("Debug caravan food was lowered for failure testing.");
+        }
+
+        [ContextMenu("Framework/Run M1 Loop Integrity Smoke")]
+        public void RunM1LoopIntegritySmoke()
+        {
+            var coordinator = GetCoordinator();
+            if (coordinator == null || FrameworkRoot.Instance == null || FrameworkRoot.Instance.TradeStart == null)
+            {
+                return;
+            }
+
+            for (var cycleIndex = 0; cycleIndex < 3; cycleIndex++)
+            {
+                FillSampleCaravan();
+
+                var smokeTradeId = $"{tradeId}_smoke_{cycleIndex + 1}";
+                var startResult = FrameworkRoot.Instance.TradeStart.TryStartTrade(
+                    caravan,
+                    distanceKm,
+                    smokeTradeId,
+                    routeId);
+                if (!startResult.canDepart || !FrameworkRoot.Instance.TradeStart.LastRecordSucceeded)
+                {
+                    FrameworkLog.Warning($"M1 smoke failed to start cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                coordinator.SetActiveCaravan(caravan);
+                coordinator.ForceCompleteActiveTrade();
+                if (coordinator.LastSettlementResult == null)
+                {
+                    FrameworkLog.Warning($"M1 smoke failed because settlement result was missing in cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                var repeatedProgressCheck = coordinator.CheckProgressAndCompletion();
+                if (repeatedProgressCheck)
+                {
+                    FrameworkLog.Warning($"M1 smoke failed because settlement was recreated in cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                var firstClaim = coordinator.ClaimSettlementAndReset();
+                var duplicateClaim = coordinator.ClaimSettlementAndReset();
+                if (!firstClaim || duplicateClaim)
+                {
+                    FrameworkLog.Warning(
+                        $"M1 smoke failed claim validation in cycle {cycleIndex + 1}. First: {firstClaim}, Duplicate: {duplicateClaim}");
+                    return;
+                }
+
+                var activeCaravan = coordinator.ActiveCaravan;
+                if (activeCaravan == null || activeCaravan.state != JourneyState.Prepare)
+                {
+                    FrameworkLog.Warning($"M1 smoke failed to return to preparation in cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                if (coordinator.LastSettlementResult != null)
+                {
+                    FrameworkLog.Warning($"M1 smoke failed because settlement cache remained after cycle {cycleIndex + 1}.");
+                    return;
+                }
+            }
+
+            FrameworkLog.Info("M1 loop integrity smoke completed 3 consecutive trade cycles.");
         }
 
         private static TradeProgressCoordinator GetCoordinator()

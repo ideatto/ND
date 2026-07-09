@@ -91,21 +91,32 @@ namespace ND.Framework
                 return false;
             }
 
+            if (tradeProgressRecorder == null)
+            {
+                FrameworkLog.Warning("Settlement claim blocked because trade progress recorder is missing.");
+                return false;
+            }
+
             if (!JourneyRunner.ClaimSettlement(caravan))
+            {
+                FrameworkLog.Warning("Settlement claim blocked because Core rejected the active settlement.");
+                return false;
+            }
+
+            var finalStateRecorded = LastSettlementResult.grade == JourneyResultGrade.Failed
+                ? MarkFailed(saveData)
+                : MarkCompleted(saveData);
+            if (!finalStateRecorded)
             {
                 return false;
             }
 
-            if (LastSettlementResult != null && LastSettlementResult.grade == JourneyResultGrade.Failed)
+            if (!JourneyRunner.ResetToPrepare(caravan))
             {
-                tradeProgressRecorder?.MarkFailed(saveData);
-            }
-            else
-            {
-                tradeProgressRecorder?.MarkCompleted(saveData);
+                FrameworkLog.Warning("Settlement was claimed but Core did not return the caravan to preparation.");
+                return false;
             }
 
-            JourneyRunner.ResetToPrepare(caravan);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Preparation);
@@ -142,18 +153,37 @@ namespace ND.Framework
 
         private bool SettleActiveTrade(SaveData saveData, CaravanData caravan)
         {
-            var result = JourneyRunner.Settle(caravan);
-            if (result == null)
+            if (!CanCreateSettlement(saveData))
             {
                 return false;
             }
 
-            LastSettlementTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            if (tradeProgressRecorder == null)
+            {
+                FrameworkLog.Warning("Trade settlement was not created because trade progress recorder is missing.");
+                return false;
+            }
+
+            var result = JourneyRunner.Settle(caravan);
+            if (result == null)
+            {
+                FrameworkLog.Warning("Trade settlement was not created because Core returned no result.");
+                return false;
+            }
+
+            tradeProgressRecorder.MarkSettlementPending(saveData);
+            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            {
+                FrameworkLog.Warning($"Trade settlement was not published because trade state is {saveData.tradeProgress.state}.");
+                return false;
+            }
+
+            var settlementTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            LastSettlementTradeId = settlementTradeId;
             LastSettlementResult = result;
-            tradeProgressRecorder?.MarkSettlementPending(saveData);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
-            FrameworkEvents.RaiseTradeSettlementReady(LastSettlementTradeId, result);
+            FrameworkEvents.RaiseTradeSettlementReady(settlementTradeId, result);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
 
             return true;
@@ -188,6 +218,53 @@ namespace ND.Framework
             }
 
             return true;
+        }
+
+        private bool CanCreateSettlement(SaveData saveData)
+        {
+            if (saveData == null || saveData.tradeProgress == null)
+            {
+                FrameworkLog.Warning("Trade settlement blocked because trade progress save data is missing.");
+                return false;
+            }
+
+            if (saveData.tradeProgress.state != TradeProgressState.Traveling)
+            {
+                FrameworkLog.Warning($"Trade settlement blocked because trade state is {saveData.tradeProgress.state}.");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(saveData.tradeProgress.activeTradeId))
+            {
+                FrameworkLog.Warning("Trade settlement blocked because active trade ID is empty.");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool MarkCompleted(SaveData saveData)
+        {
+            tradeProgressRecorder.MarkCompleted(saveData);
+            if (saveData.tradeProgress.state == TradeProgressState.Completed)
+            {
+                return true;
+            }
+
+            FrameworkLog.Warning($"Settlement completion state was not recorded. State: {saveData.tradeProgress.state}");
+            return false;
+        }
+
+        private bool MarkFailed(SaveData saveData)
+        {
+            tradeProgressRecorder.MarkFailed(saveData);
+            if (saveData.tradeProgress.state == TradeProgressState.Failed)
+            {
+                return true;
+            }
+
+            FrameworkLog.Warning($"Settlement failure state was not recorded. State: {saveData.tradeProgress.state}");
+            return false;
         }
 
         private CaravanData EnsureActiveCaravan()
