@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Market_TownName", menuName = "Town/MarketData")]
-public class MarketData : ScriptableObject
+public class MarketData : ScriptableObject, IIdentifiableData
 {
     [SerializeField] private string marketId;
 
@@ -22,6 +22,7 @@ public class MarketData : ScriptableObject
     [SerializeField] private TradeItemData[] localSpecialtyItems;
 
     #region Public Properties
+    public string Id => marketId;
     public string MarketId => marketId;
     public int ItemMaxQuantity => Mathf.Max(0, itemMaxQuantity);
     public float ItemRenewalCycle => Mathf.Max(0f, itemRenewalCycle);

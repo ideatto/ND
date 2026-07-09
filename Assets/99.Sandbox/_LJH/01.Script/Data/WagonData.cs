@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Wagon_WagonName", menuName = "TradeItem/Wagon Data")]
-public class WagonData : ScriptableObject
+public class WagonData : ScriptableObject, IIdentifiableData
 {
     [Header("Default_Info")]
     [SerializeField] private string wagonId;
@@ -46,6 +46,7 @@ public class WagonData : ScriptableObject
     [SerializeField] private bool localSpecialty;
 
     #region
+    public string Id => wagonId;
     public string WagonId => wagonId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
