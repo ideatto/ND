@@ -50,6 +50,11 @@ namespace ND.Framework
                 routeId,
                 expectedDuration);
 
+            if (LastRecordSucceeded && saveData != null)
+            {
+                CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            }
+
             if (LastRecordSucceeded && saveImmediately)
             {
                 if (saveService == null)

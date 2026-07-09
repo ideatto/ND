@@ -6,7 +6,7 @@ namespace ND.Framework
     [Serializable]
     public sealed class SaveData
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int version = CurrentVersion;
         public long lastSavedUtcTicks;
@@ -28,19 +28,63 @@ namespace ND.Framework
     [Serializable]
     public sealed class CaravanSaveData
     {
-        public float maxLoad;
-        public float currentLoad;
-        public float currentDurability;
-        public List<TradeItemBundleSaveData> inventory = new List<TradeItemBundleSaveData>();
+        public WagonSaveData wagon = new WagonSaveData();
+        public List<AnimalSaveData> animals = new List<AnimalSaveData>();
+        public List<MercenarySaveData> mercenaries = new List<MercenarySaveData>();
+        public List<CargoEntrySaveData> cargo = new List<CargoEntrySaveData>();
+        public int foodAmount;
+        public float foodUnitWeight = 1f;
+        public JourneyState state = JourneyState.Prepare;
+        public float currentDistanceKm;
+        public float totalSeconds;
+        public float progress01;
+        public bool settlementClaimed;
+        public int runCargoLost;
+        public float runFoodLost;
+        public JourneyFailureReason runFatalReason = JourneyFailureReason.None;
     }
 
     [Serializable]
-    public sealed class TradeItemBundleSaveData
+    public sealed class WagonSaveData
+    {
+        public string wagonName = string.Empty;
+        public float overLoad;
+        public float maxLoad;
+        public int minAnimals;
+        public int maxAnimals;
+        public float speedModifier;
+    }
+
+    [Serializable]
+    public sealed class AnimalSaveData
+    {
+        public string animalName = string.Empty;
+        public float speed = 1f;
+        public float foodPerKm;
+    }
+
+    [Serializable]
+    public sealed class MercenarySaveData
+    {
+        public string mercName = string.Empty;
+        public int combatPower;
+        public int contractCount;
+    }
+
+    [Serializable]
+    public sealed class CargoEntrySaveData
+    {
+        public TradeItemSaveData item = new TradeItemSaveData();
+        public int quantity;
+    }
+
+    [Serializable]
+    public sealed class TradeItemSaveData
     {
         public string itemId = string.Empty;
-        public int quantity;
-        public int purchaseUnitPrice;
-        public int sellUnitPrice;
+        public string itemName = string.Empty;
+        public float weight;
+        public int basePrice;
     }
 
     [Serializable]

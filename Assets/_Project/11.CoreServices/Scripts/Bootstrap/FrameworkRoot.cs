@@ -14,6 +14,7 @@ namespace ND.Framework
         public FrameworkDebugCommands DebugCommands { get; private set; }
         public TradeProgressRecorder TradeProgressRecorder { get; private set; }
         public TradeStartService TradeStart { get; private set; }
+        public TradeProgressCoordinator TradeProgressCoordinator { get; private set; }
         public SaveData CurrentSaveData { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -84,6 +85,11 @@ namespace ND.Framework
             DebugCommands = new FrameworkDebugCommands(GameTime);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime);
             TradeStart = new TradeStartService(() => CurrentSaveData, SaveService, TradeProgressRecorder);
+            TradeProgressCoordinator = new TradeProgressCoordinator(
+                () => CurrentSaveData,
+                SaveService,
+                GameTime,
+                TradeProgressRecorder);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
 
             FrameworkLog.Info("FrameworkRoot initialized.");

@@ -9,6 +9,7 @@ namespace ND.Framework
         public static event Action<string> TradeOfflineCompleted;
         public static event Action TimeRollbackDetected;
         public static event Action CompleteTradeRequested;
+        public static event Action<string, JourneyResultData> TradeSettlementReady;
 
         public static void RaiseLoadCompleted(SaveData data)
         {
@@ -38,6 +39,12 @@ namespace ND.Framework
         {
             FrameworkLog.Info("CompleteTradeRequested event raised.");
             CompleteTradeRequested?.Invoke();
+        }
+
+        public static void RaiseTradeSettlementReady(string tradeId, JourneyResultData result)
+        {
+            FrameworkLog.Info($"TradeSettlementReady event raised. TradeId: {tradeId}");
+            TradeSettlementReady?.Invoke(tradeId, result);
         }
     }
 }
