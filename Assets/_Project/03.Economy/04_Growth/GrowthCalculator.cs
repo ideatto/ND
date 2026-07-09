@@ -14,7 +14,6 @@ namespace ND.Economy
             if (caravanGrowthLevel > 0)
             {
                 modifier.MaxLoadBonus += 20;
-                modifier.SpeedMultiplier *= 1.05f;
             }
 
             modifier.Clamp();

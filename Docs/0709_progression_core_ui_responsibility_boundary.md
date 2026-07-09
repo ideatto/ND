@@ -147,6 +147,9 @@ RouteData.BaseMercenaryCost
 -> EconomyM1LoopInput.MercenaryCost
 ```
 
+`RouteData.baseRequiredFoodQuantity`, `RouteData.baseRequiredMercenaryPower`는 출발 준비 UI 표시용 데이터다.
+Progression 정산 결과의 `FoodCost`, `MercenaryCost`에는 `BaseFoodCost`, `BaseMercenaryCost`만 연결한다.
+
 Progression 쪽 어댑터:
 
 ```csharp

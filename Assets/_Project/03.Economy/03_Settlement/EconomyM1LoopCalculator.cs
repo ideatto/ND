@@ -95,6 +95,7 @@ namespace ND.Economy
                         workingCurrency);
                 }
 
+                AddGrowthPurchaseEntry(settlement, growthPurchase);
                 playerGrowthLevel = growthPurchase.NewLevel;
             }
 
@@ -111,6 +112,23 @@ namespace ND.Economy
                 RuntimeStats = runtimeStats,
                 FinalCurrencyState = workingCurrency.Clone()
             };
+        }
+
+        private static void AddGrowthPurchaseEntry(SettlementBreakdown settlement, GrowthPurchaseResult growthPurchase)
+        {
+            if (settlement == null || growthPurchase == null || !growthPurchase.Success)
+            {
+                return;
+            }
+
+            settlement.Entries.Add(new SettlementEntry
+            {
+                EntryType = SettlementEntryType.GrowthPurchaseCost,
+                DisplayNameKey = "settlement.growth_purchase_cost",
+                Amount = growthPurchase.CostDevelopmentCurrency < 0L ? 0L : growthPurchase.CostDevelopmentCurrency,
+                IsPositive = false,
+                SourceId = string.IsNullOrWhiteSpace(growthPurchase.GrowthId) ? "growth" : growthPurchase.GrowthId
+            });
         }
 
         private static GrowthPurchaseInput BuildGrowthPurchaseInput(EconomyM1LoopInput input, long developmentCurrencyBefore)
