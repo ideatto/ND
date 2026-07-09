@@ -48,6 +48,16 @@ public class CaravanData
     public float runFoodLost;                                      // 이번 무역 식량 이벤트 차감 누적(도난 등)
     public JourneyFailureReason runFatalReason = JourneyFailureReason.None; // 치명 상태(실패 확정) 사유
 
+    // ── 마차 내구도 & 전투 (M2) ───────────────────────────────
+    public int currentDurability;     // 현재 마차 내구도 (무역 거듭하며 감소, 무역 간 유지)
+    public int runDurabilityLost;     // 이번 무역 내구도 손실 누적
+    public int runBattlesFought;      // 이번 무역 전투 횟수 (용병 방어 판정용)
+
+    // ── 식량 고갈 제한시간 (M2) ────────────────────────────────
+    public bool runFoodDepleted;          // 이번 무역 식량 바닥 여부 (바닥나면 제한시간 시작)
+    public float runFoodDepletedProgress; // 식량이 바닥난 시점의 진행도(0~1)
+    public float starveGraceSeconds;      // 식량 바닥 후 도착 제한 시간(초). 초과+미도착 시 실패 [임시값]
+
     // TODO(M2): remainingCombatPower(상행 단위 전투력 잔량) — 전투력 소진 판정/저장용.
     //           용병별 combatPower 합산 규칙 확정 후 추가.
 }

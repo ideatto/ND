@@ -44,6 +44,7 @@ public class imsiWagonData
     public int minAnimals;       // 이 마차를 끌 최소 견인 동물 수 (기본 1)
     public int maxAnimals;       // 매달 수 있는 최대 견인 동물 수 (수레 1 / 마차 5 등)
     public float speedModifier;  // 이동 속도 보정 → 이동 계산에 사용 예정
+    public int maxDurability = 100;  // [임시] 최대 내구도. 진짜 값은 Content. [M2]
 }
 
 /// <summary>견인 동물 데이터 (초안)</summary>
@@ -52,7 +53,9 @@ public class imsiAnimalData
 {
     public string animalName;  // 동물 이름
     public float speed = 1f;   // 이동 속도 배수 (말=1 기준 / 당나귀=0.5 / 타조=1.5)
-    public float foodPerKm;    // 1Km당 식량 소모(연료 개념). 예: 0.1 → 100Km에 10 소모
+    // [2026-07-09 팀결정: 식량은 '시간' 기준] 이 값은 이제 '1초당' 식량 소모로 해석한다. 예: 0.1 → 10초에 1 소모.
+    // 필드명 foodPerKm 은 천성욱 Framework harness가 참조 중이라, 실제 SO 교체 시점에 foodPerSec 로 함께 rename 예정.
+    public float foodPerKm;    // (현재 의미: 1초당 식량 소모)
     // TODO(M1 이후): 종류별 특성(속도·적재보너스)은 여기 필드가 생기면 반영.
     //               당나귀 느림/적재↑, 말 중간, 타조 빠름/적재↓ 를 한 묶음으로 설계.
 }

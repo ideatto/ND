@@ -7,7 +7,7 @@
 //        호출 시 계산기 하나만 기억하면 됨:  CaravanCalculator.xxx
 //        · 적재: GetCurrentLoad / GetMaxLoad
 //        · 이동: GetSpeedEfficiency / GetLoadEfficiency / GetTravelSeconds ...
-//        · 식량: GetConsumptionPerKm / GetRequiredFood / GetRemainingFood  (거리 기반 연료)
+//        · 식량: GetConsumptionPerSec / GetRequiredFood / GetRemainingFood  (시간 기반 — 초당 소모)
 //
 //        튜닝 값(기준속도·효율·감속 등)은 CaravanConfig 에 분리돼 있다.
 //        UnityEngine 의존 없음 → 순수 로직 테스트 가능.
@@ -43,6 +43,19 @@ public static class CaravanCalculator
     public static float GetMaxLoad(CaravanData caravan)
     {
         return (caravan != null && caravan.wagon != null) ? caravan.wagon.maxLoad : 0f;
+    }
+
+    /// <summary>실은 무역품 총 개수 = 상품별 수량 합.</summary>
+    public static int GetCargoCount(CaravanData caravan)
+    {
+        if (caravan == null) return 0;
+
+        int total = 0;
+        foreach (CargoEntry entry in caravan.cargo)
+        {
+            if (entry != null) total += entry.quantity;
+        }
+        return total;
     }
 
     // =========================================================================
@@ -119,28 +132,30 @@ public static class CaravanCalculator
     }
 
     // =========================================================================
-    // 식량 (Food) — "연료" 개념. 시간이 아니라 거리로 소모한다.
-    //   남은 식량 = 실은 식량 - (거리당소모 × 간 거리) - 이벤트 차감
+    // 식량 (Food) — [2026-07-09 팀결정] '시간' 기준으로 소모한다. (거리 기준 폐기)
+    //   1단계(지금): 초당 소모.  2단계(이후): 인게임 시간 배율 적용한 시간당 소모(GameTimeService.TimeScale).
+    //   남은 식량 = 실은 식량 - (초당소모 × 흐른 시간) - 이벤트 차감
     // =========================================================================
 
-    /// <summary>Km당 식량 소모 = 동물들의 foodPerKm 합. 동물 많을수록 커짐(연료 더 듦).</summary>
-    public static float GetConsumptionPerKm(CaravanData caravan)
+    /// <summary>초당 식량 소모 = 동물들의 소모율 합. 동물 많을수록 커짐.</summary>
+    public static float GetConsumptionPerSec(CaravanData caravan)
     {
         if (caravan == null) return 0f;
 
-        float perKm = 0f;
+        float perSec = 0f;
         foreach (imsiAnimalData a in caravan.animals)
         {
-            if (a != null) perKm += a.foodPerKm;
+            // a.foodPerKm 은 팀결정(시간기준)으로 이제 '초당' 소모율로 해석한다. (필드명은 SO 교체 때 rename 예정)
+            if (a != null) perSec += a.foodPerKm;
         }
-        return perKm;
+        return perSec;
     }
 
-    /// <summary>이 무역에 필요한 총 식량(출발 전 UI 표시용) = Km당 소모 × 이동 거리.</summary>
+    /// <summary>이 무역에 필요한 총 식량(출발 전 UI 표시용) = 초당 소모 × 총 소요 시간(초).</summary>
     public static float GetRequiredFood(CaravanData caravan)
     {
         if (caravan == null) return 0f;
-        return GetConsumptionPerKm(caravan) * caravan.currentDistanceKm;
+        return GetConsumptionPerSec(caravan) * caravan.totalSeconds;
     }
 
     /// <summary>지금 진행도에서 남은 식량. 0 이하면 바닥(실패 판정은 JourneyRunner).</summary>
@@ -148,8 +163,8 @@ public static class CaravanCalculator
     {
         if (caravan == null) return 0f;
 
-        float traveledKm = caravan.progress01 * caravan.currentDistanceKm;   // 간 거리
-        float consumed = GetConsumptionPerKm(caravan) * traveledKm;
+        float elapsedSec = caravan.progress01 * caravan.totalSeconds;   // 흐른 시간(초)
+        float consumed = GetConsumptionPerSec(caravan) * elapsedSec;
         return caravan.foodAmount - consumed - caravan.runFoodLost;
     }
 }
