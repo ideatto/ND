@@ -21,6 +21,17 @@ MonoBehaviour:
   defaultElapsedTime: 1
   baseFoodCost: 0
   baseMercenaryCost: 0
+  baseRequiredFoodQuantity: 0
+  baseRequiredMercenaryPower: 0
   baseRiskLevel: 0
-  routeEvents: []
+  routeEvents:
+  - eventType: 0
+    routeEventId: 
+    displayName: 
+    description: 
+    eventValue: 0
+    eventRewardType: 0
+    eventReward: 0
+    minReward: 0
+    maxReward: 0
   maxEventCount: 0

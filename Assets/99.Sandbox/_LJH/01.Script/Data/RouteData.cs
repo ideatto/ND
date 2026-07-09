@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "Route_RouteName", menuName = "RouteData")]
+[CreateAssetMenu(fileName = "Route_RouteName", menuName = "Route/RouteData")]
 public class RouteData : ScriptableObject
 {
     [Header("Route_Default_Info")]
@@ -16,7 +16,10 @@ public class RouteData : ScriptableObject
     [SerializeField] private float distance;
     [SerializeField] private float defaultElapsedTime;
 
-    [Header("Route_Base_Cost")]
+    [Header("Route_Base_Require")]
+    [SerializeField] private long baseFoodCost; // TODO : change data
+    [SerializeField] private long baseMercenaryCost; // TODO : changed data
+
     [SerializeField] private int baseRequiredFoodQuantity;
     [SerializeField] private int baseRequiredMercenaryPower;
 
@@ -39,6 +42,8 @@ public class RouteData : ScriptableObject
     public float Distance => Mathf.Max(0f, distance);
     public bool UnlockedByDefault => unlockedByDefault;
     public float DefaultElapsedTime => Mathf.Max(0f, defaultElapsedTime);
+    public long BaseFoodCost => baseFoodCost > 0 ? baseFoodCost : 0;
+    public long BaseMercenaryCost => baseMercenaryCost > 0 ? baseMercenaryCost : 0;
     public int BaseRequiredFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
     public int BaseRequiredMercenaryPower => Mathf.Max(0, baseRequiredMercenaryPower);
     public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);

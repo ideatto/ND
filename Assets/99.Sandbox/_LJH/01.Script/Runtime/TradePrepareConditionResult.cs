@@ -7,5 +7,5 @@ public class TradePrepareConditionResult
     public string disabledReason;
 
     public bool hasWarning;
-    public List<string> warningMessages;
+    public List<string> warningMessages = new List<string>();
 }

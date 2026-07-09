@@ -16,6 +16,7 @@ public class TradePrepareViewData
     public string selectedRouteId;
 
     public float currentLoad;
+    public float overloadLimit;
     public float maxLoad;
 
     public long totalPurchaseCost;

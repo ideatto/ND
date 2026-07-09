@@ -42,13 +42,22 @@ public class TradePrepareConditionEvaluator
                     warningMessages = new List<string> { "Mercenary power is insufficient. Trade can start, but combat risk may increase." }
                 };
 
-            case TradePrepareConditionType.LoadExceeded:
+            case TradePrepareConditionType.OverloadWarning:
                 return new TradePrepareConditionResult
                 {
                     canStart = true,
                     disabledReason = string.Empty,
                     hasWarning = true,
-                    warningMessages = new List<string> { "Load limit exceeded. Trade can start, but penalty may occur." }
+                    warningMessages = new List<string> { "Load is over the efficient limit. Trade can start, but speed may decrease." }
+                };
+
+            case TradePrepareConditionType.LoadExceeded:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Load limit exceeded.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
                 };
 
             case TradePrepareConditionType.RouteLocked:
@@ -91,6 +100,9 @@ public class TradePrepareConditionEvaluator
         if (input.currentTradingCurrency < input.totalPurchaseCost)
             return Create(TradePrepareConditionType.NotEnoughMoney);
 
+        if (input.currentLoad > input.maxLoad)
+            return Create(TradePrepareConditionType.LoadExceeded);
+
         var warningMessages = new List<string>();
 
         if (input.loadedFoodQuantity < input.requiredFoodQuantity)
@@ -99,8 +111,8 @@ public class TradePrepareConditionEvaluator
         if (input.selectedMercenaryPower < input.requiredMercenaryPower)
             warningMessages.Add("Mercenary power is insufficient. Trade can start, but combat risk may increase.");
 
-        if (input.currentLoad > input.maxLoad)
-            warningMessages.Add("Load limit exceeded. Trade can start, but penalty may occur.");
+        if (input.overloadLimit > 0f && input.currentLoad > input.overloadLimit)
+            warningMessages.Add("Load is over the efficient limit. Trade can start, but speed may decrease.");
 
         if (warningMessages.Count > 0)
         {

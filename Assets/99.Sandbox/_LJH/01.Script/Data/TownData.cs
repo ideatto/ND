@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "Town_TownName", menuName = "TownData")]
+[CreateAssetMenu(fileName = "Town_TownName", menuName = "Town/TownData")]
 public class TownData : ScriptableObject
 {
     [Header("Town_Default_Info")]
@@ -32,7 +32,7 @@ public class TownData : ScriptableObject
     public bool UnlockedByDefault => unlockedByDefault;
     public string Description => description;
     public MarketData Market => market;
-    public RouteData[] AvailableRoutes => availableRoutes;
+    public RouteData[] AvailableRoutes => availableRoutes != null ? (RouteData[])availableRoutes.Clone() : new RouteData[0];
     public bool CanContribute => canContribute;
     public float MaximumContributionLimit => Mathf.Max(0, maximumContributionLimit);
     #endregion

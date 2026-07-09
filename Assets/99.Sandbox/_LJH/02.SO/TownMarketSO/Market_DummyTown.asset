@@ -16,6 +16,7 @@ MonoBehaviour:
   itemMaxQuantity: 6
   itemRenewalCycle: 0
   tradeItems:
-  - {fileID: 11400000, guid: 02746aa21cff0444c8a866e27b6f957f, type: 2}
+  - {fileID: 11400000, guid: cbd60f3ba1e2e074da9c37e5540c03d3, type: 2}
   draftAnimalItems: []
+  wagonItems: []
   localSpecialtyItems: []

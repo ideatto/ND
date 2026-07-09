@@ -19,7 +19,7 @@ public class PriceCalculationInput
     public int caravanGrowthLevel;
     public int oversupplyLevel;
 
-    public List<PriceModifierInput> modifiers = new List<PriceModifierInput>();
+    public List<ModifierInput> modifiers = new List<ModifierInput>();
 
     public int Quantity => quantity >= 0 ? quantity : 0;
     public long BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;

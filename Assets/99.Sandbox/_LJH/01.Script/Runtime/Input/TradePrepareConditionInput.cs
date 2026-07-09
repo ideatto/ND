@@ -8,6 +8,7 @@ public class TradePrepareConditionInput
     public long totalPurchaseCost;
 
     public float currentLoad;
+    public float overloadLimit;
     public float maxLoad;
 
     public int loadedFoodQuantity;

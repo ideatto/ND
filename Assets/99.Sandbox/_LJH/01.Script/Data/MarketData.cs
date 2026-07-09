@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "Market_TownName", menuName = "MarketData")]
+[CreateAssetMenu(fileName = "Market_TownName", menuName = "Town/MarketData")]
 public class MarketData : ScriptableObject
 {
     [SerializeField] private string marketId;
@@ -15,7 +15,8 @@ public class MarketData : ScriptableObject
     [Header("Town_TradeItem_Draft_Animal_Info")]
     [SerializeField] private TradeItemData[] draftAnimalItems;
 
-    // TODO: Add CaravanData and MercenaryData when M1 selection data is defined.
+    [Header("Town_TradeItem_Caravan_Info")]
+    [SerializeField] private WagonData[] wagonItems;
 
     [Header("Town_localSpecialty_Info")]
     [SerializeField] private TradeItemData[] localSpecialtyItems;
@@ -26,6 +27,7 @@ public class MarketData : ScriptableObject
     public float ItemRenewalCycle => Mathf.Max(0f, itemRenewalCycle);
     public TradeItemData[] TradeItems => tradeItems != null ? (TradeItemData[])tradeItems.Clone() : new TradeItemData[0];
     public TradeItemData[] DraftAnimalItems => draftAnimalItems != null ? (TradeItemData[])draftAnimalItems.Clone() : new TradeItemData[0];
+    public WagonData[] WagonItems => wagonItems != null ? (WagonData[])wagonItems.Clone() : new WagonData[0];
     public TradeItemData[] LocalSpecialtyItems => localSpecialtyItems != null ? (TradeItemData[])localSpecialtyItems.Clone() : new TradeItemData[0];
     #endregion
 }

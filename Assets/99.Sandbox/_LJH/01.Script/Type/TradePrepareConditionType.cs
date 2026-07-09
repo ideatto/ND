@@ -4,6 +4,7 @@ public enum TradePrepareConditionType
     NotEnoughMoney,
     NotEnoughFood,
     NotEnoughMercenaryPower,
+    OverloadWarning,
     LoadExceeded,
     RouteLocked,
     RouteNotSelected

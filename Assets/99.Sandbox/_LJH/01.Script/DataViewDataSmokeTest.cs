@@ -48,13 +48,19 @@ public class DataViewDataSmokeTest : MonoBehaviour
             displayName = item.DisplayName,
             icon = item.Icon,
             description = item.Description,
+            rarity = item.Rarity,
+            category = item.Category,
             purchasePrice = item.BaseBuyPrice,
             sellPrice = item.BaseSellPrice,
             ownedAmount = 0,
-            selectedAmount = 0,
+            selectedBuyAmount = 0,
+            selectedSellAmount = 0,
+            unitWeight = item.Weight,
+            selectedWeight = 0f,
             canBuy = true,
             canSell = false,
-            disabledReason = string.Empty
+            buyDisabledReason = string.Empty,
+            sellDisabledReason = "No owned item."
         };
 
         var routeViewData = new RouteViewData
@@ -102,6 +108,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
             loadedFoodQuantity = routeViewData.requiredFoodQuantity,
             requiredFoodQuantity = routeViewData.requiredFoodQuantity,
@@ -118,6 +125,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentTradingCurrency = 0,
             totalPurchaseCost = itemViewData.purchasePrice > 0 ? itemViewData.purchasePrice : 1,
             currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
             loadedFoodQuantity = routeViewData.requiredFoodQuantity,
             requiredFoodQuantity = routeViewData.requiredFoodQuantity,
@@ -134,6 +142,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
             loadedFoodQuantity = routeViewData.requiredFoodQuantity,
             requiredFoodQuantity = routeViewData.requiredFoodQuantity,
@@ -150,6 +159,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
             loadedFoodQuantity = routeViewData.requiredFoodQuantity,
             requiredFoodQuantity = routeViewData.requiredFoodQuantity,
@@ -166,6 +176,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
             loadedFoodQuantity = 0,
             requiredFoodQuantity = Mathf.Max(1, routeViewData.requiredFoodQuantity),
@@ -182,6 +193,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
             currentLoad = 120,
+            overloadLimit = 80,
             maxLoad = 100,
             loadedFoodQuantity = routeViewData.requiredFoodQuantity,
             requiredFoodQuantity = routeViewData.requiredFoodQuantity,
@@ -197,7 +209,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             isRouteUnlocked = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
-            currentLoad = 120,
+            currentLoad = 90,
+            overloadLimit = 80,
             maxLoad = 100,
             loadedFoodQuantity = 0,
             requiredFoodQuantity = Mathf.Max(1, routeViewData.requiredFoodQuantity),
@@ -222,6 +235,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             selectedRouteId = route.RouteId,
 
             currentLoad = successInput.currentLoad,
+            overloadLimit = successInput.overloadLimit,
             maxLoad = successInput.maxLoad,
 
             totalPurchaseCost = successInput.totalPurchaseCost,
@@ -250,6 +264,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             selectedRouteId = route.RouteId,
 
             currentLoad = notEnoughMoneyInput.currentLoad,
+            overloadLimit = notEnoughMoneyInput.overloadLimit,
             maxLoad = notEnoughMoneyInput.maxLoad,
 
             totalPurchaseCost = notEnoughMoneyInput.totalPurchaseCost,
@@ -278,6 +293,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             selectedRouteId = route.RouteId,
 
             currentLoad = notEnoughFoodInput.currentLoad,
+            overloadLimit = notEnoughFoodInput.overloadLimit,
             maxLoad = notEnoughFoodInput.maxLoad,
 
             totalPurchaseCost = notEnoughFoodInput.totalPurchaseCost,
@@ -306,6 +322,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             selectedRouteId = route.RouteId,
 
             currentLoad = loadExceededInput.currentLoad,
+            overloadLimit = loadExceededInput.overloadLimit,
             maxLoad = loadExceededInput.maxLoad,
 
             totalPurchaseCost = loadExceededInput.totalPurchaseCost,
@@ -334,6 +351,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             selectedRouteId = route.RouteId,
 
             currentLoad = multipleWarningInput.currentLoad,
+            overloadLimit = multipleWarningInput.overloadLimit,
             maxLoad = multipleWarningInput.maxLoad,
 
             totalPurchaseCost = multipleWarningInput.totalPurchaseCost,
@@ -423,13 +441,12 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(notEnoughFoodPrepareViewData.startCondition.warningMessages.Count > 0, "Prepare Smoke Test failed: warning message is required.");
 
         // Load Exceeded
-        Debug.Log($"Prepare Warning: {loadExceededPrepareViewData.startCondition.warningMessages[0]}");
+        Debug.Log($"Prepare Fail: {loadExceededPrepareViewData.startCondition.disabledReason}");
 
 
         Debug.Assert(loadExceededPrepareViewData.startCondition != null, "Prepare Smoke Test failed: load condition should not be null.");
-        Debug.Assert(loadExceededPrepareViewData.startCondition.canStart, "Prepare Smoke Test failed: load exceeded should allow start.");
-        Debug.Assert(loadExceededPrepareViewData.startCondition.hasWarning, "Prepare Smoke Test failed: load exceeded should show warning.");
-        Debug.Assert(loadExceededPrepareViewData.startCondition.warningMessages.Count > 0, "Prepare Smoke Test failed: warning message is required.");
+        Debug.Assert(!loadExceededPrepareViewData.startCondition.canStart, "Prepare Smoke Test failed: max load exceeded should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(loadExceededPrepareViewData.startCondition.disabledReason), "Prepare Smoke Test failed: max load exceeded disabled reason is required.");
         Debug.Assert(loadExceededPrepareViewData.currentLoad > loadExceededPrepareViewData.maxLoad, "Prepare Smoke Test failed: currentLoad should exceed maxLoad.");
 
         // Multiple Warnings
