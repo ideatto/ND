@@ -107,10 +107,7 @@ namespace ND.Framework
                 data.caravan = new CaravanSaveData();
             }
 
-            if (data.caravan.inventory == null)
-            {
-                data.caravan.inventory = new System.Collections.Generic.List<TradeItemBundleSaveData>();
-            }
+            CaravanSaveDataMapper.Normalize(data.caravan);
 
             if (data.tradeProgress == null)
             {
