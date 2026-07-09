@@ -151,7 +151,7 @@ public class JourneyRunTest : MonoBehaviour
 
         var input = new EconomyM1LoopInput();
         // cargo에서 진짜로 (첫 상품)
-        input.PriceInput.ItemId = caravan.cargo[0].item.id;
+        input.PriceInput.TradeItemId = caravan.cargo[0].item.id;
         input.PriceInput.Quantity = caravan.cargo[0].quantity;
         input.PriceInput.BaseBuyPrice = caravan.cargo[0].item.basePrice;
         input.PriceInput.BaseSellPrice = caravan.cargo[0].item.basePrice;
