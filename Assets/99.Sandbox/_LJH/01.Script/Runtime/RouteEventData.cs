@@ -27,5 +27,6 @@ public enum RewardType
 public enum RouteEvent
 {
     Combat,
-    Lucky
+    Lucky,
+    Weather
 }

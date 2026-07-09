@@ -19,7 +19,9 @@ public class WagonData : ScriptableObject
     [SerializeField] private int maxDurability;
     [SerializeField] private float overLoad;
     [SerializeField] private float maxLoad;
-    [SerializeField] private float baseMoveSpeed; // CaravanSpeed = WagonData.baseMoveSpeed + AnimalData.baseMoveSpeed
+    [SerializeField] private float baseMoveSpeed;
+    // CaravanSpeed = WagonData.baseMoveSpeed + AnimalData.baseMoveSpeed 
+    //if WagonType.WagonWithAnimals -> baseMoveSpeed = 0
 
     [Header("Wagon_Inventory_Info")]
     [SerializeField] private int inventorySlotCount;
@@ -70,7 +72,7 @@ public class WagonData : ScriptableObject
     {
         ClampValues();
         ApplyWagonTypeRules(); //if wagonType changed -> inspector changed
-        ValidateModifierTargets(); //if modifierTarget == Target.SellPrice -> return
+        ValidateModifierTargets(); //only BuyPrice modifiers are allowed for WagonData
     }
 
     private void ClampValues()

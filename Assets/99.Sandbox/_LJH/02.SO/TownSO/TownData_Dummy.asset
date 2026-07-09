@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: "\uB354\uBBF8 \uB3C4\uC2DC"
   icon: {fileID: 0}
   unlockedByDefault: 1
-  description: Dummy Town
+  description: "\uB354\uBBF8 \uB3C4\uC2DC\uC785\uB2C8\uB2E4."
   market: {fileID: 11400000, guid: 53ff6f350e87d224aac61db15be826f9, type: 2}
   availableRoutes:
   - {fileID: 11400000, guid: a3fd1e2028afb94498ff4141e2c92419, type: 2}

@@ -40,5 +40,6 @@ public enum ModifierType
     ActiveEvent,
     PlayerGrowth,
     OverSupply,
+    LowerSupply,
     AffectToTown
 }

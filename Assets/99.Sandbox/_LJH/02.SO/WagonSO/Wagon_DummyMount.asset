@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 757f6cbc27613e64e8fb8de2a4f45b03, type: 3}
+  m_Name: Wagon_DummyMount
+  m_EditorClassIdentifier: Assembly-CSharp::WagonData
+  wagonId: wagondummymount
+  displayName: "\uB354\uBBF8 \uD0C8\uAC83"
+  icon: {fileID: 0}
+  description: "\uB354\uBBF8 \uD0C8\uAC83(\uB3D9\uBB3C \uD544\uC694x)"
+  wagonType: 2
+  maxDurability: 300
+  overLoad: 20
+  maxLoad: 40
+  baseMoveSpeed: 15
+  inventorySlotCount: 71
+  maxPullAnimals: 0
+  minRequireAnimals: 0
+  rarity: 3
+  baseBuyPrice: 300
+  canStack: 1
+  maxCount: 1
+  affectModify: 1
+  modifiers:
+  - modifierType: 5
+    sourceId: 
+    displayName: "\uACFC\uACF5\uAE09"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 2
+      value: 50
+  localSpecialty: 0
