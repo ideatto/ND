@@ -48,13 +48,19 @@ public class DataViewDataSmokeTest : MonoBehaviour
             displayName = item.DisplayName,
             icon = item.Icon,
             description = item.Description,
+            rarity = item.Rarity,
+            category = item.Category,
             purchasePrice = item.BaseBuyPrice,
             sellPrice = item.BaseSellPrice,
             ownedAmount = 0,
-            selectedAmount = 0,
+            selectedBuyAmount = 0,
+            selectedSellAmount = 0,
+            unitWeight = item.Weight,
+            selectedWeight = 0f,
             canBuy = true,
             canSell = false,
-            disabledReason = string.Empty
+            buyDisabledReason = string.Empty,
+            sellDisabledReason = "No owned item."
         };
 
         var routeViewData = new RouteViewData
@@ -67,8 +73,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             toTownName = route.ToTownName,
             distance = route.Distance,
             estimatedTime = route.DefaultElapsedTime,
-            foodCost = route.BaseFoodCost,
-            mercenaryCost = route.BaseMercenaryCost,
+            requiredFoodQuantity = route.BaseRequiredFoodQuantity,
+            requiredMercenaryPower = route.BaseRequiredMercenaryPower,
             riskLevel = route.BaseRiskLevel,
             isUnlocked = saveData.world.unlockedRouteIds.Contains(route.RouteId),
             canSelect = saveData.world.unlockedRouteIds.Contains(route.RouteId),
@@ -85,13 +91,280 @@ public class DataViewDataSmokeTest : MonoBehaviour
             toTownName = routeViewData.toTownName,
             distance = routeViewData.distance,
             estimatedTime = routeViewData.estimatedTime,
-            foodCost = routeViewData.foodCost,
-            mercenaryCost = routeViewData.mercenaryCost,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower,
             riskLevel = routeViewData.riskLevel,
             isUnlocked = false,
             canSelect = false,
             disabledReason = "Route is not unlocked yet."
         };
+
+        var conditionEvaluator = new TradePrepareConditionEvaluator();
+
+        var successInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var successCondition = conditionEvaluator.Evaluate(successInput);
+
+        var notEnoughMoneyInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            currentTradingCurrency = 0,
+            totalPurchaseCost = itemViewData.purchasePrice > 0 ? itemViewData.purchasePrice : 1,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var notEnoughMoneyCondition = conditionEvaluator.Evaluate(notEnoughMoneyInput);
+
+        var routeNotSelectedInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = false,
+            isRouteUnlocked = true,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var routeNotSelectedCondition = conditionEvaluator.Evaluate(routeNotSelectedInput);
+
+        var routeLockedInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = false,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var routeLockedCondition = conditionEvaluator.Evaluate(routeLockedInput);
+
+        var notEnoughFoodInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = 0,
+            requiredFoodQuantity = Mathf.Max(1, routeViewData.requiredFoodQuantity),
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var notEnoughFoodCondition = conditionEvaluator.Evaluate(notEnoughFoodInput);
+
+        var loadExceededInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            currentLoad = 120,
+            overloadLimit = 80,
+            maxLoad = 100,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var loadExceededCondition = conditionEvaluator.Evaluate(loadExceededInput);
+
+        var multipleWarningInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            currentLoad = 90,
+            overloadLimit = 80,
+            maxLoad = 100,
+            loadedFoodQuantity = 0,
+            requiredFoodQuantity = Mathf.Max(1, routeViewData.requiredFoodQuantity),
+            selectedMercenaryPower = 0,
+            requiredMercenaryPower = Mathf.Max(1, routeViewData.requiredMercenaryPower)
+        };
+
+        var multipleWarningCondition = conditionEvaluator.Evaluate(multipleWarningInput);
+
+        var prepareViewData = new TradePrepareViewData
+        {
+            currentTownId = town.TownId,
+            currentTownName = town.DisplayName,
+
+            currentTradingCurrency = successInput.currentTradingCurrency,
+            currentDevelopmentCurrency = saveData.player.developmentCurrency,
+
+            towns = new[] { townViewData },
+            routes = new[] { routeViewData },
+            tradeItems = new[] { itemViewData },
+
+            selectedRouteId = route.RouteId,
+
+            currentLoad = successInput.currentLoad,
+            overloadLimit = successInput.overloadLimit,
+            maxLoad = successInput.maxLoad,
+
+            totalPurchaseCost = successInput.totalPurchaseCost,
+
+            loadedFoodQuantity = successInput.loadedFoodQuantity,
+            requiredFoodQuantity = successInput.requiredFoodQuantity,
+
+            selectedMercenaryPower = successInput.selectedMercenaryPower,
+            requiredMercenaryPower = successInput.requiredMercenaryPower,
+
+            startCondition = successCondition
+        };
+
+        var notEnoughMoneyPrepareViewData = new TradePrepareViewData
+        {
+            currentTownId = town.TownId,
+            currentTownName = town.DisplayName,
+
+            currentTradingCurrency = notEnoughMoneyInput.currentTradingCurrency,
+            currentDevelopmentCurrency = saveData.player.developmentCurrency,
+
+            towns = new[] { townViewData },
+            routes = new[] { routeViewData },
+            tradeItems = new[] { itemViewData },
+
+            selectedRouteId = route.RouteId,
+
+            currentLoad = notEnoughMoneyInput.currentLoad,
+            overloadLimit = notEnoughMoneyInput.overloadLimit,
+            maxLoad = notEnoughMoneyInput.maxLoad,
+
+            totalPurchaseCost = notEnoughMoneyInput.totalPurchaseCost,
+
+            loadedFoodQuantity = notEnoughMoneyInput.loadedFoodQuantity,
+            requiredFoodQuantity = notEnoughMoneyInput.requiredFoodQuantity,
+
+            selectedMercenaryPower = notEnoughMoneyInput.selectedMercenaryPower,
+            requiredMercenaryPower = notEnoughMoneyInput.requiredMercenaryPower,
+
+            startCondition = notEnoughMoneyCondition
+        };
+
+        var notEnoughFoodPrepareViewData = new TradePrepareViewData
+        {
+            currentTownId = town.TownId,
+            currentTownName = town.DisplayName,
+
+            currentTradingCurrency = notEnoughFoodInput.currentTradingCurrency,
+            currentDevelopmentCurrency = saveData.player.developmentCurrency,
+
+            towns = new[] { townViewData },
+            routes = new[] { routeViewData },
+            tradeItems = new[] { itemViewData },
+
+            selectedRouteId = route.RouteId,
+
+            currentLoad = notEnoughFoodInput.currentLoad,
+            overloadLimit = notEnoughFoodInput.overloadLimit,
+            maxLoad = notEnoughFoodInput.maxLoad,
+
+            totalPurchaseCost = notEnoughFoodInput.totalPurchaseCost,
+
+            loadedFoodQuantity = notEnoughFoodInput.loadedFoodQuantity,
+            requiredFoodQuantity = notEnoughFoodInput.requiredFoodQuantity,
+
+            selectedMercenaryPower = notEnoughFoodInput.selectedMercenaryPower,
+            requiredMercenaryPower = notEnoughFoodInput.requiredMercenaryPower,
+
+            startCondition = notEnoughFoodCondition
+        };
+
+        var loadExceededPrepareViewData = new TradePrepareViewData
+        {
+            currentTownId = town.TownId,
+            currentTownName = town.DisplayName,
+
+            currentTradingCurrency = loadExceededInput.currentTradingCurrency,
+            currentDevelopmentCurrency = saveData.player.developmentCurrency,
+
+            towns = new[] { townViewData },
+            routes = new[] { routeViewData },
+            tradeItems = new[] { itemViewData },
+
+            selectedRouteId = route.RouteId,
+
+            currentLoad = loadExceededInput.currentLoad,
+            overloadLimit = loadExceededInput.overloadLimit,
+            maxLoad = loadExceededInput.maxLoad,
+
+            totalPurchaseCost = loadExceededInput.totalPurchaseCost,
+
+            loadedFoodQuantity = loadExceededInput.loadedFoodQuantity,
+            requiredFoodQuantity = loadExceededInput.requiredFoodQuantity,
+
+            selectedMercenaryPower = loadExceededInput.selectedMercenaryPower,
+            requiredMercenaryPower = loadExceededInput.requiredMercenaryPower,
+
+            startCondition = loadExceededCondition
+        };
+
+        var multipleWarningPrepareViewData = new TradePrepareViewData
+        {
+            currentTownId = town.TownId,
+            currentTownName = town.DisplayName,
+
+            currentTradingCurrency = multipleWarningInput.currentTradingCurrency,
+            currentDevelopmentCurrency = saveData.player.developmentCurrency,
+
+            towns = new[] { townViewData },
+            routes = new[] { routeViewData },
+            tradeItems = new[] { itemViewData },
+
+            selectedRouteId = route.RouteId,
+
+            currentLoad = multipleWarningInput.currentLoad,
+            overloadLimit = multipleWarningInput.overloadLimit,
+            maxLoad = multipleWarningInput.maxLoad,
+
+            totalPurchaseCost = multipleWarningInput.totalPurchaseCost,
+
+            loadedFoodQuantity = multipleWarningInput.loadedFoodQuantity,
+            requiredFoodQuantity = multipleWarningInput.requiredFoodQuantity,
+
+            selectedMercenaryPower = multipleWarningInput.selectedMercenaryPower,
+            requiredMercenaryPower = multipleWarningInput.requiredMercenaryPower,
+
+            startCondition = multipleWarningCondition
+        };
+
 
         var result = new TradeResultData
         {
@@ -127,6 +400,67 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Log($"Locked Route: {lockedRouteViewData.displayName} / CanSelect: {lockedRouteViewData.canSelect} / Reason: {lockedRouteViewData.disabledReason}");
         Debug.Assert(!lockedRouteViewData.canSelect, "Smoke Test failed: locked route should not be selectable.");
         Debug.Assert(!string.IsNullOrEmpty(lockedRouteViewData.disabledReason), "Smoke Test failed: locked route needs disabledReason.");
+
+        // Success
+        Debug.Log($"Prepare: {prepareViewData.currentTownName} / Money: {prepareViewData.currentTradingCurrency} / CanStart: {prepareViewData.startCondition.canStart}");
+
+        Debug.Assert(prepareViewData.towns.Length > 0, "Prepare Smoke Test failed: towns should not be empty.");
+        Debug.Assert(prepareViewData.routes.Length > 0, "Prepare Smoke Test failed: routes should not be empty.");
+        Debug.Assert(prepareViewData.tradeItems.Length > 0, "Prepare Smoke Test failed: tradeItems should not be empty.");
+        Debug.Assert(prepareViewData.selectedRouteId == route.RouteId, "Prepare Smoke Test failed: selectedRouteId mismatch.");
+        Debug.Assert(prepareViewData.startCondition != null, "Prepare Smoke Test failed: startCondition should not be null.");
+        Debug.Assert(prepareViewData.startCondition.canStart == successCondition.canStart, "Prepare Smoke Test failed: success condition mismatch.");
+
+        // Not Enough Money
+        Debug.Log($"Prepare Fail: {notEnoughMoneyPrepareViewData.startCondition.disabledReason}");
+
+        Debug.Assert(notEnoughMoneyPrepareViewData.startCondition != null, "Prepare Smoke Test failed: money condition should not be null.");
+        Debug.Assert(!notEnoughMoneyPrepareViewData.startCondition.canStart, "Prepare Smoke Test failed: not enough money case should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(notEnoughMoneyPrepareViewData.startCondition.disabledReason), "Prepare Smoke Test failed: disabled reason is required.");
+
+        // Route Not Selected
+        Debug.Log($"Prepare Fail: {routeNotSelectedCondition.disabledReason}");
+
+        Debug.Assert(routeNotSelectedCondition != null, "Prepare Smoke Test failed: route not selected condition should not be null.");
+        Debug.Assert(!routeNotSelectedCondition.canStart, "Prepare Smoke Test failed: route not selected case should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(routeNotSelectedCondition.disabledReason), "Prepare Smoke Test failed: route not selected disabled reason is required.");
+
+        // Route Locked
+        Debug.Log($"Prepare Fail: {routeLockedCondition.disabledReason}");
+
+        Debug.Assert(routeLockedCondition != null, "Prepare Smoke Test failed: route locked condition should not be null.");
+        Debug.Assert(!routeLockedCondition.canStart, "Prepare Smoke Test failed: route locked case should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(routeLockedCondition.disabledReason), "Prepare Smoke Test failed: route locked disabled reason is required.");
+
+        // Not Enough Food
+        Debug.Log($"Prepare Warning: {notEnoughFoodPrepareViewData.startCondition.warningMessages[0]}");
+
+        Debug.Assert(notEnoughFoodPrepareViewData.startCondition != null, "Prepare Smoke Test failed: food condition should not be null.");
+        Debug.Assert(notEnoughFoodPrepareViewData.startCondition.canStart, "Prepare Smoke Test failed: food shortage should allow start.");
+        Debug.Assert(notEnoughFoodPrepareViewData.startCondition.hasWarning, "Prepare Smoke Test failed: food shortage should show warning.");
+        Debug.Assert(notEnoughFoodPrepareViewData.startCondition.warningMessages.Count > 0, "Prepare Smoke Test failed: warning message is required.");
+
+        // Load Exceeded
+        Debug.Log($"Prepare Fail: {loadExceededPrepareViewData.startCondition.disabledReason}");
+
+
+        Debug.Assert(loadExceededPrepareViewData.startCondition != null, "Prepare Smoke Test failed: load condition should not be null.");
+        Debug.Assert(!loadExceededPrepareViewData.startCondition.canStart, "Prepare Smoke Test failed: max load exceeded should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(loadExceededPrepareViewData.startCondition.disabledReason), "Prepare Smoke Test failed: max load exceeded disabled reason is required.");
+        Debug.Assert(loadExceededPrepareViewData.currentLoad > loadExceededPrepareViewData.maxLoad, "Prepare Smoke Test failed: currentLoad should exceed maxLoad.");
+
+        // Multiple Warnings
+        Debug.Log($"Prepare Warning Count: {multipleWarningPrepareViewData.startCondition.warningMessages.Count}");
+
+        for (var index = 0; index < multipleWarningPrepareViewData.startCondition.warningMessages.Count; index++)
+        {
+            Debug.Log($"Prepare Warning : {multipleWarningPrepareViewData.startCondition.warningMessages[index]}");
+        }
+
+        Debug.Assert(multipleWarningPrepareViewData.startCondition != null, "Prepare Smoke Test failed: multiple warning condition should not be null.");
+        Debug.Assert(multipleWarningPrepareViewData.startCondition.canStart, "Prepare Smoke Test failed: multiple warning case should allow start.");
+        Debug.Assert(multipleWarningPrepareViewData.startCondition.hasWarning, "Prepare Smoke Test failed: multiple warning case should show warning.");
+        Debug.Assert(multipleWarningPrepareViewData.startCondition.warningMessages.Count >= 3, "Prepare Smoke Test failed: multiple warning case should contain all warning messages.");
 
         Debug.Log($"Result Message: [{result.messages[0].type}] {result.messages[0].messageCode} / {result.messages[0].messageText}");
         Debug.Assert(result.messages.Count > 0, "Smoke Test failed: result messages should not be empty.");

@@ -1,11 +1,18 @@
 [System.Serializable]
-public class PriceModifierInput
+public class ModifierInput
 {
-    public ModifierType priceModifierType;
+    public ModifierType modifierType;
     public string sourceId;
     public string displayName;
-    public Target priceModifierTarget;
-    public Operation priceModifierOperation;
+
+    public ModifierBundle[] modifierBundles;
+}
+
+[System.Serializable]
+public class ModifierBundle
+{
+    public Target modifierTarget;
+    public Operation modifierOperation;
     public float value;
 }
 
@@ -13,7 +20,8 @@ public enum Target
 {
     None,
     BuyPrice,
-    SellPrice
+    SellPrice,
+    BaseMoveSpeed
 }
 
 public enum Operation
@@ -31,6 +39,7 @@ public enum ModifierType
     Disaster,
     ActiveEvent,
     PlayerGrowth,
-    CaravanGrowth,
-    OverSupply
+    OverSupply,
+    LowerSupply,
+    AffectToTown
 }

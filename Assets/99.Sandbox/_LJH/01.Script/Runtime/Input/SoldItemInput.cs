@@ -3,6 +3,6 @@ public class SoldItemInput
 {
     public string tradeItemId;
     public int quantity;
-    public int totalBuyPrice;
-    public int totalSellPrice;
+    public long totalBuyPrice;
+    public long totalSellPrice;
 }

@@ -8,12 +8,22 @@ public class TradeItemViewData
     public Sprite icon;
     public string description;
 
-    public int purchasePrice;
-    public int sellPrice;
+    public TradeItemRarity rarity;
+    public TradeItemCategory category;
+
+    public long purchasePrice;
+    public long sellPrice;
+
     public int ownedAmount;
-    public int selectedAmount;
+    public int selectedBuyAmount;
+    public int selectedSellAmount;
+
+    public float unitWeight;
+    public float selectedWeight;
 
     public bool canBuy;
     public bool canSell;
-    public string disabledReason;
+
+    public string buyDisabledReason;
+    public string sellDisabledReason;
 }

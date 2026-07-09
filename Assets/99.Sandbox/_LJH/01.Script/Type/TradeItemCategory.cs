@@ -4,6 +4,5 @@ public enum TradeItemCategory
     Material,
     Valuable,
     LuxuryGoods,
-    Caravans,
-    DraftAnimals
+    DraftAnimalsFood
 }

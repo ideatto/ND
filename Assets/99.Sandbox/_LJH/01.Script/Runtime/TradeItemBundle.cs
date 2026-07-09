@@ -4,6 +4,6 @@ public class TradeItemBundle
     public string itemId;
     public int quantity;
 
-    public int purchaseUnitPrice;
-    public int sellUnitPrice;
+    public long purchaseUnitPrice;
+    public long sellUnitPrice;
 }

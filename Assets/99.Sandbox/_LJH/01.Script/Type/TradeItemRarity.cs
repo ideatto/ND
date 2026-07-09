@@ -1,5 +1,6 @@
 public enum TradeItemRarity
 {
+    None,
     Common,
     Uncommon,
     Rare,
