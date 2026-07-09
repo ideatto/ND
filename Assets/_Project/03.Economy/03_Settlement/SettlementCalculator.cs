@@ -57,8 +57,7 @@ namespace ND.Economy
             result.TradeMoneyAfter = input.TradeMoneyBefore + result.NetProfit;
             result.IsBankrupt = result.TradeMoneyAfter < result.MinimumRecoveryMoney;
 
-            AddEntry(result, SettlementEntryType.ItemPurchaseCost, "settlement.item_purchase_cost", itemPurchaseCost, false, "system");
-            AddEntry(result, SettlementEntryType.ItemSaleRevenue, "settlement.item_sale_revenue", itemSaleRevenue, true, "system");
+            AddItemEntries(result, input);
             AddEntry(result, SettlementEntryType.FoodCost, "settlement.food_cost", foodCost, false, "food");
             AddEntry(result, SettlementEntryType.MercenaryCost, "settlement.mercenary_cost", mercenaryCost, false, "mercenary");
             AddEntry(result, SettlementEntryType.DevelopmentCurrencyReward, "settlement.development_currency_reward", result.DevelopmentCurrencyReward, true, "developmentCurrency");
@@ -70,6 +69,38 @@ namespace ND.Economy
             AddOptionalEntry(result, SettlementEntryType.LoanRepayment, "settlement.loan_repayment", loanRepayment, false, "loan");
 
             return result;
+        }
+
+        private static void AddItemEntries(SettlementBreakdown result, SettlementInput input)
+        {
+            if (input.SoldItems == null || input.SoldItems.Count == 0)
+            {
+                AddEntry(result, SettlementEntryType.ItemPurchaseCost, "settlement.item_purchase_cost", 0L, false, "system");
+                AddEntry(result, SettlementEntryType.ItemSaleRevenue, "settlement.item_sale_revenue", 0L, true, "system");
+                return;
+            }
+
+            bool hasItemEntry = false;
+
+            for (int i = 0; i < input.SoldItems.Count; i++)
+            {
+                SoldItemInput soldItem = input.SoldItems[i];
+                if (soldItem == null)
+                {
+                    continue;
+                }
+
+                string sourceId = string.IsNullOrWhiteSpace(soldItem.TradeItemId) ? "tradeItem" : soldItem.TradeItemId;
+                AddEntry(result, SettlementEntryType.ItemPurchaseCost, "settlement.item_purchase_cost", soldItem.TotalBuyPrice, false, sourceId);
+                AddEntry(result, SettlementEntryType.ItemSaleRevenue, "settlement.item_sale_revenue", soldItem.TotalSellPrice, true, sourceId);
+                hasItemEntry = true;
+            }
+
+            if (!hasItemEntry)
+            {
+                AddEntry(result, SettlementEntryType.ItemPurchaseCost, "settlement.item_purchase_cost", 0L, false, "system");
+                AddEntry(result, SettlementEntryType.ItemSaleRevenue, "settlement.item_sale_revenue", 0L, true, "system");
+            }
         }
 
         private static void AddOptionalEntry(
