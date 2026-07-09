@@ -42,6 +42,10 @@ public static class JourneyRunner
         caravan.settlementClaimed = false;
         caravan.runCargoLost = 0;
         caravan.runFoodLost = 0f;
+        caravan.runDurabilityLost = 0;
+        caravan.runBattlesFought = 0;
+        caravan.runFoodDepleted = false;
+        caravan.runFoodDepletedProgress = 0f;
         caravan.runFatalReason = JourneyFailureReason.None;
         caravan.state = JourneyState.Traveling;
         return v;
@@ -67,11 +71,25 @@ public static class JourneyRunner
             && caravan.progress01 >= ArrivalProgress;
     }
 
-    /// <summary>이동 중 이벤트 — 무역품 손실(무역 계속). → 부분 성공 요인.</summary>
+    /// <summary>이동 중 이벤트 — 무역품 손실(무역 계속). → 부분 성공 요인.
+    /// 실제 cargo 수량을 줄여서 정산 판매량에도 반영한다(첫 상품부터 차감).</summary>
     public static void ApplyCargoLoss(CaravanData caravan, int amount)
     {
         if (caravan == null || caravan.state != JourneyState.Traveling) return;
-        if (amount > 0) caravan.runCargoLost += amount;
+        if (amount <= 0) return;
+
+        // 실제 cargo에서 amount만큼 줄인다(첫 상품부터). 실제로 뺀 개수를 runCargoLost에 기록.
+        int remaining = amount;
+        foreach (CargoEntry entry in caravan.cargo)
+        {
+            if (remaining <= 0) break;
+            if (entry == null) continue;
+
+            int take = (entry.quantity < remaining) ? entry.quantity : remaining;  // 이 상품에서 뺄 수 있는 만큼
+            entry.quantity -= take;      // 실제 수량 감소 → 판매·적재에 반영됨
+            remaining -= take;
+            caravan.runCargoLost += take;  // 실제로 잃은 개수만 기록(부분성공 판정·표시용)
+        }
     }
 
     /// <summary>이동 중 이벤트 — 식량 차감(도난 등). 나중에 이벤트 시스템이 이 함수를 부른다.</summary>
@@ -82,11 +100,50 @@ public static class JourneyRunner
         CheckFoodDepletion(caravan);   // 이 차감으로 바로 바닥날 수도 있음
     }
 
+    /// <summary>이동 중 이벤트 — 마차 내구도 손실. 실제 내구도를 줄이고 이번 무역 손실에 기록. [M2]</summary>
+    public static void ApplyDurabilityLoss(CaravanData caravan, int amount)
+    {
+        if (caravan == null || caravan.state != JourneyState.Traveling) return;
+        if (amount <= 0) return;
+        caravan.currentDurability -= amount;
+        caravan.runDurabilityLost += amount;
+    }
+
+    /// <summary>약탈(전투) 판정 — [임시 규칙] 용병 1마리당 전투 1번 방어.
+    /// 이번 무역 N번째 전투가 용병 수 이하면 방어 성공(손실 없음), 넘으면 약탈당함(내구도·무역품 손실).
+    /// 반환: true=방어 성공 / false=약탈당함.
+    /// [주의] 진짜 판정은 전투력 기반 = Progression 영역. 이건 임시 placeholder. [M2]</summary>
+    public static bool ResolveRaid(CaravanData caravan, int durabilityDamage, int cargoDamage)
+    {
+        if (caravan == null || caravan.state != JourneyState.Traveling) return false;
+
+        caravan.runBattlesFought++;
+        int mercCount = (caravan.mercenaries != null) ? caravan.mercenaries.Count : 0;
+
+        if (caravan.runBattlesFought <= mercCount) return true;   // 용병 수 이하 전투면 방어 성공
+
+        // 방어 실패 → 약탈당함
+        ApplyDurabilityLoss(caravan, durabilityDamage);
+        ApplyCargoLoss(caravan, cargoDamage);
+        return false;
+    }
+
     /// <summary>식량이 바닥(0 이하)나면 실패 확정. 소모+이벤트 반영된 잔량으로 판정.</summary>
     private static void CheckFoodDepletion(CaravanData caravan)
     {
         if (caravan.runFatalReason != JourneyFailureReason.None) return;   // 이미 실패면 스킵
-        if (CaravanCalculator.GetRemainingFood(caravan) <= 0f)
+        if (CaravanCalculator.GetRemainingFood(caravan) > 0f) return;      // 아직 식량 있음
+
+        // 식량 바닥 — 처음 바닥나면 시점 기록 (즉사 아님, 여기서 제한시간 시작)
+        if (!caravan.runFoodDepleted)
+        {
+            caravan.runFoodDepleted = true;
+            caravan.runFoodDepletedProgress = caravan.progress01;
+        }
+
+        // 바닥난 뒤 흐른 시간이 제한시간을 넘었는데 아직 도착 못했으면 → 무역 실패
+        float secondsSinceDepleted = (caravan.progress01 - caravan.runFoodDepletedProgress) * caravan.totalSeconds;
+        if (secondsSinceDepleted >= caravan.starveGraceSeconds && !IsArrived(caravan))
             MarkFatal(caravan, JourneyFailureReason.FoodDepleted);
     }
 
@@ -125,6 +182,8 @@ public static class JourneyRunner
         {
             result.grade = JourneyResultGrade.Success;
         }
+
+        result.durabilityLost = caravan.runDurabilityLost;   // 이번 무역 내구도 손실 기록 [M2]
 
         caravan.state = JourneyState.Settling;
         return result;

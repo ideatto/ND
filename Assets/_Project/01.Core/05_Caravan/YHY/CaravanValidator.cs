@@ -27,7 +27,8 @@ public enum DepartureBlockReason
     NotEnoughAnimals, // 견인 동물 수 부족 (minAnimals 미만)
     TooManyAnimals,   // 견인 동물 수 초과 (maxAnimals 초과) → 출발 불가
     Overloaded,       // 물리 상한(maxLoad) 초과 → 출발 불가
-    NoCargo           // 실은 무역품 없음
+    NoCargo,          // 실은 무역품 없음
+    BrokenWagon       // 마차 내구도 0 → 수리 전 출발 불가 [M2]
 }
 
 /// <summary>출발 검증 결과 = 가능 여부 + 막힌 사유 목록</summary>
@@ -76,6 +77,10 @@ public static class CaravanValidator
             //    TravelCalculator에서 속도만 감소시킨다. 여기서 막는 건 maxLoad(물리 상한)뿐.
             if (CaravanCalculator.GetCurrentLoad(caravan) > caravan.wagon.maxLoad)
                 result.reasons.Add(DepartureBlockReason.Overloaded);
+
+            // 마차 내구도 소진(0 이하) → 수리 전 출발 불가 [M2]
+            if (caravan.currentDurability <= 0)
+                result.reasons.Add(DepartureBlockReason.BrokenWagon);
         }
 
         // ④ 실은 무역품이 하나도 없음

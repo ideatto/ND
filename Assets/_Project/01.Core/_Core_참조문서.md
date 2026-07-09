@@ -66,7 +66,7 @@
 ### TradeDataDraft — 부품 데이터 (초안, 정의 소유는 UI & Data)
 - **TradeItemData**: `id` / `itemName` / `weight`(적재 계산) / `basePrice`(정산용, 예정)
 - **WagonData**: `wagonName` / `overLoad`(속도 100% 한계) / `maxLoad`(출발 불가 상한) / `minAnimals` / `maxAnimals` / `speedModifier`(예정)
-- **AnimalData**: `animalName` / `foodPerKm`(1Km당 식량 소모)
+- **AnimalData**: `animalName` / `speed`(속도 배수) / `foodPerKm`(⚠️ 팀결정으로 이제 '1초당' 식량 소모. 필드명은 SO 교체 때 `foodPerSec`로 rename 예정)
 - **MercenaryData**: `mercName` / `combatPower`(예정) / `contractCount`(예정)
 
 > **적재 두 기준**: `overLoad` 넘으면 속도만 감소(출발 됨), `maxLoad` 넘으면 출발 불가.
@@ -116,10 +116,10 @@ DepartureValidationResult result = CaravanValidator.Validate(caravan);
 | `GetBaseSpeedKmPerSec()` | float | 1마리 기준 속도(Km/초) |
 | `GetTravelSeconds(caravan, 거리)` | float | **소요 시간(초)** ← UI 예상시간, 출발 시 저장 |
 
-### 식량 — 거리 기반 "연료"  `남은 = 실은 - (Km당소모 × 간거리) - 이벤트차감`
+### 식량 — 시간 기반 (2026-07-09 팀결정, 초당 소모)  `남은 = 실은 - (초당소모 × 흐른시간) - 이벤트차감`
 | 함수 | 반환 | 역할 |
 |---|---|---|
-| `GetConsumptionPerKm(caravan)` | float | Km당 소모 = 동물들 foodPerKm 합 |
+| `GetConsumptionPerSec(caravan)` | float | 초당 소모 = 동물들 소모율 합 |
 | `GetRequiredFood(caravan)` | float | 필요 총 식량 ← UI 표시(보유량과 비교해 경고) |
 | `GetRemainingFood(caravan)` | float | 지금 진행도 남은 식량 (0 이하 = 고갈) |
 
