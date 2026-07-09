@@ -15,11 +15,16 @@ public class TradePrepareViewData
 
     public string selectedRouteId;
 
-    public int currentLoad;
-    public int maxLoad;
+    public float currentLoad;
+    public float maxLoad;
 
     public long totalPurchaseCost;
 
-    public bool canStart;
-    public string startDisabledReason;
+    public int loadedFoodQuantity;
+    public int requiredFoodQuantity;
+
+    public int selectedMercenaryPower;
+    public int requiredMercenaryPower;
+
+    public TradePrepareConditionResult startCondition;
 }

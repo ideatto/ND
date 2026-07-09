@@ -18,12 +18,30 @@ MonoBehaviour:
   description: Dummy Item
   rarity: 0
   category: 1
-  baseBuyPrice: 10
-  baseSellPrice: 8
-  weight: 0
+  baseBuyPrice: 0
+  baseSellPrice: 0
+  weight: 0.1
   isConsumable: 0
   canStack: 0
   maxCount: 0
   modified: 0
-  modifiers: []
+  modifiers:
+  - priceModifierType: 1
+    sourceId: 
+    displayName: 
+    priceModifierTarget: 0
+    priceModifierOperation: 0
+    value: 0
+  - priceModifierType: 0
+    sourceId: 
+    displayName: 
+    priceModifierTarget: 0
+    priceModifierOperation: 0
+    value: 0
+  - priceModifierType: 0
+    sourceId: 
+    displayName: 
+    priceModifierTarget: 0
+    priceModifierOperation: 0
+    value: 0
   localSpecialty: 0
