@@ -8,6 +8,7 @@ namespace ND.Framework
         private readonly ISaveService saveService;
         private readonly IGameTimeProvider gameTimeProvider;
         private readonly TradeProgressRecorder tradeProgressRecorder;
+        private readonly InGameScreenStateRouter inGameScreenRouter;
 
         private CaravanData activeCaravan;
 
@@ -15,12 +16,14 @@ namespace ND.Framework
             Func<SaveData> getCurrentSaveData,
             ISaveService saveService,
             IGameTimeProvider gameTimeProvider,
-            TradeProgressRecorder tradeProgressRecorder)
+            TradeProgressRecorder tradeProgressRecorder,
+            InGameScreenStateRouter inGameScreenRouter = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
             this.gameTimeProvider = gameTimeProvider;
             this.tradeProgressRecorder = tradeProgressRecorder;
+            this.inGameScreenRouter = inGameScreenRouter;
 
             FrameworkEvents.CompleteTradeRequested += ForceCompleteActiveTrade;
         }
@@ -101,6 +104,7 @@ namespace ND.Framework
             JourneyRunner.ResetToPrepare(caravan);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Preparation);
 
             return true;
         }
@@ -138,6 +142,7 @@ namespace ND.Framework
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.activeTradeId, result);
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
 
             return true;
         }

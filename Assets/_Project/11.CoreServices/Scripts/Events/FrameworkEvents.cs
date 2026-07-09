@@ -10,6 +10,7 @@ namespace ND.Framework
         public static event Action TimeRollbackDetected;
         public static event Action CompleteTradeRequested;
         public static event Action<string, JourneyResultData> TradeSettlementReady;
+        public static event Action<InGameScreenState> InGameScreenChanged;
 
         public static void RaiseLoadCompleted(SaveData data)
         {
@@ -45,6 +46,12 @@ namespace ND.Framework
         {
             FrameworkLog.Info($"TradeSettlementReady event raised. TradeId: {tradeId}");
             TradeSettlementReady?.Invoke(tradeId, result);
+        }
+
+        public static void RaiseInGameScreenChanged(InGameScreenState screenState)
+        {
+            FrameworkLog.Info($"InGameScreenChanged event raised. ScreenState: {screenState}");
+            InGameScreenChanged?.Invoke(screenState);
         }
     }
 }

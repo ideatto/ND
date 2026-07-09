@@ -15,6 +15,7 @@ namespace ND.Framework
         public TradeProgressRecorder TradeProgressRecorder { get; private set; }
         public TradeStartService TradeStart { get; private set; }
         public TradeProgressCoordinator TradeProgressCoordinator { get; private set; }
+        public InGameScreenStateRouter InGameScreenRouter { get; private set; }
         public SaveData CurrentSaveData { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -63,6 +64,7 @@ namespace ND.Framework
                 CurrentSaveData = SaveService.Load();
             }
 
+            InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
             SceneFlow.GoToInGame();
         }
@@ -84,13 +86,20 @@ namespace ND.Framework
             SceneFlow = new SceneFlowService();
             DebugCommands = new FrameworkDebugCommands(GameTime);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime);
-            TradeStart = new TradeStartService(() => CurrentSaveData, SaveService, TradeProgressRecorder);
+            InGameScreenRouter = new InGameScreenStateRouter();
+            TradeStart = new TradeStartService(
+                () => CurrentSaveData,
+                SaveService,
+                TradeProgressRecorder,
+                InGameScreenRouter);
             TradeProgressCoordinator = new TradeProgressCoordinator(
                 () => CurrentSaveData,
                 SaveService,
                 GameTime,
-                TradeProgressRecorder);
+                TradeProgressRecorder,
+                InGameScreenRouter);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
+            InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
         }
