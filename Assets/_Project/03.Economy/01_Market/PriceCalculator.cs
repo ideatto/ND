@@ -89,12 +89,11 @@ namespace ND.Economy
                 return;
             }
 
-            List<PriceModifierInput> orderedModifiers = new List<PriceModifierInput>(modifiers);
-            orderedModifiers.Sort(CompareModifierOrder);
+            modifiers.Sort(CompareModifierOrder);
 
-            for (int i = 0; i < orderedModifiers.Count; i++)
+            for (int i = 0; i < modifiers.Count; i++)
             {
-                PriceModifierInput modifier = orderedModifiers[i];
+                PriceModifierInput modifier = modifiers[i];
                 long beforeBuy = ClampFinalPrice(buyPrice);
                 long beforeSell = ClampFinalPrice(sellPrice);
 

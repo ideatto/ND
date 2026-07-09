@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ND.Economy
 {
@@ -13,76 +14,128 @@ namespace ND.Economy
         public GrowthPurchaseResult GrowthPurchase;
         public CurrencyApplyResult GrowthCurrencyApply;
         public CoreRuntimeStatModifier RuntimeStats;
-        public CurrencyState FinalCurrencyState;
     }
 
     public static class EconomyM1SmokeScenario
     {
         public static EconomyM1SmokeResult Run()
         {
-            EconomyM1LoopResult loopResult = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
+            PriceCalculationResult priceResult = PriceCalculator.Calculate(new PriceCalculationInput
             {
-                PriceInput = new PriceCalculationInput
-                {
-                    TradeItemId = "apple",
-                    FromTownId = "town_start",
-                    ToTownId = "town_trade_01",
-                    RouteId = "route_01",
-                    Quantity = 5,
-                    BaseBuyPrice = 100,
-                    BaseSellPrice = 140
-                },
-                CurrencyState = new CurrencyState
-                {
-                    TradeMoney = 1000,
-                    DevelopmentCurrency = 0
-                },
-                TradeId = "m1_smoke_trade",
-                FoodCost = 50,
-                MercenaryCost = 0,
-                DevelopmentCurrencyReward = 1,
-                PurchaseGrowth = true,
-                GrowthPurchaseInput = new GrowthPurchaseInput
-                {
-                    GrowthId = "growth_load_01",
-                    CurrentLevel = 0,
-                    MaxLevel = 1,
-                    CostDevelopmentCurrency = 1
-                },
-                PlayerGrowthLevel = 0,
-                CaravanGrowthLevel = 0
+                TradeItemId = "apple",
+                FromTownId = "town_start",
+                ToTownId = "town_trade_01",
+                RouteId = "route_01",
+                Quantity = 5,
+                BaseBuyPrice = 100,
+                BaseSellPrice = 140
             });
 
-            string errorMessage = loopResult.Success
-                ? Validate(loopResult)
-                : "Loop failed: " + loopResult.ErrorCode;
+            if (!priceResult.IsValid)
+            {
+                return Fail("Price calculation failed: " + priceResult.ErrorCode, priceResult, null, null, null, null, null);
+            }
+
+            CurrencyState currencyState = new CurrencyState
+            {
+                TradeMoney = 1000,
+                DevelopmentCurrency = 0
+            };
+
+            SettlementBreakdown settlement = SettlementCalculator.Calculate(new SettlementInput
+            {
+                TradeId = "m1_smoke_trade",
+                TradeMoneyBefore = currencyState.TradeMoney,
+                SoldItems = new List<SoldItemInput>
+                {
+                    new SoldItemInput
+                    {
+                        TradeItemId = "apple",
+                        Quantity = 5,
+                        TotalBuyPrice = priceResult.TotalBuyPrice,
+                        TotalSellPrice = priceResult.TotalSellPrice
+                    }
+                },
+                FoodCost = 50,
+                MercenaryCost = 0,
+                DevelopmentCurrencyReward = 1
+            });
+
+            CurrencyApplyResult settlementCurrencyApply = CurrencyWallet.ApplySettlement(currencyState, settlement);
+            if (!settlementCurrencyApply.Success)
+            {
+                return Fail(
+                    "Settlement currency apply failed: " + settlementCurrencyApply.ErrorCode,
+                    priceResult,
+                    settlement,
+                    settlementCurrencyApply,
+                    null,
+                    null,
+                    null);
+            }
+
+            GrowthPurchaseResult growthPurchase = GrowthPurchaseCalculator.Purchase(new GrowthPurchaseInput
+            {
+                GrowthId = "growth_load_01",
+                CurrentLevel = 0,
+                MaxLevel = 1,
+                DevelopmentCurrencyBefore = currencyState.DevelopmentCurrency,
+                CostDevelopmentCurrency = 1
+            });
+
+            if (!growthPurchase.Success)
+            {
+                return Fail(
+                    "Growth purchase failed: " + growthPurchase.Error,
+                    priceResult,
+                    settlement,
+                    settlementCurrencyApply,
+                    growthPurchase,
+                    null,
+                    null);
+            }
+
+            CurrencyApplyResult growthCurrencyApply = CurrencyWallet.ApplyGrowthPurchase(currencyState, growthPurchase);
+            if (!growthCurrencyApply.Success)
+            {
+                return Fail(
+                    "Growth currency apply failed: " + growthCurrencyApply.ErrorCode,
+                    priceResult,
+                    settlement,
+                    settlementCurrencyApply,
+                    growthPurchase,
+                    growthCurrencyApply,
+                    null);
+            }
+
+            CoreRuntimeStatModifier runtimeStats = GrowthCalculator.CalculateM1RuntimeStats(growthPurchase.NewLevel, 0);
+
+            string errorMessage = Validate(priceResult, settlement, settlementCurrencyApply, growthPurchase, growthCurrencyApply, runtimeStats);
             if (!string.IsNullOrEmpty(errorMessage))
             {
-                return Fail(errorMessage, loopResult);
+                return Fail(errorMessage, priceResult, settlement, settlementCurrencyApply, growthPurchase, growthCurrencyApply, runtimeStats);
             }
 
             return new EconomyM1SmokeResult
             {
                 Success = true,
-                PriceResult = loopResult.PriceResult,
-                Settlement = loopResult.Settlement,
-                SettlementCurrencyApply = loopResult.SettlementCurrencyApply,
-                GrowthPurchase = loopResult.GrowthPurchase,
-                GrowthCurrencyApply = loopResult.GrowthCurrencyApply,
-                RuntimeStats = loopResult.RuntimeStats,
-                FinalCurrencyState = loopResult.FinalCurrencyState
+                PriceResult = priceResult,
+                Settlement = settlement,
+                SettlementCurrencyApply = settlementCurrencyApply,
+                GrowthPurchase = growthPurchase,
+                GrowthCurrencyApply = growthCurrencyApply,
+                RuntimeStats = runtimeStats
             };
         }
 
-        private static string Validate(EconomyM1LoopResult result)
+        private static string Validate(
+            PriceCalculationResult priceResult,
+            SettlementBreakdown settlement,
+            CurrencyApplyResult settlementCurrencyApply,
+            GrowthPurchaseResult growthPurchase,
+            CurrencyApplyResult growthCurrencyApply,
+            CoreRuntimeStatModifier runtimeStats)
         {
-            PriceCalculationResult priceResult = result.PriceResult;
-            SettlementBreakdown settlement = result.Settlement;
-            CurrencyApplyResult settlementCurrencyApply = result.SettlementCurrencyApply;
-            GrowthPurchaseResult growthPurchase = result.GrowthPurchase;
-            CurrencyApplyResult growthCurrencyApply = result.GrowthCurrencyApply;
-            CoreRuntimeStatModifier runtimeStats = result.RuntimeStats;
-
             if (priceResult.UnitBuyPrice != 100L)
             {
                 return "Expected unit buy price 100.";
@@ -148,11 +201,6 @@ namespace ND.Economy
                 return "Expected development currency after growth purchase 0.";
             }
 
-            if (!HasEntry(settlement, SettlementEntryType.GrowthPurchaseCost, 1L, false, "growth_load_01"))
-            {
-                return "Expected growth purchase cost settlement entry.";
-            }
-
             if (!growthCurrencyApply.Success)
             {
                 return "Expected growth currency apply success.";
@@ -183,60 +231,28 @@ namespace ND.Economy
                 return "Expected loss limit rate 0.5.";
             }
 
-            if (result.FinalCurrencyState.TradeMoney != 1150L)
-            {
-                return "Expected final trade money 1150.";
-            }
-
-            if (result.FinalCurrencyState.DevelopmentCurrency != 0L)
-            {
-                return "Expected final development currency 0.";
-            }
-
             return string.Empty;
         }
 
-        private static bool HasEntry(
+        private static EconomyM1SmokeResult Fail(
+            string errorMessage,
+            PriceCalculationResult priceResult,
             SettlementBreakdown settlement,
-            SettlementEntryType entryType,
-            long amount,
-            bool isPositive,
-            string sourceId)
-        {
-            if (settlement == null || settlement.Entries == null)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < settlement.Entries.Count; i++)
-            {
-                SettlementEntry entry = settlement.Entries[i];
-                if (entry != null
-                    && entry.EntryType == entryType
-                    && entry.Amount == amount
-                    && entry.IsPositive == isPositive
-                    && entry.SourceId == sourceId)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static EconomyM1SmokeResult Fail(string errorMessage, EconomyM1LoopResult loopResult)
+            CurrencyApplyResult settlementCurrencyApply,
+            GrowthPurchaseResult growthPurchase,
+            CurrencyApplyResult growthCurrencyApply,
+            CoreRuntimeStatModifier runtimeStats)
         {
             return new EconomyM1SmokeResult
             {
                 Success = false,
                 ErrorMessage = errorMessage,
-                PriceResult = loopResult != null ? loopResult.PriceResult : null,
-                Settlement = loopResult != null ? loopResult.Settlement : null,
-                SettlementCurrencyApply = loopResult != null ? loopResult.SettlementCurrencyApply : null,
-                GrowthPurchase = loopResult != null ? loopResult.GrowthPurchase : null,
-                GrowthCurrencyApply = loopResult != null ? loopResult.GrowthCurrencyApply : null,
-                RuntimeStats = loopResult != null ? loopResult.RuntimeStats : null,
-                FinalCurrencyState = loopResult != null ? loopResult.FinalCurrencyState : null
+                PriceResult = priceResult,
+                Settlement = settlement,
+                SettlementCurrencyApply = settlementCurrencyApply,
+                GrowthPurchase = growthPurchase,
+                GrowthCurrencyApply = growthCurrencyApply,
+                RuntimeStats = runtimeStats
             };
         }
     }

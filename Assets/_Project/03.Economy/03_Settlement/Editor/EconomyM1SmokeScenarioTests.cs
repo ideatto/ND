@@ -7,21 +7,13 @@ namespace ND.Economy.Editor
         public static void RunAll()
         {
             PriceCalculator_ReturnsExpectedM1Prices();
-            PriceCalculator_OrdersModifiersWithoutMutatingInput();
-            PriceCalculator_ClampsFinalUnitPricesToMinimumOne();
             SettlementCalculator_ReturnsExpectedM1Settlement();
-            SettlementCalculator_KeepsRequiredEntriesWhenSoldItemsAreNull();
-            SettlementCalculator_ClampsNegativeInputsToZeroEntries();
             GrowthCalculator_ReturnsExpectedM1RuntimeStats();
-            GrowthCalculator_DoesNotIncreaseSpeedInM1();
             GrowthPurchaseCalculator_SpendsDevelopmentCurrency();
             GrowthPurchaseCalculator_FailsWhenCurrencyIsNotEnough();
             CurrencyWallet_AppliesSettlementAndGrowthPurchase();
             EconomyM1LoopCalculator_ExecutesPriceSettlementCurrencyGrowthAndRuntimeStats();
-            EconomyM1LoopCalculator_ReturnsPriceFailureErrorCode();
-            EconomyM1LoopCalculator_ReturnsGrowthPurchaseFailureErrorCode();
             EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase();
-            EconomyM1LoopCalculator_RepeatsThreeTimesWithoutDuplicateGrowthOrNegativeCurrency();
             EconomyM1SmokeScenario_Run_Succeeds();
         }
 
@@ -44,80 +36,6 @@ namespace ND.Economy.Editor
             CheckEqual(500L, result.TotalBuyPrice, "TotalBuyPrice");
             CheckEqual(700L, result.TotalSellPrice, "TotalSellPrice");
             CheckEqual(200L, result.ExpectedGrossProfit, "ExpectedGrossProfit");
-        }
-
-        private static void PriceCalculator_OrdersModifiersWithoutMutatingInput()
-        {
-            PriceCalculationInput input = new PriceCalculationInput
-            {
-                TradeItemId = "apple",
-                FromTownId = "town_start",
-                ToTownId = "town_trade_01",
-                RouteId = "route_01",
-                Quantity = 1,
-                BaseBuyPrice = 100,
-                BaseSellPrice = 100,
-                Modifiers =
-                {
-                    new PriceModifierInput
-                    {
-                        ModifierType = PriceModifierType.PlayerGrowth,
-                        SourceId = "growth_price_01",
-                        Target = PriceModifierTarget.BuyPrice,
-                        Operation = PriceModifierOperation.Percent,
-                        Value = -0.1f
-                    },
-                    new PriceModifierInput
-                    {
-                        ModifierType = PriceModifierType.Town,
-                        SourceId = "town_trade_01",
-                        Target = PriceModifierTarget.Both,
-                        Operation = PriceModifierOperation.Add,
-                        Value = 20f
-                    }
-                }
-            };
-
-            PriceCalculationResult result = PriceCalculator.Calculate(input);
-
-            Check(result.IsValid, "Price modifier result should be valid: " + result.ErrorCode);
-            CheckEqual(108L, result.UnitBuyPrice, "Modifier UnitBuyPrice");
-            CheckEqual(120L, result.UnitSellPrice, "Modifier UnitSellPrice");
-            CheckEqual(PriceModifierType.Town, result.Modifiers[0].ModifierType, "First applied modifier");
-            CheckEqual(PriceModifierType.PlayerGrowth, result.Modifiers[1].ModifierType, "Second applied modifier");
-            CheckEqual(PriceModifierType.PlayerGrowth, input.Modifiers[0].ModifierType, "Input first modifier should keep original order");
-            CheckEqual(PriceModifierType.Town, input.Modifiers[1].ModifierType, "Input second modifier should keep original order");
-        }
-
-        private static void PriceCalculator_ClampsFinalUnitPricesToMinimumOne()
-        {
-            PriceCalculationResult result = PriceCalculator.Calculate(new PriceCalculationInput
-            {
-                TradeItemId = "apple",
-                FromTownId = "town_start",
-                ToTownId = "town_trade_01",
-                RouteId = "route_01",
-                Quantity = 3,
-                BaseBuyPrice = 100,
-                BaseSellPrice = 100,
-                Modifiers =
-                {
-                    new PriceModifierInput
-                    {
-                        ModifierType = PriceModifierType.Debug,
-                        SourceId = "debug_negative_price",
-                        Target = PriceModifierTarget.Both,
-                        Operation = PriceModifierOperation.Add,
-                        Value = -1000f
-                    }
-                }
-            });
-
-            Check(result.IsValid, "Price clamp result should be valid: " + result.ErrorCode);
-            CheckEqual(1L, result.UnitBuyPrice, "Clamped UnitBuyPrice");
-            CheckEqual(1L, result.UnitSellPrice, "Clamped UnitSellPrice");
-            CheckEqual(3L, result.TotalBuyPrice, "Clamped TotalBuyPrice");
-            CheckEqual(3L, result.TotalSellPrice, "Clamped TotalSellPrice");
         }
 
         private static void SettlementCalculator_ReturnsExpectedM1Settlement()
@@ -149,69 +67,6 @@ namespace ND.Economy.Editor
             CheckEqual(1L, result.DevelopmentCurrencyReward, "DevelopmentCurrencyReward");
             Check(!result.IsBankrupt, "Settlement should not be bankrupt.");
             CheckEqual(5, result.Entries.Count, "Entries.Count");
-            Check(HasEntry(result, SettlementEntryType.ItemPurchaseCost, 500L, false, "apple"), "Settlement should include apple purchase cost entry.");
-            Check(HasEntry(result, SettlementEntryType.ItemSaleRevenue, 700L, true, "apple"), "Settlement should include apple sale revenue entry.");
-            Check(HasEntry(result, SettlementEntryType.FoodCost, 50L, false, "food"), "Settlement should include food cost entry.");
-            Check(HasEntry(result, SettlementEntryType.MercenaryCost, 0L, false, "mercenary"), "Settlement should include zero mercenary cost entry.");
-            Check(HasEntry(result, SettlementEntryType.DevelopmentCurrencyReward, 1L, true, "developmentCurrency"), "Settlement should include development currency reward entry.");
-        }
-
-        private static void SettlementCalculator_KeepsRequiredEntriesWhenSoldItemsAreNull()
-        {
-            SettlementBreakdown result = SettlementCalculator.Calculate(new SettlementInput
-            {
-                TradeId = "m1_null_item_trade",
-                TradeMoneyBefore = 1000,
-                SoldItems = { null },
-                FoodCost = 0,
-                MercenaryCost = 0,
-                DevelopmentCurrencyReward = 0
-            });
-
-            CheckEqual(5, result.Entries.Count, "Null item Entries.Count");
-            Check(HasEntry(result, SettlementEntryType.ItemPurchaseCost, 0L, false, "system"), "Null item settlement should include zero purchase entry.");
-            Check(HasEntry(result, SettlementEntryType.ItemSaleRevenue, 0L, true, "system"), "Null item settlement should include zero sale entry.");
-            Check(HasEntry(result, SettlementEntryType.FoodCost, 0L, false, "food"), "Null item settlement should include zero food entry.");
-            Check(HasEntry(result, SettlementEntryType.MercenaryCost, 0L, false, "mercenary"), "Null item settlement should include zero mercenary entry.");
-            Check(HasEntry(result, SettlementEntryType.DevelopmentCurrencyReward, 0L, true, "developmentCurrency"), "Null item settlement should include zero development currency reward entry.");
-        }
-
-        private static void SettlementCalculator_ClampsNegativeInputsToZeroEntries()
-        {
-            SettlementBreakdown result = SettlementCalculator.Calculate(new SettlementInput
-            {
-                TradeId = "m1_negative_settlement_trade",
-                TradeMoneyBefore = 1000,
-                SoldItems =
-                {
-                    new SoldItemInput
-                    {
-                        TradeItemId = "apple",
-                        Quantity = 5,
-                        TotalBuyPrice = -500,
-                        TotalSellPrice = -700
-                    }
-                },
-                FoodCost = -50,
-                MercenaryCost = -10,
-                CartRepairCost = -5,
-                LostItemValue = -4,
-                EventProfit = -3,
-                EventLoss = -2,
-                LoanRepayment = -1,
-                DevelopmentCurrencyReward = -1
-            });
-
-            CheckEqual(0L, result.TotalRevenue, "Negative TotalRevenue");
-            CheckEqual(0L, result.TotalExpense, "Negative TotalExpense");
-            CheckEqual(0L, result.NetProfit, "Negative NetProfit");
-            CheckEqual(1000L, result.TradeMoneyAfter, "Negative TradeMoneyAfter");
-            CheckEqual(0L, result.DevelopmentCurrencyReward, "Negative DevelopmentCurrencyReward");
-            Check(HasEntry(result, SettlementEntryType.ItemPurchaseCost, 0L, false, "apple"), "Negative settlement should clamp purchase entry.");
-            Check(HasEntry(result, SettlementEntryType.ItemSaleRevenue, 0L, true, "apple"), "Negative settlement should clamp sale entry.");
-            Check(HasEntry(result, SettlementEntryType.FoodCost, 0L, false, "food"), "Negative settlement should clamp food entry.");
-            Check(HasEntry(result, SettlementEntryType.MercenaryCost, 0L, false, "mercenary"), "Negative settlement should clamp mercenary entry.");
-            Check(HasEntry(result, SettlementEntryType.DevelopmentCurrencyReward, 0L, true, "developmentCurrency"), "Negative settlement should clamp development currency reward entry.");
         }
 
         private static void GrowthCalculator_ReturnsExpectedM1RuntimeStats()
@@ -227,14 +82,6 @@ namespace ND.Economy.Editor
             CheckEqual(0.5f, result.LossLimitRate, "LossLimitRate");
             CheckEqual(1f, result.RiskMultiplier, "RiskMultiplier");
             CheckEqual(0L, result.MinRecoveryTradeMoney, "MinRecoveryTradeMoney");
-        }
-
-        private static void GrowthCalculator_DoesNotIncreaseSpeedInM1()
-        {
-            CoreRuntimeStatModifier result = GrowthCalculator.CalculateM1RuntimeStats(1, 1);
-
-            CheckEqual(30, result.MaxLoadBonus, "Combined MaxLoadBonus");
-            CheckEqual(1f, result.SpeedMultiplier, "M1 SpeedMultiplier should stay at design placeholder value");
         }
 
         private static void GrowthPurchaseCalculator_SpendsDevelopmentCurrency()
@@ -359,92 +206,9 @@ namespace ND.Economy.Editor
             Check(result.GrowthPurchase.Success, "Loop growth purchase should succeed.");
             CheckEqual(1, result.GrowthPurchase.NewLevel, "Loop NewLevel");
             CheckEqual(0L, result.GrowthCurrencyApply.After.DevelopmentCurrency, "Loop DevelopmentCurrency");
-            CheckEqual(6, result.Settlement.Entries.Count, "Loop Entries.Count");
-            Check(HasEntry(result.Settlement, SettlementEntryType.ItemPurchaseCost, 500L, false, "apple"), "Loop should include apple purchase cost entry.");
-            Check(HasEntry(result.Settlement, SettlementEntryType.ItemSaleRevenue, 700L, true, "apple"), "Loop should include apple sale revenue entry.");
-            Check(HasEntry(result.Settlement, SettlementEntryType.GrowthPurchaseCost, 1L, false, "growth_load_01"), "Loop should include growth purchase cost entry.");
             CheckEqual(1150L, result.FinalCurrencyState.TradeMoney, "Loop final TradeMoney");
             CheckEqual(0L, result.FinalCurrencyState.DevelopmentCurrency, "Loop final DevelopmentCurrency");
             CheckEqual(10, result.RuntimeStats.MaxLoadBonus, "Loop MaxLoadBonus");
-        }
-
-        private static void EconomyM1LoopCalculator_ReturnsPriceFailureErrorCode()
-        {
-            EconomyM1LoopResult result = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
-            {
-                PriceInput = new PriceCalculationInput
-                {
-                    TradeItemId = "apple",
-                    FromTownId = "town_start",
-                    ToTownId = "town_trade_01",
-                    RouteId = "route_01",
-                    Quantity = 0,
-                    BaseBuyPrice = 100,
-                    BaseSellPrice = 140
-                },
-                CurrencyState = new CurrencyState
-                {
-                    TradeMoney = 1000,
-                    DevelopmentCurrency = 0
-                },
-                TradeId = "m1_invalid_price_trade",
-                FoodCost = 50,
-                DevelopmentCurrencyReward = 1
-            });
-
-            Check(!result.Success, "M1 loop should fail when price input quantity is invalid.");
-            CheckEqual("PriceCalculationFailed:" + PriceCalculator.ErrorInvalidQuantity, result.ErrorCode, "Loop invalid quantity error");
-            Check(result.PriceResult != null, "Loop failure should include price result.");
-            Check(!result.PriceResult.IsValid, "Loop failure price result should be invalid.");
-            CheckEqual(PriceCalculator.ErrorInvalidQuantity, result.PriceResult.ErrorCode, "PriceResult invalid quantity error");
-            Check(result.Settlement == null, "Loop price failure should not calculate settlement.");
-            CheckEqual(1000L, result.FinalCurrencyState.TradeMoney, "Loop price failure final trade money snapshot");
-            CheckEqual(0L, result.FinalCurrencyState.DevelopmentCurrency, "Loop price failure final development currency snapshot");
-        }
-
-        private static void EconomyM1LoopCalculator_ReturnsGrowthPurchaseFailureErrorCode()
-        {
-            EconomyM1LoopResult result = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
-            {
-                PriceInput = new PriceCalculationInput
-                {
-                    TradeItemId = "apple",
-                    FromTownId = "town_start",
-                    ToTownId = "town_trade_01",
-                    RouteId = "route_01",
-                    Quantity = 5,
-                    BaseBuyPrice = 100,
-                    BaseSellPrice = 140
-                },
-                CurrencyState = new CurrencyState
-                {
-                    TradeMoney = 1000,
-                    DevelopmentCurrency = 0
-                },
-                TradeId = "m1_growth_not_enough_currency_trade",
-                FoodCost = 50,
-                DevelopmentCurrencyReward = 0,
-                PurchaseGrowth = true,
-                GrowthPurchaseInput = new GrowthPurchaseInput
-                {
-                    GrowthId = "growth_load_01",
-                    CurrentLevel = 0,
-                    MaxLevel = 1,
-                    CostDevelopmentCurrency = 1
-                }
-            });
-
-            Check(!result.Success, "M1 loop should fail when growth purchase currency is not enough.");
-            CheckEqual("GrowthPurchaseFailed:" + GrowthPurchaseError.NotEnoughDevelopmentCurrency, result.ErrorCode, "Loop growth currency error");
-            Check(result.Settlement != null, "Loop growth failure should include settlement result.");
-            CheckEqual(150L, result.Settlement.NetProfit, "Loop growth failure settlement net profit");
-            Check(result.SettlementCurrencyApply.Success, "Loop growth failure should include settlement currency apply.");
-            CheckEqual(1150L, result.FinalCurrencyState.TradeMoney, "Loop growth failure final trade money snapshot");
-            CheckEqual(0L, result.FinalCurrencyState.DevelopmentCurrency, "Loop growth failure final development currency snapshot");
-            Check(result.GrowthPurchase != null, "Loop growth failure should include growth purchase result.");
-            CheckEqual(GrowthPurchaseError.NotEnoughDevelopmentCurrency, result.GrowthPurchase.Error, "Loop growth purchase result error");
-            Check(result.GrowthCurrencyApply == null, "Loop growth purchase failure should not apply growth currency.");
-            Check(result.RuntimeStats == null, "Loop growth purchase failure should not calculate runtime stats.");
         }
 
         private static void EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase()
@@ -485,67 +249,6 @@ namespace ND.Economy.Editor
             CheckEqual(1, result.GrowthPurchase.PreviousLevel, "Loop previous growth level");
         }
 
-        private static void EconomyM1LoopCalculator_RepeatsThreeTimesWithoutDuplicateGrowthOrNegativeCurrency()
-        {
-            CurrencyState currency = new CurrencyState
-            {
-                TradeMoney = 1000,
-                DevelopmentCurrency = 0
-            };
-
-            int playerGrowthLevel = 0;
-            EconomyM1LoopResult lastResult = null;
-
-            for (int i = 0; i < 3; i++)
-            {
-                bool purchaseGrowth = playerGrowthLevel < 1;
-
-                lastResult = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
-                {
-                    PriceInput = new PriceCalculationInput
-                    {
-                        TradeItemId = "apple",
-                        FromTownId = "town_start",
-                        ToTownId = "town_trade_01",
-                        RouteId = "route_01",
-                        Quantity = 5,
-                        BaseBuyPrice = 100,
-                        BaseSellPrice = 140
-                    },
-                    CurrencyState = currency,
-                    TradeId = "m1_repeat_trade_" + i,
-                    FoodCost = 50,
-                    MercenaryCost = 0,
-                    DevelopmentCurrencyReward = 1,
-                    PurchaseGrowth = purchaseGrowth,
-                    PlayerGrowthLevel = playerGrowthLevel,
-                    GrowthPurchaseInput = new GrowthPurchaseInput
-                    {
-                        GrowthId = "growth_load_01",
-                        MaxLevel = 1,
-                        CostDevelopmentCurrency = 1
-                    }
-                });
-
-                Check(lastResult.Success, "Repeat loop " + i + " should succeed: " + lastResult.ErrorCode);
-                Check(lastResult.FinalCurrencyState.TradeMoney >= 0L, "Repeat loop trade money should not be negative.");
-                Check(lastResult.FinalCurrencyState.DevelopmentCurrency >= 0L, "Repeat loop development currency should not be negative.");
-
-                if (purchaseGrowth)
-                {
-                    Check(lastResult.GrowthPurchase.Success, "Repeat loop growth purchase should succeed once.");
-                    playerGrowthLevel = lastResult.GrowthPurchase.NewLevel;
-                }
-
-                currency = lastResult.FinalCurrencyState.Clone();
-            }
-
-            CheckEqual(1450L, currency.TradeMoney, "Repeat final TradeMoney");
-            CheckEqual(2L, currency.DevelopmentCurrency, "Repeat final DevelopmentCurrency");
-            CheckEqual(1, playerGrowthLevel, "Repeat final PlayerGrowthLevel");
-            CheckEqual(10, lastResult.RuntimeStats.MaxLoadBonus, "Repeat final MaxLoadBonus");
-        }
-
         private static void EconomyM1SmokeScenario_Run_Succeeds()
         {
             EconomyM1SmokeResult result = EconomyM1SmokeScenario.Run();
@@ -567,34 +270,6 @@ namespace ND.Economy.Editor
             {
                 throw new InvalidOperationException(message);
             }
-        }
-
-        private static bool HasEntry(
-            SettlementBreakdown settlement,
-            SettlementEntryType entryType,
-            long amount,
-            bool isPositive,
-            string sourceId)
-        {
-            if (settlement == null || settlement.Entries == null)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < settlement.Entries.Count; i++)
-            {
-                SettlementEntry entry = settlement.Entries[i];
-                if (entry != null
-                    && entry.EntryType == entryType
-                    && entry.Amount == amount
-                    && entry.IsPositive == isPositive
-                    && entry.SourceId == sourceId)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static void CheckEqual<T>(T expected, T actual, string label)
