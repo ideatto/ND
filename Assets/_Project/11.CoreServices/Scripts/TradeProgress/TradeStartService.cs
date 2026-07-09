@@ -8,6 +8,7 @@ namespace ND.Framework
         private readonly ISaveService saveService;
         private readonly TradeProgressRecorder tradeProgressRecorder;
         private readonly InGameScreenStateRouter inGameScreenRouter;
+        private readonly Action clearSettlementCache;
 
         public bool LastRecordSucceeded { get; private set; }
 
@@ -15,12 +16,14 @@ namespace ND.Framework
             Func<SaveData> getCurrentSaveData,
             ISaveService saveService,
             TradeProgressRecorder tradeProgressRecorder,
-            InGameScreenStateRouter inGameScreenRouter = null)
+            InGameScreenStateRouter inGameScreenRouter = null,
+            Action clearSettlementCache = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
             this.tradeProgressRecorder = tradeProgressRecorder;
             this.inGameScreenRouter = inGameScreenRouter;
+            this.clearSettlementCache = clearSettlementCache;
         }
 
         public DepartureValidationResult TryStartTrade(
@@ -55,6 +58,7 @@ namespace ND.Framework
 
             if (LastRecordSucceeded && saveData != null)
             {
+                clearSettlementCache?.Invoke();
                 CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             }
 

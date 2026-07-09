@@ -28,6 +28,7 @@ namespace ND.Framework
             FrameworkEvents.CompleteTradeRequested += ForceCompleteActiveTrade;
         }
 
+        public string LastSettlementTradeId { get; private set; } = string.Empty;
         public JourneyResultData LastSettlementResult { get; private set; }
 
         public CaravanData ActiveCaravan
@@ -46,8 +47,6 @@ namespace ND.Framework
 
         public bool CheckProgressAndCompletion(bool saveProgress = true)
         {
-            LastSettlementResult = null;
-
             var saveData = GetSaveData();
             if (!CanUpdateTravelingTrade(saveData))
             {
@@ -87,6 +86,11 @@ namespace ND.Framework
                 return false;
             }
 
+            if (!CanClaimCachedSettlement(saveData))
+            {
+                return false;
+            }
+
             if (!JourneyRunner.ClaimSettlement(caravan))
             {
                 return false;
@@ -105,8 +109,15 @@ namespace ND.Framework
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Preparation);
+            ClearSettlementCache();
 
             return true;
+        }
+
+        public void ClearSettlementCache()
+        {
+            LastSettlementTradeId = string.Empty;
+            LastSettlementResult = null;
         }
 
         public void ForceCompleteActiveTrade()
@@ -137,12 +148,44 @@ namespace ND.Framework
                 return false;
             }
 
+            LastSettlementTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
             LastSettlementResult = result;
             tradeProgressRecorder?.MarkSettlementPending(saveData);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
-            FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.activeTradeId, result);
+            FrameworkEvents.RaiseTradeSettlementReady(LastSettlementTradeId, result);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+
+            return true;
+        }
+
+        private bool CanClaimCachedSettlement(SaveData saveData)
+        {
+            if (LastSettlementResult == null)
+            {
+                FrameworkLog.Warning("Settlement claim blocked because cached settlement result is missing.");
+                return false;
+            }
+
+            if (saveData.tradeProgress == null)
+            {
+                FrameworkLog.Warning("Settlement claim blocked because trade progress save data is missing.");
+                return false;
+            }
+
+            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            {
+                FrameworkLog.Warning($"Settlement claim blocked because trade state is {saveData.tradeProgress.state}.");
+                return false;
+            }
+
+            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            if (string.IsNullOrEmpty(LastSettlementTradeId) || LastSettlementTradeId != activeTradeId)
+            {
+                FrameworkLog.Warning(
+                    $"Settlement claim blocked because cached trade ID does not match active trade ID. Cached: {LastSettlementTradeId}, Active: {activeTradeId}");
+                return false;
+            }
 
             return true;
         }
