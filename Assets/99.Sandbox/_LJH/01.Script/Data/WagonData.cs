@@ -1,12 +1,13 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "Wagon_WagonName", menuName = "TradeItem/Wagon Data")]
+[CreateAssetMenu(fileName = "Wagon_WagonName", menuName = "TradeItem/WagonData")]
 public class WagonData : ScriptableObject, IIdentifiableData
 {
     [Header("Default_Info")]
     [SerializeField] private string wagonId;
     [SerializeField] private string displayName;
     [SerializeField] private Sprite icon;
+    [SerializeField] private GameObject prefab;
 
     [Header("Wagon_Description")]
     [TextArea(3, 10)]
@@ -22,6 +23,9 @@ public class WagonData : ScriptableObject, IIdentifiableData
     [SerializeField] private float baseMoveSpeed;
     // CaravanSpeed = WagonData.baseMoveSpeed + AnimalData.baseMoveSpeed 
     //if WagonType.WagonWithAnimals -> baseMoveSpeed = 0
+
+    [Header("Wagon_Eligible_Animal_Info")]
+    [SerializeField] private DraftAnimalType[] eligibleAnimalTypes;
 
     [Header("Wagon_Inventory_Info")]
     [SerializeField] private int inventorySlotCount;
@@ -50,6 +54,7 @@ public class WagonData : ScriptableObject, IIdentifiableData
     public string WagonId => wagonId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
+    public GameObject Prefab => prefab;
     public string Description => description;
     public WagonType WagonType => wagonType;
     public int MaxDurability => Mathf.Max(0, maxDurability);
@@ -59,6 +64,8 @@ public class WagonData : ScriptableObject, IIdentifiableData
     public int MaxPullAnimals => Mathf.Max(0, maxPullAnimals);
     public int MinRequireAnimals => Mathf.Max(0, minRequireAnimals);
     public float BaseMoveSpeed => Mathf.Max(0f, baseMoveSpeed);
+    public DraftAnimalType[] EligibleAnimalTypes =>
+        eligibleAnimalTypes != null ? (DraftAnimalType[])eligibleAnimalTypes.Clone() : new DraftAnimalType[0];
     public TradeItemRarity Rarity => rarity;
     public long BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;
     public bool CanStack => canStack;
@@ -103,6 +110,7 @@ public class WagonData : ScriptableObject, IIdentifiableData
             maxDurability = 1;
             maxPullAnimals = 0;
             minRequireAnimals = 0;
+            eligibleAnimalTypes = new DraftAnimalType[0];
             rarity = TradeItemRarity.None;
             baseBuyPrice = 0;
             canStack = false;
@@ -114,6 +122,7 @@ public class WagonData : ScriptableObject, IIdentifiableData
         {
             maxPullAnimals = 0;
             minRequireAnimals = 0;
+            eligibleAnimalTypes = new DraftAnimalType[0];
         }
 
         if(wagonType == WagonType.WagonWithAnimals) 
@@ -124,6 +133,7 @@ public class WagonData : ScriptableObject, IIdentifiableData
 
     private void ValidateModifierTargets()
     {
+        //TODO require enhancing exception handling
         if (!affectModify || modifiers == null)
             return;
 

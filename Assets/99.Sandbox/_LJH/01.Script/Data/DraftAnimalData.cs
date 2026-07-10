@@ -1,54 +1,58 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "TradeItem_ItemName", menuName = "TradeItem/TradeItemData")]
-public class TradeItemData : ScriptableObject, IIdentifiableData
+[CreateAssetMenu(fileName = "DraftAnimal_DraftAnimalName", menuName ="TradeItem/DraftAnimalData")]
+public class DraftAnimalData : ScriptableObject, IIdentifiableData
 {
     [Header("Default_Info")]
-    [SerializeField] private string itemId;
+    [SerializeField] private string draftAnimalId;
     [SerializeField] private string displayName;
     [SerializeField] private Sprite icon;
+    [SerializeField] private GameObject prefab;
 
-    [Header("TradeItem_Description")]
+    [Header("Draft_Animal_Description")]
     [TextArea(3, 10)]
     [SerializeField] private string description;
 
+    [Header("Draft_Animal_Type")]
+    [SerializeField] private DraftAnimalType animalType;
+
+    [Header("Draft_Animal_Info")]
+    [SerializeField] private float feedConsumption; // per seconds
+    [SerializeField] private float baseMoveSpeed;
+    [SerializeField] private float increaseOverLoad; // Increase maximum overload limit
+    [SerializeField] private float increaseMaxLoad; // Increase maximum Maxload limit
+
     [Header("Trade_Info")]
     [SerializeField] private TradeItemRarity rarity;
-    [SerializeField] private TradeItemCategory category;
     [SerializeField] private long baseBuyPrice;
-    [SerializeField] private long baseSellPrice;
 
-    [Header("TradeItem_Stack_Info")]
+    [Header("Stack_Info")]
     [SerializeField] private bool canStack;
     [SerializeField] private int maxCount;
 
-    [Header("Item_Weight_Info")]
-    [SerializeField] private float weight;
-
-    [Header("Item_Consumable_Info")]
-    [SerializeField] private bool isConsumable;
-
-    [Header("TradeItem_Modify_Info")]
-    [SerializeField] private bool affectModify;
+    [Header("Modify_Info")]
+    [SerializeField] private bool affectModify; // for baseBuyPrice, baseMoveSpeed
     [SerializeField] private ModifierInput[] modifiers;
 
-    [Header("TradeItme_Local_Trade_Info")]
+    [Header("Local_Trade_Info")]
     [SerializeField] private bool localSpecialty;
 
     #region
-    public string Id => itemId;
-    public string ItemId => itemId;
+    public string Id => draftAnimalId;
+    public string DraftAnimalId => draftAnimalId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;
+    public GameObject Prefab => prefab;
     public string Description => description;
+    public DraftAnimalType AnimalType => animalType;
+    public float FeedConsumption => Mathf.Max(0f, feedConsumption);
+    public float BaseMoveSpeed => Mathf.Max(0f, baseMoveSpeed);
+    public float IncreaseOverLoad => Mathf.Max(0f, increaseOverLoad);
+    public float IncreaseMaxLoad => Mathf.Max(0f, increaseMaxLoad);
     public TradeItemRarity Rarity => rarity;
-    public TradeItemCategory Category => category;
     public long BaseBuyPrice => baseBuyPrice >= 0 ? baseBuyPrice : 0;
-    public long BaseSellPrice => baseSellPrice >= 0 ? baseSellPrice : 0;
     public bool CanStack => canStack;
     public int MaxCount => Mathf.Max(1, maxCount);
-    public float Weight => Mathf.Max(0, weight);
-    public bool IsConsumable => isConsumable;
     public bool AffectModify => affectModify;
     public ModifierInput[] Modifiers => modifiers != null ? (ModifierInput[])modifiers.Clone() : new ModifierInput[0];
     public bool LocalSpecialty => localSpecialty;
@@ -57,13 +61,19 @@ public class TradeItemData : ScriptableObject, IIdentifiableData
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        weight = Mathf.Max(0f, weight);
-        maxCount = Mathf.Max(1, maxCount);
-
+        ClampValues();
         ValidateModifierTargets();
-        //if !affectModify -> return
-        //if modifierTarget == Target.BuyPrice, but BaseBuyPrice <= 0 -> return
-        //if modifierTarget == Target.SellPrice, but BaseSellPrice <= 0 -> return
+    }
+
+    private void ClampValues()
+    {
+        feedConsumption = Mathf.Max(0f, feedConsumption);
+        baseMoveSpeed = Mathf.Max(0f, baseMoveSpeed);
+        increaseOverLoad = Mathf.Max(0f, increaseOverLoad);
+        increaseMaxLoad = Mathf.Max(0f, increaseMaxLoad);
+
+        baseBuyPrice = baseBuyPrice >= 0 ? baseBuyPrice : 0;
+        maxCount = Mathf.Max(1, maxCount);
     }
 
     private void ValidateModifierTargets()
@@ -88,7 +98,7 @@ public class TradeItemData : ScriptableObject, IIdentifiableData
                 if (bundle.modifierTarget == Target.BuyPrice)
                     continue;
 
-                if (bundle.modifierTarget == Target.SellPrice)
+                if (bundle.modifierTarget == Target.BaseMoveSpeed)
                     continue;
 
                 bundle.modifierTarget = Target.None;

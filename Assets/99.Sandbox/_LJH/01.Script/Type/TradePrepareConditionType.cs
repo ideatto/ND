@@ -7,5 +7,8 @@ public enum TradePrepareConditionType
     OverloadWarning,
     LoadExceeded,
     RouteLocked,
-    RouteNotSelected
+    RouteNotSelected,
+    WagonNotSelected,
+    NotEnoughDraftAnimals,
+    InvalidDraftAnimalType
 }
