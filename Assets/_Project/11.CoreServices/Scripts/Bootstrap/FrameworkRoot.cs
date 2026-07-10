@@ -8,7 +8,7 @@
  *
  * Main Features
  * - BeforeSceneLoad 단계에서 FrameworkRoot GameObject를 자동 생성한다.
- * - GameTime, SaveService, SceneFlow, TradeProgress, InGameScreenRouter 서비스를 초기화한다.
+ * - GameTime, SaveService, SharedGameData, SceneFlow, TradeProgress, InGameScreenRouter 서비스를 초기화한다.
  * - 새 게임, 이어하기, 로딩 완료, title 복귀 flow를 제공한다.
  * - SettlementUiBridge를 통해 정산 결과를 UI 계층에 전달한다.
  *
@@ -19,6 +19,7 @@
  *
  * Main Public APIs
  * - Instance: 현재 runtime root singleton.
+ * - SharedGameData: 검증된 공용 기준 데이터 provider.
  * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
  * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
  * - CompleteLoadingAndEnterGame(): 저장 데이터 기반 화면 상태를 갱신하고 in-game scene으로 이동한다.
@@ -63,6 +64,16 @@ namespace ND.Framework
         /// Unity scene 전환을 담당하는 서비스이다.
         /// </summary>
         public SceneFlowService SceneFlow { get; private set; }
+
+        /// <summary>
+        /// Sandbox seed data를 Framework 공용 기준 데이터로 로드하고 검증하는 서비스이다.
+        /// </summary>
+        public SharedGameDataService SharedGameDataService { get; private set; }
+
+        /// <summary>
+        /// 마지막으로 검증에 성공한 공용 기준 데이터 provider이다.
+        /// </summary>
+        public ISharedGameDataProvider SharedGameData { get; private set; }
 
         /// <summary>
         /// debug bridge가 호출하는 framework command 모음이다.
@@ -168,6 +179,12 @@ namespace ND.Framework
                 CurrentSaveData = SaveService.Load();
             }
 
+            // SaveData의 ID를 해석할 공용 기준 데이터가 준비되지 않으면 InGame에 진입하지 않는다.
+            if (!EnsureSharedGameDataLoaded())
+            {
+                return;
+            }
+
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
@@ -196,6 +213,7 @@ namespace ND.Framework
             // 서비스 생성 순서는 의존성 방향을 따른다. 저장, 시간, 화면 router를 먼저 만들고 무역 서비스를 조립한다.
             GameTime = new GameTimeService();
             SaveService = new JsonSaveService();
+            SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
             DebugCommands = new FrameworkDebugCommands(GameTime);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime);
@@ -223,6 +241,31 @@ namespace ND.Framework
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
+        }
+
+        private bool EnsureSharedGameDataLoaded()
+        {
+            if (SharedGameDataService == null)
+            {
+                FrameworkLog.Error("Shared game data load failed because SharedGameDataService is not initialized.");
+                return false;
+            }
+
+            if (!SharedGameDataService.LoadInitialData())
+            {
+                FrameworkLog.Error("InGame entry blocked because shared game data validation failed.");
+                return false;
+            }
+
+            SharedGameData = SharedGameDataService.CurrentData;
+            if (SharedGameData == null || !SharedGameData.IsLoaded)
+            {
+                FrameworkLog.Error("InGame entry blocked because shared game data provider is missing after load.");
+                return false;
+            }
+
+            FrameworkEvents.RaiseSharedGameDataLoaded(SharedGameData);
+            return true;
         }
 
         private void ClearSettlementRuntimeCache()

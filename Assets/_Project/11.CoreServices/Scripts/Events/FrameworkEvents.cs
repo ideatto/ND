@@ -7,7 +7,7 @@
  * - 서비스, scene controller, UI adapter 사이의 직접 참조를 줄이고 상태 변경 알림을 중계한다.
  *
  * Main Features
- * - 저장 데이터 로드 완료, scene 변경, 무역 완료/정산, 인게임 화면 상태 변경 이벤트를 제공한다.
+ * - 공용 데이터 준비 완료, 저장 데이터 로드 완료, scene 변경, 무역 완료/정산, 인게임 화면 상태 변경 이벤트를 제공한다.
  * - 이벤트 발행 시 framework log를 남겨 디버그 흐름을 추적할 수 있게 한다.
  *
  * Usage for Team Members
@@ -15,6 +15,7 @@
  * - 이벤트를 직접 Invoke하지 말고 Raise... 메서드를 통해 발행해야 한다.
  *
  * Main Public APIs
+ * - RaiseSharedGameDataLoaded(...): 공용 기준 데이터 준비 완료를 알린다.
  * - RaiseLoadCompleted(...): 저장 데이터 준비 완료를 알린다.
  * - RaiseSceneChanged(...): Unity scene 전환 완료를 알린다.
  * - RaiseTradeSettlementReady(...): 무역 정산 결과가 UI에 표시될 준비가 되었음을 알린다.
@@ -36,6 +37,11 @@ namespace ND.Framework
     /// </remarks>
     public static class FrameworkEvents
     {
+        /// <summary>
+        /// 공용 기준 데이터가 검증되어 후속 시스템이 ID 기반 조회를 사용할 수 있을 때 발생한다.
+        /// </summary>
+        public static event Action<ISharedGameDataProvider> SharedGameDataLoaded;
+
         /// <summary>
         /// 저장 데이터가 준비되어 game scene 진입 전 후속 시스템이 초기화될 수 있을 때 발생한다.
         /// </summary>
@@ -70,6 +76,20 @@ namespace ND.Framework
         /// 인게임 화면 상태가 preparation, traveling, settlement 중 하나로 변경될 때 발생한다.
         /// </summary>
         public static event Action<InGameScreenState> InGameScreenChanged;
+
+        /// <summary>
+        /// 공용 기준 데이터 준비 완료 이벤트를 발행한다.
+        /// </summary>
+        /// <param name="provider">검증을 통과한 공용 데이터 provider.</param>
+        /// <remarks>
+        /// SaveData 로드 완료와 별개로, 도시·상품·마차·견인 동물·무역로 기준 데이터가 먼저 준비되었음을 알린다.
+        /// </remarks>
+        public static void RaiseSharedGameDataLoaded(ISharedGameDataProvider provider)
+        {
+            // 공용 데이터는 SaveData의 ID를 해석하는 기준이므로 LoadCompleted보다 먼저 발행한다.
+            FrameworkLog.Info($"SharedGameDataLoaded event raised. Summary: {provider?.Summary ?? "None"}");
+            SharedGameDataLoaded?.Invoke(provider);
+        }
 
         /// <summary>
         /// 저장 데이터 로드 완료 이벤트를 발행한다.

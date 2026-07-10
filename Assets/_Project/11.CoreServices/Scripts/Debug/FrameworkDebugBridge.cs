@@ -9,6 +9,7 @@
  * Main Features
  * - debug time scale 적용과 reset을 제공한다.
  * - 무역 즉시 완료와 load completed 강제 발행 ContextMenu를 제공한다.
+ * - 공용 데이터 로드 요약을 ContextMenu에서 출력한다.
  *
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가하고 ContextMenu 항목을 실행한다.
@@ -19,6 +20,7 @@
  * - ResetTimeScale(): time scale을 1로 되돌린다.
  * - CompleteTradeImmediately(): active trade 즉시 완료를 요청한다.
  * - ForceLoadCompleted(): LoadCompleted 이벤트를 강제로 발행한다.
+ * - LogSharedGameDataSummary(): SharedGameData 요약을 로그로 출력한다.
  *
  * Important Notes
  * - FrameworkRoot.Instance가 준비되어 있어야 정상 동작한다.
@@ -73,6 +75,16 @@ namespace ND.Framework
         {
             // load 완료 이벤트 구독 UI와 서비스의 반응을 수동 검증할 때 사용한다.
             FrameworkRoot.Instance.DebugCommands.ForceLoadCompleted();
+        }
+
+        /// <summary>
+        /// 현재 로드된 공용 데이터 수량과 주요 상태를 로그로 출력한다.
+        /// </summary>
+        [ContextMenu("Framework/Log Shared Game Data Summary")]
+        public void LogSharedGameDataSummary()
+        {
+            // M0 통합 중 UI 없이도 공용 데이터 로드 여부를 확인할 수 있게 한다.
+            FrameworkRoot.Instance.DebugCommands.LogSharedGameDataSummary();
         }
     }
 }
