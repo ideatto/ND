@@ -1,28 +1,108 @@
+/*
+ * Technical Ownership
+ * - Responsible Discipline: Framework & Integration
+ *
+ * Script Purpose
+ * - CoreServices의 runtime root를 생성하고 framework service들을 조립한다.
+ * - scene 전환, 저장 데이터, 무역 진행, settlement UI bridge의 접근 지점을 제공한다.
+ *
+ * Main Features
+ * - BeforeSceneLoad 단계에서 FrameworkRoot GameObject를 자동 생성한다.
+ * - GameTime, SaveService, SceneFlow, TradeProgress, InGameScreenRouter 서비스를 초기화한다.
+ * - 새 게임, 이어하기, 로딩 완료, title 복귀 flow를 제공한다.
+ * - SettlementUiBridge를 통해 정산 결과를 UI 계층에 전달한다.
+ *
+ * Usage for Team Members
+ * - 다른 CoreServices 시스템은 FrameworkRoot.Instance를 통해 framework service에 접근한다.
+ * - gameplay 시작은 StartNewGame() 또는 ContinueGame()을 호출한 뒤 loading scene에서 CompleteLoadingAndEnterGame()으로 이어진다.
+ * - settlement UI는 SettlementUiBridge 또는 SettlementUiDataAdapter를 통해 정산 결과를 표시하고 claim을 요청한다.
+ *
+ * Main Public APIs
+ * - Instance: 현재 runtime root singleton.
+ * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
+ * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
+ * - CompleteLoadingAndEnterGame(): 저장 데이터 기반 화면 상태를 갱신하고 in-game scene으로 이동한다.
+ * - ReturnToTitle(): 현재 저장 데이터를 저장한 뒤 title scene으로 이동한다.
+ *
+ * Important Notes
+ * - 중복 FrameworkRoot는 Awake에서 제거된다.
+ * - CurrentSaveData는 서비스들이 공유하는 runtime 저장 데이터 참조이므로 직접 수정 시 저장 시점에 주의해야 한다.
+ * - SettlementUiBridge는 FrameworkRoot GameObject에 runtime component로 추가된다.
+ */
 using System;
 using UnityEngine;
 
 namespace ND.Framework
 {
+    /// <summary>
+    /// Framework service를 초기화하고 전역 접근 지점을 제공하는 runtime singleton이다.
+    /// </summary>
+    /// <remarks>
+    /// Unity runtime 시작 전 자동 생성되며 DontDestroyOnLoad로 scene 전환 동안 유지된다.
+    /// </remarks>
     public sealed class FrameworkRoot : MonoBehaviour
     {
         private const string RootObjectName = "FrameworkRoot";
 
+        /// <summary>
+        /// 현재 활성화된 FrameworkRoot 인스턴스이다.
+        /// </summary>
         public static FrameworkRoot Instance { get; private set; }
 
+        /// <summary>
+        /// framework 시간 조회와 Unity time scale 제어를 담당하는 서비스이다.
+        /// </summary>
         public GameTimeService GameTime { get; private set; }
+
+        /// <summary>
+        /// 저장 데이터 생성, 로드, 저장을 담당하는 서비스이다.
+        /// </summary>
         public ISaveService SaveService { get; private set; }
+
+        /// <summary>
+        /// Unity scene 전환을 담당하는 서비스이다.
+        /// </summary>
         public SceneFlowService SceneFlow { get; private set; }
+
+        /// <summary>
+        /// debug bridge가 호출하는 framework command 모음이다.
+        /// </summary>
         public FrameworkDebugCommands DebugCommands { get; private set; }
+
+        /// <summary>
+        /// 무역 시작, 정산 대기, 완료/실패 상태를 저장 데이터에 기록하는 서비스이다.
+        /// </summary>
         public TradeProgressRecorder TradeProgressRecorder { get; private set; }
+
+        /// <summary>
+        /// Core caravan 출발 검증과 저장 데이터 기록을 연결하는 서비스이다.
+        /// </summary>
         public TradeStartService TradeStart { get; private set; }
+
+        /// <summary>
+        /// 무역 진행률 계산, 정산 생성, claim 후 초기화를 조율하는 서비스이다.
+        /// </summary>
         public TradeProgressCoordinator TradeProgressCoordinator { get; private set; }
+
+        /// <summary>
+        /// 저장 데이터의 무역 상태를 인게임 화면 상태로 변환하고 이벤트를 발행하는 router이다.
+        /// </summary>
         public InGameScreenStateRouter InGameScreenRouter { get; private set; }
+
+        /// <summary>
+        /// 정산 결과 이벤트를 UI 표시와 claim 요청으로 연결하는 bridge component이다.
+        /// </summary>
         public SettlementUiBridge SettlementUiBridge { get; private set; }
+
+        /// <summary>
+        /// 현재 runtime에서 공유 중인 저장 데이터 참조이다.
+        /// </summary>
         public SaveData CurrentSaveData { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void EnsureRootExists()
         {
+            // scene에 root가 없어도 framework service가 항상 준비되도록 runtime 시작 전에 생성한다.
             if (Instance != null)
             {
                 return;
@@ -34,6 +114,7 @@ namespace ND.Framework
 
         private void Awake()
         {
+            // singleton service가 중복 초기화되면 저장 데이터와 event 구독이 갈라지므로 중복 root를 제거한다.
             if (Instance != null && Instance != this)
             {
                 FrameworkLog.Warning("Duplicate FrameworkRoot destroyed.");
@@ -46,33 +127,62 @@ namespace ND.Framework
             InitializeServices();
         }
 
+        /// <summary>
+        /// 새 게임 저장 데이터를 만들고 즉시 저장한 뒤 loading scene으로 이동한다.
+        /// </summary>
+        /// <remarks>
+        /// 기존 CurrentSaveData 참조를 새 데이터로 교체하므로 새 게임 버튼에서만 호출해야 한다.
+        /// </remarks>
         public void StartNewGame()
         {
+            // 새 게임은 기본 저장 데이터를 먼저 디스크에 기록해 이후 loading 단계가 같은 데이터를 사용하게 한다.
             CurrentSaveData = SaveService.CreateNewGameData();
             SaveService.Save(CurrentSaveData);
             SceneFlow.GoToLoading();
         }
 
+        /// <summary>
+        /// 저장 데이터를 로드하고 loading scene으로 이동한다.
+        /// </summary>
+        /// <remarks>
+        /// 저장 파일이 없거나 유효하지 않으면 ISaveService 구현체의 복구 정책에 따라 새 데이터가 반환될 수 있다.
+        /// </remarks>
         public void ContinueGame()
         {
+            // 이어하기는 저장 데이터를 먼저 확보한 뒤 scene flow를 loading 단계로 넘긴다.
             CurrentSaveData = SaveService.Load();
             SceneFlow.GoToLoading();
         }
 
+        /// <summary>
+        /// loading 단계를 완료하고 저장 데이터 기준으로 인게임 화면 상태를 갱신한 뒤 in-game scene으로 이동한다.
+        /// </summary>
+        /// <remarks>
+        /// CurrentSaveData가 비어 있으면 저장 서비스를 통해 복구한 뒤 LoadCompleted 이벤트를 발행한다.
+        /// </remarks>
         public void CompleteLoadingAndEnterGame()
         {
+            // loading scene에 직접 진입한 경우에도 game scene이 사용할 저장 데이터를 보장한다.
             if (CurrentSaveData == null)
             {
                 CurrentSaveData = SaveService.Load();
             }
 
+            // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
             SceneFlow.GoToInGame();
         }
 
+        /// <summary>
+        /// 현재 저장 데이터를 저장한 뒤 title scene으로 돌아간다.
+        /// </summary>
+        /// <remarks>
+        /// CurrentSaveData가 없으면 저장을 생략하고 scene만 전환한다.
+        /// </remarks>
         public void ReturnToTitle()
         {
+            // title 복귀 전 runtime 변경 사항이 유실되지 않도록 현재 저장 데이터를 기록한다.
             if (CurrentSaveData != null)
             {
                 SaveService.Save(CurrentSaveData);
@@ -83,6 +193,7 @@ namespace ND.Framework
 
         private void InitializeServices()
         {
+            // 서비스 생성 순서는 의존성 방향을 따른다. 저장, 시간, 화면 router를 먼저 만들고 무역 서비스를 조립한다.
             GameTime = new GameTimeService();
             SaveService = new JsonSaveService();
             SceneFlow = new SceneFlowService();
@@ -102,6 +213,8 @@ namespace ND.Framework
                 InGameScreenRouter,
                 ClearSettlementRuntimeCache);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
+
+            // Settlement bridge는 event 구독이 필요한 MonoBehaviour이므로 root GameObject에 component로 붙인다.
             SettlementUiBridge = gameObject.AddComponent<SettlementUiBridge>();
             SettlementUiBridge.Initialize(
                 () => CurrentSaveData,
@@ -114,11 +227,18 @@ namespace ND.Framework
 
         private void ClearSettlementRuntimeCache()
         {
+            // 새 무역 출발 시 이전 정산 결과가 UI에 남지 않도록 coordinator와 bridge cache를 함께 비운다.
             TradeProgressCoordinator?.ClearSettlementCache();
             SettlementUiBridge?.ClearPendingSettlement();
         }
     }
 
+    /// <summary>
+    /// 무역 정산 이벤트를 캐시하고 settlement UI와 claim 처리를 연결하는 bridge component이다.
+    /// </summary>
+    /// <remarks>
+    /// FrameworkRoot가 runtime에 추가하고 Initialize를 호출해야 정상 동작한다.
+    /// </remarks>
     public sealed class SettlementUiBridge : MonoBehaviour
     {
         private Func<SaveData> getCurrentSaveData;
@@ -128,18 +248,36 @@ namespace ND.Framework
         private JourneyResultData pendingResult;
         private bool isClaimProcessing;
 
+        /// <summary>
+        /// 표시 가능한 pending settlement가 준비되었을 때 발생한다.
+        /// </summary>
         public event Action<string, JourneyResultData> SettlementReady;
 
+        /// <summary>
+        /// bridge가 현재 settlement UI에 표시할 결과를 보유하고 있는지 여부이다.
+        /// </summary>
         public bool HasPendingSettlement
         {
             get { return pendingResult != null; }
         }
 
+        /// <summary>
+        /// settlement claim 처리가 진행 중인지 여부이다.
+        /// </summary>
         public bool IsClaimProcessing
         {
             get { return isClaimProcessing; }
         }
 
+        /// <summary>
+        /// bridge가 사용할 저장 데이터 접근자와 정산/화면 router 의존성을 설정한다.
+        /// </summary>
+        /// <param name="getCurrentSaveData">현재 SaveData를 반환하는 접근자.</param>
+        /// <param name="tradeProgressCoordinator">정산 claim과 cache 관리를 담당하는 coordinator.</param>
+        /// <param name="inGameScreenRouter">정산 화면 전환 요청을 처리하는 router.</param>
+        /// <remarks>
+        /// FrameworkRoot.InitializeServices 이후 한 번 호출되는 것을 전제로 한다.
+        /// </remarks>
         public void Initialize(
             Func<SaveData> getCurrentSaveData,
             TradeProgressCoordinator tradeProgressCoordinator,
@@ -150,6 +288,12 @@ namespace ND.Framework
             this.inGameScreenRouter = inGameScreenRouter;
         }
 
+        /// <summary>
+        /// 현재 bridge에 캐시된 pending settlement 정보를 조회한다.
+        /// </summary>
+        /// <param name="tradeId">캐시된 trade ID. 결과가 없으면 빈 문자열일 수 있다.</param>
+        /// <param name="result">캐시된 정산 결과. 결과가 없으면 null.</param>
+        /// <returns>표시할 정산 결과가 있으면 true, 없으면 false.</returns>
         public bool TryGetPendingSettlement(out string tradeId, out JourneyResultData result)
         {
             tradeId = pendingTradeId;
@@ -157,14 +301,23 @@ namespace ND.Framework
             return result != null;
         }
 
+        /// <summary>
+        /// 현재 pending settlement를 claim하고 준비 상태로 되돌린다.
+        /// </summary>
+        /// <returns>claim과 저장 데이터 초기화가 모두 성공하면 true, 검증 실패나 중복 처리 중이면 false.</returns>
+        /// <remarks>
+        /// 성공 시 bridge의 pending settlement cache가 삭제되고 coordinator가 저장 데이터를 갱신한다.
+        /// </remarks>
         public bool ClaimSettlementAndReset()
         {
+            // UI 중복 클릭이 동일한 정산 결과를 두 번 claim하지 못하도록 처리 중 상태를 먼저 확인한다.
             if (isClaimProcessing)
             {
                 FrameworkLog.Warning("Settlement claim ignored because a claim is already being processed.");
                 return false;
             }
 
+            // 저장 데이터와 bridge cache가 같은 active trade를 가리키는 경우에만 claim을 허용한다.
             if (!IsPendingSettlementValid())
             {
                 return false;
@@ -173,6 +326,7 @@ namespace ND.Framework
             isClaimProcessing = true;
             try
             {
+                // 실제 저장 데이터 상태 전환과 caravan reset은 coordinator에 위임한다.
                 var claimed = tradeProgressCoordinator != null
                     && tradeProgressCoordinator.ClaimSettlementAndReset();
                 if (claimed)
@@ -188,6 +342,9 @@ namespace ND.Framework
             }
         }
 
+        /// <summary>
+        /// bridge가 보유한 pending settlement cache를 비운다.
+        /// </summary>
         public void ClearPendingSettlement()
         {
             pendingTradeId = string.Empty;
@@ -196,21 +353,25 @@ namespace ND.Framework
 
         private void OnEnable()
         {
+            // 정산 결과 생성 이벤트를 받아 UI 표시 cache로 전환하기 위해 활성화 시 구독한다.
             FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
         }
 
         private void OnDisable()
         {
+            // 비활성 bridge가 stale settlement 이벤트를 받지 않도록 구독을 해제한다.
             FrameworkEvents.TradeSettlementReady -= HandleSettlementReady;
         }
 
         private void HandleSettlementReady(string tradeId, JourneyResultData result)
         {
+            // 현재 저장 데이터의 active trade와 일치하지 않는 정산 이벤트는 화면에 반영하지 않는다.
             if (!IsSettlementEntryValid(tradeId, result))
             {
                 return;
             }
 
+            // 검증된 정산 결과를 cache한 뒤 settlement 화면과 UI adapter에 동시에 알린다.
             pendingTradeId = tradeId ?? string.Empty;
             pendingResult = result;
             inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
@@ -219,12 +380,14 @@ namespace ND.Framework
 
         private bool IsSettlementEntryValid(string tradeId, JourneyResultData result)
         {
+            // result 없이 settlement 화면으로 전환되면 UI가 claim할 대상이 없어지므로 차단한다.
             if (result == null)
             {
                 FrameworkLog.Warning("Settlement screen entry blocked because settlement result is null.");
                 return false;
             }
 
+            // 저장 데이터가 settlement pending 상태일 때만 이벤트를 화면 상태로 승격한다.
             var saveData = GetSaveData();
             if (saveData == null || saveData.tradeProgress == null)
             {
@@ -238,6 +401,7 @@ namespace ND.Framework
                 return false;
             }
 
+            // 다른 무역의 늦은 이벤트가 현재 active trade의 settlement를 덮어쓰지 못하도록 ID를 비교한다.
             var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
             if (string.IsNullOrEmpty(tradeId) || tradeId != activeTradeId)
             {
@@ -251,12 +415,14 @@ namespace ND.Framework
 
         private bool IsPendingSettlementValid()
         {
+            // claim 요청은 bridge가 실제 정산 결과를 가지고 있을 때만 coordinator로 전달한다.
             if (pendingResult == null)
             {
                 FrameworkLog.Warning("Settlement claim blocked because bridge has no pending settlement result.");
                 return false;
             }
 
+            // 저장 데이터가 아직 settlement pending 상태인지 재검증해 stale UI 클릭을 막는다.
             var saveData = GetSaveData();
             if (saveData == null || saveData.tradeProgress == null)
             {
@@ -270,6 +436,7 @@ namespace ND.Framework
                 return false;
             }
 
+            // cache된 trade ID와 저장 데이터의 active trade ID가 다르면 중복 또는 지연 이벤트로 보고 거부한다.
             var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
             if (pendingTradeId != activeTradeId)
             {
