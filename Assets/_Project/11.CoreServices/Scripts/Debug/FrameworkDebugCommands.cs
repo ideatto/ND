@@ -10,6 +10,7 @@
  * - GameTimeService time scale 변경을 위임한다.
  * - CompleteTradeRequested 이벤트를 발행해 coordinator가 active trade를 즉시 완료하게 한다.
  * - LoadCompleted 이벤트를 강제로 발행한다.
+ * - SharedGameData 로드 상태와 요약을 로그로 출력한다.
  *
  * Usage for Team Members
  * - FrameworkRoot.DebugCommands를 통해 호출한다.
@@ -19,6 +20,7 @@
  * - SetTimeScale(...): debug time scale을 적용한다.
  * - CompleteTradeImmediately(): active trade 즉시 완료 이벤트를 발행한다.
  * - ForceLoadCompleted(): 현재 저장 데이터로 load completed 이벤트를 발행한다.
+ * - LogSharedGameDataSummary(): 공용 데이터 로드 요약을 출력한다.
  *
  * Important Notes
  * - 실제 상태 변경은 각 이벤트 구독자 또는 GameTimeService가 수행한다.
@@ -67,6 +69,21 @@ namespace ND.Framework
         {
             // debug UI 갱신을 위해 현재 root의 SaveData 참조를 그대로 전달한다.
             FrameworkEvents.RaiseLoadCompleted(FrameworkRoot.Instance.CurrentSaveData);
+        }
+
+        /// <summary>
+        /// 현재 FrameworkRoot가 보유한 공용 데이터 요약을 로그로 출력한다.
+        /// </summary>
+        public void LogSharedGameDataSummary()
+        {
+            var provider = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null;
+            if (provider == null)
+            {
+                FrameworkLog.Warning("Shared game data summary is unavailable because provider is null.");
+                return;
+            }
+
+            FrameworkLog.Info($"Shared game data summary: {provider.Summary}");
         }
     }
 }
