@@ -33,6 +33,17 @@ public static class JourneyRunner
     /// </summary>
     public static DepartureValidationResult TryDepart(CaravanData caravan, float distanceKm)
     {
+        // 준비(Prepare) 단계에서만 출발 — 이동/정산/완료 중 중복 출발을 차단한다. [M5 상태전환 중복]
+        if (caravan == null || caravan.state != JourneyState.Prepare)
+        {
+            DepartureValidationResult blocked = new DepartureValidationResult { canDepart = false };
+            if (caravan != null) blocked.reasons.Add(DepartureBlockReason.NotInPrepare);
+            return blocked;
+        }
+
+        // 음수 거리 방어: 잘못된 입력이 음수 이동시간을 만들지 않게 0으로 클램프. [M5]
+        if (distanceKm < 0f) distanceKm = 0f;
+
         DepartureValidationResult v = CaravanValidator.Validate(caravan);
         if (!v.canDepart) return v;
 
@@ -44,8 +55,13 @@ public static class JourneyRunner
         caravan.runFoodLost = 0f;
         caravan.runDurabilityLost = 0;
         caravan.runBattlesFought = 0;
+        caravan.runStartDurability = caravan.currentDurability;   // 출발 시 내구도 (정산 손실 계산 기준) [M2 거리마모]
+        caravan.runWearRemainder = 0f;
+        caravan.elapsedInGameSeconds = 0f;                        // [인게임시간] 누적 인게임 경과 초기화
         caravan.runFoodDepleted = false;
         caravan.runFoodDepletedProgress = 0f;
+        caravan.runOriginalCargoCount = CaravanCalculator.GetCargoCount(caravan);   // 손실 상한 기준: 출발 시 원래 개수
+        caravan.runDepartureLoad = CaravanCalculator.GetCurrentLoad(caravan);       // 출발 시 짐무게 (정산 데이터용) [M2]
         caravan.runFatalReason = JourneyFailureReason.None;
         caravan.state = JourneyState.Traveling;
         return v;
@@ -58,9 +74,15 @@ public static class JourneyRunner
 
         if (progress01 < 0f) progress01 = 0f;
         if (progress01 > 1f) progress01 = 1f;
+
+        // 거리 마모: 이전 진행도 → 새 진행도 구간만큼 내구도 감소.
+        //  진행도 delta 기반이라 온라인(잦은 소폭 갱신)이든 오프라인(재접속 시 한 번에 점프)이든 동일하게 정확.
+        ApplyDistanceWear(caravan, caravan.progress01, progress01);
+
         caravan.progress01 = progress01;
 
         CheckFoodDepletion(caravan);   // 진행할수록 식량 소모 → 바닥나면 실패
+        CheckWagonBroken(caravan);     // 거리 마모로 내구도 0되면 즉시 파손 실패 [M2]
     }
 
     /// <summary>도착했는가 (진행도가 기준 도달).</summary>
@@ -77,6 +99,12 @@ public static class JourneyRunner
     {
         if (caravan == null || caravan.state != JourneyState.Traveling) return;
         if (amount <= 0) return;
+
+        // [손실 상한] 이번 무역 누적 무역품 손실이 (상한율 × 원래 개수)를 넘지 않게 캡. [M2]
+        int maxCargoLoss = (int)(caravan.lossLimitRate * caravan.runOriginalCargoCount);
+        int allowedCargo = maxCargoLoss - caravan.runCargoLost;
+        if (allowedCargo <= 0) return;            // 이미 상한 도달 → 더 안 잃음
+        if (amount > allowedCargo) amount = allowedCargo;
 
         // 실제 cargo에서 amount만큼 줄인다(첫 상품부터). 실제로 뺀 개수를 runCargoLost에 기록.
         int remaining = amount;
@@ -105,8 +133,44 @@ public static class JourneyRunner
     {
         if (caravan == null || caravan.state != JourneyState.Traveling) return;
         if (amount <= 0) return;
+
+        // [손실 상한] limitRaidDurability=true 일 때만 — 이번 무역 누적 약탈 내구도 손실을
+        //  (상한율 × 최대 내구도)로 캡. false면 캡 없이 전량 적용. [M2]
+        if (caravan.limitRaidDurability)
+        {
+            int maxDur = (caravan.wagon != null) ? caravan.wagon.maxDurability : 0;
+            int maxDurLoss = (int)(caravan.lossLimitRate * maxDur);
+            int allowedDur = maxDurLoss - caravan.runDurabilityLost;
+            if (allowedDur <= 0) return;              // 이미 상한 도달 → 더 안 잃음
+            if (amount > allowedDur) amount = allowedDur;
+        }
+
         caravan.currentDurability -= amount;
+        if (caravan.currentDurability < 0) caravan.currentDurability = 0;   // 0 밑으론 안 감(캡 off 시 방어)
         caravan.runDurabilityLost += amount;
+
+        CheckWagonBroken(caravan);     // 약탈로 내구도 0되면 즉시 파손 실패 [M2]
+    }
+
+    /// <summary>거리 마모 — 이동 구간(fromProgress→toProgress)에 비례해 내구도 감소. [M2]
+    /// 진행도 delta 기반 → 온라인 실시간·오프라인 재접속 점프 모두 같은 결과.
+    /// 마모는 손실상한(lossLimitRate)을 적용하지 않는다(예측 가능한 비용이라 캡 대상 아님).</summary>
+    private static void ApplyDistanceWear(CaravanData caravan, float fromProgress, float toProgress)
+    {
+        float delta = toProgress - fromProgress;
+        if (delta <= 0f) return;                              // 정지/역행 시 마모 없음
+        if (CaravanConfig.DurabilityWearPerKm <= 0f) return;  // 마모율 0이면 스킵
+        if (caravan.currentDurability <= 0) return;           // 이미 0이면 그만
+
+        float wornKm = delta * caravan.currentDistanceKm;     // 이번 구간 이동 거리(Km)
+        caravan.runWearRemainder += wornKm * CaravanConfig.DurabilityWearPerKm;
+
+        int units = (int)caravan.runWearRemainder;            // 정수 단위만 실제 적용, 나머지는 이월
+        if (units <= 0) return;
+        caravan.runWearRemainder -= units;
+
+        int actual = (caravan.currentDurability >= units) ? units : caravan.currentDurability;  // 0 밑으론 안 감
+        caravan.currentDurability -= actual;
     }
 
     /// <summary>약탈(전투) 판정 — [임시 규칙] 용병 1마리당 전투 1번 방어.
@@ -147,6 +211,14 @@ public static class JourneyRunner
             MarkFatal(caravan, JourneyFailureReason.FoodDepleted);
     }
 
+    /// <summary>마차 내구도가 0 이하면 실패 확정(마차 파손). 이동 중 즉시 판정 — 식량 고갈과 달리 유예 없음. [M2]</summary>
+    private static void CheckWagonBroken(CaravanData caravan)
+    {
+        if (caravan.runFatalReason != JourneyFailureReason.None) return;   // 이미 실패면 스킵
+        if (caravan.currentDurability > 0) return;                          // 아직 멀쩡
+        MarkFatal(caravan, JourneyFailureReason.WagonBroken);
+    }
+
     /// <summary>이동 중 치명 상태 — 더 못 감(식량 고갈 등). → 실패 확정.</summary>
     public static void MarkFatal(CaravanData caravan, JourneyFailureReason reason)
     {
@@ -183,7 +255,20 @@ public static class JourneyRunner
             result.grade = JourneyResultGrade.Success;
         }
 
-        result.durabilityLost = caravan.runDurabilityLost;   // 이번 무역 내구도 손실 기록 [M2]
+        // 이번 무역 총 내구도 손실 = 출발 내구도 - 현재(도착) 내구도  (약탈 + 거리마모 합) [M2]
+        int durLost = caravan.runStartDurability - caravan.currentDurability;
+        result.durabilityLost = (durLost > 0) ? durLost : 0;
+
+        // [M2] 정산 데이터에 계산값 포함 (완료기준: 실제이동시간·총식량소모·출발적재량·최종적정적재량·과적비율)
+        result.travelSeconds      = caravan.progress01 * caravan.totalSeconds;         // 실제 이동한 시간(초)
+        float remainingFood       = CaravanCalculator.GetRemainingFood(caravan);
+        if (remainingFood < 0f) remainingFood = 0f;                                    // 음수 방어
+        result.foodConsumed       = caravan.foodAmount - remainingFood;                // 총 식량 소모
+        result.departureLoad      = caravan.runDepartureLoad;                          // 출발 시 짐무게
+        result.finalEfficientLoad = CaravanCalculator.GetFinalEfficientLoad(caravan);  // 최종 적정 적재량
+        result.overloadRatio      = (result.finalEfficientLoad > 0f && result.departureLoad > result.finalEfficientLoad)
+                                    ? (result.departureLoad - result.finalEfficientLoad) / result.finalEfficientLoad
+                                    : 0f;                                              // 과적 비율(적정 이하면 0)
 
         caravan.state = JourneyState.Settling;
         return result;

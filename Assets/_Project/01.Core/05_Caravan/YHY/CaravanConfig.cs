@@ -30,4 +30,10 @@ public static class CaravanConfig
     //   적재효율 = 1 - LoadPenalty × (초과무게 / overLoad)   (LoadFactorMin 밑으론 안 감)
     public const float LoadPenalty = 0.5f;   // 기준선 100% 초과당 -0.5배    ← 수정 가능
     public const float LoadFactorMin = 0.2f;   // 감속 하한(멈추지 않게)       ← 수정 가능
+
+    // ── 마차 거리 마모 (M2) ───────────────────────────────────
+    // 이동한 거리(Km)에 비례해 내구도 감소.  내구도 감소 = 이동거리 × 이 값.
+    //   예: 0.1 → 100Km 이동 시 10 감소 (최대내구도 100이면 약 10회 무역 후 수리 필요).
+    //   [임시값] 진짜 마모율은 밸런스(정헌/Content). Core는 적용만.
+    public const float DurabilityWearPerKm = 0.1f;   // ← 수정 가능(임시)
 }

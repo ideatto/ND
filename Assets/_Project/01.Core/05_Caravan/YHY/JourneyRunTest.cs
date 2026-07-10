@@ -9,11 +9,20 @@
 // [쓰는 법] (Play 모드) 우클릭 "샘플 상단 채우기" → 값 조정 → 우클릭 "무역 출발"
 // =============================================================================
 
-using System;                 
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using ND.Framework;
 using ND.Economy;
+
+/// <summary>[테스트] 인스펙터에서 무역품 SO + 수량을 한 쌍으로 넣기 위한 입력 항목.</summary>
+[Serializable]
+public class SoItemInput
+{
+    public TradeItemData item;   // 무역품 SO
+    public int quantity = 1;     // 수량
+}
 
 public class JourneyRunTest : MonoBehaviour
 {
@@ -36,8 +45,9 @@ public class JourneyRunTest : MonoBehaviour
     [SerializeField] private string TradeEndTime = "-";
     [SerializeField] private string ElapsedTime = "-";
 
-    [Header("상단 구성 (우클릭 '샘플 상단 채우기')")]
-    public CaravanData caravan = new CaravanData();
+    // [런타임] 상단은 이제 SO로 채운다 (우클릭 "SO에서 상단 채우기"). 수동 편집 불필요 → 인스펙터에서 숨김.
+    //   현재 상태는 아래 "상단 캐시" / "상태 표시"에서 확인.
+    [HideInInspector] public CaravanData caravan = new CaravanData();
 
     // ── 상단 캐시 (구성 바뀌면 RecalculateCache로 갱신, 표시·출발은 이 값을 읽음) ──
     [Header("상단 캐시 (읽기용)")]
@@ -61,6 +71,7 @@ public class JourneyRunTest : MonoBehaviour
 
     [Header("식량 고갈 제한시간(초) — 이 안에 도착 못하면 실패 [M2]")]
     public float starveGraceSeconds = 5f;
+    public float inGameTimeMultiplier = 1f;   // [인게임시간] 현실 경과 × 이 배율 = 인게임 경과. 60이면 식량 60배 빨리 소모. (실게임은 Framework가 채움)
 
     [Header("테스트 이벤트 (-1 = 없음)")]
     public int cargoLossAtSecond = -1;   // 이 초에 무역품 손실 → 부분 성공
@@ -72,6 +83,15 @@ public class JourneyRunTest : MonoBehaviour
     public int raidCount = 1;        // 이 초에 몇 번 전투가 벌어지나 (용병 수와 비교)
     public int raidDurabilityDamage = 20;  // 방어 실패 시 마차 내구도 손실
     public int raidCargoDamage = 1;        // 방어 실패 시 무역품 손실
+    public bool limitRaidDurability = true;  // [M2] 체크: 약탈 내구도 손실 손실상한(50%)까지만 / 해제: 전량 적용
+
+    // ── SO 연결 (이종현 더미 데이터) ──────────────────────────────
+    //  더미 SO를 아래 칸에 드래그 → 우클릭 "SO에서 상단 채우기"
+    [Header("SO 연결 (더미 SO 드래그)")]
+    [SerializeField] private WagonData soWagon;         // Wagon_Dummy... 드래그
+    [SerializeField] private List<DraftAnimalData> soAnimals = new List<DraftAnimalData>();  // 견인 동물 SO들 (여러 마리·여러 종류 넣어 단일종류 검증 테스트)
+    [SerializeField] private List<SoItemInput> soItems = new List<SoItemInput>();            // 무역품 SO들 (아이템+수량, 마차 슬롯 수만큼)
+    [SerializeField] private int soFoodAmount = 30;     // 실을 식량
 
     [ContextMenu("무역 출발")]
     public void Depart()
@@ -79,23 +99,32 @@ public class JourneyRunTest : MonoBehaviour
         DepartureValidationResult v = JourneyRunner.TryDepart(caravan, distanceKm);
         if (!v.canDepart)
         {
-            Debug.Log($"[출발 X] 사유: {string.Join(", ", v.reasons)}");
+            // 출발 불가 — 사유마다 실제 값까지 붙여 자세히 출력
+            string detail = "";
+            foreach (DepartureBlockReason r in v.reasons)
+                detail += $"\n   ✗ {DescribeBlockReason(r)}";
+            Debug.LogWarning($"[출발 불가] {v.reasons.Count}개 사유:{detail}");
             return;
         }
 
         caravan.starveGraceSeconds = starveGraceSeconds;   // 식량 고갈 제한시간 적용 [M2]
 
+        // [M2] 손실 상한 — 정헌 GrowthCalculator에서 LossLimitRate 받아 적용 (성장 레벨은 임시 0)
+        caravan.lossLimitRate = GrowthCalculator.CalculateM1RuntimeStats(0, 0).LossLimitRate;
+        caravan.limitRaidDurability = limitRaidDurability;   // 인스펙터 토글 → 약탈 내구도 상한 on/off [M2]
+        Debug.Log($"[손실상한] 비율 {caravan.lossLimitRate:0.##} (원래 무역품 {caravan.runOriginalCargoCount}개 → 최대 {(int)(caravan.lossLimitRate * caravan.runOriginalCargoCount)}개 손실)");
+
         int animals = caravan.animals.Count;
         float load = CaravanCalculator.GetCurrentLoad(caravan);
-        float overLoad = (caravan.wagon != null) ? caravan.wagon.overLoad : 0f;
+        float overLoad = CaravanCalculator.GetFinalEfficientLoad(caravan);   // 마차+동물 적정한계
         float animalEff = CaravanCalculator.GetSpeedEfficiency(animals);
         float loadEff = CaravanCalculator.GetLoadEfficiency(load, overLoad);
-        float needFood = CaravanCalculator.GetRequiredFood(caravan);
+        float needFood = CaravanCalculator.GetRequiredFood(caravan, caravan.totalSeconds * inGameTimeMultiplier);
 
-        Debug.Log($"[출발 O] {distanceKm:0}Km, 동물 {animals}마리(효율 {animalEff:0.##}배) " +
-                  $"적재 {load}(기준 {overLoad}) 적재효율 {loadEff:0.##}배 → 약 {caravan.totalSeconds:0.#}초");
-        Debug.Log($"[식량] 필요 {needFood:0.#} / 실은 {caravan.foodAmount}" +
-                  (needFood > caravan.foodAmount ? "  ⚠ 부족 — 도중 실패 가능" : ""));
+        Debug.Log(
+            $"[출발] {distanceKm:0}Km → 예상 {caravan.totalSeconds:0.#}초 · 짐무게 {load:0.#} (무역품무게 {CaravanCalculator.GetCargoWeight(caravan):0.#} + 식량무게 {CaravanCalculator.GetFoodWeight(caravan):0.#}, 적정 {overLoad:0.#}) → {(loadEff < 1f ? $"속도 {loadEff:0.##}배 감속" : "정상속도")}\n" +
+            $"   ↳ 동물 {animals}마리(속도효율 {animalEff:0.##}배) · 식량 필요 {needFood:0.#} / 실은 {caravan.foodAmount}" +
+            (needFood > caravan.foodAmount ? "  ⚠식량부족" : ""));
 
         tradeStartUtc = timeService.CurrentUtc;   // ← 추가: 지금 시각을 출발 시각으로
 
@@ -106,6 +135,35 @@ public class JourneyRunTest : MonoBehaviour
 
         StopAllCoroutines();
         StartCoroutine(RunTrade());
+    }
+
+    /// <summary>[테스트] 출발 불가 사유 하나를 실제 값과 함께 사람이 읽기 쉽게 풀어쓴다.</summary>
+    private string DescribeBlockReason(DepartureBlockReason reason)
+    {
+        CaravanData c = caravan;
+        switch (reason)
+        {
+            case DepartureBlockReason.NoWagon:
+                return "마차 없음 — 마차 SO를 넣어야 함";
+            case DepartureBlockReason.NotEnoughAnimals:
+                return $"견인 동물 부족 — 현재 {c.animals.Count}마리 < 최소 {c.wagon.minAnimals}마리";
+            case DepartureBlockReason.TooManyAnimals:
+                return $"견인 동물 초과 — 현재 {c.animals.Count}마리 > 최대 {c.wagon.maxAnimals}마리";
+            case DepartureBlockReason.Overloaded:
+                return $"최대적재 초과 — 짐무게 {CaravanCalculator.GetCurrentLoad(c):0.#} > 최대한계 {CaravanCalculator.GetMaxLoad(c):0.#}";
+            case DepartureBlockReason.NoCargo:
+                return "무역품 없음 — 실은 물건이 하나도 없음";
+            case DepartureBlockReason.BrokenWagon:
+                return $"마차 파손 — 내구도 {c.currentDurability} (수리 전 출발 불가)";
+            case DepartureBlockReason.SlotExceeded:
+                return $"짐칸 부족 — 사용 {CaravanCalculator.GetUsedSlots(c)}칸 > 마차 {CaravanCalculator.GetMaxSlots(c)}칸";
+            case DepartureBlockReason.MixedAnimalType:
+                return "견인 동물 종류 섞임 — 전부 같은 종류여야 함";
+            case DepartureBlockReason.NotInPrepare:
+                return $"준비 단계 아님 — 현재 상태 {c.state} (이동/정산 중엔 출발 불가)";
+            default:
+                return reason.ToString();
+        }
     }
 
     private IEnumerator RunTrade()
@@ -122,8 +180,11 @@ public class JourneyRunTest : MonoBehaviour
 
             ElapsedTime = elapsed.ToString("0.0") + "초";
 
+            // [인게임시간] Framework 흉내 — 현실 경과 × 배율을 인게임 경과로 넣는다(SetProgress 전에).
+            caravan.elapsedInGameSeconds = elapsed * inGameTimeMultiplier;
+
             float progress = (caravan.totalSeconds > 0f) ? elapsed / caravan.totalSeconds : 1f;
-            JourneyRunner.SetProgress(caravan, progress);   // 여기서 식량 소진 자동 체크됨
+            JourneyRunner.SetProgress(caravan, progress);   // 여기서 식량 소진 자동 체크됨(인게임 경과 기준)
             UpdateStatusDisplay();                          // 인스펙터 상태 표시 갱신
 
             // 테스트 이벤트
@@ -162,7 +223,7 @@ public class JourneyRunTest : MonoBehaviour
             {
                 float food = CaravanCalculator.GetRemainingFood(caravan);
                 string starve = caravan.runFoodDepleted ? "  ⚠식량바닥(제한시간 카운트다운)" : "";
-                Debug.Log($"이동중 {elapsedSec}/{totalSecInt}초  (진행 {caravan.progress01 * 100f:0}%, 식량 {food:0.#}){starve}");
+                Debug.Log($"이동중 {elapsedSec}/{totalSecInt}초  (진행 {caravan.progress01 * 100f:0}%, 식량 {food:0.#}, 내구도 {caravan.currentDurability}){starve}");
                 lastPrintedSec = elapsedSec;
             }
 
@@ -179,16 +240,6 @@ public class JourneyRunTest : MonoBehaviour
                 yield break;
             }
 
-            // 도착 또는 실패 → 정산
-            if (JourneyRunner.IsArrived(caravan) || caravan.runFatalReason != JourneyFailureReason.None)
-            {
-                JourneyResultData result = JourneyRunner.Settle(caravan);
-                PrintResult(result);
-                JourneyRunner.ClaimSettlement(caravan);
-                JourneyRunner.ResetToPrepare(caravan);
-                yield break;
-            }
-
             yield return null;
         }
     }
@@ -196,14 +247,21 @@ public class JourneyRunTest : MonoBehaviour
     //        cargo 없는 값(계절·재화 등)은 임시. 나중에 SO/정헌 값으로 교체.
     private void LogEconomyResult(CaravanData caravan)
     {
-        if (caravan.cargo.Count == 0 || caravan.cargo[0].item == null) return;
+        // 손실로 수량 0이 된 항목은 건너뛰고, 실제로 팔 게 있는(수량>0) 첫 무역품을 찾는다.
+        //  (수량 0을 정헌 계산기에 넘기면 INVALID_QUANTITY로 실패함)
+        CargoEntry sell = null;
+        foreach (CargoEntry e in caravan.cargo)
+        {
+            if (e != null && e.item != null && e.quantity > 0) { sell = e; break; }
+        }
+        if (sell == null) { Debug.Log("[정산] 판매할 무역품 없음(전량 손실)"); return; }
 
         var input = new EconomyM1LoopInput();
-        // cargo에서 진짜로 (첫 상품)
-        input.PriceInput.TradeItemId = caravan.cargo[0].item.id;
-        input.PriceInput.Quantity = caravan.cargo[0].quantity;
-        input.PriceInput.BaseBuyPrice = caravan.cargo[0].item.basePrice;
-        input.PriceInput.BaseSellPrice = Mathf.RoundToInt(caravan.cargo[0].item.basePrice * sellPriceMultiplier);   // [임시] 판매 마을 이익 배율 적용
+        // cargo에서 (팔 수 있는 첫 상품)  ※ [임시] 여러 종류는 아직 첫 상품만 계산 — 진짜 정산은 정헌 연동 시
+        input.PriceInput.TradeItemId = sell.item.id;
+        input.PriceInput.Quantity = sell.quantity;
+        input.PriceInput.BaseBuyPrice = sell.item.basePrice;
+        input.PriceInput.BaseSellPrice = (long)Mathf.Round(sell.item.basePrice * sellPriceMultiplier);   // [임시] 판매 마을 이익 배율 적용 (돈=long)
         // 나머지 [임시]
         input.TradeId = "trade_test";
         input.PriceInput.RouteId = "route_01";
@@ -222,7 +280,7 @@ public class JourneyRunTest : MonoBehaviour
                 wallet.TradeMoney = r.FinalCurrencyState.TradeMoney;
                 wallet.DevelopmentCurrency = r.FinalCurrencyState.DevelopmentCurrency;
             }
-            Debug.Log($"[정산] {caravan.cargo[0].item.itemName} {caravan.cargo[0].quantity}개 → 판매가 {r.PriceResult.TotalSellPrice} / 순이익 {r.Settlement.NetProfit} / 보유금 {before} → {wallet.TradeMoney}");
+            Debug.Log($"[정산] {sell.item.itemName} {sell.quantity}개 → 판매가 {r.PriceResult.TotalSellPrice} / 순이익 {r.Settlement.NetProfit} / 보유금 {before} → {wallet.TradeMoney}");
         }
         else
             Debug.Log($"[정산] 계산 실패: {r.ErrorCode}");
@@ -245,28 +303,104 @@ public class JourneyRunTest : MonoBehaviour
         // [M2] 마차 내구도 상태 (이번 무역 손실 + 현재 남은 내구도)
         int maxDur = (caravan.wagon != null) ? caravan.wagon.maxDurability : 0;
         Debug.Log($"[마차] 내구도 {caravan.currentDurability}/{maxDur} (이번 손실 {r.durabilityLost:0})");
+
+        // [M2] 정산 계산값 (마일스톤 완료기준: 정산 데이터에 포함되는 5개 값)
+        Debug.Log($"[정산 계산값] 이동 {r.travelSeconds:0.#}초 · 식량소모 {r.foodConsumed:0.#} · 출발짐무게 {r.departureLoad:0.#} · 최종적정 {r.finalEfficientLoad:0.#} · 과적비율 {r.overloadRatio:P0}");
     }
 
-    [ContextMenu("샘플 상단 채우기")]
-    public void FillSample()
+    // [삭제됨 2026-07-10] FillSample(imsi 하드코딩 상단 구성)은 SO 기반 FillFromSO로 대체.
+    //   무역품·마차·동물은 이제 이종현 SO(WagonData/DraftAnimalData/TradeItemData)에서 읽어온다.
+    //   (imsi 타입 자체는 천성욱 저장 시스템 CaravanSaveDataMapper가 런타임 타입으로 써서 유지)
+
+    // [SO 연결] 이종현 더미 SO에서 값을 읽어 imsi 상단으로 조립한다. (SO를 인스펙터에 드래그 후 우클릭)
+    //   ※ imsi는 임시 브릿지. 속도는 SO(base 속도 합)와 imsi(배수) 모델이 달라 '근사' 매핑이고,
+    //     슬롯·추가효율적재(increaseOverLoad 등)는 Core 신규 계산 붙일 때 반영 예정.
+    [ContextMenu("SO에서 상단 채우기")]
+    public void FillFromSO()
     {
         caravan = new CaravanData();
-        // 마차: 동물 최소 1 ~ 최대 5 / overLoad 30(속도 100% 한계) / maxLoad 60(출발 불가)
-        caravan.wagon = new imsiWagonData { wagonName = "기본 마차", overLoad = 30f, maxLoad = 60f, minAnimals = 1, maxAnimals = 5 };
-        // 동물: foodPerKm(=이제 '초당' 소모) 0.1. 2마리 → 초당 0.2 소모.
-        caravan.animals.Add(new imsiAnimalData { animalName = "말", foodPerKm = 0.1f });
-        caravan.animals.Add(new imsiAnimalData { animalName = "말", foodPerKm = 0.1f });
 
-        imsiTradeItemData wheat = new imsiTradeItemData { id = "wheat", itemName = "밀", weight = 5f, basePrice = 10 };
-        caravan.cargo.Add(new CargoEntry { item = wheat, quantity = 5 });
-        caravan.foodAmount = 30;   // 필요 식량 = 초당 0.2 × 총소요초. 총시간보다 적게 실으면 도중 식량 고갈(foodAmount 낮추면 부족 재현).
+        if (soWagon != null)
+        {
+            caravan.wagon = new imsiWagonData
+            {
+                wagonName     = soWagon.DisplayName,
+                overLoad      = soWagon.Overload,
+                maxLoad       = soWagon.MaxLoad,
+                minAnimals    = soWagon.MinRequireAnimals,
+                maxAnimals    = soWagon.MaxPullAnimals,
+                maxDurability = soWagon.MaxDurability,
+                inventorySlotCount = soWagon.InventorySlotCount,   // [M2] 마차 짐칸 수
+            };
+            caravan.currentDurability = soWagon.MaxDurability;   // 내구도 최대로 시작
+        }
 
-        caravan.currentDurability = caravan.wagon.maxDurability;   // 내구도 최대로 시작 [M2]
-        caravan.mercenaries.Add(new imsiMercenaryData { mercName = "용병", combatPower = 10, contractCount = 3 });  // [임시] 용병 1마리
+        // 견인 동물: 리스트의 SO를 한 마리씩 추가 (같은 SO 여러 번 넣으면 그만큼 여러 마리 / 다른 종류 섞으면 단일종류 검증에 걸림)
+        foreach (DraftAnimalData a in soAnimals)
+        {
+            if (a == null) continue;
+            caravan.animals.Add(new imsiAnimalData
+            {
+                animalName = a.DisplayName,
+                // [속도 모델 불일치] SO는 baseMoveSpeed(더하기식) / imsi는 배수(말=1). 지금은 배수 1(정상 속도)로 둠. [M2 신규 작업]
+                speed      = 1f,
+                foodPerKm  = a.FeedConsumption,        // 초당 소모 (둘 다 per-sec)
+                increaseOverLoad = a.IncreaseOverLoad, // [M2] 동물이 적정적재 늘림
+                increaseMaxLoad  = a.IncreaseMaxLoad,  // [M2] 동물이 최대적재 늘림
+                animalType = a.AnimalType,             // [M2] 종류 → 단일종류 검증
+            });
+        }
 
-        RecalculateCache();     // 구성 다 채웠으니 캐시 갱신
-        UpdateStatusDisplay();  // 상태 표시도 초기값으로
-        Debug.Log("[상단] 샘플 채움. foodAmount를 낮추거나 foodLossAtSecond를 켜면 식량 부족 실패 확인.");
+        // 무역품: 리스트의 (아이템 SO + 수량)을 각각 화물로 추가 (마차 슬롯 수 초과하면 출발 검증에서 막힘)
+        foreach (SoItemInput input in soItems)
+        {
+            if (input == null || input.item == null) continue;
+            caravan.cargo.Add(new CargoEntry
+            {
+                item = new imsiTradeItemData
+                {
+                    id        = input.item.ItemId,
+                    itemName  = input.item.DisplayName,
+                    weight    = input.item.Weight,
+                    basePrice = input.item.BaseBuyPrice,
+                    maxCount  = input.item.MaxCount,   // [M2] 한 칸 스택 크기
+                },
+                quantity = input.quantity,
+            });
+        }
+
+        caravan.foodAmount = soFoodAmount;
+        caravan.mercenaries.Add(new imsiMercenaryData { mercName = "용병", combatPower = 10, contractCount = 3 });  // [임시] 용병 SO 없음
+
+        RecalculateCache();
+        UpdateStatusDisplay();
+
+        string wn = soWagon != null ? soWagon.DisplayName : "없음";
+        string typeOk = CaravanCalculator.IsAnimalTypeUniform(caravan) ? "단일종류 O" : "종류섞임 ✗";
+        Debug.Log(
+            $"[SO 구성] 마차 {wn} · 동물 {caravan.animals.Count}마리({typeOk}) · 무역품 {caravan.cargo.Count}종 {CaravanCalculator.GetCargoCount(caravan)}개 · 식량 {caravan.foodAmount}\n" +
+            $"   ↳ 짐무게 {cachedLoad:0.#} (무역품무게 {CaravanCalculator.GetCargoWeight(caravan):0.#} + 식량무게 {CaravanCalculator.GetFoodWeight(caravan):0.#}) / 최대한계 {cachedMaxLoad:0.#} / 칸 {CaravanCalculator.GetUsedSlots(caravan)}/{CaravanCalculator.GetMaxSlots(caravan)} / 내구도 {caravan.currentDurability}");
+    }
+
+    // [테스트 편의] 마차 내구도를 최대로 복구. (기획상 1차엔 "수리 시스템" 대신 "재장착"이 정식 — 이건 테스트용 리셋)
+    [ContextMenu("마차 수리하기")]
+    public void RepairWagon()
+    {
+        if (caravan == null || caravan.wagon == null)
+        {
+            Debug.LogWarning("[수리] 마차가 없음 — 먼저 'SO에서 상단 채우기'");
+            return;
+        }
+        if (caravan.state == JourneyState.Traveling)
+        {
+            Debug.LogWarning("[수리] 이동 중엔 수리 불가 — 무역 끝난 뒤에");
+            return;
+        }
+
+        int before = caravan.currentDurability;
+        caravan.currentDurability = caravan.wagon.maxDurability;   // 내구도 최대로 복구
+        UpdateStatusDisplay();
+        Debug.Log($"[수리] 마차 내구도 {before} → {caravan.currentDurability}/{caravan.wagon.maxDurability} (완전 수리)");
     }
 
     // [캐시 갱신] 구성이 바뀌면 불러서 파생값(적재·속도 등)을 다시 계산해 캐시한다.
@@ -280,7 +414,10 @@ public class JourneyRunTest : MonoBehaviour
 
         cachedCargoCount = CaravanCalculator.GetCargoCount(caravan);   // 개수 합산은 계산기로 위임
 
-        Debug.Log($"[상단 캐시] 적재 {cachedLoad} / 최대 {cachedMaxLoad} / 초당식량 {cachedFoodPerSec} / 속도효율 {cachedSpeedEfficiency} / 무역품 {cachedCargoCount}개");
+        Debug.Log(
+            $"[상단 상태] 짐무게 {cachedLoad:0.#} (무역품무게 {CaravanCalculator.GetCargoWeight(caravan):0.#} + 식량무게 {CaravanCalculator.GetFoodWeight(caravan):0.#}) / 적정한계 {CaravanCalculator.GetFinalEfficientLoad(caravan):0.#} / 최대한계 {cachedMaxLoad:0.#} / 물건 {cachedCargoCount}개 · 칸 {CaravanCalculator.GetUsedSlots(caravan)}/{CaravanCalculator.GetMaxSlots(caravan)}\n" +
+            $"   ↳ 적정한계 = 마차 {CaravanCalculator.GetBaseEfficientLoad(caravan):0.#} + 동물 {CaravanCalculator.GetAdditionalEfficientLoad(caravan):0.#}  (짐무게가 적정 넘으면 감속 · 최대 넘으면 출발불가)\n" +
+            $"   ↳ 초당식량 {cachedFoodPerSec:0.##} · 동물속도효율 {cachedSpeedEfficiency:0.##}배 · 과적 {(CaravanCalculator.IsOverloaded(caravan) ? $"O({CaravanCalculator.GetOverloadRatio(caravan):P0}, 속도 {CaravanCalculator.GetLoadSpeedModifier(caravan):0.##}배)" : "X")}");
     }
 
     // [테스트 표시] caravan 안의 중첩 필드는 인스펙터 실시간 반영이 안 돼서, 직접 필드로 미러링한다.

@@ -24,8 +24,8 @@ public static class CaravanCalculator
     // 적재 (Load)
     // =========================================================================
 
-    /// <summary>현재 적재 총 무게 = 무역품 무게 합 + 식량 무게 합.</summary>
-    public static float GetCurrentLoad(CaravanData caravan)
+    /// <summary>무역품 무게 합 = Σ(아이템 무게 × 수량).</summary>
+    public static float GetCargoWeight(CaravanData caravan)
     {
         if (caravan == null) return 0f;
 
@@ -35,14 +35,68 @@ public static class CaravanCalculator
             if (entry != null && entry.item != null)
                 total += entry.item.weight * entry.quantity;
         }
-        total += caravan.foodAmount * caravan.foodUnitWeight;
         return total;
     }
 
-    /// <summary>물리 상한 = 마차 maxLoad. 마차 없으면 0.</summary>
+    /// <summary>식량 무게 = 식량 수량 × 1개당 무게.</summary>
+    public static float GetFoodWeight(CaravanData caravan)
+    {
+        if (caravan == null) return 0f;
+        return caravan.foodAmount * caravan.foodUnitWeight;
+    }
+
+    /// <summary>현재 적재 총 무게 = 무역품 무게 + 식량 무게.</summary>
+    public static float GetCurrentLoad(CaravanData caravan)
+    {
+        return GetCargoWeight(caravan) + GetFoodWeight(caravan);
+    }
+
+    /// <summary>물리 상한 = 마차 maxLoad + 동물들 increaseMaxLoad 합. [M2 동물 추가 효율]</summary>
     public static float GetMaxLoad(CaravanData caravan)
     {
-        return (caravan != null && caravan.wagon != null) ? caravan.wagon.maxLoad : 0f;
+        if (caravan == null || caravan.wagon == null) return 0f;
+        float total = caravan.wagon.maxLoad;
+        foreach (imsiAnimalData a in caravan.animals)
+            if (a != null) total += a.increaseMaxLoad;
+        return total;
+    }
+
+    /// <summary>기본 적정 적재 = 마차 overLoad (동물 없을 때의 속도 100% 한계). [M2]</summary>
+    public static float GetBaseEfficientLoad(CaravanData caravan)
+    {
+        return (caravan != null && caravan.wagon != null) ? caravan.wagon.overLoad : 0f;
+    }
+
+    /// <summary>동물 추가 효율 적재 = 동물들 increaseOverLoad 합. [M2]</summary>
+    public static float GetAdditionalEfficientLoad(CaravanData caravan)
+    {
+        if (caravan == null) return 0f;
+        float sum = 0f;
+        foreach (imsiAnimalData a in caravan.animals)
+            if (a != null) sum += a.increaseOverLoad;
+        return sum;
+    }
+
+    /// <summary>최종 적정 적재 = 기본 + 동물 추가. 이 이하면 속도 100%, 넘으면 과적 감속. [M2]</summary>
+    public static float GetFinalEfficientLoad(CaravanData caravan)
+    {
+        return GetBaseEfficientLoad(caravan) + GetAdditionalEfficientLoad(caravan);
+    }
+
+    /// <summary>과적 비율 = (현재적재 - 최종적정적재) / 최종적정적재. 적정 이하면 0. [M2]</summary>
+    public static float GetOverloadRatio(CaravanData caravan)
+    {
+        float efficient = GetFinalEfficientLoad(caravan);
+        if (efficient <= 0f) return 0f;
+        float load = GetCurrentLoad(caravan);
+        if (load <= efficient) return 0f;
+        return (load - efficient) / efficient;
+    }
+
+    /// <summary>과적 상태인가 = 현재적재 &gt; 최종적정적재. [M2] UI 표시용.</summary>
+    public static bool IsOverloaded(CaravanData caravan)
+    {
+        return GetCurrentLoad(caravan) > GetFinalEfficientLoad(caravan);
     }
 
     /// <summary>실은 무역품 총 개수 = 상품별 수량 합.</summary>
@@ -56,6 +110,44 @@ public static class CaravanCalculator
             if (entry != null) total += entry.quantity;
         }
         return total;
+    }
+
+    /// <summary>마차 짐칸(슬롯) 수 = 마차 inventorySlotCount. 마차 없으면 0. [M2]</summary>
+    public static int GetMaxSlots(CaravanData caravan)
+    {
+        return (caravan != null && caravan.wagon != null) ? caravan.wagon.inventorySlotCount : 0;
+    }
+
+    /// <summary>사용 중인 슬롯 수 = 아이템별 (수량 ÷ 스택크기, 올림) 합.
+    /// 같은 아이템은 한 칸에 maxCount개까지 쌓임. [M2]</summary>
+    public static int GetUsedSlots(CaravanData caravan)
+    {
+        if (caravan == null) return 0;
+
+        int slots = 0;
+        foreach (CargoEntry entry in caravan.cargo)
+        {
+            if (entry == null || entry.item == null) continue;
+            int stack = (entry.item.maxCount > 0) ? entry.item.maxCount : 1;   // 스택크기(0 방어)
+            slots += (entry.quantity + stack - 1) / stack;                     // 올림 나눗셈
+        }
+        return slots;
+    }
+
+    /// <summary>견인 동물이 전부 같은 종류인가 (0~1마리면 true). [M2] 단일종류 검증용.</summary>
+    public static bool IsAnimalTypeUniform(CaravanData caravan)
+    {
+        if (caravan == null || caravan.animals == null) return true;
+
+        bool hasFirst = false;
+        DraftAnimalType first = default;
+        foreach (imsiAnimalData a in caravan.animals)
+        {
+            if (a == null) continue;
+            if (!hasFirst) { first = a.animalType; hasFirst = true; }   // 첫 동물 종류 기준
+            else if (a.animalType != first) return false;               // 하나라도 다르면 섞임
+        }
+        return true;
     }
 
     // =========================================================================
@@ -85,6 +177,13 @@ public static class CaravanCalculator
         return factor;
     }
 
+    /// <summary>이 상단의 적재로 인한 속도 배수(과적 감속). UI "예상 속도 감소" 표시용. [M2]
+    /// = GetLoadEfficiency(현재적재, 최종적정적재). 과적 아니면 1.0.</summary>
+    public static float GetLoadSpeedModifier(CaravanData caravan)
+    {
+        return GetLoadEfficiency(GetCurrentLoad(caravan), GetFinalEfficientLoad(caravan));
+    }
+
     /// <summary>[미정 자리 — 1.0] 동물 종류별 속도. imsiAnimalData.speed 생기면 반영.</summary>
     public static float GetAnimalTypeSpeed(List<imsiAnimalData> animals)
     {
@@ -109,7 +208,7 @@ public static class CaravanCalculator
     /// <summary>1마리 기준 속도 (Km/초).</summary>
     public static float GetBaseSpeedKmPerSec()
     {
-        if (CaravanConfig.BaseSeconds <= 0f) return 0f;
+        // CaravanConfig.BaseSeconds 는 상수(>0)라 0 나눗셈 위험 없음.
         return CaravanConfig.BaseDistanceKm / CaravanConfig.BaseSeconds;
     }
 
@@ -119,7 +218,7 @@ public static class CaravanCalculator
         if (caravan == null) return 0f;
 
         float currentLoad = GetCurrentLoad(caravan);
-        float overLoad = (caravan.wagon != null) ? caravan.wagon.overLoad : 0f;
+        float overLoad = GetFinalEfficientLoad(caravan);   // [M2] 마차 기본 + 동물 추가 효율 적재
 
         float speed = GetBaseSpeedKmPerSec()
                     * GetSpeedEfficiency(caravan.animals.Count)
@@ -137,7 +236,8 @@ public static class CaravanCalculator
     //   남은 식량 = 실은 식량 - (초당소모 × 흐른 시간) - 이벤트 차감
     // =========================================================================
 
-    /// <summary>초당 식량 소모 = 동물들의 소모율 합. 동물 많을수록 커짐.</summary>
+    /// <summary>인게임 초당 식량 소모 = 동물들의 소모율 합. 동물 많을수록 커짐. [인게임시간]
+    /// foodPerKm는 인게임 초당 소모율로 해석(단위 정규화는 Framework 정책).</summary>
     public static float GetConsumptionPerSec(CaravanData caravan)
     {
         if (caravan == null) return 0f;
@@ -145,26 +245,34 @@ public static class CaravanCalculator
         float perSec = 0f;
         foreach (imsiAnimalData a in caravan.animals)
         {
-            // a.foodPerKm 은 팀결정(시간기준)으로 이제 '초당' 소모율로 해석한다. (필드명은 SO 교체 때 rename 예정)
+            // a.foodPerKm = 인게임 1초당 소모율(단위 정규화는 Framework). 필드명 rename은 별도 PR 예정.
             if (a != null) perSec += a.foodPerKm;
         }
         return perSec;
     }
 
-    /// <summary>이 무역에 필요한 총 식량(출발 전 UI 표시용) = 초당 소모 × 총 소요 시간(초).</summary>
-    public static float GetRequiredFood(CaravanData caravan)
+    /// <summary>출발 전 예상 총 식량 = 인게임 초당 소모 × 예상 인게임 소요시간(초). [인게임시간]
+    /// 예상 인게임 소요 = 현실 총시간 × 배율. 배율은 바깥(Framework/테스트)이 곱해 넘긴다.</summary>
+    public static float GetRequiredFood(CaravanData caravan, float expectedInGameSeconds)
     {
         if (caravan == null) return 0f;
-        return GetConsumptionPerSec(caravan) * caravan.totalSeconds;
+        return GetConsumptionPerSec(caravan) * expectedInGameSeconds;
     }
 
-    /// <summary>지금 진행도에서 남은 식량. 0 이하면 바닥(실패 판정은 JourneyRunner).</summary>
+    /// <summary>출발 전 예상 식량(거리 기반) = 인게임 초당 소모 × (예상 현실 소요시간 × 배율). [인게임시간]
+    /// 배율(inGameTimeMultiplier)은 바깥(Framework/테스트)이 넘긴다.</summary>
+    public static float GetEstimatedFood(CaravanData caravan, float distanceKm, float inGameTimeMultiplier)
+    {
+        return GetConsumptionPerSec(caravan) * GetTravelSeconds(caravan, distanceKm) * inGameTimeMultiplier;
+    }
+
+    /// <summary>남은 식량 = 실은 식량 − (인게임 초당 소모 × 누적 인게임 경과초) − 이벤트 차감. [인게임시간]
+    /// elapsedInGameSeconds는 바깥(Framework/테스트)이 채운다. 0 이하면 바닥(실패 판정은 JourneyRunner).</summary>
     public static float GetRemainingFood(CaravanData caravan)
     {
         if (caravan == null) return 0f;
 
-        float elapsedSec = caravan.progress01 * caravan.totalSeconds;   // 흐른 시간(초)
-        float consumed = GetConsumptionPerSec(caravan) * elapsedSec;
+        float consumed = GetConsumptionPerSec(caravan) * caravan.elapsedInGameSeconds;   // 인게임 경과 기준
         return caravan.foodAmount - consumed - caravan.runFoodLost;
     }
 }

@@ -171,9 +171,11 @@ namespace ND.Framework
                 tradeId,
                 result.grade,
                 result.failureReason,
-                result.revenue,
-                result.cost,
-                result.netProfit,
+                // [임시 캐스팅] JourneyResultData는 돈=long(팀 결정)인데 SettlementViewData는 아직 int.
+                //   값이 21억 넘으면 손실됨 → 추후 SettlementViewData를 long으로 바꾸고 이 (int) 제거할 것.
+                (int)result.revenue,
+                (int)result.cost,
+                (int)result.netProfit,
                 canClaim,
                 CreateStatusMessage(result));
         }
