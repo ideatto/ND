@@ -36,6 +36,7 @@ namespace ND.Framework
     public sealed class FrameworkDebugBridge : MonoBehaviour
     {
         [SerializeField] private float debugTimeScale = 10f;
+        [SerializeField] private float debugInGameTimeMultiplier = 60f;
 
         /// <summary>
         /// Inspector에 설정된 debug time scale을 적용한다.
@@ -48,6 +49,15 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// Inspector에 설정된 인게임 시간 배율을 적용한다.
+        /// </summary>
+        [ContextMenu("Framework/Set In-Game Time Multiplier")]
+        public void SetDebugInGameTimeMultiplier()
+        {
+            FrameworkRoot.Instance.DebugCommands.SetInGameTimeMultiplier(debugInGameTimeMultiplier);
+        }
+
+        /// <summary>
         /// time scale을 기본값 1로 되돌린다.
         /// </summary>
         [ContextMenu("Framework/Reset Time Scale")]
@@ -55,6 +65,33 @@ namespace ND.Framework
         {
             // 테스트 후 game speed를 정상 값으로 복구한다.
             FrameworkRoot.Instance.DebugCommands.SetTimeScale(1f);
+        }
+
+        /// <summary>
+        /// 인게임 시간 배율을 config 기본값으로 되돌린다.
+        /// </summary>
+        [ContextMenu("Framework/Reset In-Game Time Multiplier")]
+        public void ResetInGameTimeMultiplier()
+        {
+            FrameworkRoot.Instance.DebugCommands.ResetInGameTimeMultiplier();
+        }
+
+        /// <summary>
+        /// 인게임 시간 진행을 일시정지한다.
+        /// </summary>
+        [ContextMenu("Framework/Pause In-Game Time")]
+        public void PauseInGameTime()
+        {
+            FrameworkRoot.Instance.DebugCommands.PauseGameTime();
+        }
+
+        /// <summary>
+        /// 인게임 시간 진행을 재개한다.
+        /// </summary>
+        [ContextMenu("Framework/Resume In-Game Time")]
+        public void ResumeInGameTime()
+        {
+            FrameworkRoot.Instance.DebugCommands.ResumeGameTime();
         }
 
         /// <summary>

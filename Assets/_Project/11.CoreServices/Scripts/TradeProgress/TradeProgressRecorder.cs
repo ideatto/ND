@@ -35,14 +35,17 @@ namespace ND.Framework
     public sealed class TradeProgressRecorder
     {
         private readonly IGameTimeProvider gameTimeProvider;
+        private readonly IInGameTimeProvider inGameTimeProvider;
 
         /// <summary>
         /// 시간 제공자를 주입받아 recorder를 생성한다.
         /// </summary>
         /// <param name="gameTimeProvider">UTC 현재 시각을 제공하는 서비스.</param>
-        public TradeProgressRecorder(IGameTimeProvider gameTimeProvider)
+        /// <param name="inGameTimeProvider">출발 시점 인게임 배율을 읽을 서비스. null이면 gameTimeProvider에서 조회한다.</param>
+        public TradeProgressRecorder(IGameTimeProvider gameTimeProvider, IInGameTimeProvider inGameTimeProvider = null)
         {
             this.gameTimeProvider = gameTimeProvider;
+            this.inGameTimeProvider = inGameTimeProvider ?? gameTimeProvider as IInGameTimeProvider;
         }
 
         /// <summary>
@@ -120,6 +123,14 @@ namespace ND.Framework
             progress.state = TradeProgressState.Traveling;
             progress.tradeStartUtcTick = startUtc.Ticks;
             progress.expectedTradeEndUtcTick = expectedEndUtc.Ticks;
+            progress.inGameTimeMultiplierAtStart = inGameTimeProvider != null
+                ? inGameTimeProvider.InGameTimeMultiplier
+                : 1f;
+
+            if (saveData.caravan != null)
+            {
+                saveData.caravan.elapsedInGameSeconds = 0f;
+            }
 
             return true;
         }

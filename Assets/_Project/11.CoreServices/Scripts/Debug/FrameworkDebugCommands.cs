@@ -18,6 +18,8 @@
  *
  * Main Public APIs
  * - SetTimeScale(...): debug time scale을 적용한다.
+ * - SetInGameTimeMultiplier(...): gameplay 인게임 시간 배율을 적용한다.
+ * - PauseGameTime() / ResumeGameTime(): 인게임 시간 진행을 정지/재개한다.
  * - CompleteTradeImmediately(): active trade 즉시 완료 이벤트를 발행한다.
  * - ForceLoadCompleted(): 현재 저장 데이터로 load completed 이벤트를 발행한다.
  * - LogSharedGameDataSummary(): 공용 데이터 로드 요약을 출력한다.
@@ -51,6 +53,40 @@ namespace ND.Framework
         {
             // time scale 보정과 Unity 적용은 GameTimeService에 위임한다.
             gameTimeService.SetTimeScale(scale);
+        }
+
+        /// <summary>
+        /// gameplay 인게임 시간 배율을 변경한다.
+        /// </summary>
+        /// <param name="multiplier">현실 1초당 인게임 N초.</param>
+        /// <returns>Editor 또는 Development Build에서 적용되면 true.</returns>
+        public bool SetInGameTimeMultiplier(float multiplier)
+        {
+            return gameTimeService.TrySetInGameTimeMultiplier(multiplier);
+        }
+
+        /// <summary>
+        /// config 기본값으로 인게임 시간 배율을 되돌린다.
+        /// </summary>
+        public void ResetInGameTimeMultiplier()
+        {
+            gameTimeService.ResetInGameTimeMultiplier();
+        }
+
+        /// <summary>
+        /// 인게임 시간 진행을 일시정지한다.
+        /// </summary>
+        public void PauseGameTime()
+        {
+            gameTimeService.PauseGameTime();
+        }
+
+        /// <summary>
+        /// 인게임 시간 진행을 재개한다.
+        /// </summary>
+        public void ResumeGameTime()
+        {
+            gameTimeService.ResumeGameTime();
         }
 
         /// <summary>

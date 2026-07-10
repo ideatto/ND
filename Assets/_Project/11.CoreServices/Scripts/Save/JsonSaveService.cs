@@ -184,6 +184,11 @@ namespace ND.Framework
                 data.tradeProgress = new TradeProgressSaveData();
             }
 
+            if (data.tradeProgress.inGameTimeMultiplierAtStart <= 0f)
+            {
+                data.tradeProgress.inGameTimeMultiplierAtStart = 1f;
+            }
+
             if (data.world == null)
             {
                 data.world = new WorldSaveData();

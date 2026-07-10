@@ -42,7 +42,7 @@ namespace ND.Framework
         /// <summary>
         /// 현재 코드가 지원하는 저장 데이터 schema version이다.
         /// </summary>
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
 
         /// <summary>
         /// 저장 데이터 schema version이다.
@@ -162,6 +162,11 @@ namespace ND.Framework
         public float progress01;
 
         /// <summary>
+        /// 이번 무역에서 누적된 인게임 경과 시간(초)이다.
+        /// </summary>
+        public float elapsedInGameSeconds;
+
+        /// <summary>
         /// 현재 정산 결과가 claim 되었는지 여부이다.
         /// </summary>
         public bool settlementClaimed;
@@ -270,6 +275,11 @@ namespace ND.Framework
         /// 예상 도착 시각의 UTC ticks 값이다.
         /// </summary>
         public long expectedTradeEndUtcTick;
+
+        /// <summary>
+        /// 무역 출발 시점에 고정된 인게임 시간 배율이다.
+        /// </summary>
+        public float inGameTimeMultiplierAtStart = 1f;
     }
 
     /// <summary>
