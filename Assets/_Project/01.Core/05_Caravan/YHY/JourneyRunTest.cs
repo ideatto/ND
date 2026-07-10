@@ -71,6 +71,7 @@ public class JourneyRunTest : MonoBehaviour
 
     [Header("식량 고갈 제한시간(초) — 이 안에 도착 못하면 실패 [M2]")]
     public float starveGraceSeconds = 5f;
+    public float inGameTimeMultiplier = 1f;   // [인게임시간] 현실 경과 × 이 배율 = 인게임 경과. 60이면 식량 60배 빨리 소모. (실게임은 Framework가 채움)
 
     [Header("테스트 이벤트 (-1 = 없음)")]
     public int cargoLossAtSecond = -1;   // 이 초에 무역품 손실 → 부분 성공
@@ -118,7 +119,7 @@ public class JourneyRunTest : MonoBehaviour
         float overLoad = CaravanCalculator.GetFinalEfficientLoad(caravan);   // 마차+동물 적정한계
         float animalEff = CaravanCalculator.GetSpeedEfficiency(animals);
         float loadEff = CaravanCalculator.GetLoadEfficiency(load, overLoad);
-        float needFood = CaravanCalculator.GetRequiredFood(caravan);
+        float needFood = CaravanCalculator.GetRequiredFood(caravan, caravan.totalSeconds * inGameTimeMultiplier);
 
         Debug.Log(
             $"[출발] {distanceKm:0}Km → 예상 {caravan.totalSeconds:0.#}초 · 짐무게 {load:0.#} (무역품무게 {CaravanCalculator.GetCargoWeight(caravan):0.#} + 식량무게 {CaravanCalculator.GetFoodWeight(caravan):0.#}, 적정 {overLoad:0.#}) → {(loadEff < 1f ? $"속도 {loadEff:0.##}배 감속" : "정상속도")}\n" +
@@ -179,8 +180,11 @@ public class JourneyRunTest : MonoBehaviour
 
             ElapsedTime = elapsed.ToString("0.0") + "초";
 
+            // [인게임시간] Framework 흉내 — 현실 경과 × 배율을 인게임 경과로 넣는다(SetProgress 전에).
+            caravan.elapsedInGameSeconds = elapsed * inGameTimeMultiplier;
+
             float progress = (caravan.totalSeconds > 0f) ? elapsed / caravan.totalSeconds : 1f;
-            JourneyRunner.SetProgress(caravan, progress);   // 여기서 식량 소진 자동 체크됨
+            JourneyRunner.SetProgress(caravan, progress);   // 여기서 식량 소진 자동 체크됨(인게임 경과 기준)
             UpdateStatusDisplay();                          // 인스펙터 상태 표시 갱신
 
             // 테스트 이벤트

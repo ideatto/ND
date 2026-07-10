@@ -41,6 +41,7 @@ public class CaravanData
     public float currentDistanceKm;                 // 현재 뛰는 무역 거리(Km) — 출발 시 복사됨
     public float totalSeconds;                      // 이번 무역 총 소요 시간(초) — 출발 시 계산해 저장
     public float progress01;                        // 진행도 0~1 (바깥이 갱신). 1.0이면 도착
+    public float elapsedInGameSeconds;              // [인게임시간] 이번 무역 누적 인게임 경과(초). 식량 소모 기준. 바깥(Framework/테스트)이 채움
     public bool settlementClaimed;                   // 정산 수령 여부 (true면 중복 보상 방지)
 
     // ── 이번 무역 손실 누적 (출발 시 초기화, 이동 중 이벤트가 채움) ──

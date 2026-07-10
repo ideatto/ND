@@ -55,9 +55,9 @@ public class imsiAnimalData
 {
     public string animalName;  // 동물 이름
     public float speed = 1f;   // 이동 속도 배수 (말=1 기준 / 당나귀=0.5 / 타조=1.5)
-    // [2026-07-09 팀결정: 식량은 '시간' 기준] 이 값은 이제 '1초당' 식량 소모로 해석한다. 예: 0.1 → 10초에 1 소모.
-    // 필드명 foodPerKm 은 천성욱 Framework harness가 참조 중이라, 실제 SO 교체 시점에 foodPerSec 로 함께 rename 예정.
-    public float foodPerKm;    // (현재 의미: 1초당 식량 소모)
+    // [인게임시간] 이 값은 '인게임 1초당' 식량 소모율(raw). 단위(분/시간/하루) 정규화는 Framework(ToConsumptionPerInGameSecond).
+    // 필드명 foodPerKm 은 천성욱 harness가 참조 중이라, rename(foodPerInGameSecond 등)은 별도 PR 예정.
+    public float foodPerKm;    // (현재 의미: 인게임 1초당 식량 소모율)
     public float increaseOverLoad;  // [M2] 이 동물이 늘려주는 적정적재(효율 한계). SO DraftAnimalData.increaseOverLoad
     public float increaseMaxLoad;   // [M2] 이 동물이 늘려주는 최대적재(물리 한계). SO DraftAnimalData.increaseMaxLoad
     public DraftAnimalType animalType;  // [M2] 동물 종류(말·당나귀 등). SO DraftAnimalData.AnimalType → 단일종류 검증에 사용

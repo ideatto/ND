@@ -236,7 +236,8 @@ public static class CaravanCalculator
     //   남은 식량 = 실은 식량 - (초당소모 × 흐른 시간) - 이벤트 차감
     // =========================================================================
 
-    /// <summary>초당 식량 소모 = 동물들의 소모율 합. 동물 많을수록 커짐.</summary>
+    /// <summary>인게임 초당 식량 소모 = 동물들의 소모율 합. 동물 많을수록 커짐. [인게임시간]
+    /// foodPerKm는 인게임 초당 소모율로 해석(단위 정규화는 Framework 정책).</summary>
     public static float GetConsumptionPerSec(CaravanData caravan)
     {
         if (caravan == null) return 0f;
@@ -244,33 +245,34 @@ public static class CaravanCalculator
         float perSec = 0f;
         foreach (imsiAnimalData a in caravan.animals)
         {
-            // a.foodPerKm 은 팀결정(시간기준)으로 이제 '초당' 소모율로 해석한다. (필드명은 SO 교체 때 rename 예정)
+            // a.foodPerKm = 인게임 1초당 소모율(단위 정규화는 Framework). 필드명 rename은 별도 PR 예정.
             if (a != null) perSec += a.foodPerKm;
         }
         return perSec;
     }
 
-    /// <summary>이 무역에 필요한 총 식량(출발 전 UI 표시용) = 초당 소모 × 총 소요 시간(초).</summary>
-    public static float GetRequiredFood(CaravanData caravan)
+    /// <summary>출발 전 예상 총 식량 = 인게임 초당 소모 × 예상 인게임 소요시간(초). [인게임시간]
+    /// 예상 인게임 소요 = 현실 총시간 × 배율. 배율은 바깥(Framework/테스트)이 곱해 넘긴다.</summary>
+    public static float GetRequiredFood(CaravanData caravan, float expectedInGameSeconds)
     {
         if (caravan == null) return 0f;
-        return GetConsumptionPerSec(caravan) * caravan.totalSeconds;
+        return GetConsumptionPerSec(caravan) * expectedInGameSeconds;
     }
 
-    /// <summary>출발 전 예상 식량 = 초당 소모 × 예상 소요 시간(거리 기반). [M2]
-    /// GetRequiredFood는 출발 후(totalSeconds 확정) 기준이라, 출발 전 UI 표시는 이걸 쓴다.</summary>
-    public static float GetEstimatedFood(CaravanData caravan, float distanceKm)
+    /// <summary>출발 전 예상 식량(거리 기반) = 인게임 초당 소모 × (예상 현실 소요시간 × 배율). [인게임시간]
+    /// 배율(inGameTimeMultiplier)은 바깥(Framework/테스트)이 넘긴다.</summary>
+    public static float GetEstimatedFood(CaravanData caravan, float distanceKm, float inGameTimeMultiplier)
     {
-        return GetConsumptionPerSec(caravan) * GetTravelSeconds(caravan, distanceKm);
+        return GetConsumptionPerSec(caravan) * GetTravelSeconds(caravan, distanceKm) * inGameTimeMultiplier;
     }
 
-    /// <summary>지금 진행도에서 남은 식량. 0 이하면 바닥(실패 판정은 JourneyRunner).</summary>
+    /// <summary>남은 식량 = 실은 식량 − (인게임 초당 소모 × 누적 인게임 경과초) − 이벤트 차감. [인게임시간]
+    /// elapsedInGameSeconds는 바깥(Framework/테스트)이 채운다. 0 이하면 바닥(실패 판정은 JourneyRunner).</summary>
     public static float GetRemainingFood(CaravanData caravan)
     {
         if (caravan == null) return 0f;
 
-        float elapsedSec = caravan.progress01 * caravan.totalSeconds;   // 흐른 시간(초)
-        float consumed = GetConsumptionPerSec(caravan) * elapsedSec;
+        float consumed = GetConsumptionPerSec(caravan) * caravan.elapsedInGameSeconds;   // 인게임 경과 기준
         return caravan.foodAmount - consumed - caravan.runFoodLost;
     }
 }

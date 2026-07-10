@@ -57,6 +57,7 @@ public static class JourneyRunner
         caravan.runBattlesFought = 0;
         caravan.runStartDurability = caravan.currentDurability;   // 출발 시 내구도 (정산 손실 계산 기준) [M2 거리마모]
         caravan.runWearRemainder = 0f;
+        caravan.elapsedInGameSeconds = 0f;                        // [인게임시간] 누적 인게임 경과 초기화
         caravan.runFoodDepleted = false;
         caravan.runFoodDepletedProgress = 0f;
         caravan.runOriginalCargoCount = CaravanCalculator.GetCargoCount(caravan);   // 손실 상한 기준: 출발 시 원래 개수
