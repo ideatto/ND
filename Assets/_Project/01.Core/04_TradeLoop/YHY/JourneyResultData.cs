@@ -30,7 +30,8 @@ public enum JourneyFailureReason
     None,             // 실패 아님
     FoodDepleted,     // 식량 부족
     AnimalsLost,      // 견인 동물 상실
-    NotEnoughAnimals  // 마차 최소 견인 동물 수 미달
+    NotEnoughAnimals, // 마차 최소 견인 동물 수 미달
+    WagonBroken       // 마차 내구도 0 → 파손으로 이동 불가 [M2]
 }
 
 /// <summary>무역 한 사이클의 결과.</summary>

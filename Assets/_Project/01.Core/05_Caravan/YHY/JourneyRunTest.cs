@@ -82,6 +82,7 @@ public class JourneyRunTest : MonoBehaviour
     public int raidCount = 1;        // 이 초에 몇 번 전투가 벌어지나 (용병 수와 비교)
     public int raidDurabilityDamage = 20;  // 방어 실패 시 마차 내구도 손실
     public int raidCargoDamage = 1;        // 방어 실패 시 무역품 손실
+    public bool limitRaidDurability = true;  // [M2] 체크: 약탈 내구도 손실 손실상한(50%)까지만 / 해제: 전량 적용
 
     // ── SO 연결 (이종현 더미 데이터) ──────────────────────────────
     //  더미 SO를 아래 칸에 드래그 → 우클릭 "SO에서 상단 채우기"
@@ -109,6 +110,7 @@ public class JourneyRunTest : MonoBehaviour
 
         // [M2] 손실 상한 — 정헌 GrowthCalculator에서 LossLimitRate 받아 적용 (성장 레벨은 임시 0)
         caravan.lossLimitRate = GrowthCalculator.CalculateM1RuntimeStats(0, 0).LossLimitRate;
+        caravan.limitRaidDurability = limitRaidDurability;   // 인스펙터 토글 → 약탈 내구도 상한 on/off [M2]
         Debug.Log($"[손실상한] 비율 {caravan.lossLimitRate:0.##} (원래 무역품 {caravan.runOriginalCargoCount}개 → 최대 {(int)(caravan.lossLimitRate * caravan.runOriginalCargoCount)}개 손실)");
 
         int animals = caravan.animals.Count;
@@ -217,7 +219,7 @@ public class JourneyRunTest : MonoBehaviour
             {
                 float food = CaravanCalculator.GetRemainingFood(caravan);
                 string starve = caravan.runFoodDepleted ? "  ⚠식량바닥(제한시간 카운트다운)" : "";
-                Debug.Log($"이동중 {elapsedSec}/{totalSecInt}초  (진행 {caravan.progress01 * 100f:0}%, 식량 {food:0.#}){starve}");
+                Debug.Log($"이동중 {elapsedSec}/{totalSecInt}초  (진행 {caravan.progress01 * 100f:0}%, 식량 {food:0.#}, 내구도 {caravan.currentDurability}){starve}");
                 lastPrintedSec = elapsedSec;
             }
 
@@ -241,14 +243,21 @@ public class JourneyRunTest : MonoBehaviour
     //        cargo 없는 값(계절·재화 등)은 임시. 나중에 SO/정헌 값으로 교체.
     private void LogEconomyResult(CaravanData caravan)
     {
-        if (caravan.cargo.Count == 0 || caravan.cargo[0].item == null) return;
+        // 손실로 수량 0이 된 항목은 건너뛰고, 실제로 팔 게 있는(수량>0) 첫 무역품을 찾는다.
+        //  (수량 0을 정헌 계산기에 넘기면 INVALID_QUANTITY로 실패함)
+        CargoEntry sell = null;
+        foreach (CargoEntry e in caravan.cargo)
+        {
+            if (e != null && e.item != null && e.quantity > 0) { sell = e; break; }
+        }
+        if (sell == null) { Debug.Log("[정산] 판매할 무역품 없음(전량 손실)"); return; }
 
         var input = new EconomyM1LoopInput();
-        // cargo에서 진짜로 (첫 상품)
-        input.PriceInput.TradeItemId = caravan.cargo[0].item.id;
-        input.PriceInput.Quantity = caravan.cargo[0].quantity;
-        input.PriceInput.BaseBuyPrice = caravan.cargo[0].item.basePrice;
-        input.PriceInput.BaseSellPrice = (long)Mathf.Round(caravan.cargo[0].item.basePrice * sellPriceMultiplier);   // [임시] 판매 마을 이익 배율 적용 (돈=long)
+        // cargo에서 (팔 수 있는 첫 상품)  ※ [임시] 여러 종류는 아직 첫 상품만 계산 — 진짜 정산은 정헌 연동 시
+        input.PriceInput.TradeItemId = sell.item.id;
+        input.PriceInput.Quantity = sell.quantity;
+        input.PriceInput.BaseBuyPrice = sell.item.basePrice;
+        input.PriceInput.BaseSellPrice = (long)Mathf.Round(sell.item.basePrice * sellPriceMultiplier);   // [임시] 판매 마을 이익 배율 적용 (돈=long)
         // 나머지 [임시]
         input.TradeId = "trade_test";
         input.PriceInput.RouteId = "route_01";
@@ -267,7 +276,7 @@ public class JourneyRunTest : MonoBehaviour
                 wallet.TradeMoney = r.FinalCurrencyState.TradeMoney;
                 wallet.DevelopmentCurrency = r.FinalCurrencyState.DevelopmentCurrency;
             }
-            Debug.Log($"[정산] {caravan.cargo[0].item.itemName} {caravan.cargo[0].quantity}개 → 판매가 {r.PriceResult.TotalSellPrice} / 순이익 {r.Settlement.NetProfit} / 보유금 {before} → {wallet.TradeMoney}");
+            Debug.Log($"[정산] {sell.item.itemName} {sell.quantity}개 → 판매가 {r.PriceResult.TotalSellPrice} / 순이익 {r.Settlement.NetProfit} / 보유금 {before} → {wallet.TradeMoney}");
         }
         else
             Debug.Log($"[정산] 계산 실패: {r.ErrorCode}");
@@ -367,6 +376,27 @@ public class JourneyRunTest : MonoBehaviour
         Debug.Log(
             $"[SO 구성] 마차 {wn} · 동물 {caravan.animals.Count}마리({typeOk}) · 무역품 {caravan.cargo.Count}종 {CaravanCalculator.GetCargoCount(caravan)}개 · 식량 {caravan.foodAmount}\n" +
             $"   ↳ 짐무게 {cachedLoad:0.#} (무역품무게 {CaravanCalculator.GetCargoWeight(caravan):0.#} + 식량무게 {CaravanCalculator.GetFoodWeight(caravan):0.#}) / 최대한계 {cachedMaxLoad:0.#} / 칸 {CaravanCalculator.GetUsedSlots(caravan)}/{CaravanCalculator.GetMaxSlots(caravan)} / 내구도 {caravan.currentDurability}");
+    }
+
+    // [테스트 편의] 마차 내구도를 최대로 복구. (기획상 1차엔 "수리 시스템" 대신 "재장착"이 정식 — 이건 테스트용 리셋)
+    [ContextMenu("마차 수리하기")]
+    public void RepairWagon()
+    {
+        if (caravan == null || caravan.wagon == null)
+        {
+            Debug.LogWarning("[수리] 마차가 없음 — 먼저 'SO에서 상단 채우기'");
+            return;
+        }
+        if (caravan.state == JourneyState.Traveling)
+        {
+            Debug.LogWarning("[수리] 이동 중엔 수리 불가 — 무역 끝난 뒤에");
+            return;
+        }
+
+        int before = caravan.currentDurability;
+        caravan.currentDurability = caravan.wagon.maxDurability;   // 내구도 최대로 복구
+        UpdateStatusDisplay();
+        Debug.Log($"[수리] 마차 내구도 {before} → {caravan.currentDurability}/{caravan.wagon.maxDurability} (완전 수리)");
     }
 
     // [캐시 갱신] 구성이 바뀌면 불러서 파생값(적재·속도 등)을 다시 계산해 캐시한다.

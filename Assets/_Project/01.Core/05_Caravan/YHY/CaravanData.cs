@@ -50,8 +50,10 @@ public class CaravanData
 
     // ── 마차 내구도 & 전투 (M2) ───────────────────────────────
     public int currentDurability;     // 현재 마차 내구도 (무역 거듭하며 감소, 무역 간 유지)
-    public int runDurabilityLost;     // 이번 무역 내구도 손실 누적
+    public int runDurabilityLost;     // 이번 무역 약탈 내구도 손실 누적 (손실상한 캡 기준)
     public int runBattlesFought;      // 이번 무역 전투 횟수 (용병 방어 판정용)
+    public int runStartDurability;    // 이번 무역 출발 시 내구도 (정산 손실 = 출발 - 도착) [M2 거리마모]
+    public float runWearRemainder;    // 거리 마모 소수점 이월(1 미만 마모 누적) [M2 거리마모]
 
     // ── 식량 고갈 제한시간 (M2) ────────────────────────────────
     public bool runFoodDepleted;          // 이번 무역 식량 바닥 여부 (바닥나면 제한시간 시작)
@@ -60,6 +62,7 @@ public class CaravanData
 
     // ── 손실 상한 (M2, 정헌 LossLimitRate) ─────────────────────
     public float lossLimitRate = 1f;      // 손실 상한율(0~1). 1=무제한. 정헌 CoreRuntimeStatModifier.LossLimitRate로 설정
+    public bool limitRaidDurability = true;   // 약탈 내구도 손실에 손실상한 적용? false=전량 적용 [M2]
     public int runOriginalCargoCount;     // 출발 시 원래 무역품 개수 (손실 상한 계산 기준)
     public float runDepartureLoad;        // 출발 시 짐무게 (정산 데이터용) [M2]
 
