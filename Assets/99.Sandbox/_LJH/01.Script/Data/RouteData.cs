@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Route_RouteName", menuName = "Route/RouteData")]
-public class RouteData : ScriptableObject
+public class RouteData : ScriptableObject, IIdentifiableData
 {
     [Header("Route_Default_Info")]
     [SerializeField] private string routeId;
@@ -31,6 +31,7 @@ public class RouteData : ScriptableObject
     [SerializeField] private int maxEventCount;
 
     #region Public Properties
+    public string Id => routeId;
     public string RouteId => routeId;
     public TownData FromTown => fromTown;
     public TownData ToTown => toTown;

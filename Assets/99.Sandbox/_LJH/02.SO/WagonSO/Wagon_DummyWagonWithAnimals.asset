@@ -15,12 +15,14 @@ MonoBehaviour:
   wagonId: dummywagonwithanimals
   displayName: "\uB354\uBBF8 \uB9C8\uCC28"
   icon: {fileID: 0}
+  prefab: {fileID: 0}
   description: "\uB354\uBBF8 \uB9C8\uCC28 + \uB3D9\uBB3C"
   wagonType: 1
   maxDurability: 1
   overLoad: 10
   maxLoad: 20
   baseMoveSpeed: 0
+  eligibleAnimalTypes: 
   inventorySlotCount: 1
   maxPullAnimals: 3
   minRequireAnimals: 1

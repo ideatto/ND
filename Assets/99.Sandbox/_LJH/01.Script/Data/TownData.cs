@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Town_TownName", menuName = "Town/TownData")]
-public class TownData : ScriptableObject
+public class TownData : ScriptableObject, IIdentifiableData
 {
     [Header("Town_Default_Info")]
     [SerializeField] private string townId;
@@ -26,6 +26,7 @@ public class TownData : ScriptableObject
     [SerializeField] private float maximumContributionLimit;
 
     #region Public Properties
+    public string Id => townId;
     public string TownId => townId;
     public string DisplayName => displayName;
     public Sprite Icon => icon;

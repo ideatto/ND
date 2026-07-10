@@ -15,12 +15,14 @@ MonoBehaviour:
   wagonId: wagondummymount
   displayName: "\uB354\uBBF8 \uD0C8\uAC83"
   icon: {fileID: 0}
+  prefab: {fileID: 0}
   description: "\uB354\uBBF8 \uD0C8\uAC83(\uB3D9\uBB3C \uD544\uC694x)"
   wagonType: 2
   maxDurability: 300
   overLoad: 20
   maxLoad: 40
   baseMoveSpeed: 15
+  eligibleAnimalTypes: 
   inventorySlotCount: 71
   maxPullAnimals: 0
   minRequireAnimals: 0

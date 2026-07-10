@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 public class TradePrepareConditionEvaluator
 {
@@ -78,6 +79,33 @@ public class TradePrepareConditionEvaluator
                     warningMessages = new List<string>()
                 };
 
+            case TradePrepareConditionType.WagonNotSelected:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Wagon is not selected.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.NotEnoughDraftAnimals:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Not enough draft animals selected.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.InvalidDraftAnimalType:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Selected draft animal type is not allowed for this wagon.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
             default:
                 return new TradePrepareConditionResult
                 {
@@ -96,6 +124,18 @@ public class TradePrepareConditionEvaluator
 
         if (!input.isRouteUnlocked)
             return Create(TradePrepareConditionType.RouteLocked);
+
+        if (input.isWagonRequired && !input.isWagonSelected)
+            return Create(TradePrepareConditionType.WagonNotSelected);
+
+        if (input.selectedWagonType == WagonType.WagonWithAnimals)
+        {
+            if (input.selectedDraftAnimalCount < input.minRequiredDraftAnimalCount)
+                return Create(TradePrepareConditionType.NotEnoughDraftAnimals);
+
+            if (!AreSelectedDraftAnimalsAllowed(input.selectedDraftAnimalCount, input.selectedDraftAnimalTypes, input.eligibleDraftAnimalTypes))
+                return Create(TradePrepareConditionType.InvalidDraftAnimalType);
+        }
 
         if (input.currentTradingCurrency < input.totalPurchaseCost)
             return Create(TradePrepareConditionType.NotEnoughMoney);
@@ -126,5 +166,30 @@ public class TradePrepareConditionEvaluator
         }
 
         return Create(TradePrepareConditionType.Available);
+    }
+
+    private bool AreSelectedDraftAnimalsAllowed(int selectedCount, DraftAnimalType[] selectedTypes, DraftAnimalType[] eligibleTypes)
+    {
+        if (selectedCount <= 0)
+            return true;
+
+        if (selectedTypes == null || selectedTypes.Length < selectedCount)
+            return false;
+
+        if (eligibleTypes == null || eligibleTypes.Length == 0)
+            return false;
+
+        for (var index = 0; index < selectedCount; index++)
+        {
+            var selectedType = selectedTypes[index];
+
+            if (selectedType == DraftAnimalType.None)
+                return false;
+
+            if (!eligibleTypes.Contains(selectedType))
+                return false;
+        }
+
+        return true;
     }
 }
