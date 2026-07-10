@@ -211,19 +211,28 @@ namespace ND.Framework
         private void InitializeServices()
         {
             // 서비스 생성 순서는 의존성 방향을 따른다. 저장, 시간, 화면 router를 먼저 만들고 무역 서비스를 조립한다.
-            GameTime = new GameTimeService();
+            var policyConfig = Resources.Load<InGameTimePolicyConfig>(InGameTimePolicyConfig.ResourceName);
+            if (policyConfig == null)
+            {
+                policyConfig = ScriptableObject.CreateInstance<InGameTimePolicyConfig>();
+                FrameworkLog.Warning(
+                    $"InGameTimePolicyConfig was not found at Resources/{InGameTimePolicyConfig.ResourceName}. Using runtime defaults.");
+            }
+
+            GameTime = new GameTimeService(policyConfig);
             SaveService = new JsonSaveService();
             SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
             DebugCommands = new FrameworkDebugCommands(GameTime);
-            TradeProgressRecorder = new TradeProgressRecorder(GameTime);
+            TradeProgressRecorder = new TradeProgressRecorder(GameTime, GameTime);
             InGameScreenRouter = new InGameScreenStateRouter();
             TradeProgressCoordinator = new TradeProgressCoordinator(
                 () => CurrentSaveData,
                 SaveService,
                 GameTime,
                 TradeProgressRecorder,
-                InGameScreenRouter);
+                InGameScreenRouter,
+                GameTime);
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,
                 SaveService,

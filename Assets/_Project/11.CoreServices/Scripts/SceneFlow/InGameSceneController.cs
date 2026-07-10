@@ -73,6 +73,31 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// gameplay 인게임 시간 배율을 debug command를 통해 변경한다.
+        /// </summary>
+        /// <param name="multiplier">현실 1초당 인게임 N초.</param>
+        public void SetInGameTimeMultiplier(float multiplier)
+        {
+            FrameworkRoot.Instance.DebugCommands.SetInGameTimeMultiplier(multiplier);
+        }
+
+        /// <summary>
+        /// 인게임 시간 진행을 일시정지한다.
+        /// </summary>
+        public void PauseGameTime()
+        {
+            FrameworkRoot.Instance.DebugCommands.PauseGameTime();
+        }
+
+        /// <summary>
+        /// 인게임 시간 진행을 재개한다.
+        /// </summary>
+        public void ResumeGameTime()
+        {
+            FrameworkRoot.Instance.DebugCommands.ResumeGameTime();
+        }
+
+        /// <summary>
         /// 현재 active trade의 즉시 완료를 요청한다.
         /// </summary>
         public void CompleteTradeImmediately()

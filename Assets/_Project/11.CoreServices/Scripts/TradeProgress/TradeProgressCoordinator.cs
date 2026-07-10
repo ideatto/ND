@@ -40,6 +40,7 @@ namespace ND.Framework
         private readonly Func<SaveData> getCurrentSaveData;
         private readonly ISaveService saveService;
         private readonly IGameTimeProvider gameTimeProvider;
+        private readonly IInGameTimeProvider inGameTimeProvider;
         private readonly TradeProgressRecorder tradeProgressRecorder;
         private readonly InGameScreenStateRouter inGameScreenRouter;
 
@@ -53,6 +54,7 @@ namespace ND.Framework
         /// <param name="gameTimeProvider">현재 UTC 시각을 제공하는 서비스.</param>
         /// <param name="tradeProgressRecorder">무역 상태 전환을 저장 데이터에 기록하는 recorder.</param>
         /// <param name="inGameScreenRouter">정산/준비 화면 전환을 요청할 router.</param>
+        /// <param name="inGameTimeProvider">인게임 배율·pause·경과 시간 변환을 제공하는 서비스. null이면 gameTimeProvider에서 조회한다.</param>
         /// <remarks>
         /// 생성 시 CompleteTradeRequested 이벤트를 구독하므로 coordinator 수명은 FrameworkRoot와 같아야 한다.
         /// </remarks>
@@ -61,11 +63,13 @@ namespace ND.Framework
             ISaveService saveService,
             IGameTimeProvider gameTimeProvider,
             TradeProgressRecorder tradeProgressRecorder,
-            InGameScreenStateRouter inGameScreenRouter = null)
+            InGameScreenStateRouter inGameScreenRouter = null,
+            IInGameTimeProvider inGameTimeProvider = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
             this.gameTimeProvider = gameTimeProvider;
+            this.inGameTimeProvider = inGameTimeProvider ?? gameTimeProvider as IInGameTimeProvider;
             this.tradeProgressRecorder = tradeProgressRecorder;
             this.inGameScreenRouter = inGameScreenRouter;
 
@@ -123,6 +127,12 @@ namespace ND.Framework
                 return false;
             }
 
+            // pause 중에는 현실 진행률과 인게임 경과 시간을 모두 갱신하지 않는다.
+            if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
+            {
+                return false;
+            }
+
             // runtime caravan이 없으면 저장된 caravan 상태를 복원해 진행률 계산 대상으로 사용한다.
             var caravan = EnsureActiveCaravan();
             if (caravan == null)
@@ -135,6 +145,7 @@ namespace ND.Framework
             var progress = CalculateProgress(saveData.tradeProgress);
             JourneyRunner.SetProgress(caravan, progress);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            UpdateElapsedInGameSeconds(saveData);
 
             // 아직 도착하지 않았고 치명적 실패도 없으면 현재 진행률만 저장하고 settlement 생성은 미룬다.
             if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
@@ -247,6 +258,7 @@ namespace ND.Framework
             // Core progress를 도착값으로 맞춘 뒤 동일한 settlement 생성 경로를 재사용한다.
             JourneyRunner.SetProgress(caravan, JourneyRunner.ArrivalProgress);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            UpdateElapsedInGameSeconds(saveData);
             SettleActiveTrade(saveData, caravan);
         }
 
@@ -448,6 +460,19 @@ namespace ND.Framework
             // clamp는 Core JourneyRunner.SetProgress가 담당하므로 여기서는 시간 비율만 계산한다.
             var elapsedSeconds = (gameTimeProvider.CurrentUtc - startUtc).TotalSeconds;
             return (float)(elapsedSeconds / totalSeconds);
+        }
+
+        private void UpdateElapsedInGameSeconds(SaveData saveData)
+        {
+            if (saveData?.caravan == null || saveData.tradeProgress == null || inGameTimeProvider == null)
+            {
+                return;
+            }
+
+            var elapsedInGameSeconds = inGameTimeProvider.GetElapsedInGameSecondsForActiveTrade(
+                saveData.tradeProgress,
+                gameTimeProvider.CurrentUtc);
+            saveData.caravan.elapsedInGameSeconds = (float)elapsedInGameSeconds;
         }
     }
 }
