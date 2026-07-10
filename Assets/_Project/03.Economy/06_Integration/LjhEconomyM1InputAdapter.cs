@@ -49,8 +49,57 @@ namespace ND.Economy
                 DisasterId = saveData != null && saveData.world != null ? saveData.world.currentDisaster.ToString() : string.Empty,
                 PlayerGrowthLevel = playerGrowthLevel,
                 CaravanGrowthLevel = caravanGrowthLevel,
-                OversupplyLevel = oversupplyLevel
+                OversupplyLevel = oversupplyLevel,
+                Modifiers = ToPriceModifierInputs(item != null ? item.Modifiers : null)
             };
+        }
+
+        // Sandbox ModifierInput is the authoring format.  Only fields that
+        // represent price modifiers are translated for PriceCalculator.
+        public static System.Collections.Generic.List<PriceModifierInput> ToPriceModifierInputs(
+            global::ModifierInput[] sourceModifiers)
+        {
+            var priceModifiers = new System.Collections.Generic.List<PriceModifierInput>();
+            if (sourceModifiers == null)
+            {
+                return priceModifiers;
+            }
+
+            for (int modifierIndex = 0; modifierIndex < sourceModifiers.Length; modifierIndex++)
+            {
+                global::ModifierInput sourceModifier = sourceModifiers[modifierIndex];
+                PriceModifierType modifierType;
+                if (sourceModifier == null || !TryMapModifierType(sourceModifier.modifierType, out modifierType)
+                    || sourceModifier.modifierBundles == null)
+                {
+                    continue;
+                }
+
+                for (int bundleIndex = 0; bundleIndex < sourceModifier.modifierBundles.Length; bundleIndex++)
+                {
+                    global::ModifierBundle bundle = sourceModifier.modifierBundles[bundleIndex];
+                    PriceModifierTarget target;
+                    PriceModifierOperation operation;
+                    if (bundle == null
+                        || !TryMapModifierTarget(bundle.modifierTarget, out target)
+                        || !TryMapModifierOperation(bundle.modifierOperation, out operation))
+                    {
+                        continue;
+                    }
+
+                    priceModifiers.Add(new PriceModifierInput
+                    {
+                        ModifierType = modifierType,
+                        SourceId = sourceModifier.sourceId ?? string.Empty,
+                        DisplayNameKey = sourceModifier.displayName ?? string.Empty,
+                        Target = target,
+                        Operation = operation,
+                        Value = bundle.value
+                    });
+                }
+            }
+
+            return priceModifiers;
         }
 
         public static EconomyM1LoopInput ToEconomyM1LoopInput(
@@ -133,6 +182,66 @@ namespace ND.Economy
             if (field.FieldType == typeof(int))
             {
                 field.SetValue(target, value > int.MaxValue ? int.MaxValue : value < int.MinValue ? int.MinValue : (int)value);
+            }
+        }
+
+        private static bool TryMapModifierType(global::ModifierType source, out PriceModifierType target)
+        {
+            switch (source)
+            {
+                case global::ModifierType.Season:
+                    target = PriceModifierType.Season;
+                    return true;
+                case global::ModifierType.Disaster:
+                    target = PriceModifierType.Disaster;
+                    return true;
+                case global::ModifierType.ActiveEvent:
+                    target = PriceModifierType.RouteEvent;
+                    return true;
+                case global::ModifierType.PlayerGrowth:
+                    target = PriceModifierType.PlayerGrowth;
+                    return true;
+                case global::ModifierType.OverSupply:
+                    target = PriceModifierType.Oversupply;
+                    return true;
+                case global::ModifierType.AffectToTown:
+                    target = PriceModifierType.Town;
+                    return true;
+                default:
+                    target = default(PriceModifierType);
+                    return false;
+            }
+        }
+
+        private static bool TryMapModifierTarget(global::Target source, out PriceModifierTarget target)
+        {
+            switch (source)
+            {
+                case global::Target.BuyPrice:
+                    target = PriceModifierTarget.BuyPrice;
+                    return true;
+                case global::Target.SellPrice:
+                    target = PriceModifierTarget.SellPrice;
+                    return true;
+                default:
+                    target = default(PriceModifierTarget);
+                    return false;
+            }
+        }
+
+        private static bool TryMapModifierOperation(global::Operation source, out PriceModifierOperation target)
+        {
+            switch (source)
+            {
+                case global::Operation.Add:
+                    target = PriceModifierOperation.Add;
+                    return true;
+                case global::Operation.Percent:
+                    target = PriceModifierOperation.Percent;
+                    return true;
+                default:
+                    target = default(PriceModifierOperation);
+                    return false;
             }
         }
     }
