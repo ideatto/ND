@@ -304,6 +304,9 @@ Route is not selected.
 Route is locked.
 Not enough trade money.
 Current load is above max load.
+Wagon is not selected.
+Not enough draft animals selected.
+Selected draft animal type is not allowed for this wagon.
 ```
 
 ---

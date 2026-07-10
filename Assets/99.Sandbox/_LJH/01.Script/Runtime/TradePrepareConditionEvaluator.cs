@@ -128,7 +128,7 @@ public class TradePrepareConditionEvaluator
         if (input.isWagonRequired && !input.isWagonSelected)
             return Create(TradePrepareConditionType.WagonNotSelected);
 
-        if (input.isWagonRequired && input.selectedWagonType == WagonType.WagonWithAnimals)
+        if (input.selectedWagonType == WagonType.WagonWithAnimals)
         {
             if (input.selectedDraftAnimalCount < input.minRequiredDraftAnimalCount)
                 return Create(TradePrepareConditionType.NotEnoughDraftAnimals);
@@ -179,8 +179,10 @@ public class TradePrepareConditionEvaluator
         if (eligibleTypes == null || eligibleTypes.Length == 0)
             return false;
 
-        foreach (var selectedType in selectedTypes)
+        for (var index = 0; index < selectedCount; index++)
         {
+            var selectedType = selectedTypes[index];
+
             if (selectedType == DraftAnimalType.None)
                 return false;
 
