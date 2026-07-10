@@ -237,7 +237,7 @@ namespace ND.Framework
         public string itemId = string.Empty;
         public string itemName = string.Empty;
         public float weight;
-        public int basePrice;
+        public long basePrice;
     }
 
     /// <summary>

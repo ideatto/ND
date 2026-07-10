@@ -28,7 +28,10 @@ public enum DepartureBlockReason
     TooManyAnimals,   // 견인 동물 수 초과 (maxAnimals 초과) → 출발 불가
     Overloaded,       // 물리 상한(maxLoad) 초과 → 출발 불가
     NoCargo,          // 실은 무역품 없음
-    BrokenWagon       // 마차 내구도 0 → 수리 전 출발 불가 [M2]
+    BrokenWagon,      // 마차 내구도 0 → 수리 전 출발 불가 [M2]
+    SlotExceeded,     // 짐칸(슬롯) 부족 → 출발 불가 [M2]
+    MixedAnimalType,  // 견인 동물 종류가 섞임(단일종류 위반) → 출발 불가 [M2]
+    NotInPrepare      // 준비 단계가 아님(이동/정산 중) → 중복 출발 차단 [M5]
 }
 
 /// <summary>출발 검증 결과 = 가능 여부 + 막힌 사유 목록</summary>
@@ -72,15 +75,24 @@ public static class CaravanValidator
             else if (caravan.animals.Count > caravan.wagon.maxAnimals)
                 result.reasons.Add(DepartureBlockReason.TooManyAnimals);
 
+            // 견인 동물 단일 종류 검증: 여러 마리면 전부 같은 종류여야 함 (섞으면 출발 불가) [M2]
+            //  ※ "말 전용 마차" 판정(wagon.eligibleAnimalTypes 매칭)은 별도 규칙 — 다음 작업.
+            if (!CaravanCalculator.IsAnimalTypeUniform(caravan))
+                result.reasons.Add(DepartureBlockReason.MixedAnimalType);
+
             // ③ 물리 상한 초과 → 출발 불가 (현재 무게 > maxLoad).
             //    참고: overLoad(기준선) 초과는 여기서 막지 않는다. 그건 출발은 되되
             //    TravelCalculator에서 속도만 감소시킨다. 여기서 막는 건 maxLoad(물리 상한)뿐.
-            if (CaravanCalculator.GetCurrentLoad(caravan) > caravan.wagon.maxLoad)
+            if (CaravanCalculator.GetCurrentLoad(caravan) > CaravanCalculator.GetMaxLoad(caravan))
                 result.reasons.Add(DepartureBlockReason.Overloaded);
 
             // 마차 내구도 소진(0 이하) → 수리 전 출발 불가 [M2]
             if (caravan.currentDurability <= 0)
                 result.reasons.Add(DepartureBlockReason.BrokenWagon);
+
+            // 짐칸(슬롯) 초과 → 출발 불가 [M2]
+            if (CaravanCalculator.GetUsedSlots(caravan) > CaravanCalculator.GetMaxSlots(caravan))
+                result.reasons.Add(DepartureBlockReason.SlotExceeded);
         }
 
         // ④ 실은 무역품이 하나도 없음

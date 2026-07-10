@@ -58,6 +58,11 @@ public class CaravanData
     public float runFoodDepletedProgress; // 식량이 바닥난 시점의 진행도(0~1)
     public float starveGraceSeconds;      // 식량 바닥 후 도착 제한 시간(초). 초과+미도착 시 실패 [임시값]
 
+    // ── 손실 상한 (M2, 정헌 LossLimitRate) ─────────────────────
+    public float lossLimitRate = 1f;      // 손실 상한율(0~1). 1=무제한. 정헌 CoreRuntimeStatModifier.LossLimitRate로 설정
+    public int runOriginalCargoCount;     // 출발 시 원래 무역품 개수 (손실 상한 계산 기준)
+    public float runDepartureLoad;        // 출발 시 짐무게 (정산 데이터용) [M2]
+
     // TODO(M2): remainingCombatPower(상행 단위 전투력 잔량) — 전투력 소진 판정/저장용.
     //           용병별 combatPower 합산 규칙 확정 후 추가.
 }
