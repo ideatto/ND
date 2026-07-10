@@ -17,7 +17,8 @@ MonoBehaviour:
   itemRenewalCycle: 0
   tradeItems:
   - {fileID: 11400000, guid: cbd60f3ba1e2e074da9c37e5540c03d3, type: 2}
-  draftAnimalItems: []
+  draftAnimalItems:
+  - {fileID: 11400000, guid: 166fee137f173b7408311c0424612194, type: 2}
   wagonItems:
   - {fileID: 11400000, guid: 7de4fcc3bc668084682ba80497b8f8d9, type: 2}
   - {fileID: 11400000, guid: 1f1ec2f7f5822c84a9af199bcccf3565, type: 2}

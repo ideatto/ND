@@ -12,20 +12,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eadc130ef2c03854a861d0901c84e75d, type: 3}
   m_Name: DraftAnimal_Dummy
   m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
-  draftAnimalId: 
-  displayName: 
+  draftAnimalId: dummydraftanimal
+  displayName: "\uB354\uBBF8 \uACAC\uC778\uB3D9\uBB3C"
   icon: {fileID: 0}
   prefab: {fileID: 0}
-  description: 
-  animalType: 0
-  feedConsumption: 0
-  baseMoveSpeed: 0
-  increaseOverLoad: 0
-  increaseMaxLoad: 0
+  description: "\uB354\uBBF8 \uACAC\uC778\uB3D9\uBB3C(\uB9D0)"
+  animalType: 3
+  feedConsumption: 0.1
+  baseMoveSpeed: 10
+  increaseOverLoad: 5
+  increaseMaxLoad: 5
   rarity: 0
-  baseBuyPrice: 0
-  canStack: 0
-  maxCount: 0
-  affectModify: 0
-  modifiers: []
+  baseBuyPrice: 30
+  canStack: 1
+  maxCount: 999
+  affectModify: 1
+  modifiers:
+  - modifierType: 1
+    sourceId: 
+    displayName: "\uD3ED\uC5FC"
+    modifierBundles:
+    - modifierTarget: 3
+      modifierOperation: 3
+      value: 0.8
   localSpecialty: 0
