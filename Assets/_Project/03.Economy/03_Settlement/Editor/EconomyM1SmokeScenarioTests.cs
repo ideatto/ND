@@ -9,6 +9,9 @@ namespace ND.Economy.Editor
             PriceCalculator_ReturnsExpectedM1Prices();
             PriceCalculator_OrdersModifiersWithoutMutatingInput();
             PriceCalculator_ClampsFinalUnitPricesToMinimumOne();
+            EconomyCaravanCalculator_CalculatesFoodShortageMultiplier();
+            LjhEconomyM1InputAdapter_ConvertsSupportedSandboxPriceModifiers();
+            LjhEconomyM1InputAdapter_UsesSandboxDataForM1LoopInput();
             SettlementCalculator_ReturnsExpectedM1Settlement();
             SettlementCalculator_KeepsRequiredEntriesWhenSoldItemsAreNull();
             SettlementCalculator_ClampsNegativeInputsToZeroEntries();
@@ -22,6 +25,9 @@ namespace ND.Economy.Editor
             EconomyM1LoopCalculator_ReturnsGrowthPurchaseFailureErrorCode();
             EconomyM1LoopCalculator_UsesSavedPlayerGrowthLevelForGrowthPurchase();
             EconomyM1LoopCalculator_RepeatsThreeTimesWithoutDuplicateGrowthOrNegativeCurrency();
+            EconomyM1FlowService_AppliesSuccessfulResultToSaveData();
+            EconomyM1SettlementViewAdapter_ProvidesDisplayOnlyResult();
+            EconomyM1TestContentAssets_ExecuteM1Flow();
             EconomyM1SmokeScenario_Run_Succeeds();
         }
 
@@ -118,6 +124,193 @@ namespace ND.Economy.Editor
             CheckEqual(1L, result.UnitSellPrice, "Clamped UnitSellPrice");
             CheckEqual(3L, result.TotalBuyPrice, "Clamped TotalBuyPrice");
             CheckEqual(3L, result.TotalSellPrice, "Clamped TotalSellPrice");
+        }
+
+        private static void EconomyCaravanCalculator_CalculatesFoodShortageMultiplier()
+        {
+            CheckEqual(1f,
+                CaravanCalculator.GetFoodEfficiency(100f, 100f),
+                "Enough food speed multiplier");
+            CheckEqual(0.75f,
+                CaravanCalculator.GetFoodEfficiency(50f, 100f),
+                "Half food speed multiplier");
+            CheckEqual(CaravanCalculator.FoodSpeedMultiplierMin,
+                CaravanCalculator.GetFoodEfficiency(0f, 100f),
+                "No food speed multiplier");
+        }
+
+        private static void LjhEconomyM1InputAdapter_ConvertsSupportedSandboxPriceModifiers()
+        {
+            global::ModifierInput[] sourceModifiers =
+            {
+                new global::ModifierInput
+                {
+                    modifierType = global::ModifierType.Season,
+                    sourceId = "season_summer",
+                    displayName = "Summer",
+                    modifierBundles = new[]
+                    {
+                        new global::ModifierBundle
+                        {
+                            modifierTarget = global::Target.BuyPrice,
+                            modifierOperation = global::Operation.Percent,
+                            value = 0.1f
+                        }
+                    }
+                },
+                new global::ModifierInput
+                {
+                    modifierType = global::ModifierType.ActiveEvent,
+                    sourceId = "event_market_day",
+                    displayName = "Market Day",
+                    modifierBundles = new[]
+                    {
+                        new global::ModifierBundle
+                        {
+                            modifierTarget = global::Target.SellPrice,
+                            modifierOperation = global::Operation.Add,
+                            value = 20f
+                        },
+                        new global::ModifierBundle
+                        {
+                            modifierTarget = global::Target.BaseMoveSpeed,
+                            modifierOperation = global::Operation.Add,
+                            value = 3f
+                        }
+                    }
+                },
+                new global::ModifierInput
+                {
+                    modifierType = global::ModifierType.LowerSupply,
+                    modifierBundles = new global::ModifierBundle[0]
+                },
+                new global::ModifierInput
+                {
+                    modifierType = global::ModifierType.Disaster,
+                    modifierBundles = new[]
+                    {
+                        new global::ModifierBundle
+                        {
+                            modifierTarget = global::Target.BuyPrice,
+                            modifierOperation = global::Operation.Subtract,
+                            value = 10f
+                        }
+                    }
+                }
+            };
+
+            System.Collections.Generic.List<PriceModifierInput> modifiers =
+                LjhEconomyM1InputAdapter.ToPriceModifierInputs(sourceModifiers);
+
+            CheckEqual(2, modifiers.Count, "Supported Sandbox modifier count");
+            CheckEqual(PriceModifierType.Season, modifiers[0].ModifierType, "Season modifier type");
+            CheckEqual(PriceModifierTarget.BuyPrice, modifiers[0].Target, "Season modifier target");
+            CheckEqual(PriceModifierOperation.Percent, modifiers[0].Operation, "Season modifier operation");
+            CheckEqual(PriceModifierType.RouteEvent, modifiers[1].ModifierType, "Event modifier type");
+            CheckEqual(PriceModifierTarget.SellPrice, modifiers[1].Target, "Event modifier target");
+            CheckEqual(PriceModifierOperation.Add, modifiers[1].Operation, "Event modifier operation");
+
+            PriceCalculationResult result = PriceCalculator.Calculate(new PriceCalculationInput
+            {
+                TradeItemId = "apple",
+                FromTownId = "town_start",
+                ToTownId = "town_trade_01",
+                RouteId = "route_01",
+                Quantity = 1,
+                BaseBuyPrice = 100,
+                BaseSellPrice = 100,
+                Modifiers = modifiers
+            });
+
+            Check(result.IsValid, "Converted Sandbox modifiers should calculate: " + result.ErrorCode);
+            CheckEqual(110L, result.UnitBuyPrice, "Converted modifier UnitBuyPrice");
+            CheckEqual(120L, result.UnitSellPrice, "Converted modifier UnitSellPrice");
+        }
+
+        private static void LjhEconomyM1InputAdapter_UsesSandboxDataForM1LoopInput()
+        {
+            global::TradeItemData item = UnityEngine.ScriptableObject.CreateInstance<global::TradeItemData>();
+            global::TownData fromTown = UnityEngine.ScriptableObject.CreateInstance<global::TownData>();
+            global::TownData toTown = UnityEngine.ScriptableObject.CreateInstance<global::TownData>();
+            global::RouteData route = UnityEngine.ScriptableObject.CreateInstance<global::RouteData>();
+
+            try
+            {
+                SetPrivateField(item, "itemId", "apple");
+                SetPrivateField(item, "baseBuyPrice", 100L);
+                SetPrivateField(item, "baseSellPrice", 100L);
+                SetPrivateField(item, "modifiers", new[]
+                {
+                    new global::ModifierInput
+                    {
+                        modifierType = global::ModifierType.Season,
+                        sourceId = "season_summer",
+                        displayName = "Summer",
+                        modifierBundles = new[]
+                        {
+                            new global::ModifierBundle
+                            {
+                                modifierTarget = global::Target.BuyPrice,
+                                modifierOperation = global::Operation.Percent,
+                                value = 0.1f
+                            }
+                        }
+                    }
+                });
+
+                SetPrivateField(fromTown, "townId", "town_start");
+                SetPrivateField(toTown, "townId", "town_trade_01");
+                SetPrivateField(route, "routeId", "route_01");
+                SetPrivateField(route, "fromTown", fromTown);
+                SetPrivateField(route, "toTown", toTown);
+                SetPrivateField(route, "baseFoodCost", 50L);
+                SetPrivateField(route, "baseMercenaryCost", 0L);
+
+                global::SaveData saveData = new global::SaveData();
+                saveData.player.tradingCurrency = 1000L;
+                PriceCalculationInput input = LjhEconomyM1InputAdapter.ToPriceCalculationInput(
+                    item,
+                    route,
+                    saveData,
+                    1);
+                PriceCalculationResult result = PriceCalculator.Calculate(input);
+
+                CheckEqual(1, input.Modifiers.Count, "TradeItem modifier input count");
+                Check(result.IsValid, "TradeItem modifier price input should be valid: " + result.ErrorCode);
+                CheckEqual(110L, result.UnitBuyPrice, "TradeItem modifier UnitBuyPrice");
+                CheckEqual(100L, result.UnitSellPrice, "TradeItem modifier UnitSellPrice");
+
+                EconomyM1LoopResult loopResult = EconomyM1LoopCalculator.Execute(
+                    LjhEconomyM1InputAdapter.ToEconomyM1LoopInput(
+                        saveData,
+                        item,
+                        route,
+                        1,
+                        "sandbox_adapter_test",
+                        1L,
+                        false,
+                        string.Empty,
+                        0,
+                        0));
+
+                Check(loopResult.Success, "Sandbox data M1 loop should succeed: " + loopResult.ErrorCode);
+                CheckEqual(110L, loopResult.PriceResult.TotalBuyPrice, "Sandbox loop TotalBuyPrice");
+                CheckEqual(100L, loopResult.PriceResult.TotalSellPrice, "Sandbox loop TotalSellPrice");
+                CheckEqual(-60L, loopResult.Settlement.NetProfit, "Sandbox loop NetProfit");
+                CheckEqual(940L, loopResult.FinalCurrencyState.TradeMoney, "Sandbox loop final TradeMoney");
+                CheckEqual(1L, loopResult.FinalCurrencyState.DevelopmentCurrency, "Sandbox loop final DevelopmentCurrency");
+
+                LjhEconomyM1InputAdapter.ApplyFinalCurrencyState(saveData, loopResult.FinalCurrencyState);
+                CheckEqual(940L, saveData.player.tradingCurrency, "Applied SaveData tradingCurrency");
+                CheckEqual(1L, saveData.player.developmentCurrency, "Applied SaveData developmentCurrency");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(item);
+                UnityEngine.Object.DestroyImmediate(fromTown);
+                UnityEngine.Object.DestroyImmediate(toTown);
+                UnityEngine.Object.DestroyImmediate(route);
+            }
         }
 
         private static void SettlementCalculator_ReturnsExpectedM1Settlement()
@@ -546,6 +739,124 @@ namespace ND.Economy.Editor
             CheckEqual(10, lastResult.RuntimeStats.MaxLoadBonus, "Repeat final MaxLoadBonus");
         }
 
+        private static void EconomyM1FlowService_AppliesSuccessfulResultToSaveData()
+        {
+            global::TradeItemData item = UnityEngine.ScriptableObject.CreateInstance<global::TradeItemData>();
+            global::TownData fromTown = UnityEngine.ScriptableObject.CreateInstance<global::TownData>();
+            global::TownData toTown = UnityEngine.ScriptableObject.CreateInstance<global::TownData>();
+            global::RouteData route = UnityEngine.ScriptableObject.CreateInstance<global::RouteData>();
+
+            try
+            {
+                SetPrivateField(item, "itemId", "apple");
+                SetPrivateField(item, "baseBuyPrice", 100L);
+                SetPrivateField(item, "baseSellPrice", 140L);
+                SetPrivateField(fromTown, "townId", "town_start");
+                SetPrivateField(toTown, "townId", "town_trade_01");
+                SetPrivateField(route, "routeId", "route_01");
+                SetPrivateField(route, "fromTown", fromTown);
+                SetPrivateField(route, "toTown", toTown);
+                SetPrivateField(route, "baseFoodCost", 50L);
+
+                global::SaveData saveData = new global::SaveData();
+                saveData.player.tradingCurrency = 1000L;
+
+                EconomyM1LoopResult result = EconomyM1FlowService.ExecuteTradeAndApply(
+                    saveData,
+                    item,
+                    route,
+                    1,
+                    "flow_service_test",
+                    1L,
+                    false,
+                    string.Empty,
+                    0,
+                    0);
+
+                Check(result.Success, "M1 flow service should succeed: " + result.ErrorCode);
+                CheckEqual(990L, saveData.player.tradingCurrency, "Flow service saved TradeMoney");
+                CheckEqual(1L, saveData.player.developmentCurrency, "Flow service saved DevelopmentCurrency");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(item);
+                UnityEngine.Object.DestroyImmediate(fromTown);
+                UnityEngine.Object.DestroyImmediate(toTown);
+                UnityEngine.Object.DestroyImmediate(route);
+            }
+        }
+
+        private static void EconomyM1SettlementViewAdapter_ProvidesDisplayOnlyResult()
+        {
+            EconomyM1LoopResult result = EconomyM1LoopCalculator.Execute(new EconomyM1LoopInput
+            {
+                PriceInput = new PriceCalculationInput
+                {
+                    TradeItemId = "apple",
+                    FromTownId = "town_start",
+                    ToTownId = "town_trade_01",
+                    RouteId = "route_01",
+                    Quantity = 1,
+                    BaseBuyPrice = 100,
+                    BaseSellPrice = 140
+                },
+                CurrencyState = new CurrencyState
+                {
+                    TradeMoney = 1000,
+                    DevelopmentCurrency = 0
+                },
+                TradeId = "ui_view_test",
+                FoodCost = 50,
+                DevelopmentCurrencyReward = 1
+            });
+
+            EconomyM1SettlementViewData viewData = EconomyM1SettlementViewAdapter.Create(result);
+
+            Check(viewData.Success, "Settlement view data should keep success result.");
+            CheckEqual(result.PriceResult, viewData.PriceResult, "View PriceResult reference");
+            CheckEqual(result.Settlement, viewData.Settlement, "View Settlement reference");
+            CheckEqual(result.Settlement.Entries, viewData.Settlement.Entries, "View Settlement entries reference");
+            CheckEqual(-10L, viewData.Settlement.NetProfit, "View NetProfit");
+        }
+
+        private static void EconomyM1TestContentAssets_ExecuteM1Flow()
+        {
+            const string ItemPath = "Assets/_Project/03.Economy/07_TestContent/EconomyM1_Apple.asset";
+            const string RoutePath = "Assets/_Project/03.Economy/07_TestContent/EconomyM1_Route.asset";
+
+            global::TradeItemData item = UnityEditor.AssetDatabase.LoadAssetAtPath<global::TradeItemData>(ItemPath);
+            global::RouteData route = UnityEditor.AssetDatabase.LoadAssetAtPath<global::RouteData>(RoutePath);
+
+            Check(item != null, "M1 test TradeItemData asset is missing: " + ItemPath);
+            Check(route != null, "M1 test RouteData asset is missing: " + RoutePath);
+            CheckEqual(100L, item.BaseBuyPrice, "M1 test asset BaseBuyPrice");
+            CheckEqual(140L, item.BaseSellPrice, "M1 test asset BaseSellPrice");
+            CheckEqual(50L, route.BaseFoodCost, "M1 test asset BaseFoodCost");
+            CheckEqual(0L, route.BaseMercenaryCost, "M1 test asset BaseMercenaryCost");
+
+            global::SaveData saveData = new global::SaveData();
+            saveData.player.tradingCurrency = 1000L;
+
+            EconomyM1LoopResult result = EconomyM1FlowService.ExecuteTradeAndApply(
+                saveData,
+                item,
+                route,
+                1,
+                "m1_content_asset_test",
+                1L,
+                false,
+                string.Empty,
+                0,
+                0);
+
+            Check(result.Success, "M1 test content flow should succeed: " + result.ErrorCode);
+            CheckEqual(100L, result.PriceResult.TotalBuyPrice, "M1 content TotalBuyPrice");
+            CheckEqual(140L, result.PriceResult.TotalSellPrice, "M1 content TotalSellPrice");
+            CheckEqual(-10L, result.Settlement.NetProfit, "M1 content NetProfit");
+            CheckEqual(990L, saveData.player.tradingCurrency, "M1 content saved TradeMoney");
+            CheckEqual(1L, saveData.player.developmentCurrency, "M1 content saved DevelopmentCurrency");
+        }
+
         private static void EconomyM1SmokeScenario_Run_Succeeds()
         {
             EconomyM1SmokeResult result = EconomyM1SmokeScenario.Run();
@@ -603,6 +914,19 @@ namespace ND.Economy.Editor
             {
                 throw new InvalidOperationException(label + " expected " + expected + " but was " + actual + ".");
             }
+        }
+
+        private static void SetPrivateField(object target, string fieldName, object value)
+        {
+            System.Reflection.FieldInfo field = target.GetType().GetField(
+                fieldName,
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (field == null)
+            {
+                throw new InvalidOperationException("Missing test field: " + fieldName);
+            }
+
+            field.SetValue(target, value);
         }
     }
 }

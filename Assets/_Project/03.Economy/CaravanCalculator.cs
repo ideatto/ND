@@ -1,0 +1,198 @@
+﻿// =============================================================================
+// CaravanCalculator — 상단 계산 통합 (적재 · 이동 · 식량)  (Core 소유)
+// =============================================================================
+// [담당] Core Gameplay (윤호영)
+//
+// [역할] 상단(CaravanData) 하나에 대한 물리 계산을 한 곳에 모은다.
+//        호출 시 계산기 하나만 기억하면 됨:  CaravanCalculator.xxx
+//        · 적재: GetCurrentLoad / GetMaxLoad
+//        · 이동: GetSpeedEfficiency / GetLoadEfficiency / GetTravelSeconds ...
+//        · 식량: GetConsumptionPerSec / GetRequiredFood / GetRemainingFood  (시간 기반 — 초당 소모)
+//
+//        튜닝 값(기준속도·효율·감속 등)은 CaravanConfig 에 분리돼 있다.
+//        UnityEngine 의존 없음 → 순수 로직 테스트 가능.
+//
+// [값만 계산, 판단 안 함] "부족하니 막아라/경고해라"는 정하지 않는다. UI/검증이 결정.
+// =============================================================================
+
+using System.Collections.Generic;
+
+namespace ND.Economy
+{
+/// <summary>
+/// Core 원본과 분리된 CaravanCalculator 수정본.
+/// Core가 검토 후 원본 구현과 교체할 수 있도록 동일 계산 API를 유지한다.
+/// </summary>
+public static class CaravanCalculator
+{
+    // 식량 부족 → 속도 감소
+    // 식량효율 = 1 - FoodShortagePenalty × (부족식량 / 필요식량)
+    // FoodSpeedMultiplierMin 밑으로는 내려가지 않는다.
+    public const float FoodShortagePenalty = 0.5f;
+    public const float FoodSpeedMultiplierMin = 0.5f;
+
+    // =========================================================================
+    // 적재 (Load)
+    // =========================================================================
+
+    /// <summary>현재 적재 총 무게 = 무역품 무게 합 + 식량 무게 합.</summary>
+    public static float GetCurrentLoad(CaravanData caravan)
+    {
+        if (caravan == null) return 0f;
+
+        float total = 0f;
+        foreach (CargoEntry entry in caravan.cargo)
+        {
+            if (entry != null && entry.item != null)
+                total += entry.item.weight * entry.quantity;
+        }
+        total += caravan.foodAmount * caravan.foodUnitWeight;
+        return total;
+    }
+
+    /// <summary>물리 상한 = 마차 maxLoad. 마차 없으면 0.</summary>
+    public static float GetMaxLoad(CaravanData caravan)
+    {
+        return (caravan != null && caravan.wagon != null) ? caravan.wagon.maxLoad : 0f;
+    }
+
+    /// <summary>실은 무역품 총 개수 = 상품별 수량 합.</summary>
+    public static int GetCargoCount(CaravanData caravan)
+    {
+        if (caravan == null) return 0;
+
+        int total = 0;
+        foreach (CargoEntry entry in caravan.cargo)
+        {
+            if (entry != null) total += entry.quantity;
+        }
+        return total;
+    }
+
+    // =========================================================================
+    // 이동 (Travel)   속도 = 기준속도 × 동물수효율 × 적재효율 × 동물종류속도 × 마차보정
+    // =========================================================================
+
+    /// <summary>동물 수 → 속도 효율 배수. (1→1.0 / 2→1.5 / 3→2.0)</summary>
+    public static float GetSpeedEfficiency(int animalCount)
+    {
+        if (animalCount <= 1) return 1f;
+
+        float eff = 1f + global::CaravanConfig.PerExtraAnimal * (animalCount - 1);
+        if (global::CaravanConfig.MaxEfficiency > 0f && eff > global::CaravanConfig.MaxEfficiency)
+            eff = global::CaravanConfig.MaxEfficiency;
+        return eff;
+    }
+
+    /// <summary>적재 무게 → 속도 효율 배수. 기준선(overLoad) 이하 1.0, 넘으면 감속.</summary>
+    public static float GetLoadEfficiency(float currentLoad, float overLoad)
+    {
+        if (overLoad <= 0f) return 1f;
+        if (currentLoad <= overLoad) return 1f;
+
+        float overRatio = (currentLoad - overLoad) / overLoad;
+        float factor = 1f - global::CaravanConfig.LoadPenalty * overRatio;
+        if (factor < global::CaravanConfig.LoadFactorMin) factor = global::CaravanConfig.LoadFactorMin;
+        return factor;
+    }
+
+    /// <summary>출발 시 예상 식량 부족분 → 속도 효율 배수. 필요량 이상이면 1.0, 부족하면 감속.</summary>
+    public static float GetFoodEfficiency(float loadedFood, float requiredFood)
+    {
+        if (requiredFood <= 0f || loadedFood >= requiredFood) return 1f;
+
+        float shortageRatio = (requiredFood - loadedFood) / requiredFood;
+        float factor = 1f - FoodShortagePenalty * shortageRatio;
+        if (factor < FoodSpeedMultiplierMin) factor = FoodSpeedMultiplierMin;
+        return factor;
+    }
+
+    /// <summary>[미정 자리 — 1.0] 동물 종류별 속도. imsiAnimalData.speed 생기면 반영.</summary>
+    public static float GetAnimalTypeSpeed(List<imsiAnimalData> animals)
+    {
+        if (animals == null || animals.Count == 0) return 1f;
+
+        float sum = 0f;
+        int count = 0;
+        foreach (imsiAnimalData a in animals)
+        {
+            if (a != null) { sum += a.speed; count++; }
+        }
+        return count > 0 ? sum / count : 1f;   // 동물들 속도의 '평균'
+    }
+
+    /// <summary>[미정 자리] 마차 속도 보정. speedModifier 0/미설정이면 1.0(중립).</summary>
+    public static float GetWagonSpeedModifier(imsiWagonData wagon)
+    {
+        if (wagon != null && wagon.speedModifier > 0f) return wagon.speedModifier;
+        return 1f;
+    }
+
+    /// <summary>1마리 기준 속도 (Km/초).</summary>
+    public static float GetBaseSpeedKmPerSec()
+    {
+        if (global::CaravanConfig.BaseSeconds <= 0f) return 0f;
+        return global::CaravanConfig.BaseDistanceKm / global::CaravanConfig.BaseSeconds;
+    }
+
+    /// <summary>거리(Km) → 소요 시간(초). 과적과 출발 시 예상 식량 부족을 속도에 반영.</summary>
+    public static float GetTravelSeconds(CaravanData caravan, float distanceKm)
+    {
+        if (caravan == null) return 0f;
+
+        float currentLoad = GetCurrentLoad(caravan);
+        float overLoad = (caravan.wagon != null) ? caravan.wagon.overLoad : 0f;
+
+        float baseSpeed = GetBaseSpeedKmPerSec()
+                        * GetSpeedEfficiency(caravan.animals.Count)
+                        * GetLoadEfficiency(currentLoad, overLoad)
+                        * GetAnimalTypeSpeed(caravan.animals)
+                        * GetWagonSpeedModifier(caravan.wagon);
+
+        if (baseSpeed <= 0f) return 0f;
+
+        float baseTravelSeconds = distanceKm / baseSpeed;
+        float requiredFood = GetConsumptionPerSec(caravan) * baseTravelSeconds;
+        float foodEfficiency = GetFoodEfficiency(caravan.foodAmount, requiredFood);
+        float speed = baseSpeed * foodEfficiency;
+        return distanceKm / speed;
+    }
+
+    // =========================================================================
+    // 식량 (Food) — [2026-07-09 팀결정] '시간' 기준으로 소모한다. (거리 기준 폐기)
+    //   1단계(지금): 초당 소모.  2단계(이후): 인게임 시간 배율 적용한 시간당 소모(GameTimeService.TimeScale).
+    //   남은 식량 = 실은 식량 - (초당소모 × 흐른 시간) - 이벤트 차감
+    // =========================================================================
+
+    /// <summary>초당 식량 소모 = 동물들의 소모율 합. 동물 많을수록 커짐.</summary>
+    public static float GetConsumptionPerSec(CaravanData caravan)
+    {
+        if (caravan == null) return 0f;
+
+        float perSec = 0f;
+        foreach (imsiAnimalData a in caravan.animals)
+        {
+            // a.foodPerKm 은 팀결정(시간기준)으로 이제 '초당' 소모율로 해석한다. (필드명은 SO 교체 때 rename 예정)
+            if (a != null) perSec += a.foodPerKm;
+        }
+        return perSec;
+    }
+
+    /// <summary>이 무역에 필요한 총 식량(출발 전 UI 표시용) = 초당 소모 × 총 소요 시간(초).</summary>
+    public static float GetRequiredFood(CaravanData caravan)
+    {
+        if (caravan == null) return 0f;
+        return GetConsumptionPerSec(caravan) * caravan.totalSeconds;
+    }
+
+    /// <summary>지금 진행도에서 남은 식량. 0 이하면 바닥(실패 판정은 JourneyRunner).</summary>
+    public static float GetRemainingFood(CaravanData caravan)
+    {
+        if (caravan == null) return 0f;
+
+        float elapsedSec = caravan.progress01 * caravan.totalSeconds;   // 흐른 시간(초)
+        float consumed = GetConsumptionPerSec(caravan) * elapsedSec;
+        return caravan.foodAmount - consumed - caravan.runFoodLost;
+    }
+}
+}
