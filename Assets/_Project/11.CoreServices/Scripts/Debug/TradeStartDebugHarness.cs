@@ -9,6 +9,7 @@
  * Main Features
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
  * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
+ * - ForceSeason / ForceDisaster / ForceRouteEvent ContextMenu로 M2 월드 debug API를 호출한다.
  *
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
@@ -21,6 +22,7 @@
  * - RunM1LoopIntegritySmoke(): 출발-정산-claim loop를 3회 검증한다.
  * - RunEconomyE2ESmoke(): settle preview 후 currency 불변, claim 후 currency 변화를 3회 검증한다.
  * - RunInGameFoodConsumptionSmoke(): 인게임 배율에 따른 식량 소모 연동을 검증한다.
+ * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling inject hook을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
@@ -41,6 +43,15 @@ namespace ND.Framework
         [SerializeField] private float distanceKm = 100f;
         [SerializeField] private float starveGraceSeconds = 5f;
         [SerializeField] private CaravanData caravan = new CaravanData();
+
+        [Tooltip("ForceSeason ContextMenu에 사용할 계절 ID입니다.")]
+        [SerializeField] private string debugSeasonId = "winter";
+
+        [Tooltip("ForceDisaster ContextMenu에 사용할 재난 ID입니다. 빈 문자열이면 재난 없음을 의미합니다.")]
+        [SerializeField] private string debugDisasterId = "drought";
+
+        [Tooltip("ForceRouteEvent ContextMenu에 사용할 route event ID입니다. Traveling trade가 필요합니다.")]
+        [SerializeField] private string debugRouteEventId = "debug_route_event_001";
 
         /// <summary>
         /// Day 단위 raw 식량 소모율 샘플. InGameTimePolicyConfig.FoodConsumptionUnit=Day일 때 인게임 초당 0.1로 정규화된다.
@@ -477,6 +488,51 @@ namespace ND.Framework
                 $"InGame food consumption smoke passed. Elapsed in-game: {caravan.elapsedInGameSeconds:0.#}s, Food {foodBefore:0.#} -> {foodAfter:0.#}");
         }
 
+        /// <summary>
+        /// WorldSaveData.currentSeasonId를 강제 변경하고 저장한다.
+        /// </summary>
+        [ContextMenu("Framework/Force Season")]
+        public void ForceSeason()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            commands.ForceSeason(debugSeasonId);
+        }
+
+        /// <summary>
+        /// WorldSaveData.currentDisasterId를 강제 변경하고 저장한다.
+        /// </summary>
+        [ContextMenu("Framework/Force Disaster")]
+        public void ForceDisaster()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            commands.ForceDisaster(debugDisasterId);
+        }
+
+        /// <summary>
+        /// Traveling trade에 route event 1회 주입 hook을 등록한다.
+        /// </summary>
+        /// <remarks>
+        /// StartTradeAndRecordTime()으로 Traveling 상태를 만든 뒤 호출해야 한다.
+        /// </remarks>
+        [ContextMenu("Framework/Force Route Event")]
+        public void ForceRouteEvent()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            commands.ForceRouteEvent(debugRouteEventId);
+        }
+
         private void ApplyConsumptionRateNormalization()
         {
             var gameTime = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.GameTime : null;
@@ -506,6 +562,19 @@ namespace ND.Framework
             }
 
             return FrameworkRoot.Instance.TradeProgressCoordinator;
+        }
+
+        private static bool TryGetDebugCommands(out FrameworkDebugCommands commands)
+        {
+            commands = null;
+            if (FrameworkRoot.Instance == null || FrameworkRoot.Instance.DebugCommands == null)
+            {
+                FrameworkLog.Warning("Debug harness command skipped because FrameworkRoot.DebugCommands is not ready.");
+                return false;
+            }
+
+            commands = FrameworkRoot.Instance.DebugCommands;
+            return true;
         }
     }
 }

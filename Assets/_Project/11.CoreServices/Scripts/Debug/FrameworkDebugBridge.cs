@@ -10,10 +10,11 @@
  * - debug time scale 적용과 reset을 제공한다.
  * - 무역 즉시 완료와 load completed 강제 발행 ContextMenu를 제공한다.
  * - 공용 데이터 로드 요약을 ContextMenu에서 출력한다.
+ * - ForceSeason / ForceDisaster / ForceRouteEvent ContextMenu를 제공한다.
  *
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가하고 ContextMenu 항목을 실행한다.
- * - debugTimeScale 값을 Inspector에서 조정할 수 있다.
+ * - debugTimeScale, debugSeasonId 등 값을 Inspector에서 조정할 수 있다.
  *
  * Main Public APIs
  * - SetDebugTimeScale(): debugTimeScale 값을 적용한다.
@@ -21,6 +22,7 @@
  * - CompleteTradeImmediately(): active trade 즉시 완료를 요청한다.
  * - ForceLoadCompleted(): LoadCompleted 이벤트를 강제로 발행한다.
  * - LogSharedGameDataSummary(): SharedGameData 요약을 로그로 출력한다.
+ * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): M2 월드 Force* debug API를 호출한다.
  *
  * Important Notes
  * - FrameworkRoot.Instance가 준비되어 있어야 정상 동작한다.
@@ -37,6 +39,15 @@ namespace ND.Framework
     {
         [SerializeField] private float debugTimeScale = 10f;
         [SerializeField] private float debugInGameTimeMultiplier = 60f;
+
+        [Tooltip("ForceSeason ContextMenu에 사용할 계절 ID입니다.")]
+        [SerializeField] private string debugSeasonId = "winter";
+
+        [Tooltip("ForceDisaster ContextMenu에 사용할 재난 ID입니다. 빈 문자열이면 재난 없음을 의미합니다.")]
+        [SerializeField] private string debugDisasterId = "drought";
+
+        [Tooltip("ForceRouteEvent ContextMenu에 사용할 route event ID입니다. Traveling trade가 필요합니다.")]
+        [SerializeField] private string debugRouteEventId = "debug_route_event_001";
 
         /// <summary>
         /// Inspector에 설정된 debug time scale을 적용한다.
@@ -122,6 +133,61 @@ namespace ND.Framework
         {
             // M0 통합 중 UI 없이도 공용 데이터 로드 여부를 확인할 수 있게 한다.
             FrameworkRoot.Instance.DebugCommands.LogSharedGameDataSummary();
+        }
+
+        /// <summary>
+        /// Inspector의 debugSeasonId로 WorldSaveData.currentSeasonId를 강제 변경한다.
+        /// </summary>
+        [ContextMenu("Framework/Force Season")]
+        public void ForceSeason()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            commands.ForceSeason(debugSeasonId);
+        }
+
+        /// <summary>
+        /// Inspector의 debugDisasterId로 WorldSaveData.currentDisasterId를 강제 변경한다.
+        /// </summary>
+        [ContextMenu("Framework/Force Disaster")]
+        public void ForceDisaster()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            commands.ForceDisaster(debugDisasterId);
+        }
+
+        /// <summary>
+        /// Inspector의 debugRouteEventId로 Traveling trade route event 주입 hook을 등록한다.
+        /// </summary>
+        [ContextMenu("Framework/Force Route Event")]
+        public void ForceRouteEvent()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            commands.ForceRouteEvent(debugRouteEventId);
+        }
+
+        private static bool TryGetDebugCommands(out FrameworkDebugCommands commands)
+        {
+            commands = null;
+            if (FrameworkRoot.Instance == null || FrameworkRoot.Instance.DebugCommands == null)
+            {
+                FrameworkLog.Warning("Debug bridge command skipped because FrameworkRoot.DebugCommands is not ready.");
+                return false;
+            }
+
+            commands = FrameworkRoot.Instance.DebugCommands;
+            return true;
         }
     }
 }

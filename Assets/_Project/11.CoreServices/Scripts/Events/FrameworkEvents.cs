@@ -8,6 +8,7 @@
  *
  * Main Features
  * - 공용 데이터 준비 완료, 저장 데이터 로드 완료, scene 변경, 무역 완료/정산, 인게임 화면 상태 변경 이벤트를 제공한다.
+ * - debug ForceRouteEvent 주입 hook 알림을 제공한다.
  * - 이벤트 발행 시 framework log를 남겨 디버그 흐름을 추적할 수 있게 한다.
  *
  * Usage for Team Members
@@ -20,6 +21,7 @@
  * - RaiseSceneChanged(...): Unity scene 전환 완료를 알린다.
  * - RaiseTradeSettlementReady(...): 무역 정산 결과가 UI에 표시될 준비가 되었음을 알린다.
  * - RaiseInGameScreenChanged(...): 인게임 화면 상태 변경을 알린다.
+ * - RaiseRouteEventForced(...): debug route event 1회 주입 hook을 알린다.
  *
  * Important Notes
  * - static event bus이므로 구독 해제를 누락하면 비활성 객체가 이벤트를 계속 받을 수 있다.
@@ -76,6 +78,16 @@ namespace ND.Framework
         /// 인게임 화면 상태가 preparation, traveling, settlement 중 하나로 변경될 때 발생한다.
         /// </summary>
         public static event Action<InGameScreenState> InGameScreenChanged;
+
+        /// <summary>
+        /// debug ForceRouteEvent가 Traveling trade에 route event 1회 주입 hook을 등록했을 때 발생한다.
+        /// </summary>
+        /// <remarks>
+        /// 인자 순서는 tradeId, eventId이다.
+        /// Core 로드/약탈 적용 API가 연결되기 전까지는 Framework stub hook이며, 구독자는 중복 처리를 방지해야 한다.
+        /// FrameworkDebugCommands.TryConsumeForcedRouteEvent로 pending hook을 1회 소모할 수 있다.
+        /// </remarks>
+        public static event Action<string, string> RouteEventForced;
 
         /// <summary>
         /// 공용 기준 데이터 준비 완료 이벤트를 발행한다.
@@ -174,6 +186,21 @@ namespace ND.Framework
             // 화면 router의 상태 변화는 UI 패널 전환의 기준이므로 상태값을 로그에 남긴다.
             FrameworkLog.Info($"InGameScreenChanged event raised. ScreenState: {screenState}");
             InGameScreenChanged?.Invoke(screenState);
+        }
+
+        /// <summary>
+        /// debug route event 1회 주입 hook 등록 이벤트를 발행한다.
+        /// </summary>
+        /// <param name="tradeId">주입 대상 active trade ID.</param>
+        /// <param name="eventId">주입할 route event ID.</param>
+        /// <remarks>
+        /// FrameworkDebugCommands.ForceRouteEvent가 Traveling 검증 후 호출한다.
+        /// Core 적용은 구독자 또는 TryConsumeForcedRouteEvent 경로에서 처리한다.
+        /// </remarks>
+        public static void RaiseRouteEventForced(string tradeId, string eventId)
+        {
+            FrameworkLog.Info($"RouteEventForced event raised. TradeId: {tradeId}, EventId: {eventId}");
+            RouteEventForced?.Invoke(tradeId, eventId);
         }
     }
 }
