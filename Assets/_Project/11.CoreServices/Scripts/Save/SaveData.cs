@@ -8,8 +8,9 @@
  *
  * Main Features
  * - 현재 저장 schema version을 제공한다.
- * - Core caravan runtime data를 직렬화 가능한 DTO 형태로 보관한다.
+ * - Core caravan runtime data(M2 포함)를 직렬화 가능한 DTO 형태로 보관한다.
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
+ * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
  *
  * Usage for Team Members
  * - JsonSaveService가 SaveData를 생성, 로드, 저장한다.
@@ -23,7 +24,7 @@
  * Important Notes
  * - Unity JsonUtility 직렬화를 위해 DTO는 public field 중심으로 구성되어 있다.
  * - 시간 값은 UTC DateTime.Ticks 기준으로 저장된다.
- * - progress01은 0부터 1 사이의 진행률 의미로 사용되지만, 보정은 Core 계산 로직에 따른다.
+ * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
  */
 using System;
 using System.Collections.Generic;
@@ -42,7 +43,7 @@ namespace ND.Framework
         /// <summary>
         /// 현재 코드가 지원하는 저장 데이터 schema version이다.
         /// </summary>
-        public const int CurrentVersion = 3;
+        public const int CurrentVersion = 4;
 
         /// <summary>
         /// 저장 데이터 schema version이다.
@@ -55,7 +56,7 @@ namespace ND.Framework
         public long lastSavedUtcTicks;
 
         /// <summary>
-        /// 플레이어 위치와 보유 재화를 저장하는 데이터이다.
+        /// 플레이어 위치, 재화, growth level을 저장하는 데이터이다.
         /// </summary>
         public PlayerSaveData player = new PlayerSaveData();
 
@@ -70,7 +71,7 @@ namespace ND.Framework
         public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
 
         /// <summary>
-        /// 월드 계절과 재난 상태를 저장하는 데이터이다.
+        /// 월드 계절, 재난, unlock 목록을 저장하는 데이터이다.
         /// </summary>
         public WorldSaveData world = new WorldSaveData();
 
@@ -81,7 +82,7 @@ namespace ND.Framework
     }
 
     /// <summary>
-    /// 플레이어의 현재 위치와 재화 상태를 저장하는 DTO이다.
+    /// 플레이어의 현재 위치, 재화, growth level을 저장하는 DTO이다.
     /// </summary>
     [Serializable]
     public sealed class PlayerSaveData
@@ -92,18 +93,28 @@ namespace ND.Framework
         public string currentTownId = string.Empty;
 
         /// <summary>
-        /// 거래에 사용하는 재화량이다.
+        /// 거래에 사용하는 재화량이다. 단위: abstract trade money (long).
         /// </summary>
-        public int tradingCurrency = 1000;
+        public long tradingCurrency = 1000;
 
         /// <summary>
-        /// 개발 또는 성장에 사용하는 재화량이다.
+        /// 개발 또는 성장에 사용하는 재화량이다. 단위: abstract development currency (long).
         /// </summary>
-        public int developmentCurrency;
+        public long developmentCurrency;
+
+        /// <summary>
+        /// 플레이어 growth level이다. Economy M1 runtime stat 계산에 사용한다.
+        /// </summary>
+        public int playerGrowthLevel;
+
+        /// <summary>
+        /// caravan growth level이다. Economy M1 runtime stat 계산에 사용한다.
+        /// </summary>
+        public int caravanGrowthLevel;
     }
 
     /// <summary>
-    /// caravan의 구성, 적재, 여정 진행 상태를 저장하는 DTO이다.
+    /// caravan의 구성, 적재, 여정 진행 상태(M2 포함)를 저장하는 DTO이다.
     /// </summary>
     /// <remarks>
     /// runtime CaravanData와 직접 동일하지 않으므로 CaravanSaveDataMapper를 통해 변환해야 한다.
@@ -185,6 +196,66 @@ namespace ND.Framework
         /// 이번 run의 치명적 실패 원인이다.
         /// </summary>
         public JourneyFailureReason runFatalReason = JourneyFailureReason.None;
+
+        /// <summary>
+        /// 현재 마차 내구도이다. 0 이하면 출발 불가(BrokenWagon)로 검증된다.
+        /// </summary>
+        public int currentDurability;
+
+        /// <summary>
+        /// 이번 무역 약탈 내구도 손실 누적이다.
+        /// </summary>
+        public int runDurabilityLost;
+
+        /// <summary>
+        /// 이번 무역 전투 횟수이다.
+        /// </summary>
+        public int runBattlesFought;
+
+        /// <summary>
+        /// 이번 무역 출발 시 내구도이다.
+        /// </summary>
+        public int runStartDurability;
+
+        /// <summary>
+        /// 거리 마모 소수점 이월 값이다.
+        /// </summary>
+        public float runWearRemainder;
+
+        /// <summary>
+        /// 이번 무역 식량 바닥 여부이다.
+        /// </summary>
+        public bool runFoodDepleted;
+
+        /// <summary>
+        /// 식량이 바닥난 시점의 진행도(0~1)이다.
+        /// </summary>
+        public float runFoodDepletedProgress;
+
+        /// <summary>
+        /// 식량 바닥 후 도착 제한 시간(초)이다.
+        /// </summary>
+        public float starveGraceSeconds;
+
+        /// <summary>
+        /// 손실 상한율(0~1)이다. 1이면 무제한이다.
+        /// </summary>
+        public float lossLimitRate = 1f;
+
+        /// <summary>
+        /// 약탈 내구도 손실에 손실 상한을 적용할지 여부이다.
+        /// </summary>
+        public bool limitRaidDurability = true;
+
+        /// <summary>
+        /// 출발 시 원래 무역품 개수이다.
+        /// </summary>
+        public int runOriginalCargoCount;
+
+        /// <summary>
+        /// 출발 시 짐무게이다.
+        /// </summary>
+        public float runDepartureLoad;
     }
 
     /// <summary>
@@ -199,10 +270,12 @@ namespace ND.Framework
         public int minAnimals;
         public int maxAnimals;
         public float speedModifier;
+        public int maxDurability = 100;
+        public int inventorySlotCount = 1;
     }
 
     /// <summary>
-    /// caravan 동물 한 개체의 이동/식량 정보를 저장하는 DTO이다.
+    /// caravan 동물 한 개체의 이동/식량/M2 효율 정보를 저장하는 DTO이다.
     /// </summary>
     [Serializable]
     public sealed class AnimalSaveData
@@ -210,6 +283,9 @@ namespace ND.Framework
         public string animalName = string.Empty;
         public float speed = 1f;
         public float foodPerKm;
+        public float increaseOverLoad;
+        public float increaseMaxLoad;
+        public DraftAnimalType animalType;
     }
 
     /// <summary>
@@ -243,6 +319,7 @@ namespace ND.Framework
         public string itemName = string.Empty;
         public float weight;
         public long basePrice;
+        public int maxCount = 1;
     }
 
     /// <summary>
@@ -283,13 +360,35 @@ namespace ND.Framework
     }
 
     /// <summary>
-    /// 월드 계절과 재난 상태를 저장하는 DTO이다.
+    /// 월드 계절, 재난, unlock 목록을 저장하는 DTO이다.
     /// </summary>
     [Serializable]
     public sealed class WorldSaveData
     {
+        /// <summary>
+        /// 현재 계절 ID이다. Economy PriceCalculationInput.SeasonId와 연결된다.
+        /// </summary>
         public string currentSeasonId = "summer";
+
+        /// <summary>
+        /// 현재 재난 ID이다. Economy PriceCalculationInput.DisasterId와 연결된다.
+        /// </summary>
         public string currentDisasterId = string.Empty;
+
+        /// <summary>
+        /// unlock된 마을 ID 목록이다.
+        /// </summary>
+        public List<string> unlockedTownIds = new List<string>();
+
+        /// <summary>
+        /// unlock된 route ID 목록이다.
+        /// </summary>
+        public List<string> unlockedRouteIds = new List<string>();
+
+        /// <summary>
+        /// 완료된 route ID 목록이다.
+        /// </summary>
+        public List<string> completedRouteIds = new List<string>();
     }
 
     /// <summary>

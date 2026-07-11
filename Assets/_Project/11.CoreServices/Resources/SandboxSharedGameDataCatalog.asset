@@ -19,6 +19,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 53ff6f350e87d224aac61db15be826f9, type: 2}
   tradeItems:
   - {fileID: 11400000, guid: cbd60f3ba1e2e074da9c37e5540c03d3, type: 2}
+  - {fileID: 11400000, guid: 926d44c3a7bd40c799ad6397028e5076, type: 2}
   wagons:
   - {fileID: 11400000, guid: 7de4fcc3bc668084682ba80497b8f8d9, type: 2}
   - {fileID: 11400000, guid: 1f1ec2f7f5822c84a9af199bcccf3565, type: 2}
@@ -26,3 +27,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 166fee137f173b7408311c0424612194, type: 2}
   routes:
   - {fileID: 11400000, guid: a3fd1e2028afb94498ff4141e2c92419, type: 2}
+  - {fileID: 11400000, guid: b7417bcdbc25463a819af2e3d0bc6496, type: 2}

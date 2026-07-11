@@ -4,7 +4,7 @@
  *
  * Script Purpose
  * - SettlementUiBridge의 pending settlement를 ISettlementView 구현체가 표시할 SettlementViewData로 변환한다.
- * - settlement claim 버튼 입력을 bridge의 claim 처리로 전달한다.
+ * - SettlementViewData의 long 금액과 M2 계산값을 UI view model로 변환한다.
  *
  * Main Features
  * - InGameScreenChanged와 SettlementReady 이벤트를 구독해 settlement view를 갱신한다.
@@ -171,11 +171,15 @@ namespace ND.Framework
                 tradeId,
                 result.grade,
                 result.failureReason,
-                // [임시 캐스팅] JourneyResultData는 돈=long(팀 결정)인데 SettlementViewData는 아직 int.
-                //   값이 21억 넘으면 손실됨 → 추후 SettlementViewData를 long으로 바꾸고 이 (int) 제거할 것.
-                (int)result.revenue,
-                (int)result.cost,
-                (int)result.netProfit,
+                result.revenue,
+                result.cost,
+                result.netProfit,
+                result.cargoLost,
+                result.durabilityLost,
+                result.travelSeconds,
+                result.foodConsumed,
+                result.departureLoad,
+                result.overloadRatio,
                 canClaim,
                 CreateStatusMessage(result));
         }

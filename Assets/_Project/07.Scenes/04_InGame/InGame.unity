@@ -2043,6 +2043,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.FrameworkDebugBridge
   debugTimeScale: 10
+  debugInGameTimeMultiplier: 60
 --- !u!4 &1268539406
 Transform:
   m_ObjectHideFlags: 0
@@ -2989,8 +2990,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.TradeStartDebugHarness
   tradeId: debug_trade_001
-  routeId: debug_route_001
+  routeId: dummyroute
   distanceKm: 100
+  starveGraceSeconds: 5
   caravan:
     wagon:
       wagonName: 
@@ -3000,6 +3002,7 @@ MonoBehaviour:
       maxAnimals: 0
       speedModifier: 0
       maxDurability: 100
+      inventorySlotCount: 1
     animals: []
     mercenaries: []
     cargo: []
@@ -3009,6 +3012,7 @@ MonoBehaviour:
     currentDistanceKm: 0
     totalSeconds: 0
     progress01: 0
+    elapsedInGameSeconds: 0
     settlementClaimed: 0
     runCargoLost: 0
     runFoodLost: 0
@@ -3016,9 +3020,15 @@ MonoBehaviour:
     currentDurability: 0
     runDurabilityLost: 0
     runBattlesFought: 0
+    runStartDurability: 0
+    runWearRemainder: 0
     runFoodDepleted: 0
     runFoodDepletedProgress: 0
     starveGraceSeconds: 0
+    lossLimitRate: 1
+    limitRaidDurability: 1
+    runOriginalCargoCount: 0
+    runDepartureLoad: 0
 --- !u!4 &1768299109
 Transform:
   m_ObjectHideFlags: 0

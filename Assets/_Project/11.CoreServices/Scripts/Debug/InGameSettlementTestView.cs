@@ -8,7 +8,7 @@
  *
  * Main Features
  * - InGameScreenChanged 이벤트를 받아 panel active 상태를 전환한다.
- * - SettlementViewData의 trade ID, 등급, 실패 원인, 순이익을 TMP text에 표시한다.
+ * - SettlementViewData의 trade ID, 등급, 실패 원인, long 순이익, M2 계산값을 TMP text에 표시한다.
  * - claim 버튼 interactable 상태를 갱신한다.
  *
  * Usage for Team Members

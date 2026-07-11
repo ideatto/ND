@@ -14,11 +14,13 @@
  * Important Notes
  * - Player build에서는 Resources catalog가 필요하다. Editor path fallback은 Unity Editor 통합 확인용이다.
  * - Sandbox DraftAnimalData.IncreaseMaxLoad는 최신 계약상 사용하지 않으며 경고만 남긴다.
+ * - TradeItem modifier는 Economy M1 가격 계산용 PriceModifierInput 스냅샷으로 변환한다.
  */
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
+using ND.Economy;
 using UnityEngine;
 
 namespace ND.Framework
@@ -334,7 +336,8 @@ namespace ND.Framework
                     MaxCount = item.MaxCount,
                     Weight = item.Weight,
                     IsConsumable = item.IsConsumable,
-                    LocalSpecialty = item.LocalSpecialty
+                    LocalSpecialty = item.LocalSpecialty,
+                    PriceModifiers = ToPriceModifierInputs(item.Modifiers)
                 });
             }
         }
@@ -467,7 +470,9 @@ namespace ND.Framework
                     BaseRequiredFoodQuantity = item.BaseRequiredFoodQuantity,
                     BaseRequiredMercenaryPower = item.BaseRequiredMercenaryPower,
                     BaseRiskLevel = item.BaseRiskLevel,
-                    MaxEventCount = item.MaxEventCount
+                    MaxEventCount = item.MaxEventCount,
+                    BaseFoodCost = item.BaseFoodCost,
+                    BaseMercenaryCost = item.BaseMercenaryCost
                 });
             }
         }
@@ -696,6 +701,109 @@ namespace ND.Framework
             }
 
             return names;
+        }
+
+        private static List<PriceModifierInput> ToPriceModifierInputs(global::ModifierInput[] sourceModifiers)
+        {
+            var priceModifiers = new List<PriceModifierInput>();
+            if (sourceModifiers == null)
+            {
+                return priceModifiers;
+            }
+
+            for (var modifierIndex = 0; modifierIndex < sourceModifiers.Length; modifierIndex++)
+            {
+                var sourceModifier = sourceModifiers[modifierIndex];
+                if (sourceModifier == null
+                    || !TryMapModifierType(sourceModifier.modifierType, out var modifierType)
+                    || sourceModifier.modifierBundles == null)
+                {
+                    continue;
+                }
+
+                for (var bundleIndex = 0; bundleIndex < sourceModifier.modifierBundles.Length; bundleIndex++)
+                {
+                    var bundle = sourceModifier.modifierBundles[bundleIndex];
+                    if (bundle == null
+                        || !TryMapModifierTarget(bundle.modifierTarget, out var target)
+                        || !TryMapModifierOperation(bundle.modifierOperation, out var operation))
+                    {
+                        continue;
+                    }
+
+                    priceModifiers.Add(new PriceModifierInput
+                    {
+                        ModifierType = modifierType,
+                        SourceId = sourceModifier.sourceId ?? string.Empty,
+                        DisplayNameKey = sourceModifier.displayName ?? string.Empty,
+                        Target = target,
+                        Operation = operation,
+                        Value = bundle.value
+                    });
+                }
+            }
+
+            return priceModifiers;
+        }
+
+        private static bool TryMapModifierType(global::ModifierType source, out PriceModifierType target)
+        {
+            switch (source)
+            {
+                case global::ModifierType.Season:
+                    target = PriceModifierType.Season;
+                    return true;
+                case global::ModifierType.Disaster:
+                    target = PriceModifierType.Disaster;
+                    return true;
+                case global::ModifierType.ActiveEvent:
+                    target = PriceModifierType.RouteEvent;
+                    return true;
+                case global::ModifierType.PlayerGrowth:
+                    target = PriceModifierType.PlayerGrowth;
+                    return true;
+                case global::ModifierType.OverSupply:
+                    target = PriceModifierType.Oversupply;
+                    return true;
+                case global::ModifierType.AffectToTown:
+                    target = PriceModifierType.Town;
+                    return true;
+                default:
+                    target = default;
+                    return false;
+            }
+        }
+
+        private static bool TryMapModifierTarget(global::Target source, out PriceModifierTarget target)
+        {
+            switch (source)
+            {
+                case global::Target.BuyPrice:
+                    target = PriceModifierTarget.BuyPrice;
+                    return true;
+                case global::Target.SellPrice:
+                    target = PriceModifierTarget.SellPrice;
+                    return true;
+                default:
+                    target = default;
+                    return false;
+            }
+        }
+
+        private static bool TryMapModifierOperation(global::Operation source, out PriceModifierOperation target)
+        {
+            switch (source)
+            {
+                case global::Operation.Add:
+                    target = PriceModifierOperation.Add;
+                    return true;
+                case global::Operation.Percent:
+                    target = PriceModifierOperation.Percent;
+                    return true;
+                default:
+                    target = default;
+                    return false;
+            }
         }
 
         private void LogResult(List<string> errors, List<string> warnings)
