@@ -9,6 +9,7 @@
  * Main Features
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
  * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
+ * - Pause 중 식량 elapsed 정지 smoke, Failed 정산 화면 smoke, Force* World debug smoke를 제공한다.
  * - ForceSeason / ForceDisaster / ForceRouteEvent ContextMenu로 M2 월드 debug API를 호출한다.
  *
  * Usage for Team Members
@@ -22,11 +23,15 @@
  * - RunM1LoopIntegritySmoke(): 출발-정산-claim loop를 3회 검증한다.
  * - RunEconomyE2ESmoke(): settle preview 후 currency 불변, claim 후 currency 변화를 3회 검증한다.
  * - RunInGameFoodConsumptionSmoke(): 인게임 배율에 따른 식량 소모 연동을 검증한다.
+ * - RunPauseFoodFreezeSmoke(): Pause 중 elapsed/식량이 증가하지 않는지 검증한다.
+ * - RunFailedSettlementScreenSmoke(): Failed grade 정산 화면 진입과 claim 후 Preparation 복귀를 검증한다.
+ * - RunForceWorldDebugSmoke(): ForceSeason/Disaster/RouteEvent 기본 재현을 검증한다.
  * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling inject hook을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
  * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md
  */
 using System;
 using UnityEngine;
@@ -486,6 +491,306 @@ namespace ND.Framework
 
             FrameworkLog.Info(
                 $"InGame food consumption smoke passed. Elapsed in-game: {caravan.elapsedInGameSeconds:0.#}s, Food {foodBefore:0.#} -> {foodAfter:0.#}");
+        }
+
+        /// <summary>
+        /// Pause 중에는 현실 시간 backdate가 있어도 식량용 elapsed와 잔량이 증가·감소하지 않는지 검증한다.
+        /// </summary>
+        /// <remarks>
+        /// Boot flow로 InGame에 진입한 뒤 실행해야 GameTimeService와 coordinator가 준비된다.
+        /// 통과 시 ResumeGameTime()을 호출해 pause 상태를 정리한다.
+        /// </remarks>
+        [ContextMenu("Framework/Run Pause Food Freeze Smoke")]
+        public void RunPauseFoodFreezeSmoke()
+        {
+            var coordinator = GetCoordinator();
+            if (coordinator == null || FrameworkRoot.Instance == null || FrameworkRoot.Instance.TradeStart == null
+                || FrameworkRoot.Instance.GameTime == null)
+            {
+                return;
+            }
+
+            var gameTime = FrameworkRoot.Instance.GameTime;
+            var saveData = FrameworkRoot.Instance.CurrentSaveData;
+            if (saveData == null)
+            {
+                FrameworkLog.Warning("Pause food freeze smoke skipped because save data is not ready.");
+                return;
+            }
+
+            FillSampleCaravan();
+            caravan.foodAmount = 30;
+
+            var smokeTradeId = $"{tradeId}_pause_food_smoke";
+            var startResult = FrameworkRoot.Instance.TradeStart.TryStartTrade(
+                caravan,
+                distanceKm,
+                smokeTradeId,
+                routeId);
+            if (!startResult.canDepart || !FrameworkRoot.Instance.TradeStart.LastRecordSucceeded)
+            {
+                FrameworkLog.Warning("Pause food freeze smoke failed to start trade.");
+                return;
+            }
+
+            coordinator.SetActiveCaravan(caravan);
+            coordinator.CheckProgressAndCompletion(saveProgress: false);
+
+            var elapsedBaseline = caravan.elapsedInGameSeconds;
+            var foodBaseline = CaravanCalculator.GetRemainingFood(caravan);
+
+            gameTime.PauseGameTime();
+            BackdateActiveTradeStart(saveData, 30d);
+            var pausedCheck = coordinator.CheckProgressAndCompletion(saveProgress: false);
+            var elapsedPaused = caravan.elapsedInGameSeconds;
+            var foodPaused = CaravanCalculator.GetRemainingFood(caravan);
+            gameTime.ResumeGameTime();
+
+            if (pausedCheck)
+            {
+                FrameworkLog.Warning("Pause food freeze smoke failed because progress check returned true while paused.");
+                return;
+            }
+
+            if (Mathf.Abs(elapsedPaused - elapsedBaseline) > 0.01f)
+            {
+                FrameworkLog.Warning(
+                    $"Pause food freeze smoke failed: elapsed changed while paused. Baseline: {elapsedBaseline}, Paused: {elapsedPaused}");
+                return;
+            }
+
+            if (Mathf.Abs(foodPaused - foodBaseline) > 0.01f)
+            {
+                FrameworkLog.Warning(
+                    $"Pause food freeze smoke failed: food changed while paused. Baseline: {foodBaseline}, Paused: {foodPaused}");
+                return;
+            }
+
+            FrameworkLog.Info(
+                $"Pause food freeze smoke passed. Elapsed held at {elapsedBaseline:0.#}s, Food held at {foodBaseline:0.#}.");
+        }
+
+        /// <summary>
+        /// 식량 고갈 실패로 Failed 정산이 Settlement 화면에 진입하고 claim 후 Preparation으로 복귀하는지 검증한다.
+        /// </summary>
+        /// <remarks>
+        /// foodAmount=0과 starveGraceSeconds=0으로 FoodDepleted fatal을 즉시 재현한다.
+        /// ForceCompleteActiveTrade 성공 경로는 사용하지 않는다.
+        /// </remarks>
+        [ContextMenu("Framework/Run Failed Settlement Screen Smoke")]
+        public void RunFailedSettlementScreenSmoke()
+        {
+            var coordinator = GetCoordinator();
+            if (coordinator == null || FrameworkRoot.Instance == null || FrameworkRoot.Instance.TradeStart == null)
+            {
+                return;
+            }
+
+            var saveData = FrameworkRoot.Instance.CurrentSaveData;
+            var screenRouter = FrameworkRoot.Instance.InGameScreenRouter;
+            if (saveData == null)
+            {
+                FrameworkLog.Warning("Failed settlement screen smoke skipped because save data is not ready.");
+                return;
+            }
+
+            FillSampleCaravan();
+            caravan.foodAmount = 0f;
+            caravan.starveGraceSeconds = 0f;
+
+            var smokeTradeId = $"{tradeId}_failed_settlement_smoke";
+            var startResult = FrameworkRoot.Instance.TradeStart.TryStartTrade(
+                caravan,
+                distanceKm,
+                smokeTradeId,
+                routeId);
+            if (!startResult.canDepart || !FrameworkRoot.Instance.TradeStart.LastRecordSucceeded)
+            {
+                FrameworkLog.Warning("Failed settlement screen smoke failed to start trade.");
+                return;
+            }
+
+            coordinator.SetActiveCaravan(caravan);
+            BackdateActiveTradeStart(saveData, 1d);
+            var settlementReady = coordinator.CheckProgressAndCompletion(saveProgress: false);
+            if (!settlementReady || coordinator.LastSettlementResult == null)
+            {
+                FrameworkLog.Warning("Failed settlement screen smoke failed because settlement was not created.");
+                return;
+            }
+
+            var result = coordinator.LastSettlementResult;
+            if (result.grade != JourneyResultGrade.Failed)
+            {
+                FrameworkLog.Warning($"Failed settlement screen smoke failed: grade was {result.grade}, expected Failed.");
+                return;
+            }
+
+            if (result.failureReason != JourneyFailureReason.FoodDepleted)
+            {
+                FrameworkLog.Warning(
+                    $"Failed settlement screen smoke failed: failureReason was {result.failureReason}, expected FoodDepleted.");
+                return;
+            }
+
+            if (saveData.tradeProgress == null
+                || saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            {
+                FrameworkLog.Warning(
+                    $"Failed settlement screen smoke failed: trade state was {saveData.tradeProgress?.state}, expected SettlementPending.");
+                return;
+            }
+
+            if (screenRouter != null && screenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                FrameworkLog.Warning(
+                    $"Failed settlement screen smoke failed: screen was {screenRouter.CurrentScreenState}, expected Settlement.");
+                return;
+            }
+
+            var viewData = new SettlementViewData(
+                smokeTradeId,
+                result.grade,
+                result.failureReason,
+                result.revenue,
+                result.cost,
+                result.netProfit,
+                result.cargoLost,
+                result.durabilityLost,
+                result.travelSeconds,
+                result.foodConsumed,
+                result.departureLoad,
+                result.overloadRatio,
+                true,
+                "Trade failed.");
+            if (!viewData.IsFailed)
+            {
+                FrameworkLog.Warning("Failed settlement screen smoke failed because SettlementViewData.IsFailed was false.");
+                return;
+            }
+
+            var firstClaim = coordinator.ClaimSettlementAndReset();
+            var duplicateClaim = coordinator.ClaimSettlementAndReset();
+            if (!firstClaim || duplicateClaim)
+            {
+                FrameworkLog.Warning(
+                    $"Failed settlement screen smoke failed claim validation. First: {firstClaim}, Duplicate: {duplicateClaim}");
+                return;
+            }
+
+            if (saveData.tradeProgress.state != TradeProgressState.Failed)
+            {
+                FrameworkLog.Warning(
+                    $"Failed settlement screen smoke failed: post-claim state was {saveData.tradeProgress.state}, expected Failed.");
+                return;
+            }
+
+            var activeCaravan = coordinator.ActiveCaravan;
+            if (activeCaravan == null || activeCaravan.state != JourneyState.Prepare)
+            {
+                FrameworkLog.Warning("Failed settlement screen smoke failed to return caravan to Prepare.");
+                return;
+            }
+
+            if (screenRouter != null && screenRouter.CurrentScreenState != InGameScreenState.Preparation)
+            {
+                FrameworkLog.Warning(
+                    $"Failed settlement screen smoke failed: post-claim screen was {screenRouter.CurrentScreenState}, expected Preparation.");
+                return;
+            }
+
+            FrameworkLog.Info(
+                "Failed settlement screen smoke passed. Failed grade -> Settlement -> claim -> Preparation/Failed state.");
+        }
+
+        /// <summary>
+        /// ForceSeason / ForceDisaster 저장 반영과 ForceRouteEvent Traveling 전후 결과를 짧게 검증한다.
+        /// </summary>
+        [ContextMenu("Framework/Run Force World Debug Smoke")]
+        public void RunForceWorldDebugSmoke()
+        {
+            if (!TryGetDebugCommands(out var commands))
+            {
+                return;
+            }
+
+            var saveData = FrameworkRoot.Instance.CurrentSaveData;
+            if (saveData == null)
+            {
+                FrameworkLog.Warning("Force world debug smoke skipped because save data is not ready.");
+                return;
+            }
+
+            if (!commands.ForceSeason(debugSeasonId))
+            {
+                FrameworkLog.Warning("Force world debug smoke failed: ForceSeason returned false.");
+                return;
+            }
+
+            if (saveData.world == null || saveData.world.currentSeasonId != debugSeasonId.Trim())
+            {
+                FrameworkLog.Warning(
+                    $"Force world debug smoke failed: season was '{saveData.world?.currentSeasonId}', expected '{debugSeasonId}'.");
+                return;
+            }
+
+            if (!commands.ForceDisaster(debugDisasterId))
+            {
+                FrameworkLog.Warning("Force world debug smoke failed: ForceDisaster returned false.");
+                return;
+            }
+
+            var expectedDisaster = debugDisasterId?.Trim() ?? string.Empty;
+            if (saveData.world.currentDisasterId != expectedDisaster)
+            {
+                FrameworkLog.Warning(
+                    $"Force world debug smoke failed: disaster was '{saveData.world.currentDisasterId}', expected '{expectedDisaster}'.");
+                return;
+            }
+
+            if (commands.ForceRouteEvent(debugRouteEventId))
+            {
+                FrameworkLog.Warning(
+                    "Force world debug smoke failed: ForceRouteEvent succeeded before Traveling trade.");
+                return;
+            }
+
+            if (FrameworkRoot.Instance.TradeStart == null)
+            {
+                FrameworkLog.Warning("Force world debug smoke skipped because TradeStart is not ready.");
+                return;
+            }
+
+            FillSampleCaravan();
+            var smokeTradeId = $"{tradeId}_force_route_smoke";
+            var startResult = FrameworkRoot.Instance.TradeStart.TryStartTrade(
+                caravan,
+                distanceKm,
+                smokeTradeId,
+                routeId);
+            if (!startResult.canDepart || !FrameworkRoot.Instance.TradeStart.LastRecordSucceeded)
+            {
+                FrameworkLog.Warning("Force world debug smoke failed to start Traveling trade.");
+                return;
+            }
+
+            FrameworkRoot.Instance.TradeProgressCoordinator?.SetActiveCaravan(caravan);
+            if (!commands.ForceRouteEvent(debugRouteEventId))
+            {
+                FrameworkLog.Warning("Force world debug smoke failed: ForceRouteEvent returned false while Traveling.");
+                return;
+            }
+
+            if (!commands.TryConsumeForcedRouteEvent(smokeTradeId, out var consumedEventId)
+                || consumedEventId != debugRouteEventId.Trim())
+            {
+                FrameworkLog.Warning(
+                    $"Force world debug smoke failed: consumed event was '{consumedEventId}', expected '{debugRouteEventId}'.");
+                return;
+            }
+
+            FrameworkLog.Info(
+                $"Force world debug smoke passed. Season={saveData.world.currentSeasonId}, Disaster='{saveData.world.currentDisasterId}', RouteEvent consumed.");
         }
 
         /// <summary>
