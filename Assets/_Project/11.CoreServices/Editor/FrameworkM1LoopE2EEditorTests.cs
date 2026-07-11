@@ -9,6 +9,7 @@
  * Main Features
  * - SharedGameData 로드, 3회 loop integrity, settle 후 currency 불변·claim 후 currency 변화 검증.
  * - 인게임 식량 소모 elapsed 동기화 및 배율 효과 검증.
+ * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 복귀 검증.
  * - Unity batchmode -executeMethod 진입점 제공.
  *
  * Usage for Team Members
@@ -18,6 +19,7 @@
  * Important Notes
  * - Editor 전용이며 Player build에 포함되지 않는다.
  * - JsonSaveService는 persistentDataPath에 저장할 수 있으나 테스트는 in-memory SaveData 참조를 우선 사용한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md
  */
 #if UNITY_EDITOR
 using System;
@@ -50,6 +52,8 @@ namespace ND.Framework.Editor
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
             RunInGameFoodConsumptionE2E(context);
+            RunPauseFoodFreezeE2E(TestContext.Create());
+            RunFailedSettlementScreenE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
         }
 
@@ -266,6 +270,151 @@ namespace ND.Framework.Editor
             }
         }
 
+        private static void RunPauseFoodFreezeE2E(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.foodAmount = 30;
+
+            var tradeId = "editor_pause_food_freeze";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Pause food freeze E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            context.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+
+            var elapsedBaseline = caravan.elapsedInGameSeconds;
+            var foodBaseline = CaravanCalculator.GetRemainingFood(caravan);
+
+            context.GameTime.PauseGameTime();
+            BackdateActiveTradeStart(context.SaveData, 30d);
+            var pausedCheck = context.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+            var elapsedPaused = caravan.elapsedInGameSeconds;
+            var foodPaused = CaravanCalculator.GetRemainingFood(caravan);
+            context.GameTime.ResumeGameTime();
+
+            if (pausedCheck)
+            {
+                throw new InvalidOperationException(
+                    "Pause food freeze E2E failed because progress check returned true while paused.");
+            }
+
+            if (Mathf.Abs(elapsedPaused - elapsedBaseline) > 0.01f)
+            {
+                throw new InvalidOperationException(
+                    $"Pause food freeze E2E failed: elapsed changed while paused. Baseline: {elapsedBaseline}, Paused: {elapsedPaused}");
+            }
+
+            if (Mathf.Abs(foodPaused - foodBaseline) > 0.01f)
+            {
+                throw new InvalidOperationException(
+                    $"Pause food freeze E2E failed: food changed while paused. Baseline: {foodBaseline}, Paused: {foodPaused}");
+            }
+
+            Debug.Log(
+                $"[Framework M1 E2E] Pause food freeze passed. Elapsed held at {elapsedBaseline:0.#}s, Food held at {foodBaseline:0.#}.");
+        }
+
+        private static void RunFailedSettlementScreenE2E(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.foodAmount = 0;
+            caravan.starveGraceSeconds = 0f;
+
+            var tradeId = "editor_failed_settlement";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Failed settlement screen E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            BackdateActiveTradeStart(context.SaveData, 1d);
+            var settlementReady = context.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+            if (!settlementReady || context.Coordinator.LastSettlementResult == null)
+            {
+                throw new InvalidOperationException("Failed settlement screen E2E failed because settlement was not created.");
+            }
+
+            var result = context.Coordinator.LastSettlementResult;
+            if (result.grade != JourneyResultGrade.Failed)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed: grade was {result.grade}, expected Failed.");
+            }
+
+            if (result.failureReason != JourneyFailureReason.FoodDepleted)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed: failureReason was {result.failureReason}, expected FoodDepleted.");
+            }
+
+            if (context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed: trade state was {context.SaveData.tradeProgress.state}, expected SettlementPending.");
+            }
+
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed: screen was {context.ScreenRouter.CurrentScreenState}, expected Settlement.");
+            }
+
+            var viewData = new SettlementViewData(
+                tradeId,
+                result.grade,
+                result.failureReason,
+                result.revenue,
+                result.cost,
+                result.netProfit,
+                result.cargoLost,
+                result.durabilityLost,
+                result.travelSeconds,
+                result.foodConsumed,
+                result.departureLoad,
+                result.overloadRatio,
+                true,
+                "Trade failed.");
+            if (!viewData.IsFailed)
+            {
+                throw new InvalidOperationException(
+                    "Failed settlement screen E2E failed because SettlementViewData.IsFailed was false.");
+            }
+
+            var firstClaim = context.Coordinator.ClaimSettlementAndReset();
+            var duplicateClaim = context.Coordinator.ClaimSettlementAndReset();
+            if (!firstClaim || duplicateClaim)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed claim validation. First: {firstClaim}, Duplicate: {duplicateClaim}");
+            }
+
+            if (context.SaveData.tradeProgress.state != TradeProgressState.Failed)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed: post-claim state was {context.SaveData.tradeProgress.state}, expected Failed.");
+            }
+
+            var activeCaravan = context.Coordinator.ActiveCaravan;
+            if (activeCaravan == null || activeCaravan.state != JourneyState.Prepare)
+            {
+                throw new InvalidOperationException(
+                    "Failed settlement screen E2E failed to return caravan to Prepare.");
+            }
+
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Preparation)
+            {
+                throw new InvalidOperationException(
+                    $"Failed settlement screen E2E failed: post-claim screen was {context.ScreenRouter.CurrentScreenState}, expected Preparation.");
+            }
+
+            Debug.Log(
+                "[Framework M1 E2E] Failed settlement screen passed. Failed grade -> Settlement -> claim -> Preparation/Failed state.");
+        }
+
         private static void BackdateActiveTradeStart(SaveData saveData, double realSeconds)
         {
             if (saveData?.tradeProgress == null || saveData.tradeProgress.tradeStartUtcTick <= 0)
@@ -340,6 +489,8 @@ namespace ND.Framework.Editor
 
             public TradeStartService TradeStart { get; private set; }
 
+            public InGameScreenStateRouter ScreenRouter { get; private set; }
+
             public static TestContext Create()
             {
                 var policyConfig = Resources.Load<InGameTimePolicyConfig>(InGameTimePolicyConfig.ResourceName);
@@ -388,7 +539,8 @@ namespace ND.Framework.Editor
                     SaveService = saveService,
                     SharedGameData = sharedGameData,
                     Coordinator = coordinator,
-                    TradeStart = tradeStart
+                    TradeStart = tradeStart,
+                    ScreenRouter = router
                 };
             }
         }

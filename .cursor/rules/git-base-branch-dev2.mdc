@@ -1,0 +1,34 @@
+---
+description: Default Git integration base branch is dev2 (not dev or main).
+alwaysApply: true
+---
+
+# Git Base Branch — `dev2`
+
+## Default Integration Branch
+
+- Use **`dev2`** as the default base branch for feature, fix, documentation, chore, and asset work.
+- Do **not** use `dev` as the default PR base or task-branch starting point.
+- Do **not** commit or push directly to `main` or `dev2`.
+- Integrate work only through a Pull Request whose **base is `dev2`** unless the user explicitly names another base.
+
+## Task Branch Workflow
+
+When starting a new task:
+
+1. Check out `dev2`.
+2. Fetch and pull the latest remote changes for `dev2`.
+3. Create a new task branch from the updated `dev2`.
+4. Work only within the approved task scope.
+
+When creating a Pull Request:
+
+- Confirm the base branch is `dev2` unless the user explicitly directed otherwise.
+- Confirm the compare branch is the current task branch.
+- Do not merge, close, or delete the branch after opening the PR unless the user asks.
+
+## Naming Note
+
+- Remote branch name is lowercase: `dev2`.
+- Treat `Dev2` in older docs as the same branch as `dev2`.
+- If a document still says `dev` or `develop` as the daily integration branch, prefer `dev2` for new work and call out the mismatch when relevant.
