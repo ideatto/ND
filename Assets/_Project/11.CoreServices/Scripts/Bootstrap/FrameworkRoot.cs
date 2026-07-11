@@ -8,7 +8,7 @@
  *
  * Main Features
  * - BeforeSceneLoad 단계에서 FrameworkRoot GameObject를 자동 생성한다.
- * - GameTime, SaveService, SharedGameData, SceneFlow, TradeProgress, InGameScreenRouter 서비스를 초기화한다.
+ * - GameTime, SaveService, SharedGameData, SceneFlow, TradeProgress, Economy M1 bridge, InGameScreenRouter 서비스를 초기화한다.
  * - 새 게임, 이어하기, 로딩 완료, title 복귀 flow를 제공한다.
  * - SettlementUiBridge를 통해 정산 결과를 UI 계층에 전달한다.
  *
@@ -232,7 +232,8 @@ namespace ND.Framework
                 GameTime,
                 TradeProgressRecorder,
                 InGameScreenRouter,
-                GameTime);
+                GameTime,
+                () => SharedGameData);
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,
                 SaveService,

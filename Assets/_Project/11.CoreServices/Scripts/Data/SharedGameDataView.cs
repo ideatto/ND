@@ -13,8 +13,10 @@
  * Important Notes
  * - DraftAnimalDefinition.AdditionalEfficientLoad는 Sandbox의 IncreaseOverLoad를 사용한다.
  * - Sandbox의 IncreaseMaxLoad는 최신 1차 빌드 규칙과 충돌하므로 저장하지 않는다.
+ * - SharedTradeItemDefinition.PriceModifiers는 Economy M1 가격 계산용 스냅샷이다.
  */
 using System.Collections.Generic;
+using ND.Economy;
 
 namespace ND.Framework
 {
@@ -149,6 +151,7 @@ namespace ND.Framework
         public float Weight;
         public bool IsConsumable;
         public bool LocalSpecialty;
+        public List<PriceModifierInput> PriceModifiers = new List<PriceModifierInput>();
     }
 
     public sealed class SharedWagonDefinition
@@ -195,5 +198,7 @@ namespace ND.Framework
         public int BaseRequiredMercenaryPower;
         public float BaseRiskLevel;
         public int MaxEventCount;
+        public long BaseFoodCost;
+        public long BaseMercenaryCost;
     }
 }

@@ -4,7 +4,7 @@
  *
  * Script Purpose
  * - 진행 중인 무역의 시간 기반 진행률 계산, 정산 생성, claim 후 초기화를 조율한다.
- * - Core JourneyRunner 결과를 SaveData, FrameworkEvents, 인게임 화면 상태에 반영한다.
+ * - Core JourneyRunner 결과를 SaveData, FrameworkEvents, Economy M1 bridge, 인게임 화면 상태에 반영한다.
  *
  * Main Features
  * - 저장된 UTC tick을 기준으로 traveling caravan의 progress01을 갱신한다.
@@ -26,7 +26,8 @@
  * Important Notes
  * - 생성자에서 FrameworkEvents.CompleteTradeRequested를 구독한다.
  * - LastSettlementResult는 claim 전 UI 표시와 중복 정산 방지에 사용되는 runtime cache이다.
- * - saveData.tradeProgress가 Traveling 상태일 때만 진행률 갱신과 정산 생성이 가능하다.
+ * - settle 시 Economy M1 계산으로 JourneyResultData 금액 필드를 채운다.
+ * - claim 시 Economy pending 결과를 SaveData 화폐에 반영한다.
  */
 using System;
 
@@ -43,6 +44,8 @@ namespace ND.Framework
         private readonly IInGameTimeProvider inGameTimeProvider;
         private readonly TradeProgressRecorder tradeProgressRecorder;
         private readonly InGameScreenStateRouter inGameScreenRouter;
+        private readonly Func<ISharedGameDataProvider> getSharedGameData;
+        private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
         private CaravanData activeCaravan;
 
@@ -55,6 +58,7 @@ namespace ND.Framework
         /// <param name="tradeProgressRecorder">무역 상태 전환을 저장 데이터에 기록하는 recorder.</param>
         /// <param name="inGameScreenRouter">정산/준비 화면 전환을 요청할 router.</param>
         /// <param name="inGameTimeProvider">인게임 배율·pause·경과 시간 변환을 제공하는 서비스. null이면 gameTimeProvider에서 조회한다.</param>
+        /// <param name="getSharedGameData">Economy M1 입력 조립에 사용할 공용 기준 데이터 provider 접근자.</param>
         /// <remarks>
         /// 생성 시 CompleteTradeRequested 이벤트를 구독하므로 coordinator 수명은 FrameworkRoot와 같아야 한다.
         /// </remarks>
@@ -64,7 +68,8 @@ namespace ND.Framework
             IGameTimeProvider gameTimeProvider,
             TradeProgressRecorder tradeProgressRecorder,
             InGameScreenStateRouter inGameScreenRouter = null,
-            IInGameTimeProvider inGameTimeProvider = null)
+            IInGameTimeProvider inGameTimeProvider = null,
+            Func<ISharedGameDataProvider> getSharedGameData = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
@@ -72,6 +77,7 @@ namespace ND.Framework
             this.inGameTimeProvider = inGameTimeProvider ?? gameTimeProvider as IInGameTimeProvider;
             this.tradeProgressRecorder = tradeProgressRecorder;
             this.inGameScreenRouter = inGameScreenRouter;
+            this.getSharedGameData = getSharedGameData;
 
             FrameworkEvents.CompleteTradeRequested += ForceCompleteActiveTrade;
         }
@@ -198,6 +204,12 @@ namespace ND.Framework
                 return false;
             }
 
+            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            if (!economySettlementBridge.TryApplyPendingEconomy(saveData, caravan, activeTradeId))
+            {
+                FrameworkLog.Warning("Settlement claim continued but Economy M1 currency apply did not complete.");
+            }
+
             // settlement 결과 등급에 따라 최종 저장 상태를 Completed 또는 Failed로 기록한다.
             var finalStateRecorded = LastSettlementResult.grade == JourneyResultGrade.Failed
                 ? MarkFailed(saveData)
@@ -230,6 +242,7 @@ namespace ND.Framework
         {
             LastSettlementTradeId = string.Empty;
             LastSettlementResult = null;
+            economySettlementBridge.ClearPending();
         }
 
         /// <summary>
@@ -297,6 +310,17 @@ namespace ND.Framework
             var settlementTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
             LastSettlementTradeId = settlementTradeId;
             LastSettlementResult = result;
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded)
+            {
+                FrameworkLog.Warning("Economy M1 settlement preview skipped because shared game data is not loaded.");
+            }
+            else if (!economySettlementBridge.TryCalculateAndFill(saveData, caravan, result, sharedGameData))
+            {
+                FrameworkLog.Warning("Economy M1 settlement preview failed. Core settlement grade is still available.");
+            }
+
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             FrameworkEvents.RaiseTradeSettlementReady(settlementTradeId, result);

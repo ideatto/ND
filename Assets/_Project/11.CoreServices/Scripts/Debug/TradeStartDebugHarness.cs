@@ -22,7 +22,7 @@
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
- * - FrameworkRoot.Instance가 준비되지 않으면 대부분의 작업은 warning 후 중단된다.
+ * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
  */
 using UnityEngine;
 
@@ -34,8 +34,9 @@ namespace ND.Framework
     public sealed class TradeStartDebugHarness : MonoBehaviour
     {
         [SerializeField] private string tradeId = "debug_trade_001";
-        [SerializeField] private string routeId = "debug_route_001";
+        [SerializeField] private string routeId = "dummyroute";
         [SerializeField] private float distanceKm = 100f;
+        [SerializeField] private float starveGraceSeconds = 5f;
         [SerializeField] private CaravanData caravan = new CaravanData();
 
         /// <summary>
@@ -53,20 +54,36 @@ namespace ND.Framework
                     overLoad = 30f,
                     maxLoad = 60f,
                     minAnimals = 1,
-                    maxAnimals = 5
+                    maxAnimals = 5,
+                    maxDurability = 100,
+                    inventorySlotCount = 8
                 },
-                foodAmount = 30
+                foodAmount = 30,
+                starveGraceSeconds = starveGraceSeconds
             };
 
-            caravan.animals.Add(new imsiAnimalData { animalName = "Debug Horse", foodPerKm = 0.1f });
-            caravan.animals.Add(new imsiAnimalData { animalName = "Debug Horse", foodPerKm = 0.1f });
+            caravan.animals.Add(new imsiAnimalData
+            {
+                animalName = "Debug Horse",
+                foodPerKm = 0.1f,
+                animalType = DraftAnimalType.Horse,
+                increaseOverLoad = 5f
+            });
+            caravan.animals.Add(new imsiAnimalData
+            {
+                animalName = "Debug Horse",
+                foodPerKm = 0.1f,
+                animalType = DraftAnimalType.Horse,
+                increaseOverLoad = 5f
+            });
 
             var item = new imsiTradeItemData
             {
-                id = "debug_item_wheat",
+                id = "dummyitem",
                 itemName = "Debug Wheat",
                 weight = 5f,
-                basePrice = 10
+                basePrice = 10,
+                maxCount = 10
             };
             caravan.cargo.Add(new CargoEntry { item = item, quantity = 5 });
             caravan.currentDurability = caravan.wagon.maxDurability;
