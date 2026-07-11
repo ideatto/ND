@@ -595,7 +595,7 @@ namespace ND.Framework
             }
 
             FillSampleCaravan();
-            caravan.foodAmount = 0f;
+            caravan.foodAmount = 0;
             caravan.starveGraceSeconds = 0f;
 
             var smokeTradeId = $"{tradeId}_failed_settlement_smoke";

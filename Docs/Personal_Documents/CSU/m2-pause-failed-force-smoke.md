@@ -12,9 +12,9 @@
 
 | Milestone 완료 기준 | 검증 수단 | 상태 |
 |---------------------|-----------|------|
-| 게임 시간이 정지되면 식량 계산용 경과 인게임 시간도 증가하지 않는다 | `Run Pause Food Freeze Smoke` / Editor E2E | 코드 추가 완료 — Unity 실행 확인 필요 |
-| 성공과 실패가 올바른 화면으로 이동한다 (실패 → Settlement) | `Run Failed Settlement Screen Smoke` / Editor E2E | 코드 추가 완료 — Unity 실행 확인 필요 |
-| 디버그 메뉴로 주요 조건을 재현한다 | Force* ContextMenu + `Run Force World Debug Smoke` | 코드 추가 완료 — Unity 실행 확인 필요 |
+| 게임 시간이 정지되면 식량 계산용 경과 인게임 시간도 증가하지 않는다 | `Run Pause Food Freeze Smoke` / Editor E2E | **Pass** (2026-07-11) |
+| 성공과 실패가 올바른 화면으로 이동한다 (실패 → Settlement) | `Run Failed Settlement Screen Smoke` / Editor E2E | **Pass** (2026-07-11) |
+| 디버그 메뉴로 주요 조건을 재현한다 | Force* ContextMenu + `Run Force World Debug Smoke` | **Pass** (2026-07-11) |
 
 관련 milestone: [`Docs/Planning_Milestone/02_Framework_Integration_Milestone.md`](../../Planning_Milestone/02_Framework_Integration_Milestone.md) M2 완료 기준.
 
@@ -60,7 +60,7 @@ Pause food freeze smoke passed. Elapsed held at ...s, Food held at ....
 
 ### 절차
 
-1. `foodAmount=0`, `starveGraceSeconds=0`으로 `FoodDepleted` fatal 즉시 재현
+1. `foodAmount=0`(int), `starveGraceSeconds=0f`로 `FoodDepleted` fatal 즉시 재현
 2. Trade start → backdate 1s → `CheckProgress` (ForceComplete 성공 경로 미사용)
 3. 통과 조건:
    - `LastSettlementResult.grade == Failed`
@@ -131,26 +131,64 @@ Boot → Title → New Game → Loading → InGame
 | 항목 | 결과 |
 |------|------|
 | ForceSeason / ForceDisaster / ForceRouteEvent 코드 경로 | 기존 구현 유지 (재구현 없음) |
-| `Run Force World Debug Smoke` | Harness에 추가 |
-| Unity Play 수동 실행 | **확인 필요** (Agent 환경에서 Unity Editor 미실행) |
+| `Run Force World Debug Smoke` | **Pass** (Play ContextMenu) |
+| Unity Play 수동 Force Season/Disaster/Route | **Pass** |
 | Editor batchmode Force smoke | 미포함 (`FrameworkRoot` 의존) — Play harness로 검증 |
 
 ---
 
-## 5. 변경 파일
+## 5. 통합 실행 결과 (2026-07-11)
+
+검증자: 로컬 Unity Editor / Play Mode  
+브랜치: `chore/integration/m2-pause-failed-force-smoke`  
+Console 오류: 없음 (`foodAmount` int 할당 수정 후 CS0266 해소)
+
+### 5-1. Editor E2E
+
+메뉴: `ND/Framework/Run M1 Loop + Economy E2E Checks`
+
+| 항목 | 결과 |
+|------|------|
+| Loop integrity 3사이클 | Pass |
+| Economy E2E 3사이클 | Pass |
+| InGame food consumption E2E | Pass |
+| Pause food freeze E2E | Pass |
+| Failed settlement screen E2E | Pass |
+| 전체 `All checks passed.` | Pass |
+
+### 5-2. Play Mode (`TradeStartDebugHarness`)
+
+경로: Boot → Title → New Game → Loading → InGame
+
+| ContextMenu | 결과 |
+|-------------|------|
+| `Run Pause Food Freeze Smoke` | Pass |
+| `Run Failed Settlement Screen Smoke` | Pass |
+| `Run Force World Debug Smoke` | Pass |
+| Force Season / Disaster / Route Event (수동) | Pass |
+
+### 5-3. 참고
+
+- Failed smoke의 `CaravanData.foodAmount`는 **int** (`0`). `0f` 할당은 CS0266을 유발하므로 사용하지 않는다.
+- Editor E2E에 Force World smoke는 포함하지 않는다. Force*는 Play harness로 검증한다.
+
+---
+
+## 6. 변경 파일
 
 | 경로 | 변경 |
 |------|------|
 | `Scripts/Debug/TradeStartDebugHarness.cs` | Pause / Failed / Force World smoke ContextMenu |
 | `Editor/FrameworkM1LoopE2EEditorTests.cs` | Pause / Failed Editor 회귀 |
 | `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | 본 문서 |
+| `Docs/Guide/Framework_CoreServices_Team_Usage_Guide.md` | 팀 가이드 smoke 메뉴·검증 경로 |
 | `Docs/Policy/GitRules.md` | 기본 통합 브랜치 `dev2` 명시 |
 | `.cursor/rules/git-base-branch-dev2.mdc` | Agent alwaysApply base=`dev2` |
 | `Docs/Personal_Documents/CSU/user-rule-dev2-base-branch-patch.md` | User Rules 수동 패치 안내 |
 
 ---
 
-## 6. 범위 밖
+## 7. 범위 밖
 
 - Core 로드/약탈 실제 적용, `expectedTradeEndUtcTick` 갱신
 - 계절·재난 자동 시간 전환
@@ -160,7 +198,7 @@ Boot → Title → New Game → Loading → InGame
 
 ---
 
-## 7. 검증 방법 (리뷰어)
+## 8. 검증 방법 (리뷰어 재현)
 
 1. Unity: `ND/Framework/Run M1 Loop + Economy E2E Checks`
 2. Play: Boot → InGame → `TradeStartDebugHarness`에서  

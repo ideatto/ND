@@ -320,7 +320,7 @@ namespace ND.Framework.Editor
         private static void RunFailedSettlementScreenE2E(TestContext context)
         {
             var caravan = CreateSampleCaravan(context.GameTime);
-            caravan.foodAmount = 0f;
+            caravan.foodAmount = 0;
             caravan.starveGraceSeconds = 0f;
 
             var tradeId = "editor_failed_settlement";

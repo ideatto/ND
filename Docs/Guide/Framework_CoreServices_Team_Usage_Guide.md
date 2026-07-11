@@ -53,6 +53,8 @@ Boot → Title → New Game → Loading → InGame
 메뉴 ND → Framework → Run M1 Loop + Economy E2E Checks
 ```
 
+포함 항목: loop integrity · Economy E2E · 인게임 식량 · **Pause 식량 정지** · **Failed 정산 화면**.  
+M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md)
 ---
 
 ## 2. FrameworkRoot 서비스 맵
@@ -185,6 +187,9 @@ Debug (InGame `FrameworkDebugBridge`):
 | Set / Reset In-Game Time Multiplier | 게임플레이 배율 |
 | Pause / Resume In-Game Time | 인게임 경과 정지/재개 |
 
+Pause 중에는 `TradeProgressCoordinator.CheckProgressAndCompletion()`이 `progress01`과 `elapsedInGameSeconds`를 **모두** 갱신하지 않는다.  
+식량 잔량도 증가·감소하지 않는다. 검증: `Framework/Run Pause Food Freeze Smoke`.
+
 Release 빌드에서는 runtime 배율 변경이 제한될 수 있다.  
 상세: [`Framework_InGame_Time_Multiplier_API_Guide.md`](./Framework_InGame_Time_Multiplier_API_Guide.md)
 
@@ -252,8 +257,12 @@ FrameworkEvents.InGameScreenChanged += screen => { /* 패널 전환 */ };
 | `tradeProgress.state` | 화면 |
 |----------------------|------|
 | Traveling | Traveling |
-| SettlementPending | Settlement |
+| SettlementPending | Settlement (Success / Failed grade 모두) |
+| Completed / Failed (claim 후) | Preparation |
 | 그 외 | Preparation |
+
+실패 무역도 정산 전에는 `SettlementPending` + Settlement 화면이다.  
+claim 후 `Failed`로 기록되면 Preparation으로 돌아온다. 검증: `Framework/Run Failed Settlement Screen Smoke`.
 
 서비스가 화면을 바꿀 때: `InGameScreenRouter.RequestScreen(...)`.
 
@@ -332,8 +341,14 @@ InGame에 이미 배치된 컴포넌트:
 | Run M1 Loop Integrity Smoke | 3사이클 loop |
 | Run Economy E2E Smoke | settle/claim 화폐 검증 |
 | Run InGame Food Consumption Smoke | 인게임 식량 연동 |
+| Run Pause Food Freeze Smoke | Pause 중 식량 elapsed 정지 |
+| Run Failed Settlement Screen Smoke | Failed → Settlement → claim → Preparation |
+| Run Force World Debug Smoke | ForceSeason/Disaster/RouteEvent 일괄 검증 |
 | Force Season / Disaster / Route Event | 월드 Force* |
 | Print Save Data | JSON 확인 |
+
+Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDepleted`를 즉시 재현한다.  
+`CaravanData.foodAmount`는 int이므로 `0f`를 넣지 않는다.
 
 ### 11-3. World Force* 요약
 
@@ -345,6 +360,18 @@ InGame에 이미 배치된 컴포넌트:
 
 상세: [`Framework_World_Force_Debug_API_Guide.md`](./Framework_World_Force_Debug_API_Guide.md)
 
+### 11-4. M2 통합 Smoke 체크리스트
+
+경로: Boot → Title → New Game → Loading → InGame
+
+| 순서 | ContextMenu / 메뉴 | 기대 |
+|------|-------------------|------|
+| 1 | Editor: `ND/Framework/Run M1 Loop + Economy E2E Checks` | `All checks passed.` |
+| 2 | `Run Pause Food Freeze Smoke` | elapsed/food 불변 |
+| 3 | `Run Failed Settlement Screen Smoke` | Failed → Settlement → Preparation |
+| 4 | `Run Force World Debug Smoke` | Season/Disaster Save + RouteEvent Traveling |
+
+검증 기록: [`m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
 ---
 
 ## 12. 팀별 빠른 경로
@@ -355,7 +382,7 @@ InGame에 이미 배치된 컴포넌트:
 | **Economy / Progression** | §5 SharedData, §7 Economy | season/disaster는 Force* 또는 Save `world` |
 | **Core** | §6 시간, §7 무역 | `elapsedInGameSeconds`는 Framework가 채움; `progress01`은 UTC |
 | **Content** | §5 SharedData 카탈로그 | ID가 Save / Force / smoke와 일치하는지 |
-| **QA / 통합** | §1 퀵스타트, §11 Smoke | Harness smoke + Editor E2E 메뉴 |
+| **QA / 통합** | §1 퀵스타트, §11 Smoke | Harness M2 smoke + Editor E2E 메뉴 |
 
 ---
 
@@ -379,6 +406,7 @@ InGame에 이미 배치된 컴포넌트:
 | `Docs/Personal_Documents/CSU/M1_Trade_Loop_Integrity.md` | 무역 loop 무결성 |
 | `Docs/Personal_Documents/CSU/caravan-ingame-food-sync.md` | 식량·인게임 시간 |
 | `Docs/Personal_Documents/CSU/world-force-debug-commands.md` | Force* 구현 로직 |
+| `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
 
 ### 테스트 씬 (선택)
 
