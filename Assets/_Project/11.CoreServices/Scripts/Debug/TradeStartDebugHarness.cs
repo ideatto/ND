@@ -8,7 +8,7 @@
  *
  * Main Features
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
- * - 낮은 식량 실패 케이스와 3회 연속 loop smoke test를 제공한다.
+ * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test를 제공한다.
  *
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
@@ -19,6 +19,7 @@
  * - StartTradeAndRecordTime(): 무역 출발과 기록을 시도한다.
  * - CheckTradeProgressAndCompletion(): 진행률 갱신과 정산 생성을 확인한다.
  * - RunM1LoopIntegritySmoke(): 출발-정산-claim loop를 3회 검증한다.
+ * - RunEconomyE2ESmoke(): settle preview 후 currency 불변, claim 후 currency 변화를 3회 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
@@ -295,6 +296,98 @@ namespace ND.Framework
             }
 
             FrameworkLog.Info("M1 loop integrity smoke completed 3 consecutive trade cycles.");
+        }
+
+        /// <summary>
+        /// SharedGameData와 Economy settle preview/claim apply를 포함해 3회 연속 E2E를 검증한다.
+        /// </summary>
+        /// <remarks>
+        /// Boot flow로 InGame에 진입한 뒤 실행해야 SharedGameData가 로드되어 Economy preview가 skip되지 않는다.
+        /// </remarks>
+        [ContextMenu("Framework/Run Economy E2E Smoke")]
+        public void RunEconomyE2ESmoke()
+        {
+            var coordinator = GetCoordinator();
+            if (coordinator == null || FrameworkRoot.Instance == null || FrameworkRoot.Instance.TradeStart == null)
+            {
+                return;
+            }
+
+            var sharedGameData = FrameworkRoot.Instance.SharedGameData;
+            if (sharedGameData == null || !sharedGameData.IsLoaded)
+            {
+                FrameworkLog.Warning("Economy E2E smoke skipped because shared game data is not loaded. Use Boot flow.");
+                return;
+            }
+
+            var saveData = FrameworkRoot.Instance.CurrentSaveData;
+            if (saveData == null || saveData.player == null)
+            {
+                FrameworkLog.Warning("Economy E2E smoke skipped because save data is not ready.");
+                return;
+            }
+
+            for (var cycleIndex = 0; cycleIndex < 3; cycleIndex++)
+            {
+                FillSampleCaravan();
+
+                var smokeTradeId = $"{tradeId}_economy_{cycleIndex + 1}";
+                var currencyBeforeCycle = saveData.player.tradingCurrency;
+
+                var startResult = FrameworkRoot.Instance.TradeStart.TryStartTrade(
+                    caravan,
+                    distanceKm,
+                    smokeTradeId,
+                    routeId);
+                if (!startResult.canDepart || !FrameworkRoot.Instance.TradeStart.LastRecordSucceeded)
+                {
+                    FrameworkLog.Warning($"Economy E2E smoke failed to start cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                coordinator.SetActiveCaravan(caravan);
+                coordinator.ForceCompleteActiveTrade();
+
+                var currencyAfterSettle = saveData.player.tradingCurrency;
+                if (currencyAfterSettle != currencyBeforeCycle)
+                {
+                    FrameworkLog.Warning(
+                        $"Economy E2E smoke failed in cycle {cycleIndex + 1}: tradingCurrency changed after settle. Before: {currencyBeforeCycle}, After settle: {currencyAfterSettle}");
+                    return;
+                }
+
+                if (coordinator.LastSettlementResult == null)
+                {
+                    FrameworkLog.Warning($"Economy E2E smoke failed because settlement result was missing in cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                if (!coordinator.ClaimSettlementAndReset())
+                {
+                    FrameworkLog.Warning($"Economy E2E smoke failed because claim failed in cycle {cycleIndex + 1}.");
+                    return;
+                }
+
+                var currencyAfterClaim = saveData.player.tradingCurrency;
+                if (currencyAfterClaim == currencyAfterSettle)
+                {
+                    FrameworkLog.Warning(
+                        $"Economy E2E smoke failed in cycle {cycleIndex + 1}: tradingCurrency unchanged after claim. Value: {currencyAfterClaim}");
+                    return;
+                }
+
+                if (currencyAfterClaim < 0)
+                {
+                    FrameworkLog.Warning(
+                        $"Economy E2E smoke failed in cycle {cycleIndex + 1}: tradingCurrency became negative: {currencyAfterClaim}");
+                    return;
+                }
+
+                FrameworkLog.Info(
+                    $"Economy E2E smoke cycle {cycleIndex + 1}: tradingCurrency {currencyBeforeCycle} -> settle {currencyAfterSettle} -> claim {currencyAfterClaim}");
+            }
+
+            FrameworkLog.Info("Economy E2E smoke completed 3 consecutive trade cycles.");
         }
 
         private static TradeProgressCoordinator GetCoordinator()
