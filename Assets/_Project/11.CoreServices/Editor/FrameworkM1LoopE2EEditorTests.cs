@@ -8,6 +8,7 @@
  *
  * Main Features
  * - SharedGameData 로드, 3회 loop integrity, settle 후 currency 불변·claim 후 currency 변화 검증.
+ * - 인게임 식량 소모 elapsed 동기화 및 배율 효과 검증.
  * - Unity batchmode -executeMethod 진입점 제공.
  *
  * Usage for Team Members
@@ -35,6 +36,9 @@ namespace ND.Framework.Editor
         private const string ItemId = "dummyitem";
         private const float DistanceKm = 100f;
         private const float StarveGraceSeconds = 5f;
+        private const float SampleRawFoodConsumptionPerDay = 8640f;
+        private const float FoodConsumptionTestMultiplier = 60f;
+        private const double FoodConsumptionBackdateRealSeconds = 10d;
 
         /// <summary>
         /// loop integrity smoke와 Economy E2E 검증을 순서대로 실행한다.
@@ -45,6 +49,7 @@ namespace ND.Framework.Editor
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
+            RunInGameFoodConsumptionE2E(context);
             Debug.Log("[Framework M1 E2E] All checks passed.");
         }
 
@@ -71,7 +76,7 @@ namespace ND.Framework.Editor
         {
             for (var cycleIndex = 0; cycleIndex < CycleCount; cycleIndex++)
             {
-                var caravan = CreateSampleCaravan();
+                var caravan = CreateSampleCaravan(context.GameTime);
                 var smokeTradeId = $"editor_smoke_{cycleIndex + 1}";
 
                 var startResult = context.TradeStart.TryStartTrade(
@@ -133,7 +138,7 @@ namespace ND.Framework.Editor
 
             for (var cycleIndex = 0; cycleIndex < CycleCount; cycleIndex++)
             {
-                var caravan = CreateSampleCaravan();
+                var caravan = CreateSampleCaravan(context.GameTime);
                 var tradeId = $"editor_economy_{cycleIndex + 1}";
                 var currencyBeforeCycle = context.SaveData.player.tradingCurrency;
 
@@ -183,7 +188,96 @@ namespace ND.Framework.Editor
             Debug.Log("[Framework M1 E2E] Economy E2E completed 3 consecutive trade cycles.");
         }
 
-        private static CaravanData CreateSampleCaravan()
+        private static void RunInGameFoodConsumptionE2E(TestContext context)
+        {
+            RunInGameFoodConsumptionHighMultiplierCase(context);
+
+            var baselineContext = TestContext.Create();
+            baselineContext.GameTime.TrySetInGameTimeMultiplier(1f);
+            RunInGameFoodConsumptionBaselineMultiplierCase(baselineContext);
+
+            Debug.Log("[Framework M1 E2E] InGame food consumption E2E passed.");
+        }
+
+        private static void RunInGameFoodConsumptionHighMultiplierCase(TestContext context)
+        {
+            if (!context.GameTime.TrySetInGameTimeMultiplier(FoodConsumptionTestMultiplier))
+            {
+                throw new InvalidOperationException("InGame food consumption E2E failed because multiplier could not be set.");
+            }
+
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.foodAmount = 10;
+
+            var tradeId = "editor_food_high_multiplier";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("InGame food consumption E2E failed to start high-multiplier trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            BackdateActiveTradeStart(context.SaveData, FoodConsumptionBackdateRealSeconds);
+
+            var foodBefore = CaravanCalculator.GetRemainingFood(caravan);
+            context.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+
+            if (Mathf.Abs(caravan.elapsedInGameSeconds - context.SaveData.caravan.elapsedInGameSeconds) > 0.01f)
+            {
+                throw new InvalidOperationException(
+                    $"InGame food consumption E2E failed: elapsed mismatch. Runtime: {caravan.elapsedInGameSeconds}, Save: {context.SaveData.caravan.elapsedInGameSeconds}");
+            }
+
+            var foodAfter = CaravanCalculator.GetRemainingFood(caravan);
+            if (foodAfter >= foodBefore)
+            {
+                throw new InvalidOperationException(
+                    $"InGame food consumption E2E failed: food did not decrease. Before: {foodBefore}, After: {foodAfter}");
+            }
+
+            if (!caravan.runFoodDepleted && caravan.runFatalReason == JourneyFailureReason.None)
+            {
+                throw new InvalidOperationException(
+                    $"InGame food consumption E2E failed: food should be depleted with multiplier {FoodConsumptionTestMultiplier}. Remaining: {foodAfter}");
+            }
+        }
+
+        private static void RunInGameFoodConsumptionBaselineMultiplierCase(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.foodAmount = 10;
+
+            var tradeId = "editor_food_baseline_multiplier";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("InGame food consumption E2E failed to start baseline-multiplier trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            BackdateActiveTradeStart(context.SaveData, FoodConsumptionBackdateRealSeconds);
+            context.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+
+            var foodAfter = CaravanCalculator.GetRemainingFood(caravan);
+            if (foodAfter <= 0f || caravan.runFoodDepleted)
+            {
+                throw new InvalidOperationException(
+                    $"InGame food consumption E2E failed: baseline multiplier should not deplete food this quickly. Remaining: {foodAfter}");
+            }
+        }
+
+        private static void BackdateActiveTradeStart(SaveData saveData, double realSeconds)
+        {
+            if (saveData?.tradeProgress == null || saveData.tradeProgress.tradeStartUtcTick <= 0)
+            {
+                throw new InvalidOperationException("InGame food consumption E2E failed because trade start tick is missing.");
+            }
+
+            var startUtc = new DateTime(saveData.tradeProgress.tradeStartUtcTick, DateTimeKind.Utc);
+            saveData.tradeProgress.tradeStartUtcTick = startUtc.AddSeconds(-realSeconds).Ticks;
+        }
+
+        private static CaravanData CreateSampleCaravan(IInGameTimeProvider inGameTimeProvider)
         {
             var caravan = new CaravanData
             {
@@ -204,14 +298,14 @@ namespace ND.Framework.Editor
             caravan.animals.Add(new imsiAnimalData
             {
                 animalName = "Editor Horse",
-                foodPerKm = 0.1f,
+                foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
             });
             caravan.animals.Add(new imsiAnimalData
             {
                 animalName = "Editor Horse",
-                foodPerKm = 0.1f,
+                foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
             });
@@ -226,6 +320,8 @@ namespace ND.Framework.Editor
             };
             caravan.cargo.Add(new CargoEntry { item = item, quantity = 5 });
             caravan.currentDurability = caravan.wagon.maxDurability;
+
+            CaravanConsumptionRateNormalizer.ApplyToCaravan(caravan, inGameTimeProvider);
 
             return caravan;
         }

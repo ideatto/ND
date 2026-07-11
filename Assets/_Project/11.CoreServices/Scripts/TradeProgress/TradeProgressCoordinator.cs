@@ -8,6 +8,7 @@
  *
  * Main Features
  * - 저장된 UTC tick을 기준으로 traveling caravan의 progress01을 갱신한다.
+ * - SetProgress 전에 active caravan과 SaveData에 elapsedInGameSeconds를 동기화한다.
  * - 도착 또는 실패 조건을 만족하면 settlement 결과를 생성하고 settlement pending 상태로 전환한다.
  * - 정산 claim 성공 후 완료/실패 상태를 기록하고 caravan을 준비 상태로 되돌린다.
  * - debug 이벤트를 통해 active trade를 즉시 완료할 수 있다.
@@ -147,11 +148,13 @@ namespace ND.Framework
                 return false;
             }
 
+            // 식량 소모는 인게임 경과 초를 사용하므로 SetProgress 전에 runtime caravan에 반영한다.
+            SyncElapsedInGameSeconds(saveData, caravan);
+
             // 저장된 UTC 시작/종료 tick과 현재 시간을 비교해 Core caravan 진행률을 갱신한다.
             var progress = CalculateProgress(saveData.tradeProgress);
             JourneyRunner.SetProgress(caravan, progress);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-            UpdateElapsedInGameSeconds(saveData);
 
             // 아직 도착하지 않았고 치명적 실패도 없으면 현재 진행률만 저장하고 settlement 생성은 미룬다.
             if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
@@ -268,10 +271,12 @@ namespace ND.Framework
                 return;
             }
 
+            // 정산 시 foodConsumed 계산이 올바르도록 도착 처리 전 인게임 경과를 동기화한다.
+            SyncElapsedInGameSeconds(saveData, caravan);
+
             // Core progress를 도착값으로 맞춘 뒤 동일한 settlement 생성 경로를 재사용한다.
             JourneyRunner.SetProgress(caravan, JourneyRunner.ArrivalProgress);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-            UpdateElapsedInGameSeconds(saveData);
             SettleActiveTrade(saveData, caravan);
         }
 
@@ -486,17 +491,25 @@ namespace ND.Framework
             return (float)(elapsedSeconds / totalSeconds);
         }
 
-        private void UpdateElapsedInGameSeconds(SaveData saveData)
+        /// <summary>
+        /// active trade 기준 인게임 경과 초를 runtime caravan과 SaveData에 동시 기록한다.
+        /// </summary>
+        /// <remarks>
+        /// JourneyRunner.SetProgress 이전에 호출해야 Core 식량 소모 계산이 올바른 elapsed를 사용한다.
+        /// </remarks>
+        private void SyncElapsedInGameSeconds(SaveData saveData, CaravanData caravan)
         {
-            if (saveData?.caravan == null || saveData.tradeProgress == null || inGameTimeProvider == null)
+            if (saveData?.caravan == null || saveData.tradeProgress == null || caravan == null
+                || inGameTimeProvider == null || gameTimeProvider == null)
             {
                 return;
             }
 
-            var elapsedInGameSeconds = inGameTimeProvider.GetElapsedInGameSecondsForActiveTrade(
+            var elapsedInGameSeconds = (float)inGameTimeProvider.GetElapsedInGameSecondsForActiveTrade(
                 saveData.tradeProgress,
                 gameTimeProvider.CurrentUtc);
-            saveData.caravan.elapsedInGameSeconds = (float)elapsedInGameSeconds;
+            caravan.elapsedInGameSeconds = elapsedInGameSeconds;
+            saveData.caravan.elapsedInGameSeconds = elapsedInGameSeconds;
         }
     }
 }

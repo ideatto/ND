@@ -8,7 +8,7 @@
  *
  * Main Features
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
- * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test를 제공한다.
+ * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
  *
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
@@ -20,11 +20,13 @@
  * - CheckTradeProgressAndCompletion(): 진행률 갱신과 정산 생성을 확인한다.
  * - RunM1LoopIntegritySmoke(): 출발-정산-claim loop를 3회 검증한다.
  * - RunEconomyE2ESmoke(): settle preview 후 currency 불변, claim 후 currency 변화를 3회 검증한다.
+ * - RunInGameFoodConsumptionSmoke(): 인게임 배율에 따른 식량 소모 연동을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
  * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
  */
+using System;
 using UnityEngine;
 
 namespace ND.Framework
@@ -39,6 +41,11 @@ namespace ND.Framework
         [SerializeField] private float distanceKm = 100f;
         [SerializeField] private float starveGraceSeconds = 5f;
         [SerializeField] private CaravanData caravan = new CaravanData();
+
+        /// <summary>
+        /// Day 단위 raw 식량 소모율 샘플. InGameTimePolicyConfig.FoodConsumptionUnit=Day일 때 인게임 초당 0.1로 정규화된다.
+        /// </summary>
+        private const float SampleRawFoodConsumptionPerDay = 8640f;
 
         /// <summary>
         /// 테스트에 사용할 샘플 caravan 데이터를 생성한다.
@@ -66,14 +73,14 @@ namespace ND.Framework
             caravan.animals.Add(new imsiAnimalData
             {
                 animalName = "Debug Horse",
-                foodPerKm = 0.1f,
+                foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
             });
             caravan.animals.Add(new imsiAnimalData
             {
                 animalName = "Debug Horse",
-                foodPerKm = 0.1f,
+                foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
             });
@@ -88,6 +95,8 @@ namespace ND.Framework
             };
             caravan.cargo.Add(new CargoEntry { item = item, quantity = 5 });
             caravan.currentDurability = caravan.wagon.maxDurability;
+
+            ApplyConsumptionRateNormalization();
 
             FrameworkLog.Info("Sample caravan filled for trade start debug.");
         }
@@ -106,6 +115,7 @@ namespace ND.Framework
             }
 
             var tradeStart = FrameworkRoot.Instance.TradeStart;
+            ApplyConsumptionRateNormalization();
             var result = tradeStart.TryStartTrade(caravan, distanceKm, tradeId, routeId);
             // Core 검증 실패 사유를 그대로 로그에 남겨 테스트 데이터 조정을 쉽게 한다.
             if (!result.canDepart)
@@ -388,6 +398,103 @@ namespace ND.Framework
             }
 
             FrameworkLog.Info("Economy E2E smoke completed 3 consecutive trade cycles.");
+        }
+
+        /// <summary>
+        /// 인게임 시간 배율이 식량 소모와 elapsed 동기화에 반영되는지 검증한다.
+        /// </summary>
+        /// <remarks>
+        /// Boot flow로 InGame에 진입한 뒤 실행해야 GameTimeService와 coordinator가 준비된다.
+        /// </remarks>
+        [ContextMenu("Framework/Run InGame Food Consumption Smoke")]
+        public void RunInGameFoodConsumptionSmoke()
+        {
+            var coordinator = GetCoordinator();
+            if (coordinator == null || FrameworkRoot.Instance == null || FrameworkRoot.Instance.TradeStart == null
+                || FrameworkRoot.Instance.GameTime == null)
+            {
+                return;
+            }
+
+            var gameTime = FrameworkRoot.Instance.GameTime;
+            var saveData = FrameworkRoot.Instance.CurrentSaveData;
+            if (saveData == null)
+            {
+                FrameworkLog.Warning("InGame food consumption smoke skipped because save data is not ready.");
+                return;
+            }
+
+            if (!gameTime.TrySetInGameTimeMultiplier(60f))
+            {
+                FrameworkLog.Warning("InGame food consumption smoke skipped because multiplier could not be set.");
+                return;
+            }
+
+            FillSampleCaravan();
+            caravan.foodAmount = 10;
+
+            var smokeTradeId = $"{tradeId}_food_smoke";
+            var startResult = FrameworkRoot.Instance.TradeStart.TryStartTrade(
+                caravan,
+                distanceKm,
+                smokeTradeId,
+                routeId);
+            if (!startResult.canDepart || !FrameworkRoot.Instance.TradeStart.LastRecordSucceeded)
+            {
+                FrameworkLog.Warning("InGame food consumption smoke failed to start trade.");
+                return;
+            }
+
+            coordinator.SetActiveCaravan(caravan);
+            BackdateActiveTradeStart(saveData, 10d);
+
+            var foodBefore = CaravanCalculator.GetRemainingFood(caravan);
+            coordinator.CheckProgressAndCompletion(saveProgress: false);
+
+            if (Mathf.Abs(caravan.elapsedInGameSeconds - saveData.caravan.elapsedInGameSeconds) > 0.01f)
+            {
+                FrameworkLog.Warning(
+                    $"InGame food consumption smoke failed: elapsed mismatch. Runtime: {caravan.elapsedInGameSeconds}, Save: {saveData.caravan.elapsedInGameSeconds}");
+                return;
+            }
+
+            var foodAfter = CaravanCalculator.GetRemainingFood(caravan);
+            if (foodAfter >= foodBefore)
+            {
+                FrameworkLog.Warning(
+                    $"InGame food consumption smoke failed: food did not decrease. Before: {foodBefore}, After: {foodAfter}");
+                return;
+            }
+
+            if (!caravan.runFoodDepleted && caravan.runFatalReason == JourneyFailureReason.None)
+            {
+                FrameworkLog.Warning(
+                    $"InGame food consumption smoke failed: food should be depleted. Remaining: {foodAfter}");
+                return;
+            }
+
+            FrameworkLog.Info(
+                $"InGame food consumption smoke passed. Elapsed in-game: {caravan.elapsedInGameSeconds:0.#}s, Food {foodBefore:0.#} -> {foodAfter:0.#}");
+        }
+
+        private void ApplyConsumptionRateNormalization()
+        {
+            var gameTime = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.GameTime : null;
+            if (gameTime != null)
+            {
+                CaravanConsumptionRateNormalizer.ApplyToCaravan(caravan, gameTime);
+            }
+        }
+
+        private static void BackdateActiveTradeStart(SaveData saveData, double realSeconds)
+        {
+            if (saveData?.tradeProgress == null || saveData.tradeProgress.tradeStartUtcTick <= 0)
+            {
+                return;
+            }
+
+            var startUtc = new DateTime(saveData.tradeProgress.tradeStartUtcTick, DateTimeKind.Utc);
+            saveData.tradeProgress.tradeStartUtcTick = startUtc.AddSeconds(-realSeconds).Ticks;
         }
 
         private static TradeProgressCoordinator GetCoordinator()
