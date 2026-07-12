@@ -23,11 +23,14 @@
  * - InGameTimeMultiplier: 현재 인게임 시간 배율.
  * - PauseGameTime() / ResumeGameTime(): 인게임 진행 정지/재개.
  * - GetElapsedInGameSeconds(...): UTC 구간의 인게임 경과 초.
+ * - GetOfflineElapsedInGameSeconds(...): 오프라인 복구용 인게임 경과 초.
+ * - TryResolveOfflineEvaluationUtc(...): 역행 감지와 최대 오프라인 상한 clamp.
  *
  * Important Notes
  * - SetTimeScale은 inGameTimeMultiplier를 변경하지 않는다.
  * - Release 빌드에서는 SetInGameTimeMultiplier가 무시된다.
  * - pause 중에는 인게임 경과 시간이 증가하지 않는다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
  */
 using System;
 using UnityEngine;
@@ -89,6 +92,14 @@ namespace ND.Framework
         /// </summary>
         public InGameTimeUnit FoodConsumptionUnit =>
             policyConfig != null ? policyConfig.FoodConsumptionUnit : InGameTimeUnit.Hour;
+
+        /// <summary>
+        /// 오프라인 복구에 인정하는 최대 현실 경과 시간이다. 단위: 초.
+        /// </summary>
+        public double MaxOfflineRealSeconds =>
+            policyConfig != null
+                ? policyConfig.MaxOfflineRealSeconds
+                : InGameTimePolicyConfig.DefaultMaxOfflineRealSeconds;
 
         /// <summary>
         /// 현재 UTC 시각을 반환한다.
@@ -198,6 +209,22 @@ namespace ND.Framework
             float multiplierAtStart)
         {
             return conversionPolicy.GetOfflineElapsedInGameSeconds(tradeStartUtc, loadUtc, multiplierAtStart);
+        }
+
+        /// <summary>
+        /// 오프라인 복구에 사용할 evaluationUtc를 결정한다.
+        /// </summary>
+        /// <returns>시간 역행이면 true. 이 경우 evaluationUtc는 loadUtc이며 호출자는 적용을 건너뛴다.</returns>
+        public bool TryResolveOfflineEvaluationUtc(
+            long lastSavedUtcTicks,
+            DateTime loadUtc,
+            out DateTime evaluationUtc)
+        {
+            return conversionPolicy.TryResolveOfflineEvaluationUtc(
+                lastSavedUtcTicks,
+                loadUtc,
+                MaxOfflineRealSeconds,
+                out evaluationUtc);
         }
 
         /// <summary>

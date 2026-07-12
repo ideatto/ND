@@ -174,17 +174,32 @@ ND → Framework → Run M1 Loop + Economy E2E Checks
 
 ---
 
-## 8. 범위 밖
+## 8. 실행 결과 (Pass)
+
+**검증일:** 2026-07-12  
+**브랜치:** `feature/framework/pending-settlement-save` (이후 `dev2` 병합)  
+**검증자:** 로컬 Unity Editor / Play Mode
+
+| 항목 | 결과 |
+|------|------|
+| Editor: `ND/Framework/Run M1 Loop + Economy E2E Checks` (Pending restore 포함) | **Pass** |
+| Play: `Framework/Run Pending Settlement Restore Smoke` | **Pass** |
+| Console 오류 | 없음 |
+
+---
+
+## 9. 범위 밖
 
 - AtomicSave (temp/backup)
 - AutoSave / Dirty Flag
-- Offline 완료 파이프라인 (`TradeOfflineCompleted` 연동)
+- Offline 완료 파이프라인 (`TradeOfflineCompleted` 연동) — [`m3-offline-progress-pipeline.md`](m3-offline-progress-pipeline.md) / 브랜치 `feature/framework/offline-progress-pipeline`
 - HMAC / 저장 암호화
 - Core / Economy 패키지 직접 수정
 
 ---
 
-## 9. 관련 문서
+## 10. 관련 문서
 
 - [`Docs/Planning_Milestone/02_Framework_Integration_Milestone.md`](../../Planning_Milestone/02_Framework_Integration_Milestone.md) M3
 - [`Docs/Guide/Framework_CoreServices_Team_Usage_Guide.md`](../../Guide/Framework_CoreServices_Team_Usage_Guide.md)
+- [`m3-offline-progress-pipeline.md`](m3-offline-progress-pipeline.md) — Traveling 오프라인 복구·완료

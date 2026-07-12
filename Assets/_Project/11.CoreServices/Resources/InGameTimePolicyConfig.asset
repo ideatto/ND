@@ -15,3 +15,4 @@ MonoBehaviour:
   defaultInGameTimeMultiplier: 1
   elapsedTimeDisplayUnit: 3
   foodConsumptionUnit: 3
+  maxOfflineRealSeconds: 259200

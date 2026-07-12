@@ -9,6 +9,8 @@
  * Important Notes
  * - 온라인·오프라인·식량 계산은 동일한 변환 규칙을 사용한다.
  * - 음수 현실 경과는 0으로 보정한다.
+ * - TryResolveOfflineEvaluationUtc는 시간 역행과 최대 오프라인 상한을 판정한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
  */
 using System;
 
@@ -63,6 +65,46 @@ namespace ND.Framework
             float multiplierAtStart)
         {
             return GetElapsedInGameSeconds(tradeStartUtc, loadUtc, multiplierAtStart);
+        }
+
+        /// <summary>
+        /// 오프라인 복구에 사용할 evaluationUtc를 결정한다.
+        /// </summary>
+        /// <param name="lastSavedUtcTicks">마지막 저장 UTC ticks. 0 이하면 상한·역행 검사를 생략하고 loadUtc를 사용한다.</param>
+        /// <param name="loadUtc">현재 로드 UTC.</param>
+        /// <param name="maxOfflineRealSeconds">lastSaved 기준 최대 인정 현실 초. 0 이하면 상한 없음.</param>
+        /// <param name="evaluationUtc">진행·식량 계산에 사용할 UTC. 역행 시 loadUtc.</param>
+        /// <returns>시간 역행이면 true.</returns>
+        public bool TryResolveOfflineEvaluationUtc(
+            long lastSavedUtcTicks,
+            DateTime loadUtc,
+            double maxOfflineRealSeconds,
+            out DateTime evaluationUtc)
+        {
+            if (lastSavedUtcTicks <= 0)
+            {
+                evaluationUtc = loadUtc;
+                return false;
+            }
+
+            var lastSavedUtc = new DateTime(lastSavedUtcTicks, DateTimeKind.Utc);
+            if (loadUtc < lastSavedUtc)
+            {
+                evaluationUtc = loadUtc;
+                return true;
+            }
+
+            evaluationUtc = loadUtc;
+            if (maxOfflineRealSeconds > 0d)
+            {
+                var cappedUtc = lastSavedUtc.AddSeconds(maxOfflineRealSeconds);
+                if (evaluationUtc > cappedUtc)
+                {
+                    evaluationUtc = cappedUtc;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

@@ -4,6 +4,7 @@
  *
  * Script Purpose
  * - 인게임 시간 배율 기본값과 표시·식량 해석 단위를 Inspector에서 설정한다.
+ * - 오프라인 복구에 인정할 최대 현실 경과 시간 상한을 제공한다.
  *
  * Usage for Team Members
  * - Resources/InGameTimePolicyConfig asset을 수정해 기본 배율과 테스트 단위를 조정한다.
@@ -11,6 +12,7 @@
  * Important Notes
  * - Release 빌드에서는 defaultInGameTimeMultiplier만 runtime 초기값으로 사용된다.
  * - 런타임 배율 변경은 debug API에서만 허용된다.
+ * - maxOfflineRealSeconds는 Continue/Load 시 evaluationUtc clamp에만 사용한다.
  */
 using UnityEngine;
 
@@ -24,6 +26,11 @@ namespace ND.Framework
     {
         public const string ResourceName = "InGameTimePolicyConfig";
 
+        /// <summary>
+        /// 최대 오프라인 인정 시간의 기본값이다. 단위: 현실 초 (72시간).
+        /// </summary>
+        public const double DefaultMaxOfflineRealSeconds = 259200d;
+
         [Tooltip("현실 1초당 인게임 N초를 나타내는 기본 배율입니다. Release 빌드 초기값으로 사용됩니다.")]
         [SerializeField]
         private float defaultInGameTimeMultiplier = 1f;
@@ -35,6 +42,10 @@ namespace ND.Framework
         [Tooltip("견인 동물 foodPerKm(raw rate)를 해석할 때 사용할 인게임 시간 단위입니다.")]
         [SerializeField]
         private InGameTimeUnit foodConsumptionUnit = InGameTimeUnit.Hour;
+
+        [Tooltip("Continue/Load 시 인정하는 최대 오프라인 현실 경과 시간(초)입니다. lastSaved 기준으로 evaluationUtc를 상한합니다.")]
+        [SerializeField]
+        private double maxOfflineRealSeconds = DefaultMaxOfflineRealSeconds;
 
         /// <summary>
         /// Release·Editor 공통 기본 인게임 시간 배율이다.
@@ -50,5 +61,11 @@ namespace ND.Framework
         /// 식량 소모율 해석 단위이다.
         /// </summary>
         public InGameTimeUnit FoodConsumptionUnit => foodConsumptionUnit;
+
+        /// <summary>
+        /// 오프라인 복구에 인정하는 최대 현실 경과 시간이다. 단위: 초.
+        /// </summary>
+        public double MaxOfflineRealSeconds =>
+            maxOfflineRealSeconds > 0d ? maxOfflineRealSeconds : DefaultMaxOfflineRealSeconds;
     }
 }

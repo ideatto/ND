@@ -11,6 +11,7 @@
  * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
  * - Pause 중 식량 elapsed 정지 smoke, Failed 정산 화면 smoke, Force* World debug smoke를 제공한다.
  * - PendingSettlementSaveData 저장 후 세션 캐시 소실·복구·claim smoke를 제공한다.
+ * - Offline Traveling 복구·완료·역행 smoke를 제공한다.
  * - ForceSeason / ForceDisaster / ForceRouteEvent ContextMenu로 M2 월드 debug API를 호출한다.
  *
  * Usage for Team Members
@@ -27,13 +28,14 @@
  * - RunPauseFoodFreezeSmoke(): Pause 중 elapsed/식량이 증가하지 않는지 검증한다.
  * - RunFailedSettlementScreenSmoke(): Failed grade 정산 화면 진입과 claim 후 Preparation 복귀를 검증한다.
  * - RunPendingSettlementRestoreSmoke(): pendingSettlement 저장·캐시 소실·복구·claim을 검증한다.
+ * - RunOfflineProgressSmoke(): Traveling 오프라인 미완료·완료·재호출·역행을 검증한다.
  * - RunForceWorldDebugSmoke(): ForceSeason/Disaster/RouteEvent 기본 재현을 검증한다.
  * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling inject hook을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
  * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
  */
 using System;
 using UnityEngine;
@@ -813,6 +815,146 @@ namespace ND.Framework
             }
 
             FrameworkLog.Info("Pending settlement restore smoke passed.");
+        }
+
+        /// <summary>
+        /// Traveling 오프라인 미완료·완료·재호출 no-op·시간 역행 스킵을 검증한다.
+        /// </summary>
+        /// <remarks>
+        /// CompleteLoadingAndEnterGame의 ApplyOfflineProgressOnLoad 경로를 Play Mode에서 재현한다.
+        /// 같은 CurrentSaveData를 쓰므로 Case B는 새 출발 없이 Case A Traveling을 재사용하고,
+        /// Case D는 claim으로 SettlementPending을 비운 뒤 새 Traveling을 시작한다.
+        /// </remarks>
+        [ContextMenu("Framework/Run Offline Progress Smoke")]
+        public void RunOfflineProgressSmoke()
+        {
+            var coordinator = GetCoordinator();
+            var root = FrameworkRoot.Instance;
+            if (coordinator == null || root == null || root.TradeStart == null || root.SaveService == null)
+            {
+                return;
+            }
+
+            var saveData = root.CurrentSaveData;
+            if (saveData == null)
+            {
+                FrameworkLog.Warning("Offline progress smoke skipped because save data is not ready.");
+                return;
+            }
+
+            var offlineCompletedCount = 0;
+            var rollbackCount = 0;
+            void OnOfflineCompleted(string completedTradeId) => offlineCompletedCount++;
+            void OnRollback() => rollbackCount++;
+
+            FrameworkEvents.TradeOfflineCompleted += OnOfflineCompleted;
+            FrameworkEvents.TimeRollbackDetected += OnRollback;
+
+            try
+            {
+                // Case A: 미완료 Traveling — elapsed 증가, state 유지, OfflineCompleted 미발생
+                FillSampleCaravan();
+                var travelingTradeId = $"{tradeId}_offline_traveling";
+                var incompleteStart = root.TradeStart.TryStartTrade(caravan, distanceKm, travelingTradeId, routeId);
+                if (!incompleteStart.canDepart || !root.TradeStart.LastRecordSucceeded)
+                {
+                    FrameworkLog.Warning("Offline progress smoke failed to start incomplete trade.");
+                    return;
+                }
+
+                coordinator.SetActiveCaravan(caravan);
+                var foodBefore = caravan.foodAmount;
+                var elapsedBefore = caravan.elapsedInGameSeconds;
+                BackdateActiveTradeStart(saveData, 10d);
+                saveData.lastSavedUtcTicks = DateTime.UtcNow.AddSeconds(-30d).Ticks;
+
+                var incompleteSettled = coordinator.ApplyOfflineProgressOnLoad(saveData);
+                if (incompleteSettled
+                    || saveData.tradeProgress.state != TradeProgressState.Traveling
+                    || offlineCompletedCount != 0)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline incomplete case failed. Settled: {incompleteSettled}, State: {saveData.tradeProgress.state}, OfflineEvents: {offlineCompletedCount}");
+                    return;
+                }
+
+                if (caravan.elapsedInGameSeconds <= elapsedBefore)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline incomplete case failed: elapsed did not increase. Before: {elapsedBefore}, After: {caravan.elapsedInGameSeconds}");
+                    return;
+                }
+
+                // Case B: 동일 Traveling을 완료 구간으로 만들어 offline settle (새 TryStartTrade 금지)
+                saveData.tradeProgress.expectedTradeEndUtcTick = DateTime.UtcNow.AddSeconds(-5d).Ticks;
+                saveData.lastSavedUtcTicks = DateTime.UtcNow.AddSeconds(-60d).Ticks;
+                offlineCompletedCount = 0;
+
+                var completeSettled = coordinator.ApplyOfflineProgressOnLoad(saveData);
+                if (!completeSettled
+                    || saveData.tradeProgress.state != TradeProgressState.SettlementPending
+                    || saveData.pendingSettlement == null
+                    || !saveData.pendingSettlement.hasResult
+                    || saveData.pendingSettlement.tradeId != travelingTradeId
+                    || offlineCompletedCount != 1)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline complete case failed. Settled: {completeSettled}, State: {saveData.tradeProgress.state}, OfflineEvents: {offlineCompletedCount}");
+                    return;
+                }
+
+                // Case C: SettlementPending에서 재호출 — no-op, 추가 OfflineCompleted 없음
+                offlineCompletedCount = 0;
+                var secondApply = coordinator.ApplyOfflineProgressOnLoad(saveData);
+                if (secondApply || offlineCompletedCount != 0)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline re-apply case failed. Settled: {secondApply}, OfflineEvents: {offlineCompletedCount}");
+                    return;
+                }
+
+                // Case D: claim으로 pending 정리 후 새 Traveling → 역행 스킵
+                if (!coordinator.ClaimSettlementAndReset())
+                {
+                    FrameworkLog.Warning("Offline progress smoke failed to claim settlement before rollback case.");
+                    return;
+                }
+
+                FillSampleCaravan();
+                var rollbackTradeId = $"{tradeId}_offline_rollback";
+                var rollbackStart = root.TradeStart.TryStartTrade(caravan, distanceKm, rollbackTradeId, routeId);
+                if (!rollbackStart.canDepart || !root.TradeStart.LastRecordSucceeded)
+                {
+                    FrameworkLog.Warning("Offline progress smoke failed to start rollback trade.");
+                    return;
+                }
+
+                coordinator.SetActiveCaravan(caravan);
+                var elapsedRollbackBefore = caravan.elapsedInGameSeconds;
+                var foodRollbackBefore = caravan.foodAmount;
+                saveData.lastSavedUtcTicks = DateTime.UtcNow.AddHours(1d).Ticks;
+                rollbackCount = 0;
+
+                var rollbackSettled = coordinator.ApplyOfflineProgressOnLoad(saveData);
+                if (rollbackSettled
+                    || rollbackCount != 1
+                    || saveData.tradeProgress.state != TradeProgressState.Traveling
+                    || !Mathf.Approximately(caravan.elapsedInGameSeconds, elapsedRollbackBefore)
+                    || caravan.foodAmount != foodRollbackBefore)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline rollback case failed. Settled: {rollbackSettled}, RollbackEvents: {rollbackCount}, State: {saveData.tradeProgress.state}");
+                    return;
+                }
+
+                FrameworkLog.Info(
+                    $"Offline progress smoke passed. Incomplete elapsed advanced (food was {foodBefore}), complete settled once, re-apply no-op, rollback skipped.");
+            }
+            finally
+            {
+                FrameworkEvents.TradeOfflineCompleted -= OnOfflineCompleted;
+                FrameworkEvents.TimeRollbackDetected -= OnRollback;
+            }
         }
 
         /// <summary>

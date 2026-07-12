@@ -6,6 +6,7 @@
  * - 진행 중인 무역의 시간 기반 진행률 계산, 정산 생성, claim 후 초기화를 조율한다.
  * - Core JourneyRunner 결과를 SaveData, FrameworkEvents, Economy M1 bridge, 인게임 화면 상태에 반영한다.
  * - SettlementPending 대기 정산을 PendingSettlementSaveData로 영속화하고 재실행 시 runtime cache를 복구한다.
+ * - Continue/Load 시 Traveling 무역의 오프라인 경과·식량·완료를 ApplyOfflineProgressOnLoad로 복구한다.
  *
  * Main Features
  * - 저장된 UTC tick을 기준으로 traveling caravan의 progress01을 갱신한다.
@@ -13,6 +14,7 @@
  * - 도착 또는 실패 조건을 만족하면 settlement 결과를 생성하고 settlement pending 상태로 전환한다.
  * - 정산 생성 직후 PendingSettlementSaveData와 SettlementPending을 같은 저장 단위로 기록한다.
  * - 로드 후 RestorePendingSettlement로 LastSettlementResult·Economy pending·TradeSettlementReady를 재구성한다.
+ * - 로드 시 ApplyOfflineProgressOnLoad로 역행 감지·상한 clamp·오프라인 완료(TradeOfflineCompleted)를 처리한다.
  * - 정산 claim 성공 후 완료/실패 상태를 기록하고 caravan을 준비 상태로 되돌린다.
  * - debug 이벤트를 통해 active trade를 즉시 완료할 수 있다.
  *
@@ -20,11 +22,12 @@
  * - 인게임 진행 갱신 또는 debug command에서 CheckProgressAndCompletion(...)을 호출한다.
  * - settlement UI claim은 SettlementUiBridge를 통해 ClaimSettlementAndReset()으로 연결된다.
  * - runtime caravan을 별도로 준비한 경우 SetActiveCaravan(...)으로 coordinator에 전달한다.
- * - CompleteLoadingAndEnterGame에서 SharedGameData 로드 이후 RestorePendingSettlement(...)를 호출한다.
+ * - CompleteLoadingAndEnterGame에서 SharedGameData 로드 이후 ApplyOfflineProgressOnLoad → RestorePendingSettlement 순으로 호출한다.
  *
  * Main Public APIs
  * - ActiveCaravan: 현재 진행 계산에 사용할 runtime caravan.
  * - CheckProgressAndCompletion(...): 진행률을 갱신하고 정산 가능 시 정산 이벤트를 발행한다.
+ * - ApplyOfflineProgressOnLoad(...): Continue/Load 시 Traveling 오프라인 복구를 적용한다.
  * - ClaimSettlementAndReset(): pending settlement를 claim하고 저장 데이터를 준비 상태로 갱신한다.
  * - RestorePendingSettlement(...): 저장된 대기 정산으로 runtime cache를 복구한다.
  * - ForceCompleteActiveTrade(): 현재 active trade를 즉시 도착 처리한다.
@@ -36,7 +39,8 @@
  * - settle 시 Economy M1 계산으로 JourneyResultData 금액 필드를 채운 뒤 pendingSettlement에 저장한다.
  * - restore 시 Economy pending은 TryCalculateAndFill로 재구성하고, UI 표시 금액은 저장값을 우선한다.
  * - claim 시 Economy pending 결과를 SaveData 화폐에 반영하고 pendingSettlement를 clear한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - 오프라인 elapsed는 tradeStart→evaluationUtc 절대값 overwrite이므로 재로드 시 이중 소모되지 않는다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
  */
 using System;
 
@@ -157,10 +161,10 @@ namespace ND.Framework
             }
 
             // 식량 소모는 인게임 경과 초를 사용하므로 SetProgress 전에 runtime caravan에 반영한다.
-            SyncElapsedInGameSeconds(saveData, caravan);
+            SyncElapsedInGameSeconds(saveData, caravan, gameTimeProvider.CurrentUtc);
 
             // 저장된 UTC 시작/종료 tick과 현재 시간을 비교해 Core caravan 진행률을 갱신한다.
-            var progress = CalculateProgress(saveData.tradeProgress);
+            var progress = CalculateProgress(saveData.tradeProgress, gameTimeProvider.CurrentUtc);
             JourneyRunner.SetProgress(caravan, progress);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
 
@@ -176,6 +180,69 @@ namespace ND.Framework
             }
 
             return SettleActiveTrade(saveData, caravan);
+        }
+
+        /// <summary>
+        /// Continue/Load 시 Traveling 무역에 오프라인 경과·진행도·식량을 적용하고 필요하면 정산을 생성한다.
+        /// </summary>
+        /// <param name="saveData">로드된 SaveData. null이면 CurrentSaveData를 사용한다.</param>
+        /// <returns>
+        /// 이번 호출에서 오프라인 완료로 settlement가 생성되면 true.
+        /// Traveling이 아니거나 역행으로 스킵하거나 아직 이동 중이면 false.
+        /// </returns>
+        /// <remarks>
+        /// lastSavedUtcTicks 대비 시간 역행이면 TimeRollbackDetected를 발행하고 상태를 변경하지 않는다.
+        /// evaluationUtc는 lastSaved + maxOfflineRealSeconds로 상한한다.
+        /// 오프라인 settle 성공 시 TradeOfflineCompleted를 한 번 발행한다.
+        /// SettlementPending 복구는 RestorePendingSettlement가 담당하므로 이 메서드는 Traveling만 처리한다.
+        /// </remarks>
+        public bool ApplyOfflineProgressOnLoad(SaveData saveData = null)
+        {
+            saveData = saveData ?? GetSaveData();
+            if (!CanUpdateTravelingTrade(saveData))
+            {
+                return false;
+            }
+
+            var loadUtc = gameTimeProvider.CurrentUtc;
+            var isRollback = ResolveOfflineEvaluationUtc(saveData, loadUtc, out var evaluationUtc);
+            if (isRollback)
+            {
+                FrameworkEvents.RaiseTimeRollbackDetected();
+                FrameworkLog.Warning(
+                    "Offline progress skipped because load UTC is earlier than lastSavedUtcTicks.");
+                return false;
+            }
+
+            var caravan = EnsureActiveCaravan();
+            if (caravan == null)
+            {
+                FrameworkLog.Warning("Offline progress skipped because active caravan is missing.");
+                return false;
+            }
+
+            SyncElapsedInGameSeconds(saveData, caravan, evaluationUtc);
+            var progress = CalculateProgress(saveData.tradeProgress, evaluationUtc);
+            JourneyRunner.SetProgress(caravan, progress);
+            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+
+            if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
+            {
+                saveService?.Save(saveData);
+                FrameworkLog.Info(
+                    $"Offline progress applied while still traveling. EvaluationUtc: {evaluationUtc:o}, ElapsedInGameSeconds: {caravan.elapsedInGameSeconds}");
+                return false;
+            }
+
+            var tradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            var settled = SettleActiveTrade(saveData, caravan);
+            if (settled)
+            {
+                FrameworkEvents.RaiseTradeOfflineCompleted(tradeId);
+                FrameworkLog.Info($"Offline trade completed and settled. TradeId: {tradeId}");
+            }
+
+            return settled;
         }
 
         /// <summary>
@@ -400,12 +467,29 @@ namespace ND.Framework
             }
 
             // 정산 시 foodConsumed 계산이 올바르도록 도착 처리 전 인게임 경과를 동기화한다.
-            SyncElapsedInGameSeconds(saveData, caravan);
+            SyncElapsedInGameSeconds(saveData, caravan, gameTimeProvider.CurrentUtc);
 
             // Core progress를 도착값으로 맞춘 뒤 동일한 settlement 생성 경로를 재사용한다.
             JourneyRunner.SetProgress(caravan, JourneyRunner.ArrivalProgress);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             SettleActiveTrade(saveData, caravan);
+        }
+
+        private bool ResolveOfflineEvaluationUtc(SaveData saveData, DateTime loadUtc, out DateTime evaluationUtc)
+        {
+            var lastSavedUtcTicks = saveData != null ? saveData.lastSavedUtcTicks : 0L;
+            if (gameTimeProvider is GameTimeService gameTimeService)
+            {
+                return gameTimeService.TryResolveOfflineEvaluationUtc(lastSavedUtcTicks, loadUtc, out evaluationUtc);
+            }
+
+            var conversionPolicy = new InGameTimeConversionPolicy();
+            var maxOffline = InGameTimePolicyConfig.DefaultMaxOfflineRealSeconds;
+            return conversionPolicy.TryResolveOfflineEvaluationUtc(
+                lastSavedUtcTicks,
+                loadUtc,
+                maxOffline,
+                out evaluationUtc);
         }
 
         private bool SettleActiveTrade(SaveData saveData, CaravanData caravan)
@@ -616,7 +700,7 @@ namespace ND.Framework
             return true;
         }
 
-        private float CalculateProgress(TradeProgressSaveData progress)
+        private float CalculateProgress(TradeProgressSaveData progress, DateTime evaluationUtc)
         {
             var startTicks = progress.tradeStartUtcTick;
             var endTicks = progress.expectedTradeEndUtcTick;
@@ -636,7 +720,7 @@ namespace ND.Framework
             }
 
             // clamp는 Core JourneyRunner.SetProgress가 담당하므로 여기서는 시간 비율만 계산한다.
-            var elapsedSeconds = (gameTimeProvider.CurrentUtc - startUtc).TotalSeconds;
+            var elapsedSeconds = (evaluationUtc - startUtc).TotalSeconds;
             return (float)(elapsedSeconds / totalSeconds);
         }
 
@@ -645,18 +729,19 @@ namespace ND.Framework
         /// </summary>
         /// <remarks>
         /// JourneyRunner.SetProgress 이전에 호출해야 Core 식량 소모 계산이 올바른 elapsed를 사용한다.
+        /// evaluationUtc를 넘겨 온라인(CurrentUtc)과 오프라인(상한 clamp) 경로를 공유한다.
         /// </remarks>
-        private void SyncElapsedInGameSeconds(SaveData saveData, CaravanData caravan)
+        private void SyncElapsedInGameSeconds(SaveData saveData, CaravanData caravan, DateTime evaluationUtc)
         {
             if (saveData?.caravan == null || saveData.tradeProgress == null || caravan == null
-                || inGameTimeProvider == null || gameTimeProvider == null)
+                || inGameTimeProvider == null)
             {
                 return;
             }
 
             var elapsedInGameSeconds = (float)inGameTimeProvider.GetElapsedInGameSecondsForActiveTrade(
                 saveData.tradeProgress,
-                gameTimeProvider.CurrentUtc);
+                evaluationUtc);
             caravan.elapsedInGameSeconds = elapsedInGameSeconds;
             saveData.caravan.elapsedInGameSeconds = elapsedInGameSeconds;
         }

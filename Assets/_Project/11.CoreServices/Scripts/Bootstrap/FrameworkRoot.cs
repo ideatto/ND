@@ -22,15 +22,15 @@
  * - SharedGameData: 검증된 공용 기준 데이터 provider.
  * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
  * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
- * - CompleteLoadingAndEnterGame(): SharedGameData 로드 후 대기 정산을 복구하고 in-game scene으로 이동한다.
+ * - CompleteLoadingAndEnterGame(): SharedGameData 로드 후 오프라인 복구·대기 정산 복구를 하고 in-game scene으로 이동한다.
  * - ReturnToTitle(): 현재 저장 데이터를 저장한 뒤 title scene으로 이동한다.
  *
  * Important Notes
  * - 중복 FrameworkRoot는 Awake에서 제거된다.
  * - CurrentSaveData는 서비스들이 공유하는 runtime 저장 데이터 참조이므로 직접 수정 시 저장 시점에 주의해야 한다.
  * - SettlementUiBridge는 FrameworkRoot GameObject에 runtime component로 추가된다.
- * - SettlementPending 재실행 시 RestorePendingSettlement로 TradeSettlementReady를 재발행한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Loading 완료 시 ApplyOfflineProgressOnLoad → RestorePendingSettlement 순으로 호출한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
  */
 using System;
 using UnityEngine;
@@ -172,7 +172,8 @@ namespace ND.Framework
         /// </summary>
         /// <remarks>
         /// CurrentSaveData가 비어 있으면 저장 서비스를 통해 복구한 뒤 LoadCompleted 이벤트를 발행한다.
-        /// SharedGameData 로드 이후 SettlementPending이면 RestorePendingSettlement로 runtime 정산 cache를 재구성한다.
+        /// SharedGameData 로드 이후 Traveling이면 ApplyOfflineProgressOnLoad로 오프라인 경과를 적용한다.
+        /// SettlementPending이면 RestorePendingSettlement로 runtime 정산 cache를 재구성한다.
         /// </remarks>
         public void CompleteLoadingAndEnterGame()
         {
@@ -187,6 +188,9 @@ namespace ND.Framework
             {
                 return;
             }
+
+            // Traveling 이어하기는 오프라인 경과·완료를 먼저 반영한 뒤 pending 복구로 이어진다.
+            TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
 
             // SettlementPending 재진입 시 세션 캐시가 비어 있으므로 pendingSettlement로 복구한 뒤 화면을 갱신한다.
             TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
