@@ -22,13 +22,15 @@
  * - SharedGameData: 검증된 공용 기준 데이터 provider.
  * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
  * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
- * - CompleteLoadingAndEnterGame(): 저장 데이터 기반 화면 상태를 갱신하고 in-game scene으로 이동한다.
+ * - CompleteLoadingAndEnterGame(): SharedGameData 로드 후 대기 정산을 복구하고 in-game scene으로 이동한다.
  * - ReturnToTitle(): 현재 저장 데이터를 저장한 뒤 title scene으로 이동한다.
  *
  * Important Notes
  * - 중복 FrameworkRoot는 Awake에서 제거된다.
  * - CurrentSaveData는 서비스들이 공유하는 runtime 저장 데이터 참조이므로 직접 수정 시 저장 시점에 주의해야 한다.
  * - SettlementUiBridge는 FrameworkRoot GameObject에 runtime component로 추가된다.
+ * - SettlementPending 재실행 시 RestorePendingSettlement로 TradeSettlementReady를 재발행한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
  */
 using System;
 using UnityEngine;
@@ -170,6 +172,7 @@ namespace ND.Framework
         /// </summary>
         /// <remarks>
         /// CurrentSaveData가 비어 있으면 저장 서비스를 통해 복구한 뒤 LoadCompleted 이벤트를 발행한다.
+        /// SharedGameData 로드 이후 SettlementPending이면 RestorePendingSettlement로 runtime 정산 cache를 재구성한다.
         /// </remarks>
         public void CompleteLoadingAndEnterGame()
         {
@@ -184,6 +187,9 @@ namespace ND.Framework
             {
                 return;
             }
+
+            // SettlementPending 재진입 시 세션 캐시가 비어 있으므로 pendingSettlement로 복구한 뒤 화면을 갱신한다.
+            TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
 
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
@@ -280,8 +286,9 @@ namespace ND.Framework
 
         private void ClearSettlementRuntimeCache()
         {
-            // 새 무역 출발 시 이전 정산 결과가 UI에 남지 않도록 coordinator와 bridge cache를 함께 비운다.
+            // 새 무역 출발 시 이전 정산 결과가 UI·저장 DTO에 남지 않도록 runtime cache와 pendingSettlement를 함께 비운다.
             TradeProgressCoordinator?.ClearSettlementCache();
+            TradeProgressCoordinator?.ClearPendingSettlementSave(CurrentSaveData);
             SettlementUiBridge?.ClearPendingSettlement();
         }
     }

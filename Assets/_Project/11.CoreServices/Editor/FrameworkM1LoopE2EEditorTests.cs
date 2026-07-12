@@ -10,6 +10,7 @@
  * - SharedGameData 로드, 3회 loop integrity, settle 후 currency 불변·claim 후 currency 변화 검증.
  * - 인게임 식량 소모 elapsed 동기화 및 배율 효과 검증.
  * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 복귀 검증.
+ * - PendingSettlementSaveData 저장·캐시 소실 후 복구·claim·손상 케이스 검증.
  * - Unity batchmode -executeMethod 진입점 제공.
  *
  * Usage for Team Members
@@ -19,7 +20,7 @@
  * Important Notes
  * - Editor 전용이며 Player build에 포함되지 않는다.
  * - JsonSaveService는 persistentDataPath에 저장할 수 있으나 테스트는 in-memory SaveData 참조를 우선 사용한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
  */
 #if UNITY_EDITOR
 using System;
@@ -54,6 +55,7 @@ namespace ND.Framework.Editor
             RunInGameFoodConsumptionE2E(context);
             RunPauseFoodFreezeE2E(TestContext.Create());
             RunFailedSettlementScreenE2E(TestContext.Create());
+            RunPendingSettlementRestoreE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
         }
 
@@ -415,6 +417,245 @@ namespace ND.Framework.Editor
                 "[Framework M1 E2E] Failed settlement screen passed. Failed grade -> Settlement -> claim -> Preparation/Failed state.");
         }
 
+        private static void RunPendingSettlementRestoreE2E(TestContext context)
+        {
+            RunPendingSettlementSuccessRestoreAndClaim(context);
+            RunPendingSettlementFailedRestoreAndClaim(TestContext.Create());
+            RunPendingSettlementCorruptCases(TestContext.Create());
+            RunPendingSettlementProgressRecheckKeepsCache(TestContext.Create());
+            Debug.Log("[Framework M1 E2E] Pending settlement restore checks passed.");
+        }
+
+        private static void RunPendingSettlementSuccessRestoreAndClaim(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            var tradeId = "editor_pending_restore_success";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Pending restore E2E failed to start success trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            context.Coordinator.ForceCompleteActiveTrade();
+
+            var pending = context.SaveData.pendingSettlement;
+            if (pending == null || !pending.hasResult || pending.tradeId != tradeId || pending.claimed)
+            {
+                throw new InvalidOperationException("Pending restore E2E failed because pendingSettlement was not written on settle.");
+            }
+
+            var savedGrade = pending.grade;
+            var savedRevenue = pending.revenue;
+            var currencyBeforeClaim = context.SaveData.player.tradingCurrency;
+
+            SimulateSessionCacheLoss(context);
+
+            if (!context.Coordinator.RestorePendingSettlement(context.SaveData))
+            {
+                throw new InvalidOperationException("Pending restore E2E failed to restore success settlement.");
+            }
+
+            if (context.Coordinator.LastSettlementResult == null
+                || context.Coordinator.LastSettlementTradeId != tradeId
+                || context.Coordinator.LastSettlementResult.grade != savedGrade
+                || context.Coordinator.LastSettlementResult.revenue != savedRevenue)
+            {
+                throw new InvalidOperationException("Pending restore E2E failed because restored cache did not match saved pending result.");
+            }
+
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                throw new InvalidOperationException(
+                    $"Pending restore E2E failed: screen was {context.ScreenRouter.CurrentScreenState}, expected Settlement.");
+            }
+
+            var firstClaim = context.Coordinator.ClaimSettlementAndReset();
+            var duplicateClaim = context.Coordinator.ClaimSettlementAndReset();
+            if (!firstClaim || duplicateClaim)
+            {
+                throw new InvalidOperationException(
+                    $"Pending restore E2E claim validation failed. First: {firstClaim}, Duplicate: {duplicateClaim}");
+            }
+
+            if (context.SaveData.tradeProgress.state != TradeProgressState.Completed)
+            {
+                throw new InvalidOperationException(
+                    $"Pending restore E2E failed: post-claim state was {context.SaveData.tradeProgress.state}, expected Completed.");
+            }
+
+            if (context.SaveData.pendingSettlement != null && context.SaveData.pendingSettlement.hasResult)
+            {
+                throw new InvalidOperationException("Pending restore E2E failed because pendingSettlement was not cleared after claim.");
+            }
+
+            if (context.SaveData.player.tradingCurrency == currencyBeforeClaim)
+            {
+                throw new InvalidOperationException("Pending restore E2E failed because trading currency did not change after restored claim.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Pending settlement success restore + claim passed.");
+        }
+
+        private static void RunPendingSettlementFailedRestoreAndClaim(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.foodAmount = 0;
+            caravan.starveGraceSeconds = 0f;
+
+            var tradeId = "editor_pending_restore_failed";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Pending restore failed-path E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            BackdateActiveTradeStart(context.SaveData, 1d);
+            if (!context.Coordinator.CheckProgressAndCompletion(saveProgress: false)
+                || context.Coordinator.LastSettlementResult == null
+                || context.Coordinator.LastSettlementResult.grade != JourneyResultGrade.Failed)
+            {
+                throw new InvalidOperationException("Pending restore failed-path E2E failed to create Failed settlement.");
+            }
+
+            SimulateSessionCacheLoss(context);
+            if (!context.Coordinator.RestorePendingSettlement(context.SaveData))
+            {
+                throw new InvalidOperationException("Pending restore failed-path E2E failed to restore Failed settlement.");
+            }
+
+            if (context.Coordinator.LastSettlementResult.grade != JourneyResultGrade.Failed
+                || context.Coordinator.LastSettlementResult.failureReason != JourneyFailureReason.FoodDepleted)
+            {
+                throw new InvalidOperationException("Pending restore failed-path E2E failed because Failed grade was not preserved.");
+            }
+
+            if (!context.Coordinator.ClaimSettlementAndReset())
+            {
+                throw new InvalidOperationException("Pending restore failed-path E2E failed to claim restored Failed settlement.");
+            }
+
+            if (context.SaveData.tradeProgress.state != TradeProgressState.Failed)
+            {
+                throw new InvalidOperationException(
+                    $"Pending restore failed-path E2E failed: post-claim state was {context.SaveData.tradeProgress.state}, expected Failed.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Pending settlement Failed restore + claim passed.");
+        }
+
+        private static void RunPendingSettlementCorruptCases(TestContext context)
+        {
+            AssertCorruptRestoreBlocked(
+                context,
+                "hasResult_false",
+                pending =>
+                {
+                    pending.hasResult = false;
+                });
+
+            AssertCorruptRestoreBlocked(
+                TestContext.Create(),
+                "tradeId_mismatch",
+                pending =>
+                {
+                    pending.tradeId = "other_trade_id";
+                });
+
+            AssertCorruptRestoreBlocked(
+                TestContext.Create(),
+                "claimed_true",
+                pending =>
+                {
+                    pending.claimed = true;
+                });
+
+            AssertCorruptRestoreBlocked(
+                TestContext.Create(),
+                "unsupported_resultVersion",
+                pending =>
+                {
+                    pending.resultVersion = PendingSettlementSaveData.CurrentResultVersion + 100;
+                });
+
+            Debug.Log("[Framework M1 E2E] Pending settlement corrupt restore cases passed.");
+        }
+
+        private static void AssertCorruptRestoreBlocked(
+            TestContext context,
+            string caseName,
+            Action<PendingSettlementSaveData> mutatePending)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            var tradeId = $"editor_pending_corrupt_{caseName}";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException($"Pending corrupt E2E ({caseName}) failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            context.Coordinator.ForceCompleteActiveTrade();
+            if (context.SaveData.pendingSettlement == null || !context.SaveData.pendingSettlement.hasResult)
+            {
+                throw new InvalidOperationException($"Pending corrupt E2E ({caseName}) failed because pendingSettlement was missing.");
+            }
+
+            mutatePending(context.SaveData.pendingSettlement);
+            SimulateSessionCacheLoss(context);
+
+            if (context.Coordinator.RestorePendingSettlement(context.SaveData))
+            {
+                throw new InvalidOperationException($"Pending corrupt E2E ({caseName}) unexpectedly restored.");
+            }
+
+            if (context.Coordinator.ClaimSettlementAndReset())
+            {
+                throw new InvalidOperationException($"Pending corrupt E2E ({caseName}) unexpectedly allowed claim.");
+            }
+        }
+
+        private static void RunPendingSettlementProgressRecheckKeepsCache(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            var tradeId = "editor_pending_restore_recheck";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Pending restore recheck E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            context.Coordinator.ForceCompleteActiveTrade();
+            SimulateSessionCacheLoss(context);
+            if (!context.Coordinator.RestorePendingSettlement(context.SaveData))
+            {
+                throw new InvalidOperationException("Pending restore recheck E2E failed to restore settlement.");
+            }
+
+            var gradeBefore = context.Coordinator.LastSettlementResult.grade;
+            var recheckCreatedSettlement = context.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+            if (recheckCreatedSettlement)
+            {
+                throw new InvalidOperationException("Pending restore recheck E2E failed because progress check created a new settlement.");
+            }
+
+            if (context.Coordinator.LastSettlementResult == null
+                || context.Coordinator.LastSettlementResult.grade != gradeBefore)
+            {
+                throw new InvalidOperationException("Pending restore recheck E2E failed because progress check cleared restored cache.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Pending settlement progress recheck keeps restored cache passed.");
+        }
+
+        private static void SimulateSessionCacheLoss(TestContext context)
+        {
+            context.Coordinator.ClearSettlementCache();
+            context.Coordinator.SetActiveCaravan(null);
+        }
+
         private static void BackdateActiveTradeStart(SaveData saveData, double realSeconds)
         {
             if (saveData?.tradeProgress == null || saveData.tradeProgress.tradeStartUtcTick <= 0)
@@ -530,7 +771,11 @@ namespace ND.Framework.Editor
                     saveService,
                     recorder,
                     router,
-                    coordinator.ClearSettlementCache);
+                    () =>
+                    {
+                        coordinator.ClearSettlementCache();
+                        coordinator.ClearPendingSettlementSave(saveData);
+                    });
 
                 return new TestContext
                 {

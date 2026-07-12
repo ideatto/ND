@@ -23,7 +23,7 @@
  *
  * Important Notes
  * - 저장 파일 이름은 save_data.json으로 고정되어 있다.
- * - version이 CurrentVersion과 다르면 migration 없이 새 데이터로 복구한다(version 4: M2 caravan·long 화폐).
+ * - version이 CurrentVersion과 다르면 migration 없이 새 데이터로 복구한다(version 5: pendingSettlement 포함).
  * - Save(...)는 null 입력이나 IO 예외를 로그로 남기고 외부로 예외를 던지지 않는다.
  */
 using System;
@@ -187,6 +187,11 @@ namespace ND.Framework
             if (data.tradeProgress.inGameTimeMultiplierAtStart <= 0f)
             {
                 data.tradeProgress.inGameTimeMultiplierAtStart = 1f;
+            }
+
+            if (data.pendingSettlement == null)
+            {
+                data.pendingSettlement = PendingSettlementSaveDataMapper.CreateEmpty();
             }
 
             if (data.world == null)

@@ -11,10 +11,12 @@
  * - Core caravan runtime data(M2 포함)를 직렬화 가능한 DTO 형태로 보관한다.
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
+ * - SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
  *
  * Usage for Team Members
  * - JsonSaveService가 SaveData를 생성, 로드, 저장한다.
  * - runtime caravan 객체와의 변환은 CaravanSaveDataMapper를 통해 수행한다.
+ * - 대기 정산 결과 변환은 PendingSettlementSaveDataMapper를 통해 수행한다.
  * - 새 저장 필드를 추가할 때는 CurrentVersion과 NormalizeData 정책을 함께 검토한다.
  *
  * Main Public APIs
@@ -25,6 +27,8 @@
  * - Unity JsonUtility 직렬화를 위해 DTO는 public field 중심으로 구성되어 있다.
  * - 시간 값은 UTC DateTime.Ticks 기준으로 저장된다.
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
+ * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
  */
 using System;
 using System.Collections.Generic;
@@ -43,7 +47,7 @@ namespace ND.Framework
         /// <summary>
         /// 현재 코드가 지원하는 저장 데이터 schema version이다.
         /// </summary>
-        public const int CurrentVersion = 4;
+        public const int CurrentVersion = 5;
 
         /// <summary>
         /// 저장 데이터 schema version이다.
@@ -69,6 +73,11 @@ namespace ND.Framework
         /// active trade ID, route ID, 진행 상태, 시간 정보를 저장하는 데이터이다.
         /// </summary>
         public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
+
+        /// <summary>
+        /// SettlementPending 대기 정산 결과이다. 수령 전 재실행 복구에 사용한다.
+        /// </summary>
+        public PendingSettlementSaveData pendingSettlement = new PendingSettlementSaveData();
 
         /// <summary>
         /// 월드 계절, 재난, unlock 목록을 저장하는 데이터이다.
