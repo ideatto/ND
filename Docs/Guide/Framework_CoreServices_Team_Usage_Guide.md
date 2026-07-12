@@ -53,8 +53,9 @@ Boot → Title → New Game → Loading → InGame
 메뉴 ND → Framework → Run M1 Loop + Economy E2E Checks
 ```
 
-포함 항목: loop integrity · Economy E2E · 인게임 식량 · Pause 식량 정지 · Failed 정산 화면 · **PendingSettlement 복구**.  
+포함 항목: loop integrity · Economy E2E · 인게임 식량 · Pause 식량 정지 · Failed 정산 화면 · PendingSettlement 복구 · **Offline 진행 복구**.  
 M3 대기 정산 로직: [`Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)  
+M3 오프라인 진행: [`Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)  
 M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md)
 ---
 
@@ -249,20 +250,31 @@ SettlementUiDataAdapter.OnClickClaimSettlement()
 중복 claim · trade ID 불일치 · `pendingSettlement.claimed`는 Framework가 차단한다.  
 Claim 성공 시 `pendingSettlement`는 clear되고 `Completed`/`Failed`로 기록된다.
 
-### 7-5. 재실행 복구 (PendingSettlement)
+### 7-5. Continue / Load 복구 (Offline + PendingSettlement)
 
-`SettlementPending` 저장 후 Title 복귀·앱 재시작·Continue 시:
+Title Continue 또는 Loading 완료 시:
 
 ```text
 CompleteLoadingAndEnterGame
 → SharedGameData 로드
-→ TradeProgressCoordinator.RestorePendingSettlement
-→ TradeSettlementReady 재발행 (Bridge 캐시 복구)
-→ Settlement 화면
+→ ApplyOfflineProgressOnLoad   (Traveling만: 역행 검사 · 상한 clamp · 경과/식량 · 오프라인 완료)
+→ RestorePendingSettlement     (SettlementPending만: runtime cache · TradeSettlementReady)
+→ RefreshFromSaveData
+→ RaiseLoadCompleted
+→ InGame
 ```
 
-상세: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)  
-검증: `Framework/Run Pending Settlement Restore Smoke`
+- Traveling + 오프라인 미완료: 진행·식량 갱신 후 Traveling 유지
+- Traveling + 오프라인 완료: `SettlementPending` + `pendingSettlement` 저장 + `TradeOfflineCompleted` 1회
+- 이미 SettlementPending: Offline 분기 no-op → Pending 복구만 수행
+- `loadUtc < lastSavedUtcTicks`: `TimeRollbackDetected`, 오프라인 적용 스킵
+
+상세:
+
+- Offline: [`m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
+- Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)
+
+검증: `Framework/Run Offline Progress Smoke`, `Framework/Run Pending Settlement Restore Smoke`
 
 ---
 
@@ -325,8 +337,8 @@ UI 팀 할 일:
 | `InGameScreenChanged` | 인게임 패널 전환 |
 | `CompleteTradeRequested` | debug 즉시 완료 요청 |
 | `RouteEventForced` | debug ForceRouteEvent `(tradeId, eventId)` |
-| `TradeOfflineCompleted` | M3 예정 |
-| `TimeRollbackDetected` | 시간 역행 |
+| `TradeOfflineCompleted` | Offline settle 성공 시 1회 `(tradeId)`. Traveling→SettlementPending 전환 직후. 재로드 시 중복 발행하지 않음 |
+| `TimeRollbackDetected` | Continue/Load 시 `CurrentUtc < lastSavedUtcTicks`이면 발행. Offline 적용은 스킵 |
 
 인자는 공유 참조일 수 있으므로 구독자가 함부로 수정하지 않는다.
 
@@ -367,6 +379,7 @@ InGame에 이미 배치된 컴포넌트:
 | Run Pause Food Freeze Smoke | Pause 중 식량 elapsed 정지 |
 | Run Failed Settlement Screen Smoke | Failed → Settlement → claim → Preparation |
 | Run Pending Settlement Restore Smoke | pending 저장 → 캐시 소실 → 복구 → claim |
+| Run Offline Progress Smoke | Traveling 오프라인 미완료 · 완료 · 재호출 no-op · 역행 |
 | Run Force World Debug Smoke | ForceSeason/Disaster/RouteEvent 일괄 검증 |
 | Force Season / Disaster / Route Event | 월드 Force* |
 | Print Save Data | JSON 확인 |
@@ -390,15 +403,17 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 | 순서 | ContextMenu / 메뉴 | 기대 |
 |------|-------------------|------|
-| 1 | Editor: `ND/Framework/Run M1 Loop + Economy E2E Checks` | `All checks passed.` (Pending restore 포함) |
+| 1 | Editor: `ND/Framework/Run M1 Loop + Economy E2E Checks` | `All checks passed.` (Pending + Offline 포함) |
 | 2 | `Run Pause Food Freeze Smoke` | elapsed/food 불변 |
 | 3 | `Run Failed Settlement Screen Smoke` | Failed → Settlement → Preparation |
 | 4 | `Run Pending Settlement Restore Smoke` | pending 복구 → claim → Preparation |
-| 5 | `Run Force World Debug Smoke` | Season/Disaster Save + RouteEvent Traveling |
+| 5 | `Run Offline Progress Smoke` | incomplete / complete / re-apply / rollback |
+| 6 | `Run Force World Debug Smoke` | Season/Disaster Save + RouteEvent Traveling |
 
 검증 기록:
 
-- M3 Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)
+- M3 Offline: [`m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
+- M3 Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md) (2026-07-12 **Pass**)
 - M2 Pause/Failed/Force: [`m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
 ---
 
@@ -436,6 +451,7 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 | `Docs/Personal_Documents/CSU/world-force-debug-commands.md` | Force* 구현 로직 |
 | `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
 | `Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
+| `Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
 
 ### 테스트 씬 (선택)
 
@@ -456,5 +472,6 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 - UI에서 Core `JourneyRunner`나 Save 화폐를 직접 건드리지 말 것 (정산은 Bridge/Adapter)
 - `Time.timeScale`로 식량·월드 시뮬을 맞추려 하지 말 것
 - ForceRouteEvent를 Core 로드/약탈 **완전 적용**으로 오해하지 말 것
-- AtomicSave / Offline / AutoSave 범위를 PendingSettlement 복구 smoke에 섞지 말 것
+- AtomicSave / AutoSave 범위를 Pending·Offline smoke에 섞지 말 것
+- Offline smoke와 Pending restore smoke를 한 ContextMenu에 섞지 말 것
 - v4 세이브를 v5에서 그대로 이어하기 가능하다고 가정하지 말 것

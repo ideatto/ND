@@ -68,13 +68,17 @@ elapsedInGameSeconds = (CurrentUtc - tradeStartUtc).TotalSeconds × inGameTimeMu
 - 출발 후 runtime 배율을 바꿔도 **진행 중 무역에는 적용되지 않음**
 - Pause 중에는 Framework coordinator가 갱신하지 않음
 
-### 오프라인 복구 (M3 예정)
+### 오프라인 복구 (구현됨)
 
 ```text
-offlineElapsedInGameSeconds = (loadUtc - tradeStartUtc) × inGameTimeMultiplierAtStart
+evaluationUtc = min(loadUtc, lastSavedUtc + maxOfflineRealSeconds)
+offlineElapsedInGameSeconds = (evaluationUtc - tradeStartUtc) × inGameTimeMultiplierAtStart
 ```
 
-공식 변경 시 `InGameTimeConversionPolicy.GetOfflineElapsedInGameSeconds(...)` 한 곳만 수정한다.
+- call site: `TradeProgressCoordinator.ApplyOfflineProgressOnLoad` → `GetOfflineElapsedInGameSeconds` / `GetElapsedInGameSecondsForActiveTrade`
+- `loadUtc < lastSavedUtc`이면 `TimeRollbackDetected`를 발행하고 오프라인 적용을 건너뛴다
+- 공식 변경 시 `InGameTimeConversionPolicy.GetOfflineElapsedInGameSeconds(...)` 한 곳만 수정한다
+- 상세: [`Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
 
 ---
 
@@ -96,6 +100,7 @@ offlineElapsedInGameSeconds = (loadUtc - tradeStartUtc) × inGameTimeMultiplierA
 | `defaultInGameTimeMultiplier` | Release·Editor 공통 **초기** runtime 배율 |
 | `elapsedTimeDisplayUnit` | 경과 인게임 시간 UI 표시 단위 |
 | `foodConsumptionUnit` | 견인 동물 raw rate(`foodPerKm`) 해석 단위 |
+| `maxOfflineRealSeconds` | Continue/Load 시 인정하는 최대 오프라인 현실 초 (`lastSaved` 기준 evaluationUtc 상한, 기본 259200 = 72h) |
 
 ### `InGameTimeUnit`
 
@@ -305,7 +310,7 @@ void ResumeGameTime();
 DateTime CalculateTradeEnd(DateTime startUtc, TimeSpan duration);
 TimeSpan GetRemainingTime(DateTime endUtc);
 
-// 오프라인 복구 (M3)
+// 오프라인 복구 (CompleteLoadingAndEnterGame → ApplyOfflineProgressOnLoad)
 double GetOfflineElapsedInGameSeconds(
     DateTime tradeStartUtc,
     DateTime loadUtc,
@@ -344,7 +349,9 @@ DateTime CurrentUtc { get; }
 
 ## 10. SaveData 필드
 
-저장 schema version: **3** (`SaveData.CurrentVersion`)
+저장 schema version: **5** (`SaveData.CurrentVersion`)
+
+`version 5`부터 `pendingSettlement`(대기 정산 결과)를 포함한다. v4 이하 세이브는 마이그레이션 없이 새 게임으로 복구될 수 있다.
 
 ### `TradeProgressSaveData`
 
@@ -413,7 +420,7 @@ DateTime CurrentUtc { get; }
 | 목적 | 사용 API |
 |------|----------|
 | 계절·재난·마을 갱신 tick | 인게임 초 축 (`elapsedInGameSeconds` 또는 변환 API) |
-| 오프라인 복구 | `GetOfflineElapsedInGameSeconds` (M3 적용 예정) |
+| 오프라인 복구 | `ApplyOfflineProgressOnLoad` → `GetOfflineElapsedInGameSeconds` / evaluationUtc (구현됨) |
 
 ---
 
@@ -511,9 +518,10 @@ Release에서는 **defaultInGameTimeMultiplier**만 초기값으로 사용된다
 | `Assets/_Project/11.CoreServices/Resources/InGameTimePolicyConfig.asset` | runtime config |
 | `Assets/_Project/11.CoreServices/Scripts/Bootstrap/FrameworkRoot.cs` | 서비스 조립·config 로드 |
 | `Assets/_Project/11.CoreServices/Scripts/Debug/FrameworkDebugCommands.cs` | debug API |
-| `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressCoordinator.cs` | progress·elapsed 갱신 |
+| `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressCoordinator.cs` | progress·elapsed 갱신 · ApplyOfflineProgressOnLoad |
 | `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressRecorder.cs` | 출발 시 배율 스냅샷 |
-| `Assets/_Project/11.CoreServices/Scripts/Save/SaveData.cs` | 저장 schema v3 |
+| `Assets/_Project/11.CoreServices/Scripts/Save/SaveData.cs` | 저장 schema v5 (`pendingSettlement` 포함) |
+| `Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md` | 오프라인 복구 로직·테스트 |
 | `Assets/Scripts/InGameTimeTextDisplay.cs` | UI 표시 예시 |
 
 ---

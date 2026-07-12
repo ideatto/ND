@@ -11,6 +11,7 @@
  * - 인게임 식량 소모 elapsed 동기화 및 배율 효과 검증.
  * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 복귀 검증.
  * - PendingSettlementSaveData 저장·캐시 소실 후 복구·claim·손상 케이스 검증.
+ * - Traveling 오프라인 미완료·완료·역행 복구 검증.
  * - Unity batchmode -executeMethod 진입점 제공.
  *
  * Usage for Team Members
@@ -20,7 +21,7 @@
  * Important Notes
  * - Editor 전용이며 Player build에 포함되지 않는다.
  * - JsonSaveService는 persistentDataPath에 저장할 수 있으나 테스트는 in-memory SaveData 참조를 우선 사용한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
  */
 #if UNITY_EDITOR
 using System;
@@ -56,6 +57,7 @@ namespace ND.Framework.Editor
             RunPauseFoodFreezeE2E(TestContext.Create());
             RunFailedSettlementScreenE2E(TestContext.Create());
             RunPendingSettlementRestoreE2E(TestContext.Create());
+            RunOfflineProgressE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
         }
 
@@ -648,6 +650,149 @@ namespace ND.Framework.Editor
             }
 
             Debug.Log("[Framework M1 E2E] Pending settlement progress recheck keeps restored cache passed.");
+        }
+
+        private static void RunOfflineProgressE2E(TestContext context)
+        {
+            RunOfflineIncompleteProgress(context);
+            RunOfflineCompleteAndPending(TestContext.Create());
+            RunOfflineTimeRollback(TestContext.Create());
+            Debug.Log("[Framework M1 E2E] Offline progress checks passed.");
+        }
+
+        private static void RunOfflineIncompleteProgress(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            var tradeId = "editor_offline_incomplete";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Offline incomplete E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            var elapsedBefore = caravan.elapsedInGameSeconds;
+            BackdateActiveTradeStart(context.SaveData, FoodConsumptionBackdateRealSeconds);
+            context.SaveData.lastSavedUtcTicks = DateTime.UtcNow.AddSeconds(-30d).Ticks;
+
+            var offlineCompletedCount = 0;
+            void OnOfflineCompleted(string completedTradeId) => offlineCompletedCount++;
+            FrameworkEvents.TradeOfflineCompleted += OnOfflineCompleted;
+            try
+            {
+                var settled = context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData);
+                if (settled
+                    || context.SaveData.tradeProgress.state != TradeProgressState.Traveling
+                    || offlineCompletedCount != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Offline incomplete E2E failed. Settled: {settled}, State: {context.SaveData.tradeProgress.state}, Events: {offlineCompletedCount}");
+                }
+
+                if (caravan.elapsedInGameSeconds <= elapsedBefore)
+                {
+                    throw new InvalidOperationException(
+                        $"Offline incomplete E2E failed: elapsed did not increase. Before: {elapsedBefore}, After: {caravan.elapsedInGameSeconds}");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.TradeOfflineCompleted -= OnOfflineCompleted;
+            }
+
+            Debug.Log("[Framework M1 E2E] Offline incomplete progress passed.");
+        }
+
+        private static void RunOfflineCompleteAndPending(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            var tradeId = "editor_offline_complete";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Offline complete E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            context.SaveData.tradeProgress.expectedTradeEndUtcTick = DateTime.UtcNow.AddSeconds(-5d).Ticks;
+            context.SaveData.lastSavedUtcTicks = DateTime.UtcNow.AddSeconds(-60d).Ticks;
+
+            var offlineCompletedCount = 0;
+            void OnOfflineCompleted(string completedTradeId) => offlineCompletedCount++;
+            FrameworkEvents.TradeOfflineCompleted += OnOfflineCompleted;
+            try
+            {
+                var settled = context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData);
+                if (!settled
+                    || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                    || context.SaveData.pendingSettlement == null
+                    || !context.SaveData.pendingSettlement.hasResult
+                    || context.SaveData.pendingSettlement.tradeId != tradeId
+                    || offlineCompletedCount != 1)
+                {
+                    throw new InvalidOperationException(
+                        $"Offline complete E2E failed. Settled: {settled}, State: {context.SaveData.tradeProgress.state}, Events: {offlineCompletedCount}");
+                }
+
+                offlineCompletedCount = 0;
+                var secondApply = context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData);
+                if (secondApply || offlineCompletedCount != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Offline complete re-apply E2E failed. Settled: {secondApply}, Events: {offlineCompletedCount}");
+                }
+
+                if (!context.Coordinator.RestorePendingSettlement(context.SaveData)
+                    || context.Coordinator.LastSettlementTradeId != tradeId)
+                {
+                    throw new InvalidOperationException("Offline complete E2E failed to restore pending settlement after offline settle.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.TradeOfflineCompleted -= OnOfflineCompleted;
+            }
+
+            Debug.Log("[Framework M1 E2E] Offline complete + pending restore passed.");
+        }
+
+        private static void RunOfflineTimeRollback(TestContext context)
+        {
+            var caravan = CreateSampleCaravan(context.GameTime);
+            var tradeId = "editor_offline_rollback";
+            var startResult = context.TradeStart.TryStartTrade(caravan, DistanceKm, tradeId, RouteId);
+            if (!startResult.canDepart || !context.TradeStart.LastRecordSucceeded)
+            {
+                throw new InvalidOperationException("Offline rollback E2E failed to start trade.");
+            }
+
+            context.Coordinator.SetActiveCaravan(caravan);
+            var elapsedBefore = caravan.elapsedInGameSeconds;
+            var foodBefore = caravan.foodAmount;
+            context.SaveData.lastSavedUtcTicks = DateTime.UtcNow.AddHours(1d).Ticks;
+
+            var rollbackCount = 0;
+            void OnRollback() => rollbackCount++;
+            FrameworkEvents.TimeRollbackDetected += OnRollback;
+            try
+            {
+                var settled = context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData);
+                if (settled
+                    || rollbackCount != 1
+                    || context.SaveData.tradeProgress.state != TradeProgressState.Traveling
+                    || !Mathf.Approximately(caravan.elapsedInGameSeconds, elapsedBefore)
+                    || caravan.foodAmount != foodBefore)
+                {
+                    throw new InvalidOperationException(
+                        $"Offline rollback E2E failed. Settled: {settled}, RollbackEvents: {rollbackCount}, State: {context.SaveData.tradeProgress.state}");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.TimeRollbackDetected -= OnRollback;
+            }
+
+            Debug.Log("[Framework M1 E2E] Offline time rollback passed.");
         }
 
         private static void SimulateSessionCacheLoss(TestContext context)

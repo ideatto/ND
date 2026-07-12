@@ -6,7 +6,7 @@
 
 **최종 마감:** 2026년 7월 16일 오전 10시  
 **기능 동결:** 2026년 7월 14일 오후 6시  
-**문서 업데이트:** 2026년 7월 9일 — 저장 안정성·자동저장·Caravan 시간 기반 식량·오프라인 시간 배율·정산 캐시 생명주기·대기 정산 결과 복구 반영
+**문서 업데이트:** 2026년 7월 12일 — Traveling 오프라인 복구·`TradeOfflineCompleted`·역행/상한·PendingSettlement Pass 반영  
 
 ---
 
@@ -335,14 +335,14 @@
 
 # 4. 공용 API 체크리스트
 
-- [ ] `GameTimeService`
-- [ ] `IGameTimeProvider`
-- [ ] `GetElapsedInGameTime` 또는 동등한 경과 인게임 시간 API
-- [ ] 현실 시간→인게임 시간 변환 정책
-- [ ] `ISaveService`
-- [ ] `PendingSettlementSaveData`
-- [ ] `PendingSettlementSaveDataMapper` 또는 동등한 결과 DTO 변환 계층
-- [ ] `RestorePendingSettlement` 또는 동등한 대기 정산 복구 API
+- [x] `GameTimeService`
+- [x] `IGameTimeProvider`
+- [x] `GetElapsedInGameTime` 또는 동등한 경과 인게임 시간 API
+- [x] 현실 시간→인게임 시간 변환 정책
+- [x] `ISaveService`
+- [x] `PendingSettlementSaveData`
+- [x] `PendingSettlementSaveDataMapper` 또는 동등한 결과 DTO 변환 계층
+- [x] `RestorePendingSettlement` 또는 동등한 대기 정산 복구 API
 - [ ] `SaveDataValidator`
 - [ ] `AtomicSaveStorage` 또는 동등한 메인·임시·백업 저장 계층
 - [ ] `AutoSaveService`
@@ -351,35 +351,35 @@
 - [ ] `SaveCompleted`
 - [ ] `SaveFailed`
 - [ ] `SaveRecovered`
-- [ ] `LoadCompleted`
-- [ ] `TradeOfflineCompleted`
-- [ ] `TimeRollbackDetected`
-- [ ] `ResetSaveData`
-- [ ] `CompleteTradeImmediately`
-- [ ] `SetTimeScale`
-- [ ] `ForceSeason`
-- [ ] `ForceDisaster`
-- [ ] `ForceRouteEvent`
+- [x] `LoadCompleted`
+- [x] `TradeOfflineCompleted`
+- [x] `TimeRollbackDetected`
+- [x] `ResetSaveData`
+- [x] `CompleteTradeImmediately`
+- [x] `SetTimeScale`
+- [x] `ForceSeason`
+- [x] `ForceDisaster`
+- [x] `ForceRouteEvent`
 
 ---
 
 # 5. 통합 체크리스트
 
 - [ ] develop 브랜치가 매일 빌드된다.
-- [ ] 공용 매니저가 중복되지 않는다.
+- [x] 공용 매니저가 중복되지 않는다.
 - [ ] 씬 이동 중 입력이 중복 처리되지 않는다.
-- [ ] 동일 무역 보상이 한 번만 지급된다.
-- [ ] `LastSettlementResult`는 진행 확인 재호출로 삭제되지 않는다.
-- [ ] 현재 활성 무역 ID와 `LastSettlementTradeId`가 다르면 정산 수령이 차단된다.
-- [ ] 결과가 없는 정산 요청을 `Completed`로 간주하지 않는다.
-- [ ] 정산 수령 후 또는 새 무역 시작 후 이전 런타임 정산 캐시가 남지 않는다.
-- [ ] `SettlementPending` 상태와 `PendingSettlementSaveData`가 함께 저장된다.
-- [ ] 재실행 시 저장된 대기 정산 결과로 Coordinator 캐시와 정산 UI가 복구된다.
-- [ ] 대기 정산 결과 누락·ID 불일치·버전 불일치는 보상 적용 없이 오류 처리된다.
-- [ ] `claimed` 상태가 저장되어 재실행 후 중복 보상이 차단된다.
-- [ ] 온라인·오프라인에서 같은 배율 정책으로 인게임 경과 시간을 계산한다.
-- [ ] 일시정지 중 식량 계산용 경과 인게임 시간이 증가하지 않는다.
-- [ ] 최종 적정 적재량·과적 비율 같은 파생값은 저장 데이터에 중복 기록하지 않는다.
+- [x] 동일 무역 보상이 한 번만 지급된다.
+- [x] `LastSettlementResult`는 진행 확인 재호출로 삭제되지 않는다.
+- [x] 현재 활성 무역 ID와 `LastSettlementTradeId`가 다르면 정산 수령이 차단된다.
+- [x] 결과가 없는 정산 요청을 `Completed`로 간주하지 않는다.
+- [x] 정산 수령 후 또는 새 무역 시작 후 이전 런타임 정산 캐시가 남지 않는다.
+- [x] `SettlementPending` 상태와 `PendingSettlementSaveData`가 함께 저장된다.
+- [x] 재실행 시 저장된 대기 정산 결과로 Coordinator 캐시와 정산 UI가 복구된다.
+- [x] 대기 정산 결과 누락·ID 불일치·버전 불일치는 보상 적용 없이 오류 처리된다.
+- [x] `claimed` 상태가 저장되어 재실행 후 중복 보상이 차단된다.
+- [x] 온라인·오프라인에서 같은 배율 정책으로 인게임 경과 시간을 계산한다.
+- [x] 일시정지 중 식량 계산용 경과 인게임 시간이 증가하지 않는다.
+- [x] 최종 적정 적재량·과적 비율 같은 파생값은 저장 데이터에 중복 기록하지 않는다.
 - [ ] 변경이 없는 상태에서는 자동저장이 불필요한 파일 쓰기를 하지 않는다.
 - [ ] 중요 상태 전환은 즉시 저장된다.
 - [ ] 여러 저장 요청이 발생해도 저장 작업이 동시에 실행되지 않는다.
