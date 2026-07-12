@@ -5,11 +5,14 @@
  * Script Purpose
  * - 진행 중인 무역의 시간 기반 진행률 계산, 정산 생성, claim 후 초기화를 조율한다.
  * - Core JourneyRunner 결과를 SaveData, FrameworkEvents, Economy M1 bridge, 인게임 화면 상태에 반영한다.
+ * - SettlementPending 대기 정산을 PendingSettlementSaveData로 영속화하고 재실행 시 runtime cache를 복구한다.
  *
  * Main Features
  * - 저장된 UTC tick을 기준으로 traveling caravan의 progress01을 갱신한다.
  * - SetProgress 전에 active caravan과 SaveData에 elapsedInGameSeconds를 동기화한다.
  * - 도착 또는 실패 조건을 만족하면 settlement 결과를 생성하고 settlement pending 상태로 전환한다.
+ * - 정산 생성 직후 PendingSettlementSaveData와 SettlementPending을 같은 저장 단위로 기록한다.
+ * - 로드 후 RestorePendingSettlement로 LastSettlementResult·Economy pending·TradeSettlementReady를 재구성한다.
  * - 정산 claim 성공 후 완료/실패 상태를 기록하고 caravan을 준비 상태로 되돌린다.
  * - debug 이벤트를 통해 active trade를 즉시 완료할 수 있다.
  *
@@ -17,18 +20,23 @@
  * - 인게임 진행 갱신 또는 debug command에서 CheckProgressAndCompletion(...)을 호출한다.
  * - settlement UI claim은 SettlementUiBridge를 통해 ClaimSettlementAndReset()으로 연결된다.
  * - runtime caravan을 별도로 준비한 경우 SetActiveCaravan(...)으로 coordinator에 전달한다.
+ * - CompleteLoadingAndEnterGame에서 SharedGameData 로드 이후 RestorePendingSettlement(...)를 호출한다.
  *
  * Main Public APIs
  * - ActiveCaravan: 현재 진행 계산에 사용할 runtime caravan.
  * - CheckProgressAndCompletion(...): 진행률을 갱신하고 정산 가능 시 정산 이벤트를 발행한다.
  * - ClaimSettlementAndReset(): pending settlement를 claim하고 저장 데이터를 준비 상태로 갱신한다.
+ * - RestorePendingSettlement(...): 저장된 대기 정산으로 runtime cache를 복구한다.
  * - ForceCompleteActiveTrade(): 현재 active trade를 즉시 도착 처리한다.
+ * - ClearPendingSettlementSave(...): SaveData의 pendingSettlement DTO를 비운다.
  *
  * Important Notes
  * - 생성자에서 FrameworkEvents.CompleteTradeRequested를 구독한다.
  * - LastSettlementResult는 claim 전 UI 표시와 중복 정산 방지에 사용되는 runtime cache이다.
- * - settle 시 Economy M1 계산으로 JourneyResultData 금액 필드를 채운다.
- * - claim 시 Economy pending 결과를 SaveData 화폐에 반영한다.
+ * - settle 시 Economy M1 계산으로 JourneyResultData 금액 필드를 채운 뒤 pendingSettlement에 저장한다.
+ * - restore 시 Economy pending은 TryCalculateAndFill로 재구성하고, UI 표시 금액은 저장값을 우선한다.
+ * - claim 시 Economy pending 결과를 SaveData 화폐에 반영하고 pendingSettlement를 clear한다.
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
  */
 using System;
 
@@ -175,7 +183,7 @@ namespace ND.Framework
         /// </summary>
         /// <returns>claim, 상태 기록, caravan reset, 저장이 모두 성공하면 true.</returns>
         /// <remarks>
-        /// 성공 시 settlement cache가 삭제되고 InGameScreenState.Preparation으로 전환된다.
+        /// 성공 시 settlement cache와 pendingSettlement가 삭제되고 InGameScreenState.Preparation으로 전환된다.
         /// </remarks>
         public bool ClaimSettlementAndReset()
         {
@@ -229,12 +237,123 @@ namespace ND.Framework
                 return false;
             }
 
+            // 수령 확정 후 대기 정산 DTO를 비워 재실행 시 중복 보상을 막는다.
+            PendingSettlementSaveDataMapper.Clear(saveData);
+
             // reset된 runtime caravan을 저장 데이터에 반영하고 UI를 preparation 화면으로 복귀시킨다.
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Preparation);
             ClearSettlementCache();
 
+            return true;
+        }
+
+        /// <summary>
+        /// 저장된 PendingSettlementSaveData로 runtime settlement cache를 복구한다.
+        /// </summary>
+        /// <param name="saveData">로드된 SaveData. null이면 CurrentSaveData를 사용한다.</param>
+        /// <returns>
+        /// SettlementPending과 pendingSettlement 검증에 성공하고 LastSettlementResult·Economy pending을 재구성하면 true.
+        /// 상태 불일치·결과 누락·claimed·버전 불일치·caravan 상태 불일치 시 false이며 Completed로 강등하지 않는다.
+        /// </returns>
+        /// <remarks>
+        /// SharedGameData가 로드된 뒤 호출해야 Economy pending 재계산이 가능하다.
+        /// 성공 시 TradeSettlementReady를 다시 발행해 SettlementUiBridge cache를 갱신한다.
+        /// </remarks>
+        public bool RestorePendingSettlement(SaveData saveData = null)
+        {
+            saveData = saveData ?? GetSaveData();
+            if (saveData == null || saveData.tradeProgress == null)
+            {
+                FrameworkLog.Warning("Pending settlement restore blocked because trade progress save data is missing.");
+                return false;
+            }
+
+            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            {
+                return false;
+            }
+
+            var pending = saveData.pendingSettlement;
+            if (pending == null || !pending.hasResult)
+            {
+                FrameworkLog.Error(
+                    "Pending settlement restore blocked because SettlementPending has no saved result. Claim remains blocked.");
+                return false;
+            }
+
+            if (pending.claimed)
+            {
+                FrameworkLog.Error("Pending settlement restore blocked because pending settlement is already claimed.");
+                return false;
+            }
+
+            if (pending.resultVersion != PendingSettlementSaveData.CurrentResultVersion)
+            {
+                FrameworkLog.Error(
+                    $"Pending settlement restore blocked because resultVersion {pending.resultVersion} is unsupported. Expected {PendingSettlementSaveData.CurrentResultVersion}.");
+                return false;
+            }
+
+            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            if (string.IsNullOrEmpty(pending.tradeId) || pending.tradeId != activeTradeId)
+            {
+                FrameworkLog.Error(
+                    $"Pending settlement restore blocked because trade ID mismatch. Pending: {pending.tradeId}, Active: {activeTradeId}");
+                return false;
+            }
+
+            if (!PendingSettlementSaveDataMapper.TryToRuntime(pending, out var restoredResult) || restoredResult == null)
+            {
+                FrameworkLog.Error("Pending settlement restore blocked because pending settlement could not be mapped to JourneyResultData.");
+                return false;
+            }
+
+            var caravan = EnsureActiveCaravan();
+            if (caravan == null)
+            {
+                FrameworkLog.Error("Pending settlement restore blocked because active caravan is missing.");
+                return false;
+            }
+
+            if (caravan.state != JourneyState.Settling || caravan.settlementClaimed)
+            {
+                FrameworkLog.Error(
+                    $"Pending settlement restore blocked because caravan state is invalid. State: {caravan.state}, Claimed: {caravan.settlementClaimed}");
+                return false;
+            }
+
+            LastSettlementTradeId = pending.tradeId;
+            LastSettlementResult = restoredResult;
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded)
+            {
+                FrameworkLog.Warning("Pending settlement Economy rebuild skipped because shared game data is not loaded. Claim currency apply may fail.");
+            }
+            else if (!economySettlementBridge.TryCalculateAndFill(saveData, caravan, restoredResult, sharedGameData))
+            {
+                FrameworkLog.Warning("Pending settlement Economy rebuild failed. Saved display amounts are kept for UI.");
+            }
+            else
+            {
+                // UI에는 저장 시점의 확정 금액을 우선 표시하고, Claim apply는 재계산된 Economy pending을 사용한다.
+                if (restoredResult.revenue != pending.revenue
+                    || restoredResult.cost != pending.cost
+                    || restoredResult.netProfit != pending.netProfit)
+                {
+                    FrameworkLog.Warning(
+                        "Pending settlement Economy amounts differ from saved values. UI uses saved amounts; claim apply uses recalculated Economy pending.");
+                }
+
+                restoredResult.revenue = pending.revenue;
+                restoredResult.cost = pending.cost;
+                restoredResult.netProfit = pending.netProfit;
+            }
+
+            FrameworkEvents.RaiseTradeSettlementReady(LastSettlementTradeId, LastSettlementResult);
+            FrameworkLog.Info($"Pending settlement restored. TradeId: {LastSettlementTradeId}, Grade: {LastSettlementResult.grade}");
             return true;
         }
 
@@ -246,6 +365,15 @@ namespace ND.Framework
             LastSettlementTradeId = string.Empty;
             LastSettlementResult = null;
             economySettlementBridge.ClearPending();
+        }
+
+        /// <summary>
+        /// SaveData의 pendingSettlement DTO를 빈 상태로 초기화한다.
+        /// </summary>
+        /// <param name="saveData">대상 SaveData. null이면 CurrentSaveData를 사용한다.</param>
+        public void ClearPendingSettlementSave(SaveData saveData = null)
+        {
+            PendingSettlementSaveDataMapper.Clear(saveData ?? GetSaveData());
         }
 
         /// <summary>
@@ -313,6 +441,7 @@ namespace ND.Framework
 
             // 생성된 결과를 runtime cache와 저장 데이터에 반영하고 UI 계층에 settlement 준비를 알린다.
             var settlementTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            var settlementRouteId = saveData.tradeProgress.activeRouteId ?? string.Empty;
             LastSettlementTradeId = settlementTradeId;
             LastSettlementResult = result;
 
@@ -325,6 +454,9 @@ namespace ND.Framework
             {
                 FrameworkLog.Warning("Economy M1 settlement preview failed. Core settlement grade is still available.");
             }
+
+            // SettlementPending과 확정 정산 결과를 같은 저장 단위에 기록한다.
+            saveData.pendingSettlement = PendingSettlementSaveDataMapper.ToSave(result, settlementTradeId, settlementRouteId);
 
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
@@ -363,6 +495,23 @@ namespace ND.Framework
                 FrameworkLog.Warning(
                     $"Settlement claim blocked because cached trade ID does not match active trade ID. Cached: {LastSettlementTradeId}, Active: {activeTradeId}");
                 return false;
+            }
+
+            var pending = saveData.pendingSettlement;
+            if (pending != null && pending.hasResult)
+            {
+                if (pending.claimed)
+                {
+                    FrameworkLog.Warning("Settlement claim blocked because pending settlement is already claimed.");
+                    return false;
+                }
+
+                if (!string.IsNullOrEmpty(pending.tradeId) && pending.tradeId != activeTradeId)
+                {
+                    FrameworkLog.Warning(
+                        $"Settlement claim blocked because pending settlement trade ID does not match active trade ID. Pending: {pending.tradeId}, Active: {activeTradeId}");
+                    return false;
+                }
             }
 
             return true;

@@ -53,7 +53,8 @@ Boot → Title → New Game → Loading → InGame
 메뉴 ND → Framework → Run M1 Loop + Economy E2E Checks
 ```
 
-포함 항목: loop integrity · Economy E2E · 인게임 식량 · **Pause 식량 정지** · **Failed 정산 화면**.  
+포함 항목: loop integrity · Economy E2E · 인게임 식량 · Pause 식량 정지 · Failed 정산 화면 · **PendingSettlement 복구**.  
+M3 대기 정산 로직: [`Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)  
 M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md)
 ---
 
@@ -116,8 +117,8 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 | 항목 | 내용 |
 |------|------|
 | 구현 | `JsonSaveService` → `persistentDataPath/save_data.json` |
-| 스키마 | `SaveData` version **4** |
-| 주요 섹션 | `player`, `caravan`, `tradeProgress`, `world`, `tutorial` |
+| 스키마 | `SaveData` version **5** |
+| 주요 섹션 | `player`, `caravan`, `tradeProgress`, `pendingSettlement`, `world`, `tutorial` |
 
 자주 보는 필드:
 
@@ -125,6 +126,9 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 |------|------|
 | `tradeProgress.state` | None / Preparing / Traveling / SettlementPending / Completed / Failed |
 | `tradeProgress.activeTradeId` | 현재 무역 ID |
+| `pendingSettlement` | SettlementPending 대기 정산 결과 (재실행 복구용) |
+| `pendingSettlement.hasResult` | 유효 정산 결과 존재 |
+| `pendingSettlement.claimed` | 이미 수령한 pending (복구·재수령 차단) |
 | `world.currentSeasonId` | 계절 (Economy 입력) |
 | `world.currentDisasterId` | 재난 (빈 문자열 = 없음) |
 | `caravan.elapsedInGameSeconds` | 인게임 경과(식량) |
@@ -133,9 +137,10 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 디버그 출력:
 
 - `TradeStartDebugHarness` → `Framework/Print Save Data`
-- `SaveDataDebugPrinter` → `Framework/Print Full Save Data`
+- `SaveDataDebugPrinter` → `Framework/Print Full Save Data` / `Print Pending Settlement Save Data`
 
-버전 불일치 시 마이그레이션 없이 새 게임 데이터가 될 수 있다.
+버전 불일치 시 마이그레이션 없이 새 게임 데이터가 될 수 있다.  
+**v4 이하 세이브는 v5 코드에서 새 게임으로 복구될 수 있으므로**, M3 통합 전에는 New Game으로 맞추는 것을 권장한다.
 
 ---
 
@@ -241,7 +246,23 @@ SettlementUiDataAdapter.OnClickClaimSettlement()
 → SettlementUiBridge → ClaimSettlementAndReset
 ```
 
-중복 claim · trade ID 불일치는 Framework가 차단한다.
+중복 claim · trade ID 불일치 · `pendingSettlement.claimed`는 Framework가 차단한다.  
+Claim 성공 시 `pendingSettlement`는 clear되고 `Completed`/`Failed`로 기록된다.
+
+### 7-5. 재실행 복구 (PendingSettlement)
+
+`SettlementPending` 저장 후 Title 복귀·앱 재시작·Continue 시:
+
+```text
+CompleteLoadingAndEnterGame
+→ SharedGameData 로드
+→ TradeProgressCoordinator.RestorePendingSettlement
+→ TradeSettlementReady 재발행 (Bridge 캐시 복구)
+→ Settlement 화면
+```
+
+상세: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)  
+검증: `Framework/Run Pending Settlement Restore Smoke`
 
 ---
 
@@ -277,6 +298,8 @@ TradeSettlementReady
 → OnClickClaimSettlement
 ```
 
+재실행·Continue 시에도 `RestorePendingSettlement`가 `TradeSettlementReady`를 다시 발행하므로, UI는 기존 이벤트 구독만으로 복구 결과를 받을 수 있다.
+
 UI 팀 할 일:
 
 1. `ISettlementView` 구현
@@ -298,7 +321,7 @@ UI 팀 할 일:
 | `SharedGameDataLoaded` | 공용 데이터 준비 |
 | `LoadCompleted` | SaveData 준비 |
 | `SceneChanged` | 씬 로드 완료 |
-| `TradeSettlementReady` | 정산 결과 준비 `(tradeId, JourneyResultData)` |
+| `TradeSettlementReady` | 정산 결과 준비 `(tradeId, JourneyResultData)`. Settle뿐 아니라 **RestorePendingSettlement** 시에도 재발행 |
 | `InGameScreenChanged` | 인게임 패널 전환 |
 | `CompleteTradeRequested` | debug 즉시 완료 요청 |
 | `RouteEventForced` | debug ForceRouteEvent `(tradeId, eventId)` |
@@ -343,6 +366,7 @@ InGame에 이미 배치된 컴포넌트:
 | Run InGame Food Consumption Smoke | 인게임 식량 연동 |
 | Run Pause Food Freeze Smoke | Pause 중 식량 elapsed 정지 |
 | Run Failed Settlement Screen Smoke | Failed → Settlement → claim → Preparation |
+| Run Pending Settlement Restore Smoke | pending 저장 → 캐시 소실 → 복구 → claim |
 | Run Force World Debug Smoke | ForceSeason/Disaster/RouteEvent 일괄 검증 |
 | Force Season / Disaster / Route Event | 월드 Force* |
 | Print Save Data | JSON 확인 |
@@ -360,18 +384,22 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 상세: [`Framework_World_Force_Debug_API_Guide.md`](./Framework_World_Force_Debug_API_Guide.md)
 
-### 11-4. M2 통합 Smoke 체크리스트
+### 11-4. M2 / M3 통합 Smoke 체크리스트
 
 경로: Boot → Title → New Game → Loading → InGame
 
 | 순서 | ContextMenu / 메뉴 | 기대 |
 |------|-------------------|------|
-| 1 | Editor: `ND/Framework/Run M1 Loop + Economy E2E Checks` | `All checks passed.` |
+| 1 | Editor: `ND/Framework/Run M1 Loop + Economy E2E Checks` | `All checks passed.` (Pending restore 포함) |
 | 2 | `Run Pause Food Freeze Smoke` | elapsed/food 불변 |
 | 3 | `Run Failed Settlement Screen Smoke` | Failed → Settlement → Preparation |
-| 4 | `Run Force World Debug Smoke` | Season/Disaster Save + RouteEvent Traveling |
+| 4 | `Run Pending Settlement Restore Smoke` | pending 복구 → claim → Preparation |
+| 5 | `Run Force World Debug Smoke` | Season/Disaster Save + RouteEvent Traveling |
 
-검증 기록: [`m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
+검증 기록:
+
+- M3 Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)
+- M2 Pause/Failed/Force: [`m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
 ---
 
 ## 12. 팀별 빠른 경로
@@ -407,6 +435,7 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 | `Docs/Personal_Documents/CSU/caravan-ingame-food-sync.md` | 식량·인게임 시간 |
 | `Docs/Personal_Documents/CSU/world-force-debug-commands.md` | Force* 구현 로직 |
 | `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
+| `Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
 
 ### 테스트 씬 (선택)
 
@@ -427,4 +456,5 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 - UI에서 Core `JourneyRunner`나 Save 화폐를 직접 건드리지 말 것 (정산은 Bridge/Adapter)
 - `Time.timeScale`로 식량·월드 시뮬을 맞추려 하지 말 것
 - ForceRouteEvent를 Core 로드/약탈 **완전 적용**으로 오해하지 말 것
-- M3(AtomicSave / Offline / AutoSave) 범위를 M2 smoke에 섞지 말 것
+- AtomicSave / Offline / AutoSave 범위를 PendingSettlement 복구 smoke에 섞지 말 것
+- v4 세이브를 v5에서 그대로 이어하기 가능하다고 가정하지 말 것

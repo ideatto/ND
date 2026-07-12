@@ -9,6 +9,7 @@
  * Main Features
  * - 전체 SaveData JSON 출력 ContextMenu를 제공한다.
  * - TradeProgressSaveData의 ID, 상태, UTC tick, ISO UTC 시각을 출력한다.
+ * - PendingSettlementSaveData의 hasResult·tradeId·grade·claimed를 출력한다.
  *
  * Usage for Team Members
  * - 디버그용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
@@ -17,6 +18,7 @@
  * Main Public APIs
  * - PrintFullSaveData(): 현재 SaveData 전체를 JSON으로 출력한다.
  * - PrintTradeProgress(): 현재 무역 진행 저장 데이터를 출력한다.
+ * - PrintPendingSettlement(): 현재 대기 정산 저장 데이터를 출력한다.
  *
  * Important Notes
  * - 출력 로직은 UNITY_EDITOR 또는 DEVELOPMENT_BUILD에서만 동작한다.
@@ -83,6 +85,36 @@ namespace ND.Framework
                 + $"TradeStartUtc: {startUtc}\n"
                 + $"ExpectedTradeEndUtcTick: {progress.expectedTradeEndUtcTick}\n"
                 + $"ExpectedTradeEndUtc: {expectedEndUtc}");
+#endif
+        }
+
+        /// <summary>
+        /// 현재 PendingSettlementSaveData를 사람이 읽기 쉬운 형태로 출력한다.
+        /// </summary>
+        [ContextMenu("Framework/Print Pending Settlement Save Data")]
+        public void PrintPendingSettlement()
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var saveData = GetCurrentSaveData();
+            if (saveData == null || saveData.pendingSettlement == null)
+            {
+                FrameworkLog.Warning("No pending settlement save data is available.");
+                return;
+            }
+
+            var pending = saveData.pendingSettlement;
+            FrameworkLog.Info(
+                "Pending settlement save data:\n"
+                + $"HasResult: {pending.hasResult}\n"
+                + $"TradeId: {pending.tradeId}\n"
+                + $"RouteId: {pending.routeId}\n"
+                + $"ResultVersion: {pending.resultVersion}\n"
+                + $"Grade: {pending.grade}\n"
+                + $"FailureReason: {pending.failureReason}\n"
+                + $"Revenue: {pending.revenue}\n"
+                + $"Cost: {pending.cost}\n"
+                + $"NetProfit: {pending.netProfit}\n"
+                + $"Claimed: {pending.claimed}");
 #endif
         }
 

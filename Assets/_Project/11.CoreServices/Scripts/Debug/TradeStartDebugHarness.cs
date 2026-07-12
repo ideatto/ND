@@ -10,6 +10,7 @@
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
  * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
  * - Pause 중 식량 elapsed 정지 smoke, Failed 정산 화면 smoke, Force* World debug smoke를 제공한다.
+ * - PendingSettlementSaveData 저장 후 세션 캐시 소실·복구·claim smoke를 제공한다.
  * - ForceSeason / ForceDisaster / ForceRouteEvent ContextMenu로 M2 월드 debug API를 호출한다.
  *
  * Usage for Team Members
@@ -25,13 +26,14 @@
  * - RunInGameFoodConsumptionSmoke(): 인게임 배율에 따른 식량 소모 연동을 검증한다.
  * - RunPauseFoodFreezeSmoke(): Pause 중 elapsed/식량이 증가하지 않는지 검증한다.
  * - RunFailedSettlementScreenSmoke(): Failed grade 정산 화면 진입과 claim 후 Preparation 복귀를 검증한다.
+ * - RunPendingSettlementRestoreSmoke(): pendingSettlement 저장·캐시 소실·복구·claim을 검증한다.
  * - RunForceWorldDebugSmoke(): ForceSeason/Disaster/RouteEvent 기본 재현을 검증한다.
  * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling inject hook을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
  * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
  */
 using System;
 using UnityEngine;
@@ -701,6 +703,116 @@ namespace ND.Framework
 
             FrameworkLog.Info(
                 "Failed settlement screen smoke passed. Failed grade -> Settlement -> claim -> Preparation/Failed state.");
+        }
+
+        /// <summary>
+        /// pendingSettlement 저장 후 세션 캐시 소실을 시뮬레이션하고 복구·claim까지 검증한다.
+        /// </summary>
+        /// <remarks>
+        /// CompleteLoadingAndEnterGame의 RestorePendingSettlement 경로를 Play Mode에서 재현한다.
+        /// </remarks>
+        [ContextMenu("Framework/Run Pending Settlement Restore Smoke")]
+        public void RunPendingSettlementRestoreSmoke()
+        {
+            var coordinator = GetCoordinator();
+            var root = FrameworkRoot.Instance;
+            if (coordinator == null || root == null || root.TradeStart == null || root.SaveService == null)
+            {
+                return;
+            }
+
+            var saveData = root.CurrentSaveData;
+            var bridge = root.SettlementUiBridge;
+            if (saveData == null)
+            {
+                FrameworkLog.Warning("Pending settlement restore smoke skipped because save data is not ready.");
+                return;
+            }
+
+            FillSampleCaravan();
+            var smokeTradeId = $"{tradeId}_pending_restore_smoke";
+            var startResult = root.TradeStart.TryStartTrade(caravan, distanceKm, smokeTradeId, routeId);
+            if (!startResult.canDepart || !root.TradeStart.LastRecordSucceeded)
+            {
+                FrameworkLog.Warning("Pending settlement restore smoke failed to start trade.");
+                return;
+            }
+
+            coordinator.SetActiveCaravan(caravan);
+            coordinator.ForceCompleteActiveTrade();
+
+            var pending = saveData.pendingSettlement;
+            if (pending == null || !pending.hasResult || pending.tradeId != smokeTradeId)
+            {
+                FrameworkLog.Warning("Pending settlement restore smoke failed because pendingSettlement was not written.");
+                return;
+            }
+
+            if (saveData.tradeProgress == null
+                || saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            {
+                FrameworkLog.Warning(
+                    $"Pending settlement restore smoke failed: trade state was {saveData.tradeProgress?.state}, expected SettlementPending.");
+                return;
+            }
+
+            var savedGrade = pending.grade;
+            root.SaveService.Save(saveData);
+
+            coordinator.ClearSettlementCache();
+            coordinator.SetActiveCaravan(null);
+            bridge?.ClearPendingSettlement();
+
+            if (!coordinator.RestorePendingSettlement(saveData))
+            {
+                FrameworkLog.Warning("Pending settlement restore smoke failed because RestorePendingSettlement returned false.");
+                return;
+            }
+
+            if (coordinator.LastSettlementResult == null
+                || coordinator.LastSettlementTradeId != smokeTradeId
+                || coordinator.LastSettlementResult.grade != savedGrade)
+            {
+                FrameworkLog.Warning("Pending settlement restore smoke failed because coordinator cache did not match saved result.");
+                return;
+            }
+
+            if (bridge != null)
+            {
+                if (!bridge.TryGetPendingSettlement(out var bridgeTradeId, out var bridgeResult)
+                    || bridgeTradeId != smokeTradeId
+                    || bridgeResult == null
+                    || bridgeResult.grade != savedGrade)
+                {
+                    FrameworkLog.Warning("Pending settlement restore smoke failed because SettlementUiBridge cache was not restored.");
+                    return;
+                }
+            }
+
+            var firstClaim = coordinator.ClaimSettlementAndReset();
+            var duplicateClaim = coordinator.ClaimSettlementAndReset();
+            if (!firstClaim || duplicateClaim)
+            {
+                FrameworkLog.Warning(
+                    $"Pending settlement restore smoke failed claim validation. First: {firstClaim}, Duplicate: {duplicateClaim}");
+                return;
+            }
+
+            if (saveData.pendingSettlement != null && saveData.pendingSettlement.hasResult)
+            {
+                FrameworkLog.Warning("Pending settlement restore smoke failed because pendingSettlement was not cleared after claim.");
+                return;
+            }
+
+            if (root.InGameScreenRouter != null
+                && root.InGameScreenRouter.CurrentScreenState != InGameScreenState.Preparation)
+            {
+                FrameworkLog.Warning(
+                    $"Pending settlement restore smoke failed: post-claim screen was {root.InGameScreenRouter.CurrentScreenState}, expected Preparation.");
+                return;
+            }
+
+            FrameworkLog.Info("Pending settlement restore smoke passed.");
         }
 
         /// <summary>
