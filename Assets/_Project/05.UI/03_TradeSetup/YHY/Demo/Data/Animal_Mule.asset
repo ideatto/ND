@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eadc130ef2c03854a861d0901c84e75d, type: 3}
+  m_Name: Animal_Mule
+  m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
+  draftAnimalId: an_mule
+  displayName: Mule
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  description: 
+  animalType: 2
+  feedConsumption: 1
+  baseMoveSpeed: 5
+  increaseOverLoad: 12
+  increaseMaxLoad: 18
+  rarity: 0
+  baseBuyPrice: 0
+  canStack: 0
+  maxCount: 5
+  affectModify: 0
+  modifiers: []
+  localSpecialty: 0

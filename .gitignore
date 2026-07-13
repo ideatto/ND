@@ -150,3 +150,9 @@ crashlytics-build.properties
 # - Commit the imported dependency once, subject to its license and repository size
 # - Use a separately versioned embedded/local package
 #
+
+# -----------------------------------------------------------------------------
+# Personal dev artifacts (YHY): MCP demo verification screenshots
+# -----------------------------------------------------------------------------
+/Assets/Screenshots/
+/Assets/Screenshots.meta

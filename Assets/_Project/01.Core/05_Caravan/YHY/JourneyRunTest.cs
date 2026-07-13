@@ -403,6 +403,23 @@ public class JourneyRunTest : MonoBehaviour
         Debug.Log($"[수리] 마차 내구도 {before} → {caravan.currentDurability}/{caravan.wagon.maxDurability} (완전 수리)");
     }
 
+    // [테스트] BuildPrepareDisplay 결과 확인 — UI(이종현님)가 받을 "준비 화면 값 묶음"을 로그로.
+    [ContextMenu("준비 표시 확인")]
+    public void LogPrepareDisplay()
+    {
+        if (caravan == null || caravan.wagon == null)
+        {
+            Debug.LogWarning("[준비표시] 상단이 없음 — 먼저 'SO에서 상단 채우기'");
+            return;
+        }
+
+        PrepareDisplayData p = CaravanCalculator.BuildPrepareDisplay(caravan, distanceKm, inGameTimeMultiplier);
+        Debug.Log(
+            $"[준비 표시] 짐무게 {p.currentLoad:0.#} (무역품 {p.cargoWeight:0.#} + 식량 {p.foodWeight:0.#}) / 적정 {p.overloadLimit:0.#} / 최대 {p.maxLoad:0.#}\n" +
+            $"   ↳ 칸 {p.usedSlots}/{p.maxSlots} · 물건 {p.cargoCount}개 · 과적 {(p.isOverloaded ? $"O({p.overloadRatio:P0}, 속도 {p.loadSpeedModifier:0.##}배)" : "X")}\n" +
+            $"   ↳ 예상 이동 {p.estimatedTravelSeconds:0.#}초 · 예상 식량 {p.requiredFood:0.#}");
+    }
+
     // [캐시 갱신] 구성이 바뀌면 불러서 파생값(적재·속도 등)을 다시 계산해 캐시한다.
     //            계산은 CaravanCalculator(순수 계산기)가 하고, 여기선 결과만 저장.
     public void RecalculateCache()

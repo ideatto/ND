@@ -275,4 +275,39 @@ public static class CaravanCalculator
         float consumed = GetConsumptionPerSec(caravan) * caravan.elapsedInGameSeconds;   // 인게임 경과 기준
         return caravan.foodAmount - consumed - caravan.runFoodLost;
     }
+
+    // =========================================================================
+    // 준비 화면 표시용 묶음 (UI 지원) — 위 계산값들을 한 번에 반환
+    // =========================================================================
+
+    /// <summary>준비 화면에 필요한 Core 계산값을 한 번에 묶어 반환한다. [1차 빌드 UI 지원]
+    /// UI(이종현님)는 이 한 번의 호출로 PrepareDisplayData를 받아 바인딩만 하면 된다.</summary>
+    /// <param name="distanceKm">선택한 무역로 거리(Km).</param>
+    /// <param name="inGameTimeMultiplier">인게임 시간 배율 (예상 식량 계산용). Framework/테스트가 넘김.</param>
+    public static PrepareDisplayData BuildPrepareDisplay(CaravanData caravan, float distanceKm, float inGameTimeMultiplier)
+    {
+        PrepareDisplayData d = new PrepareDisplayData();
+        if (caravan == null) return d;
+
+        // 적재(무게)
+        d.currentLoad       = GetCurrentLoad(caravan);
+        d.cargoWeight       = GetCargoWeight(caravan);
+        d.foodWeight        = GetFoodWeight(caravan);
+        d.overloadLimit     = GetFinalEfficientLoad(caravan);
+        d.maxLoad           = GetMaxLoad(caravan);
+        d.isOverloaded      = IsOverloaded(caravan);
+        d.overloadRatio     = GetOverloadRatio(caravan);
+        d.loadSpeedModifier = GetLoadSpeedModifier(caravan);
+
+        // 슬롯(칸)
+        d.usedSlots = GetUsedSlots(caravan);
+        d.maxSlots  = GetMaxSlots(caravan);
+
+        // 개수·식량·시간
+        d.cargoCount             = GetCargoCount(caravan);
+        d.estimatedTravelSeconds = GetTravelSeconds(caravan, distanceKm);
+        d.requiredFood           = GetEstimatedFood(caravan, distanceKm, inGameTimeMultiplier);
+
+        return d;
+    }
 }
