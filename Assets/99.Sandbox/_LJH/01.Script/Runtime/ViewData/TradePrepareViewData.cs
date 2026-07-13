@@ -28,4 +28,18 @@ public class TradePrepareViewData
     public int requiredMercenaryPower;
 
     public TradePrepareConditionResult startCondition;
+
+    public WagonViewData[] wagons;
+    public DraftAnimalViewData[] draftAnimals;
+    public MercenaryViewData[] mercenaries;
+
+    public string selectedWagonId;
+
+    public long mercenaryCost;
+    public long totalPreparationCost;
+    public long estimatedSellRevenue;
+    public long estimatedNetProfit;
+
+    public float estimatedTime;
+    public float currentMoveSpeed;
 }

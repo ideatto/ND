@@ -1,0 +1,19 @@
+using UnityEngine;
+
+[System.Serializable]
+public class MercenaryViewData
+{
+    public string mercenaryId;
+    public string displayName;
+    public Sprite icon;
+    public string description;
+
+    public float combatCapability;
+    public long baseBuyPrice;
+
+    public int availableAmount;
+    public int selectedAmount;
+
+    public bool canHire;
+    public string disabledReason;
+}
