@@ -9,6 +9,74 @@
 
 ---
 
+## 0. API 쉬운 안내 (팀원용)
+
+Title Settings에서 쓰는 API를 **버튼·슬라이더에 무엇을 연결하면 되는지** 기준으로 정리한다.
+
+### 한 줄로
+
+- **화면 버튼** → 대부분 `SettingsUIManager` 또는 `TitleSceneController`
+- **실제 소리/해상도 처리** → `SoundManager` / `DisplayManager` (자동 생성, 직접 씬에 안 넣어도 됨)
+- **기본값(Reset 기준)** → Project의 `SoundSettingsConfig` / `DisplaySettingsConfig` 에셋
+
+### 누가 무엇을 하나
+
+| 이름 | 쉬운 역할 |
+|------|-----------|
+| `SettingsUIManager` | Settings 패널 열고 닫기 + UI 조작을 매니저에 전달 + 열 때/Reset 때 화면 숫자를 매니저 값에 맞춤 |
+| `SoundManager` | BGM/SFX 볼륨, 켜기/끄기, 재생 |
+| `DisplayManager` | 창모드·해상도 바꾸기 |
+| `SoundSettingsConfig` / `DisplaySettingsConfig` | “공장 초기값”. Reset 누르면 여기 값으로 돌아감 |
+| `TitleSceneController` / `FrameworkRoot` | 새 게임·이어하기·종료(저장 후 끄기) |
+
+### Settings 패널 — Prefab에 연결할 메서드
+
+| 하고 싶은 일 | 연결할 대상 | 메서드 | 전달 값 |
+|--------------|-------------|--------|---------|
+| Settings 열기 | `SettingsUIManager` | `OpenOption` | 없음 |
+| Settings 닫기 | `SettingsUIManager` | `CloseOption` | 없음 |
+| Settings 열기/닫기 토글 | `SettingsUIManager` | `ToggleOption` | 없음 |
+| BGM 볼륨 | `SettingsUIManager` | `SetBgmVolume` | Slider float (0~1) |
+| SFX 볼륨 | `SettingsUIManager` | `SetSfxVolume` | Slider float (0~1) |
+| BGM 켜기/끄기 | `SettingsUIManager` | `SetBgmEnabled` | Toggle bool |
+| SFX 켜기/끄기 | `SettingsUIManager` | `SetSfxEnabled` | Toggle bool |
+| 창 모드 | `SettingsUIManager` | `SetWindowMode` | Dropdown int: 0 창모드 / 1 전체 창모드 / 2 전체모드 |
+| 해상도 | `SettingsUIManager` | `SetResolution` | Dropdown int: 0=1280x720 / 1=1920x1080 / 2=2560x1440 |
+| 기본값으로 되돌리기 | `SettingsUIManager` | `ResetAllSettings` | 없음 |
+| 게임 종료 | `TitleSceneController` | `ExitGame` | 없음 (저장 후 종료, Editor면 Play 중지) |
+
+### 코드에서 직접 쓸 때 (Sound / Display)
+
+UI를 거치지 않고 게임플레이 코드에서 부를 때:
+
+| 하고 싶은 일 | 호출 |
+|--------------|------|
+| BGM 바꾸기 | `SoundManager.Instance.PlayBgm(clip)` |
+| BGM 정지 | `SoundManager.Instance.StopBgm()` |
+| SFX 한 번 재생 | `SoundManager.Instance.PlaySfx(clip)` |
+| 볼륨/토글 | `SetBgmVolume` / `SetSfxVolume` / `SetBgmEnabled` / `SetSfxEnabled` |
+| 소리 기본값 복구 | `SoundManager.Instance.ResetToDefaults()` |
+| 창 모드 | `DisplayManager.Instance.SetWindowMode(mode 또는 int)` |
+| 해상도 | `DisplayManager.Instance.SetResolution(preset 또는 int)` |
+| 화면 기본값 복구 | `DisplayManager.Instance.ResetToDefaults()` |
+
+### 기본값을 바꾸고 싶을 때
+
+1. Project에서 `Assets/_Project/05.UI/02_Title/Resources/SoundSettingsConfig` 또는 `DisplaySettingsConfig` 선택
+2. Inspector에서 숫자·토글·모드 수정
+3. Play 중 Reset 버튼 → 그 값으로 복귀
+4. Settings를 다시 열면 화면도 그 값에 맞춰 보임 (`OpenOption`이 UI를 동기화함)
+
+### Inspector에서 꼭 연결할 것 (`SettingsUIManager`)
+
+동기화가 되려면 SettingsUIManager에 아래를 드래그해 넣어야 한다.
+
+- Bgm Slider, Sfx Slider, Bgm Toggle, Sfx Toggle
+- Window Mode Dropdown, Resolution Dropdown
+- Option Panel (실제 열리는 패널 오브젝트)
+
+---
+
 ## 1. 배경
 
 1차 빌드 축소 범위에서 Framework는 `Title.unity` 오너이다. Title Settings 패널에 사운드·디스플레이 옵션을 붙이려면 공용 매니저 뼈대가 필요하고, Exit 시에는 현재 저장 데이터를 기록한 뒤 종료해야 한다.
@@ -138,3 +206,4 @@ Dropdown 옵션 순서 = enum 순서 (`WindowDisplayMode`, `ResolutionPreset`).
 | 날짜 | 내용 |
 |------|------|
 | 2026-07-13 | Title Settings 매니저·SO·ExitGame·UI Sync 작업 로그 작성 |
+| 2026-07-13 | 상단에 팀원용 API 쉬운 안내(§0) 추가 |
