@@ -1,0 +1,150 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5f9a2b30c7e4f8b9d1e2f3a4b5c6d7e, type: 3}
+  m_Name: SharedGameDataWatchInventory
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.SharedGameDataWatchInventory
+  entries:
+  - assetGuid: 0dde79d6f6eee1344bfd9045a5daae76
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Town_BaseCamp.asset
+    typeName: TownData
+    dataId: BaseCamp
+    watchRootKind: 0
+  - assetGuid: 9c4c1521bbaa1d546b26a41f7d5a8255
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Town_RiverTown.asset
+    typeName: TownData
+    dataId: RiverTown
+    watchRootKind: 0
+  - assetGuid: 2c96b46f441c50c41af162d300042fdf
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Market_BaseCamp.asset
+    typeName: MarketData
+    dataId: BaseCampMarket
+    watchRootKind: 0
+  - assetGuid: 24facdcdcd1273e4a901c56ee267a402
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Market_RiverTown.asset
+    typeName: MarketData
+    dataId: RiverTownMarket
+    watchRootKind: 0
+  - assetGuid: 516cb545e2dec9f49ac10b83ac381bcd
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Apple.asset
+    typeName: TradeItemData
+    dataId: Apple
+    watchRootKind: 0
+  - assetGuid: 94ed95203aade1d4f9f3fb54372c2fd2
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Bread.asset
+    typeName: TradeItemData
+    dataId: Bread
+    watchRootKind: 0
+  - assetGuid: 6d583a4b588878f4590e2f778fadebcf
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Cloth.asset
+    typeName: TradeItemData
+    dataId: Cloth
+    watchRootKind: 0
+  - assetGuid: d3e0661c62971554698aecafac846371
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Fish.asset
+    typeName: TradeItemData
+    dataId: Fish
+    watchRootKind: 0
+  - assetGuid: f546f2032fa12be49bb841ec17ba64c8
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Wheat.asset
+    typeName: TradeItemData
+    dataId: Wheat
+    watchRootKind: 0
+  - assetGuid: d1f29cbc4f6fb5d489d1ac675ed655df
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagon_WagonM.asset
+    typeName: WagonData
+    dataId: Wagon_M
+    watchRootKind: 0
+  - assetGuid: 5a4e66a6b162bbd4fa04db74a5ff2a7d
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagon_WagonS.asset
+    typeName: WagonData
+    dataId: Wagon_S
+    watchRootKind: 0
+  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimal_donkey.asset
+    typeName: DraftAnimalData
+    dataId: Donkey
+    watchRootKind: 0
+  - assetGuid: 76f8d2c8354dee44ba423e15d4531cf5
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimal_Horse.asset
+    typeName: DraftAnimalData
+    dataId: Horse
+    watchRootKind: 0
+  - assetGuid: 65c62a9e92134ab4bb1aae8077ca2b8e
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Route_BaseToRiver.asset
+    typeName: RouteData
+    dataId: BaseRoute
+    watchRootKind: 0
+  - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset
+    typeName: TownData
+    dataId: basecamp
+    watchRootKind: 1
+  - assetGuid: 2b94a9733de040b4383c1bcfc427585f
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/TownData_Dummy.asset
+    typeName: TownData
+    dataId: dummytown
+    watchRootKind: 1
+  - assetGuid: 53ff6f350e87d224aac61db15be826f9
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownMarketSO/Market_DummyTown.asset
+    typeName: MarketData
+    dataId: dummytownmarket
+    watchRootKind: 1
+  - assetGuid: cbd60f3ba1e2e074da9c37e5540c03d3
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/TradeItemSO/TradeItem_Dummy.asset
+    typeName: TradeItemData
+    dataId: dummyitem
+    watchRootKind: 1
+  - assetGuid: 7de4fcc3bc668084682ba80497b8f8d9
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/WagonSO/Wagon_DummyMount.asset
+    typeName: WagonData
+    dataId: wagondummymount
+    watchRootKind: 1
+  - assetGuid: 1f1ec2f7f5822c84a9af199bcccf3565
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/WagonSO/Wagon_DummyWagonWithAnimals.asset
+    typeName: WagonData
+    dataId: dummywagonwithanimals
+    watchRootKind: 1
+  - assetGuid: 166fee137f173b7408311c0424612194
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/DraftAnimalSO/DraftAnimal_Dummy.asset
+    typeName: DraftAnimalData
+    dataId: dummydraftanimal
+    watchRootKind: 1
+  - assetGuid: a3fd1e2028afb94498ff4141e2c92419
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/RouteSO/Route_Dummy.asset
+    typeName: RouteData
+    dataId: dummyroute
+    watchRootKind: 1
+  catalogRegisteredGuids:
+  - dedcb317d8ab97d43bee3c540ffd717e
+  - 0dde79d6f6eee1344bfd9045a5daae76
+  - 9c4c1521bbaa1d546b26a41f7d5a8255
+  - 2b94a9733de040b4383c1bcfc427585f
+  - 2c96b46f441c50c41af162d300042fdf
+  - 53ff6f350e87d224aac61db15be826f9
+  - 24facdcdcd1273e4a901c56ee267a402
+  - 926d44c3a7bd40c799ad6397028e5076
+  - 516cb545e2dec9f49ac10b83ac381bcd
+  - 94ed95203aade1d4f9f3fb54372c2fd2
+  - 6d583a4b588878f4590e2f778fadebcf
+  - cbd60f3ba1e2e074da9c37e5540c03d3
+  - d3e0661c62971554698aecafac846371
+  - f546f2032fa12be49bb841ec17ba64c8
+  - 7de4fcc3bc668084682ba80497b8f8d9
+  - 1f1ec2f7f5822c84a9af199bcccf3565
+  - d1f29cbc4f6fb5d489d1ac675ed655df
+  - 5a4e66a6b162bbd4fa04db74a5ff2a7d
+  - 3b376bfea70875947a7bbaaebbd7d735
+  - 166fee137f173b7408311c0424612194
+  - 76f8d2c8354dee44ba423e15d4531cf5
+  - b7417bcdbc25463a819af2e3d0bc6496
+  - 65c62a9e92134ab4bb1aae8077ca2b8e
+  - a3fd1e2028afb94498ff4141e2c92419

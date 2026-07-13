@@ -3,16 +3,18 @@
  * - Responsible Discipline: Framework & Integration
  *
  * Script Purpose
- * - Sandbox ScriptableObject 더미 데이터를 Framework 공용 데이터 로더에 전달하는 catalog asset 타입을 정의한다.
- * - 실제 Sandbox asset은 이동하거나 수정하지 않고, Framework feature root의 catalog가 읽기 전용 참조만 보유한다.
+ * - Project/Sandbox ScriptableObject 기준 데이터를 Framework 공용 데이터 로더에 전달하는 catalog asset 타입을 정의한다.
+ * - 원본 SO를 이동하지 않고, Resources catalog가 읽기 전용 참조만 보유한다.
  *
  * Main Features
  * - Town, Market, TradeItem, Wagon, DraftAnimal, Route asset 참조 배열을 제공한다.
  * - Resources 경로 상수로 runtime 로더가 catalog asset을 찾을 수 있게 한다.
  *
  * Important Notes
- * - 이 타입은 Sandbox 데이터를 1차 빌드 M0 seed data로 사용하는 임시 연결점이다.
- * - public API에는 Sandbox 원본 타입을 직접 노출하지 않고 SharedGameDataService가 스냅샷으로 변환한다.
+ * - Runtime catalog는 Assets/_Project/11.CoreServices/Resources/SandboxSharedGameDataCatalog.asset 이다.
+ * - 1차 빌드 seed는 Assets/_Project/02.Data/01_ScriptableObjects 의 SO를 등록한다.
+ * - watch root에 새 SO를 추가하면 catalog에도 등록하고 SharedGameDataWatchInventory를 refresh해야 한다.
+ * - public API에는 원본 SO 타입을 직접 노출하지 않고 SharedGameDataService가 스냅샷으로 변환한다.
  */
 using UnityEngine;
 
