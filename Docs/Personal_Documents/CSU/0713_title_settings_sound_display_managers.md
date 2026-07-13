@@ -60,6 +60,59 @@ UI를 거치지 않고 게임플레이 코드에서 부를 때:
 | 해상도 | `DisplayManager.Instance.SetResolution(preset 또는 int)` |
 | 화면 기본값 복구 | `DisplayManager.Instance.ResetToDefaults()` |
 
+### BGM / SFX 교체·재생 API (존재 확인)
+
+**이미 구현되어 있다.** `SoundManager`에 아래 API가 있으므로 추가 구현은 필요 없다.
+
+| 메서드 | 쉬운 설명 |
+|--------|-----------|
+| `PlayBgm(AudioClip clip, bool loop = true)` | 넘긴 클립으로 BGM을 **바꿔서** 재생한다. 기본은 루프 |
+| `StopBgm()` | 지금 나오는 BGM을 멈춘다 |
+| `PlaySfx(AudioClip clip)` | 효과음을 **한 번** 재생한다 (현재 SFX 볼륨·토글 반영) |
+
+Settings 패널 버튼에는 AudioClip을 넘기기 어렵기 때문에, **Title/InGame 스크립트에서 `SoundManager.Instance`를 직접 호출**하면 된다. `SettingsUIManager`에 Play 래퍼를 두지 않은 이유이다.
+
+짧은 사용 예:
+
+```csharp
+using ND.UI.Title;
+using UnityEngine;
+
+// Title 입장 시 BGM 교체 재생
+public void PlayTitleBgm(AudioClip titleBgm)
+{
+    if (SoundManager.Instance == null || titleBgm == null)
+    {
+        return;
+    }
+
+    SoundManager.Instance.PlayBgm(titleBgm);
+}
+
+// 버튼 클릭 SFX
+public void PlayClickSfx(AudioClip clickSfx)
+{
+    if (SoundManager.Instance == null || clickSfx == null)
+    {
+        return;
+    }
+
+    SoundManager.Instance.PlaySfx(clickSfx);
+}
+
+// 씬 나갈 때 BGM 정지
+public void StopTitleBgm()
+{
+    SoundManager.Instance?.StopBgm();
+}
+```
+
+주의:
+
+- `clip`이 null이면 아무 것도 하지 않는다.
+- Settings에서 BGM/SFX 토글이 꺼져 있으면 재생되지 않는다 (볼륨 설정은 유지).
+- `SoundManager`는 BeforeSceneLoad에 자동 생성되므로 보통 `Instance`가 있다. 그래도 null 체크를 권장한다.
+
 ### 기본값을 바꾸고 싶을 때
 
 1. Project에서 `Assets/_Project/05.UI/02_Title/Resources/SoundSettingsConfig` 또는 `DisplaySettingsConfig` 선택
@@ -207,3 +260,4 @@ Dropdown 옵션 순서 = enum 순서 (`WindowDisplayMode`, `ResolutionPreset`).
 |------|------|
 | 2026-07-13 | Title Settings 매니저·SO·ExitGame·UI Sync 작업 로그 작성 |
 | 2026-07-13 | 상단에 팀원용 API 쉬운 안내(§0) 추가 |
+| 2026-07-13 | BGM/SFX 교체·재생 API(`PlayBgm`/`PlaySfx`/`StopBgm`) 존재 확인 및 사용 예시 보강 |
