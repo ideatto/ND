@@ -48,7 +48,7 @@ namespace ND.Framework
     public sealed class TradeStartDebugHarness : MonoBehaviour
     {
         [SerializeField] private string tradeId = "debug_trade_001";
-        [SerializeField] private string routeId = "dummyroute";
+        [SerializeField] private string routeId = "BaseRoute";
         [SerializeField] private float distanceKm = 100f;
         [SerializeField] private float starveGraceSeconds = 5f;
         [SerializeField] private CaravanData caravan = new CaravanData();
@@ -107,8 +107,8 @@ namespace ND.Framework
 
             var item = new imsiTradeItemData
             {
-                id = "dummyitem",
-                itemName = "Debug Wheat",
+                id = "Apple",
+                itemName = "Apple",
                 weight = 5f,
                 basePrice = 10,
                 maxCount = 10

@@ -36,8 +36,8 @@ namespace ND.Framework.Editor
     public static class FrameworkM1LoopE2EEditorTests
     {
         private const int CycleCount = 3;
-        private const string RouteId = "dummyroute";
-        private const string ItemId = "dummyitem";
+        private const string RouteId = "BaseRoute";
+        private const string ItemId = "Apple";
         private const float DistanceKm = 100f;
         private const float StarveGraceSeconds = 5f;
         private const float SampleRawFoodConsumptionPerDay = 8640f;
