@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5ed5148acd8fe249b27ebca44cd5746, type: 3}
+  m_Name: SandboxSharedGameDataCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.SandboxSharedGameDataCatalog
+  towns:
+  - {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
+  - {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
+  markets:
+  - {fileID: 11400000, guid: 2c96b46f441c50c41af162d300042fdf, type: 2}
+  - {fileID: 11400000, guid: 24facdcdcd1273e4a901c56ee267a402, type: 2}
+  tradeItems:
+  - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
+  - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
+  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: d3e0661c62971554698aecafac846371, type: 2}
+  - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
+  wagons:
+  - {fileID: 11400000, guid: d1f29cbc4f6fb5d489d1ac675ed655df, type: 2}
+  - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
+  draftAnimals:
+  - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
+  - {fileID: 11400000, guid: 76f8d2c8354dee44ba423e15d4531cf5, type: 2}
+  routes:
+  - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
