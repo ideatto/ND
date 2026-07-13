@@ -202,6 +202,29 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// 현재 저장 데이터를 기록한 뒤 애플리케이션을 종료한다.
+        /// </summary>
+        /// <remarks>
+        /// Editor Play Mode에서는 Application.Quit이 동작하지 않으므로 Play Mode를 종료한다.
+        /// CurrentSaveData가 없으면 저장을 생략하고 종료만 수행한다.
+        /// </remarks>
+        public void ExitGame()
+        {
+            // 종료 직전 런타임 변경이 유실되지 않도록 현재 메모리를 디스크에 기록한다.
+            if (CurrentSaveData != null)
+            {
+                SaveService.Save(CurrentSaveData);
+            }
+#if UNITY_EDITOR
+            // 빌드가 아닌 Editor Play Mode에서도 Exit 버튼으로 플레이를 끝낼 수 있게 한다.
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+    Application.Quit();
+#endif
+        }
+
+
+        /// <summary>
         /// 현재 저장 데이터를 저장한 뒤 title scene으로 돌아간다.
         /// </summary>
         /// <remarks>

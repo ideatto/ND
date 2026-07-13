@@ -66,13 +66,11 @@ namespace ND.Framework
         }
 
         /// <summary>
-        /// 애플리케이션 종료를 요청한다.
+        /// 현재 저장을 기록한 뒤 게임 종료를 FrameworkRoot에 요청한다.
         /// </summary>
         public void ExitGame()
         {
-            // 종료 요청은 플랫폼에 따라 즉시 반영되지 않을 수 있어 로그를 남긴다.
-            FrameworkLog.Info("Exit requested.");
-            Application.Quit();
+            FrameworkRoot.Instance.ExitGame();
         }
     }
 }
