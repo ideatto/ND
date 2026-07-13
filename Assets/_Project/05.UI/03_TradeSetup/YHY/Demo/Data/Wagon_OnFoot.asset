@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 757f6cbc27613e64e8fb8de2a4f45b03, type: 3}
+  m_Name: Wagon_OnFoot
+  m_EditorClassIdentifier: Assembly-CSharp::WagonData
+  wagonId: t_none
+  displayName: On Foot
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  description: 
+  wagonType: 0
+  maxDurability: 1
+  overLoad: 15
+  maxLoad: 20
+  baseMoveSpeed: 0
+  eligibleAnimalTypes: 
+  inventorySlotCount: 2
+  maxPullAnimals: 0
+  minRequireAnimals: 0
+  rarity: 0
+  baseBuyPrice: 0
+  canStack: 0
+  maxCount: 1
+  affectModify: 0
+  modifiers: []
+  localSpecialty: 0
