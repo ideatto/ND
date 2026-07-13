@@ -12,18 +12,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
   m_Name: TradeItem_Apple
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
-  itemId: 
-  displayName: 
-  icon: {fileID: 0}
-  description: 
-  rarity: 0
+  itemId: Apple
+  displayName: Apple
+  icon: {fileID: 21300000, guid: c6ba72f840279004698b4f843d87351c, type: 3}
+  description: TradeItem_Apple
+  rarity: 1
   category: 0
-  baseBuyPrice: 0
-  baseSellPrice: 0
-  canStack: 0
-  maxCount: 0
-  weight: 0
+  baseBuyPrice: 1
+  baseSellPrice: 2
+  canStack: 1
+  maxCount: 10
+  weight: 1
   isConsumable: 0
   affectModify: 0
   modifiers: []
-  localSpecialty: 0
+  localSpecialty: 1

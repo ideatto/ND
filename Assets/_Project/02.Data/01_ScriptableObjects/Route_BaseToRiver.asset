@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: Route_BaseToRiver
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
   routeId: BaseRoute
-  fromTown: {fileID: 0}
-  toTown: {fileID: 0}
-  displayName: 
-  unlockedByDefault: 0
-  distance: 0
-  defaultElapsedTime: 0
-  baseFoodCost: 0
+  fromTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
+  toTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
+  displayName: BaseToRiver
+  unlockedByDefault: 1
+  distance: 20
+  defaultElapsedTime: 100
+  baseFoodCost: 1
   baseMercenaryCost: 0
-  baseRequiredFoodQuantity: 0
+  baseRequiredFoodQuantity: 5
   baseRequiredMercenaryPower: 0
   baseRiskLevel: 0
   routeEvents: []

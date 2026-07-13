@@ -12,12 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f32ce7dc35c28ff42affbb4305649f6f, type: 3}
   m_Name: Town_BaseCamp
   m_EditorClassIdentifier: Assembly-CSharp::TownData
-  townId: 
-  displayName: 
+  townId: BaseCamp
+  displayName: BaseCamp
   icon: {fileID: 0}
-  unlockedByDefault: 0
-  description: 
-  market: {fileID: 0}
-  availableRoutes: []
+  unlockedByDefault: 1
+  description: BaseCamp
+  market: {fileID: 11400000, guid: 2c96b46f441c50c41af162d300042fdf, type: 2}
+  availableRoutes:
+  - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
   canContribute: 0
   maximumContributionLimit: 0

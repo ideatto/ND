@@ -12,20 +12,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eadc130ef2c03854a861d0901c84e75d, type: 3}
   m_Name: DraftAnimal_donkey
   m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
-  draftAnimalId: 
-  displayName: 
-  icon: {fileID: 0}
+  draftAnimalId: Donkey
+  displayName: Donkey
+  icon: {fileID: 21300000, guid: 821f64e1baf63374fa10f5fee4a239f5, type: 3}
   prefab: {fileID: 0}
-  description: 
-  animalType: 0
-  feedConsumption: 0
-  baseMoveSpeed: 0
-  increaseOverLoad: 0
-  increaseMaxLoad: 0
-  rarity: 0
-  baseBuyPrice: 0
+  description: 'Donkey Can pull wagon
+
+'
+  animalType: 1
+  feedConsumption: 1
+  baseMoveSpeed: 10
+  increaseOverLoad: 5
+  increaseMaxLoad: 20
+  rarity: 1
+  baseBuyPrice: 10
   canStack: 0
-  maxCount: 0
+  maxCount: 1
   affectModify: 0
   modifiers: []
   localSpecialty: 0

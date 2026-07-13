@@ -12,18 +12,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
   m_Name: TradeItem_Bread
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
-  itemId: 
-  displayName: 
-  icon: {fileID: 0}
-  description: 
-  rarity: 0
+  itemId: Bread
+  displayName: Bread
+  icon: {fileID: 21300000, guid: 7a3a43b670c3e4c42a26096440b91d1b, type: 3}
+  description: 'TradeItem_Bread
+
+'
+  rarity: 1
   category: 0
-  baseBuyPrice: 0
-  baseSellPrice: 0
-  canStack: 0
-  maxCount: 0
-  weight: 0
-  isConsumable: 0
+  baseBuyPrice: 1
+  baseSellPrice: 2
+  canStack: 1
+  maxCount: 10
+  weight: 1
+  isConsumable: 1
   affectModify: 0
   modifiers: []
   localSpecialty: 0

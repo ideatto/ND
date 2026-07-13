@@ -12,12 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f32ce7dc35c28ff42affbb4305649f6f, type: 3}
   m_Name: Town_RiverTown
   m_EditorClassIdentifier: Assembly-CSharp::TownData
-  townId: 
-  displayName: 
+  townId: RiverTown
+  displayName: RiverTown
   icon: {fileID: 0}
-  unlockedByDefault: 0
-  description: 
-  market: {fileID: 0}
-  availableRoutes: []
-  canContribute: 0
-  maximumContributionLimit: 0
+  unlockedByDefault: 1
+  description: River Side Town
+  market: {fileID: 11400000, guid: 24facdcdcd1273e4a901c56ee267a402, type: 2}
+  availableRoutes:
+  - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
+  canContribute: 1
+  maximumContributionLimit: 100

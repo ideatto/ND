@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0b5576986d930d841b3059a26feab7aa, type: 3}
   m_Name: InGameTimePolicyConfig
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.InGameTimePolicyConfig
-  defaultInGameTimeMultiplier: 1
+  defaultInGameTimeMultiplier: 60
   elapsedTimeDisplayUnit: 2
   foodConsumptionUnit: 2
   maxOfflineRealSeconds: 259200

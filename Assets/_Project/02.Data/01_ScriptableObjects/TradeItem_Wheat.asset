@@ -12,17 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
   m_Name: TradeItem_Wheat
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
-  itemId: 
-  displayName: 
-  icon: {fileID: 0}
-  description: 
-  rarity: 0
-  category: 0
-  baseBuyPrice: 0
-  baseSellPrice: 0
-  canStack: 0
-  maxCount: 0
-  weight: 0
+  itemId: Wheat
+  displayName: Wheat
+  icon: {fileID: 21300000, guid: afbc89dc6ce2aff459ee31cf5fcb0ee0, type: 3}
+  description: Wheat
+  rarity: 1
+  category: 1
+  baseBuyPrice: 2
+  baseSellPrice: 3
+  canStack: 1
+  maxCount: 20
+  weight: 1
   isConsumable: 0
   affectModify: 0
   modifiers: []
