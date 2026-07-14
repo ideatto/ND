@@ -17,7 +17,7 @@ public class MercenaryData : ScriptableObject, IIdentifiableData
     [SerializeField] private long baseBuyPrice;
 
     [Header("Combat_Info")]
-    [SerializeField] private float combatCapability;
+    [SerializeField] private int combatCapability;
 
     [Header("Mercenary_Unlocked_Default")]
     [SerializeField] private bool unlockedByDefault;
@@ -31,7 +31,7 @@ public class MercenaryData : ScriptableObject, IIdentifiableData
     public string Description => description;
     public TradeItemRarity Rarity => rarity;
     public long BaseBuyPrice => baseBuyPrice;
-    public float CombatCapability => combatCapability;
+    public int CombatCapability => combatCapability;
     public bool UnlockedByDefault => unlockedByDefault;
     #endregion
 }

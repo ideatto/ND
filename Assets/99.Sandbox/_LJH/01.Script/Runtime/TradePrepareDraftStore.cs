@@ -1,0 +1,264 @@
+using System;
+using System.Collections.Generic;
+
+public sealed class TradePrepareDraftStore
+{
+    private TradePrepareDraft current = new TradePrepareDraft();
+
+    public TradePrepareDraft Current => current.CreateSnapshot();
+
+    public event Action<TradePrepareDraft> DraftChanged;
+
+    public void Reset(string currentTownId)
+    {
+        current = new TradePrepareDraft
+        {
+            currentTownId = NormalizeId(currentTownId)
+        };
+
+        NotifyChanged();
+    }
+
+    public void SelectDestination(string townId)
+    {
+        var normalizedTownId = NormalizeId(townId);
+        if (current.selectedDestinationTownId == normalizedTownId)
+        {
+            return;
+        }
+
+        current.selectedDestinationTownId = normalizedTownId;
+        current.selectedRouteId = string.Empty;
+        NotifyChanged();
+    }
+
+    public void AddWaypoint(string townId)
+    {
+        var normalizedTownId = NormalizeId(townId);
+        if (string.IsNullOrEmpty(normalizedTownId) || current.selectedWaypointTownIds.Contains(normalizedTownId))
+        {
+            return;
+        }
+
+        current.selectedWaypointTownIds.Add(normalizedTownId);
+        NotifyChanged();
+    }
+
+    public void RemoveWaypoint(string townId)
+    {
+        if (current.selectedWaypointTownIds.Remove(NormalizeId(townId)))
+        {
+            NotifyChanged();
+        }
+    }
+
+    public void ClearWaypoints()
+    {
+        if (current.selectedWaypointTownIds.Count == 0)
+        {
+            return;
+        }
+
+        current.selectedWaypointTownIds.Clear();
+        NotifyChanged();
+    }
+
+    public void SelectRoute(string routeId)
+    {
+        SetId(ref current.selectedRouteId, routeId);
+    }
+
+    public void SelectWagon(string wagonId)
+    {
+        var normalizedWagonId = NormalizeId(wagonId);
+        if (current.selectedWagonId == normalizedWagonId)
+        {
+            return;
+        }
+
+        current.selectedWagonId = normalizedWagonId;
+        current.selectedAnimals.Clear();
+        current.selectedBuyItems.Clear();
+        current.selectedSellItems.Clear();
+        NotifyChanged();
+    }
+
+    public void SetAnimalQuantity(string draftAnimalId, int quantity)
+    {
+        var normalizedAnimalId = NormalizeId(draftAnimalId);
+        if (string.IsNullOrEmpty(normalizedAnimalId))
+        {
+            return;
+        }
+
+        var selectionIndex = current.selectedAnimals.FindIndex(
+            selection => selection != null && selection.draftAnimalId == normalizedAnimalId);
+
+        if (quantity <= 0)
+        {
+            if (selectionIndex >= 0)
+            {
+                current.selectedAnimals.RemoveAt(selectionIndex);
+                NotifyChanged();
+            }
+
+            return;
+        }
+
+        if (selectionIndex >= 0)
+        {
+            if (current.selectedAnimals[selectionIndex].quantity == quantity)
+            {
+                return;
+            }
+
+            current.selectedAnimals[selectionIndex].quantity = quantity;
+        }
+        else
+        {
+            current.selectedAnimals.Add(new DraftAnimalSelectionData
+            {
+                draftAnimalId = normalizedAnimalId,
+                quantity = quantity
+            });
+        }
+
+        NotifyChanged();
+    }
+
+    public void SetBuyItemQuantity(string itemId, int quantity)
+    {
+        if (SetItemQuantity(current.selectedBuyItems, itemId, quantity))
+        {
+            NotifyChanged();
+        }
+    }
+
+    public void SetSellItemQuantity(string itemId, int quantity)
+    {
+        if (SetItemQuantity(current.selectedSellItems, itemId, quantity))
+        {
+            NotifyChanged();
+        }
+    }
+
+    public void ClearCargo()
+    {
+        if (current.selectedBuyItems.Count == 0 && current.selectedSellItems.Count == 0)
+        {
+            return;
+        }
+
+        current.selectedBuyItems.Clear();
+        current.selectedSellItems.Clear();
+        NotifyChanged();
+    }
+
+    public void SetFoodQuantity(int quantity)
+    {
+        var normalizedQuantity = Math.Max(0, quantity);
+        if (current.loadedFoodQuantity == normalizedQuantity)
+        {
+            return;
+        }
+
+        current.loadedFoodQuantity = normalizedQuantity;
+        NotifyChanged();
+    }
+
+    public void SelectMercenary(string mercenaryId)
+    {
+        if (current.SelectMercenary(NormalizeId(mercenaryId)))
+        {
+            NotifyChanged();
+        }
+    }
+
+    public void DeselectMercenary(string mercenaryId)
+    {
+        if (current.DeselectMercenary(NormalizeId(mercenaryId)))
+        {
+            NotifyChanged();
+        }
+    }
+
+    public void ClearMercenaries()
+    {
+        if (current.SelectedMercenaryIds.Count == 0)
+        {
+            return;
+        }
+
+        current.ClearMercenaries();
+        NotifyChanged();
+    }
+
+    public void Cancel()
+    {
+        current = new TradePrepareDraft();
+        NotifyChanged();
+    }
+
+    private void SetId(ref string targetId, string value)
+    {
+        var normalizedId = NormalizeId(value);
+        if (targetId == normalizedId)
+        {
+            return;
+        }
+
+        targetId = normalizedId;
+        NotifyChanged();
+    }
+
+    private static bool SetItemQuantity(List<TradeItemBundle> selections, string itemId, int quantity)
+    {
+        var normalizedItemId = NormalizeId(itemId);
+        if (string.IsNullOrEmpty(normalizedItemId))
+        {
+            return false;
+        }
+
+        var selectionIndex = selections.FindIndex(
+            selection => selection != null && selection.itemId == normalizedItemId);
+
+        if (quantity <= 0)
+        {
+            if (selectionIndex < 0)
+            {
+                return false;
+            }
+
+            selections.RemoveAt(selectionIndex);
+            return true;
+        }
+
+        if (selectionIndex >= 0)
+        {
+            if (selections[selectionIndex].quantity == quantity)
+            {
+                return false;
+            }
+
+            selections[selectionIndex].quantity = quantity;
+            return true;
+        }
+
+        selections.Add(new TradeItemBundle
+        {
+            itemId = normalizedItemId,
+            quantity = quantity
+        });
+        return true;
+    }
+
+    private static string NormalizeId(string id)
+    {
+        return string.IsNullOrWhiteSpace(id) ? string.Empty : id.Trim();
+    }
+
+    private void NotifyChanged()
+    {
+        DraftChanged?.Invoke(current.CreateSnapshot());
+    }
+}

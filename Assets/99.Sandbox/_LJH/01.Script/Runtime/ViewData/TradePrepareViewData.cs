@@ -18,6 +18,8 @@ public class TradePrepareViewData
     public float currentLoad;
     public float overloadLimit;
     public float maxLoad;
+    public int usedInventorySlotCount;
+    public int maxInventorySlotCount;
 
     public long totalPurchaseCost;
 
@@ -31,15 +33,18 @@ public class TradePrepareViewData
 
     public WagonViewData[] wagons;
     public DraftAnimalViewData[] draftAnimals;
+    public CargoItemViewData[] loadedItems;
     public MercenaryViewData[] mercenaries;
 
     public string selectedWagonId;
 
+    public long foodCost;
     public long mercenaryCost;
     public long totalPreparationCost;
     public long estimatedSellRevenue;
     public long estimatedNetProfit;
 
-    public float estimatedTime;
-    public float currentMoveSpeed;
+    public float baseExpectedTravelTime;
+    public float finalExpectedTravelTime;
+    public float selectedMoveSpeed;
 }

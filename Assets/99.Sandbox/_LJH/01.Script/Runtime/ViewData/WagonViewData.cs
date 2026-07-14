@@ -11,7 +11,7 @@ public class WagonViewData
     public WagonType wagonType;
     public float baseMoveSpeed;
 
-    public float currentDurability;
+    public int currentDurability;
     public int maxDurability;
 
     public float overLoad;

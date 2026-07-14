@@ -8,11 +8,10 @@ public class MercenaryViewData
     public Sprite icon;
     public string description;
 
-    public float combatCapability;
+    public int combatCapability;
     public long baseBuyPrice;
 
-    public int availableAmount;
-    public int selectedAmount;
+    public bool isSelected;
 
     public bool canHire;
     public string disabledReason;

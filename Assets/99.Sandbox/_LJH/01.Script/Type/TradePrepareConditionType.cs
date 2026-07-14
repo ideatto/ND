@@ -1,6 +1,7 @@
 public enum TradePrepareConditionType
 {
     Available,
+    TradeAlreadyActive,
     NotEnoughMoney,
     NotEnoughFood,
     NotEnoughMercenaryPower,
@@ -9,6 +10,17 @@ public enum TradePrepareConditionType
     RouteLocked,
     RouteNotSelected,
     WagonNotSelected,
+    WagonNotOwned,
+    BrokenWagon,
     NotEnoughDraftAnimals,
-    InvalidDraftAnimalType
+    TooManyDraftAnimals,
+    InvalidDraftAnimalType,
+    InvalidDraftAnimalSelection,
+    MixedDraftAnimalType,
+    NoCargo,
+    InventorySlotExceeded,
+    InvalidSellQuantity,
+    PreDepartureSellingUnsupported,
+    CargoTypeLimitExceeded,
+    InvalidMercenarySelection
 }

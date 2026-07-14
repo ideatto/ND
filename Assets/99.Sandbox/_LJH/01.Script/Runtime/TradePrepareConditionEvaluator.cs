@@ -7,6 +7,15 @@ public class TradePrepareConditionEvaluator
     {
         switch (conditionType)
         {
+            case TradePrepareConditionType.TradeAlreadyActive:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Another trade is already active or awaiting settlement.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
             case TradePrepareConditionType.Available:
                 return new TradePrepareConditionResult
                 {
@@ -88,6 +97,15 @@ public class TradePrepareConditionEvaluator
                     warningMessages = new List<string>()
                 };
 
+            case TradePrepareConditionType.WagonNotOwned:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Selected wagon is not owned.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
             case TradePrepareConditionType.NotEnoughDraftAnimals:
                 return new TradePrepareConditionResult
                 {
@@ -106,6 +124,96 @@ public class TradePrepareConditionEvaluator
                     warningMessages = new List<string>()
                 };
 
+            case TradePrepareConditionType.InvalidDraftAnimalSelection:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Selected draft animal is unavailable or exceeds the owned quantity.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.BrokenWagon:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Wagon durability is depleted.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.TooManyDraftAnimals:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Too many draft animals selected for this wagon.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.MixedDraftAnimalType:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Selected draft animal types cannot be mixed.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.NoCargo:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "No cargo is loaded.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.InventorySlotExceeded:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Inventory slot limit exceeded.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.InvalidSellQuantity:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Selected sell quantity exceeds the owned quantity.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.PreDepartureSellingUnsupported:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Pre-departure selling is not supported in the current trade flow.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.CargoTypeLimitExceeded:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Only one cargo item type is supported in the current trade flow.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
+            case TradePrepareConditionType.InvalidMercenarySelection:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Selected mercenary is unavailable or locked.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
             default:
                 return new TradePrepareConditionResult
                 {
@@ -119,6 +227,9 @@ public class TradePrepareConditionEvaluator
 
     public TradePrepareConditionResult Evaluate(TradePrepareConditionInput input)
     {
+        if (input.isTradeAlreadyActive)
+            return Create(TradePrepareConditionType.TradeAlreadyActive);
+
         if (!input.isRouteSelected)
             return Create(TradePrepareConditionType.RouteNotSelected);
 
@@ -128,16 +239,49 @@ public class TradePrepareConditionEvaluator
         if (input.isWagonRequired && !input.isWagonSelected)
             return Create(TradePrepareConditionType.WagonNotSelected);
 
+        if (input.isWagonSelected && !input.isSelectedWagonOwned)
+            return Create(TradePrepareConditionType.WagonNotOwned);
+
+        if (input.isWagonSelected && input.currentWagonDurability <= 0)
+            return Create(TradePrepareConditionType.BrokenWagon);
+
+        if (input.hasInvalidDraftAnimalSelection)
+            return Create(TradePrepareConditionType.InvalidDraftAnimalSelection);
+
+        if (input.hasInvalidMercenarySelection)
+            return Create(TradePrepareConditionType.InvalidMercenarySelection);
+
         if (input.selectedWagonType == WagonType.WagonWithAnimals)
         {
             if (input.selectedDraftAnimalCount < input.minRequiredDraftAnimalCount)
                 return Create(TradePrepareConditionType.NotEnoughDraftAnimals);
 
+            if (input.maxAllowedDraftAnimalCount >= 0 && input.selectedDraftAnimalCount > input.maxAllowedDraftAnimalCount)
+                return Create(TradePrepareConditionType.TooManyDraftAnimals);
+
             if (!AreSelectedDraftAnimalsAllowed(input.selectedDraftAnimalCount, input.selectedDraftAnimalTypes, input.eligibleDraftAnimalTypes))
                 return Create(TradePrepareConditionType.InvalidDraftAnimalType);
+
+            if (!AreSelectedDraftAnimalTypesUniform(input.selectedDraftAnimalCount, input.selectedDraftAnimalTypes))
+                return Create(TradePrepareConditionType.MixedDraftAnimalType);
         }
 
-        if (input.currentTradingCurrency < input.totalPurchaseCost)
+        if (input.hasInvalidSellQuantity)
+            return Create(TradePrepareConditionType.InvalidSellQuantity);
+
+        if (input.hasUnsupportedPreDepartureSelling)
+            return Create(TradePrepareConditionType.PreDepartureSellingUnsupported);
+
+        if (!input.hasCargo)
+            return Create(TradePrepareConditionType.NoCargo);
+
+        if (input.maxSupportedCargoTypeCount > 0 && input.cargoTypeCount > input.maxSupportedCargoTypeCount)
+            return Create(TradePrepareConditionType.CargoTypeLimitExceeded);
+
+        if (input.usedInventorySlotCount > input.maxInventorySlotCount)
+            return Create(TradePrepareConditionType.InventorySlotExceeded);
+
+        if (input.currentTradingCurrency < input.totalPreparationCost)
             return Create(TradePrepareConditionType.NotEnoughMoney);
 
         if (input.currentLoad > input.maxLoad)
@@ -187,6 +331,24 @@ public class TradePrepareConditionEvaluator
                 return false;
 
             if (!eligibleTypes.Contains(selectedType))
+                return false;
+        }
+
+        return true;
+    }
+
+    private bool AreSelectedDraftAnimalTypesUniform(int selectedCount, DraftAnimalType[] selectedTypes)
+    {
+        if (selectedCount <= 1)
+            return true;
+
+        if (selectedTypes == null || selectedTypes.Length < selectedCount)
+            return false;
+
+        var firstType = selectedTypes[0];
+        for (var index = 1; index < selectedCount; index++)
+        {
+            if (selectedTypes[index] != firstType)
                 return false;
         }
 

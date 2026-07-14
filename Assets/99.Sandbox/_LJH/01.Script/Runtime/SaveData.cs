@@ -30,7 +30,7 @@ public sealed class CaravanSaveData
     public float maxLoad;
     public float currentLoad;
 
-    public float currentDurability;
+    public int currentDurability;
 
     public List<TradeItemBundle> inventory = new List<TradeItemBundle>();
 }

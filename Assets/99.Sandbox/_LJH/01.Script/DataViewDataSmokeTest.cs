@@ -24,6 +24,65 @@ public class DataViewDataSmokeTest : MonoBehaviour
         var saveData = new SaveData();
         saveData.player.currentTownId = town.TownId;
 
+        var prepareDraft = new TradePrepareDraft
+        {
+            currentTownId = town.TownId,
+            selectedDestinationTownId = route.ToTownId,
+            selectedRouteId = route.RouteId,
+            loadedFoodQuantity = route.BaseRequiredFoodQuantity
+        };
+
+        prepareDraft.selectedAnimals.Add(new DraftAnimalSelectionData
+        {
+            draftAnimalId = "smoke-animal",
+            quantity = 1
+        });
+
+        var firstMercenarySelection = prepareDraft.SelectMercenary("smoke-mercenary");
+        var duplicateMercenarySelection = prepareDraft.SelectMercenary("smoke-mercenary");
+
+        var draftChangeCount = 0;
+        var draftStore = new TradePrepareDraftStore();
+        draftStore.DraftChanged += _ => draftChangeCount++;
+        draftStore.Reset(town.TownId);
+        var storeResetTownMatched = draftStore.Current.currentTownId == town.TownId;
+        var mutableDraftSnapshot = draftStore.Current;
+        mutableDraftSnapshot.selectedBuyItems.Add(new TradeItemBundle { itemId = "snapshot-only", quantity = 1 });
+        var storeSnapshotIsolated = draftStore.Current.selectedBuyItems.Count == 0;
+
+        draftStore.SelectDestination(route.ToTownId);
+        draftStore.SelectRoute(route.RouteId);
+        draftStore.SelectWagon("smoke-wagon-a");
+        draftStore.SetAnimalQuantity("smoke-animal", 1);
+        draftStore.SetAnimalQuantity("smoke-animal", 2);
+        var storeAnimalSelectionUpdated = draftStore.Current.selectedAnimals.Count == 1
+            && draftStore.Current.selectedAnimals[0].quantity == 2;
+
+        draftStore.SetBuyItemQuantity(item.ItemId, 1);
+        draftStore.SetBuyItemQuantity(item.ItemId, 3);
+        var storeItemSelectionUpdated = draftStore.Current.selectedBuyItems.Count == 1
+            && draftStore.Current.selectedBuyItems[0].quantity == 3;
+        draftStore.SetBuyItemQuantity(item.ItemId, 0);
+        var storeZeroQuantityRemovedItem = draftStore.Current.selectedBuyItems.Count == 0;
+
+        draftStore.SetFoodQuantity(-1);
+        var storeFoodQuantityClamped = draftStore.Current.loadedFoodQuantity == 0;
+
+        draftStore.SelectMercenary("smoke-mercenary");
+        draftStore.SelectMercenary("smoke-mercenary");
+        var storePreventedDuplicateMercenary = draftStore.Current.SelectedMercenaryIds.Count == 1;
+
+        draftStore.SetBuyItemQuantity(item.ItemId, 1);
+        draftStore.SetSellItemQuantity(item.ItemId, 1);
+        draftStore.SelectWagon("smoke-wagon-b");
+        var storeClearedAnimalsAfterWagonChange = draftStore.Current.selectedAnimals.Count == 0;
+        var storeClearedCargoAfterWagonChange = draftStore.Current.selectedBuyItems.Count == 0
+            && draftStore.Current.selectedSellItems.Count == 0;
+
+        draftStore.Cancel();
+        var storeCancelClearedDraft = string.IsNullOrEmpty(draftStore.Current.currentTownId)
+            && draftStore.Current.SelectedMercenaryIds.Count == 0;
+
         if (town.UnlockedByDefault)
             saveData.world.unlockedTownIds.Add(town.TownId);
 
@@ -61,6 +120,18 @@ public class DataViewDataSmokeTest : MonoBehaviour
             canSell = false,
             buyDisabledReason = string.Empty,
             sellDisabledReason = "No owned item."
+        };
+
+        var cargoItemViewData = new CargoItemViewData
+        {
+            itemId = item.ItemId,
+            displayName = item.DisplayName,
+            icon = item.Icon,
+            quantity = 1,
+            unitWeight = item.Weight,
+            totalWeight = item.Weight,
+            purchaseUnitPrice = item.BaseBuyPrice,
+            totalPurchasePrice = item.BaseBuyPrice
         };
 
         var routeViewData = new RouteViewData
@@ -105,8 +176,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = true,
             isRouteUnlocked = true,
+            hasCargo = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
@@ -122,8 +195,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = true,
             isRouteUnlocked = true,
+            hasCargo = true,
             currentTradingCurrency = 0,
             totalPurchaseCost = itemViewData.purchasePrice > 0 ? itemViewData.purchasePrice : 1,
+            totalPreparationCost = itemViewData.purchasePrice > 0 ? itemViewData.purchasePrice : 1,
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
@@ -139,8 +214,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = false,
             isRouteUnlocked = true,
+            hasCargo = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
@@ -156,8 +233,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = true,
             isRouteUnlocked = false,
+            hasCargo = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
@@ -173,8 +252,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = true,
             isRouteUnlocked = true,
+            hasCargo = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
@@ -190,8 +271,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = true,
             isRouteUnlocked = true,
+            hasCargo = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
             currentLoad = 120,
             overloadLimit = 80,
             maxLoad = 100,
@@ -207,8 +290,10 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             isRouteSelected = true,
             isRouteUnlocked = true,
+            hasCargo = true,
             currentTradingCurrency = saveData.player.tradingCurrency,
             totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
             currentLoad = 90,
             overloadLimit = 80,
             maxLoad = 100,
@@ -219,6 +304,75 @@ public class DataViewDataSmokeTest : MonoBehaviour
         };
 
         var multipleWarningCondition = conditionEvaluator.Evaluate(multipleWarningInput);
+
+        var noCargoInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            hasCargo = false,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = 0,
+            totalPreparationCost = 0,
+            currentLoad = 0,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var noCargoCondition = conditionEvaluator.Evaluate(noCargoInput);
+
+        var mixedDraftAnimalInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            isWagonRequired = true,
+            isWagonSelected = true,
+            isSelectedWagonOwned = true,
+            currentWagonDurability = 100,
+            selectedWagonType = WagonType.WagonWithAnimals,
+            selectedDraftAnimalCount = 2,
+            minRequiredDraftAnimalCount = 1,
+            maxAllowedDraftAnimalCount = 2,
+            selectedDraftAnimalTypes = new[] { DraftAnimalType.Donkey, DraftAnimalType.Horse },
+            eligibleDraftAnimalTypes = new[] { DraftAnimalType.Donkey, DraftAnimalType.Horse },
+            hasCargo = true,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var mixedDraftAnimalCondition = conditionEvaluator.Evaluate(mixedDraftAnimalInput);
+
+        var inventorySlotExceededInput = new TradePrepareConditionInput
+        {
+            isRouteSelected = true,
+            isRouteUnlocked = true,
+            hasCargo = true,
+            usedInventorySlotCount = 2,
+            maxInventorySlotCount = 1,
+            currentTradingCurrency = saveData.player.tradingCurrency,
+            totalPurchaseCost = itemViewData.purchasePrice,
+            totalPreparationCost = itemViewData.purchasePrice,
+            currentLoad = saveData.caravan.currentLoad,
+            overloadLimit = saveData.caravan.maxLoad,
+            maxLoad = saveData.caravan.maxLoad,
+            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            selectedMercenaryPower = routeViewData.requiredMercenaryPower,
+            requiredMercenaryPower = routeViewData.requiredMercenaryPower
+        };
+
+        var inventorySlotExceededCondition = conditionEvaluator.Evaluate(inventorySlotExceededInput);
 
         var prepareViewData = new TradePrepareViewData
         {
@@ -231,14 +385,18 @@ public class DataViewDataSmokeTest : MonoBehaviour
             towns = new[] { townViewData },
             routes = new[] { routeViewData },
             tradeItems = new[] { itemViewData },
+            loadedItems = new[] { cargoItemViewData },
 
             selectedRouteId = route.RouteId,
 
             currentLoad = successInput.currentLoad,
             overloadLimit = successInput.overloadLimit,
             maxLoad = successInput.maxLoad,
+            usedInventorySlotCount = successInput.usedInventorySlotCount,
+            maxInventorySlotCount = successInput.maxInventorySlotCount,
 
             totalPurchaseCost = successInput.totalPurchaseCost,
+            totalPreparationCost = successInput.totalPreparationCost,
 
             loadedFoodQuantity = successInput.loadedFoodQuantity,
             requiredFoodQuantity = successInput.requiredFoodQuantity,
@@ -246,7 +404,9 @@ public class DataViewDataSmokeTest : MonoBehaviour
             selectedMercenaryPower = successInput.selectedMercenaryPower,
             requiredMercenaryPower = successInput.requiredMercenaryPower,
 
-            startCondition = successCondition
+            startCondition = successCondition,
+            baseExpectedTravelTime = routeViewData.estimatedTime,
+            finalExpectedTravelTime = routeViewData.estimatedTime
         };
 
         var notEnoughMoneyPrepareViewData = new TradePrepareViewData
@@ -268,6 +428,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             maxLoad = notEnoughMoneyInput.maxLoad,
 
             totalPurchaseCost = notEnoughMoneyInput.totalPurchaseCost,
+            totalPreparationCost = notEnoughMoneyInput.totalPreparationCost,
 
             loadedFoodQuantity = notEnoughMoneyInput.loadedFoodQuantity,
             requiredFoodQuantity = notEnoughMoneyInput.requiredFoodQuantity,
@@ -297,6 +458,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             maxLoad = notEnoughFoodInput.maxLoad,
 
             totalPurchaseCost = notEnoughFoodInput.totalPurchaseCost,
+            totalPreparationCost = notEnoughFoodInput.totalPreparationCost,
 
             loadedFoodQuantity = notEnoughFoodInput.loadedFoodQuantity,
             requiredFoodQuantity = notEnoughFoodInput.requiredFoodQuantity,
@@ -326,6 +488,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             maxLoad = loadExceededInput.maxLoad,
 
             totalPurchaseCost = loadExceededInput.totalPurchaseCost,
+            totalPreparationCost = loadExceededInput.totalPreparationCost,
 
             loadedFoodQuantity = loadExceededInput.loadedFoodQuantity,
             requiredFoodQuantity = loadExceededInput.requiredFoodQuantity,
@@ -355,6 +518,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             maxLoad = multipleWarningInput.maxLoad,
 
             totalPurchaseCost = multipleWarningInput.totalPurchaseCost,
+            totalPreparationCost = multipleWarningInput.totalPreparationCost,
 
             loadedFoodQuantity = multipleWarningInput.loadedFoodQuantity,
             requiredFoodQuantity = multipleWarningInput.requiredFoodQuantity,
@@ -389,6 +553,21 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(townViewData.townId == town.TownId, "Smoke Test failed: townId mismatch.");
         Debug.Assert(townViewData.isCurrentTown, "Smoke Test failed: current town should be true.");
 
+        Debug.Assert(firstMercenarySelection, "Draft Smoke Test failed: first mercenary selection should succeed.");
+        Debug.Assert(!duplicateMercenarySelection, "Draft Smoke Test failed: duplicate mercenary selection should fail.");
+        Debug.Assert(prepareDraft.SelectedMercenaryIds.Count == 1, "Draft Smoke Test failed: duplicate mercenary ID should not be stored.");
+        Debug.Assert(storeResetTownMatched, "Draft Store Smoke Test failed: Reset should set currentTownId.");
+        Debug.Assert(storeSnapshotIsolated, "Draft Store Smoke Test failed: modifying a snapshot should not mutate the stored draft.");
+        Debug.Assert(storeAnimalSelectionUpdated, "Draft Store Smoke Test failed: animal selection should update without duplicates.");
+        Debug.Assert(storeItemSelectionUpdated, "Draft Store Smoke Test failed: item selection should update without duplicates.");
+        Debug.Assert(storeZeroQuantityRemovedItem, "Draft Store Smoke Test failed: zero item quantity should remove the selection.");
+        Debug.Assert(storeFoodQuantityClamped, "Draft Store Smoke Test failed: food quantity should not be negative.");
+        Debug.Assert(storePreventedDuplicateMercenary, "Draft Store Smoke Test failed: mercenary IDs should not be duplicated.");
+        Debug.Assert(storeClearedAnimalsAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear animal selections.");
+        Debug.Assert(storeClearedCargoAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear cargo selections.");
+        Debug.Assert(storeCancelClearedDraft, "Draft Store Smoke Test failed: Cancel should clear the current draft.");
+        Debug.Assert(draftChangeCount > 0, "Draft Store Smoke Test failed: draft changes should raise DraftChanged.");
+
         Debug.Log($"Item: {itemViewData.displayName} / Buy: {itemViewData.purchasePrice} / Sell: {itemViewData.sellPrice}");
         Debug.Assert(itemViewData.itemId == item.ItemId, "Smoke Test failed: itemId mismatch.");
         Debug.Assert(itemViewData.purchasePrice >= 0 && itemViewData.sellPrice >= 0, "Smoke Test failed: item prices should not be negative.");
@@ -407,6 +586,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(prepareViewData.towns.Length > 0, "Prepare Smoke Test failed: towns should not be empty.");
         Debug.Assert(prepareViewData.routes.Length > 0, "Prepare Smoke Test failed: routes should not be empty.");
         Debug.Assert(prepareViewData.tradeItems.Length > 0, "Prepare Smoke Test failed: tradeItems should not be empty.");
+        Debug.Assert(prepareViewData.loadedItems.Length > 0, "Prepare Smoke Test failed: loadedItems should not be empty.");
+        Debug.Assert(prepareViewData.loadedItems[0].quantity > 0, "Prepare Smoke Test failed: loaded item quantity should be positive.");
         Debug.Assert(prepareViewData.selectedRouteId == route.RouteId, "Prepare Smoke Test failed: selectedRouteId mismatch.");
         Debug.Assert(prepareViewData.startCondition != null, "Prepare Smoke Test failed: startCondition should not be null.");
         Debug.Assert(prepareViewData.startCondition.canStart == successCondition.canStart, "Prepare Smoke Test failed: success condition mismatch.");
@@ -431,6 +612,27 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(routeLockedCondition != null, "Prepare Smoke Test failed: route locked condition should not be null.");
         Debug.Assert(!routeLockedCondition.canStart, "Prepare Smoke Test failed: route locked case should not start.");
         Debug.Assert(!string.IsNullOrEmpty(routeLockedCondition.disabledReason), "Prepare Smoke Test failed: route locked disabled reason is required.");
+
+        // No Cargo
+        Debug.Log($"Prepare Fail: {noCargoCondition.disabledReason}");
+
+        Debug.Assert(noCargoCondition != null, "Prepare Smoke Test failed: no cargo condition should not be null.");
+        Debug.Assert(!noCargoCondition.canStart, "Prepare Smoke Test failed: no cargo case should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(noCargoCondition.disabledReason), "Prepare Smoke Test failed: no cargo disabled reason is required.");
+
+        // Mixed Draft Animal Type
+        Debug.Log($"Prepare Fail: {mixedDraftAnimalCondition.disabledReason}");
+
+        Debug.Assert(mixedDraftAnimalCondition != null, "Prepare Smoke Test failed: mixed animal condition should not be null.");
+        Debug.Assert(!mixedDraftAnimalCondition.canStart, "Prepare Smoke Test failed: mixed animal types should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(mixedDraftAnimalCondition.disabledReason), "Prepare Smoke Test failed: mixed animal disabled reason is required.");
+
+        // Inventory Slot Exceeded
+        Debug.Log($"Prepare Fail: {inventorySlotExceededCondition.disabledReason}");
+
+        Debug.Assert(inventorySlotExceededCondition != null, "Prepare Smoke Test failed: inventory slot condition should not be null.");
+        Debug.Assert(!inventorySlotExceededCondition.canStart, "Prepare Smoke Test failed: inventory slot exceeded case should not start.");
+        Debug.Assert(!string.IsNullOrEmpty(inventorySlotExceededCondition.disabledReason), "Prepare Smoke Test failed: inventory slot disabled reason is required.");
 
         // Not Enough Food
         Debug.Log($"Prepare Warning: {notEnoughFoodPrepareViewData.startCondition.warningMessages[0]}");
