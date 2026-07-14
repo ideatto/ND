@@ -439,6 +439,19 @@ Runtime과 Player build에서는 **`Resources` 폴더 하위**에 있어야 `Res
 
 아니다. SaveData에는 ID만 저장하고, 스펙은 Shared Game Data에서 조회한다.
 
+### Q. Shared `markets`와 SaveData `world.marketInventories`는 같나요?
+
+아니다. 역할이 다르다.
+
+| 구분 | Shared Game Data `markets` | SaveData `world.marketInventories` |
+|------|----------------------------|--------------------------------------|
+| 의미 | 상점 **정의**(어떤 마을·상품 풀인지) | 플레이어 세션의 상점 **재고 스냅샷** |
+| 출처 | Catalog의 `MarketData` SO | `JsonSaveService` 저장/로드 |
+| 조회 | `TryGetMarket(id, ...)` | `CurrentSaveData.world.marketInventories` |
+
+품목 스펙(무게·기본가 등)은 Shared `tradeItems`에서 조회하고, 현재 남은 수량·단가·갱신 구간은 SaveData market inventory에 둔다.  
+구매 초안·확정 마커는 `world.marketPurchasePreparation`, 적재 품목 자체는 `caravan.cargo`에 둔다.
+
 ---
 
 ## 11. 관련 파일

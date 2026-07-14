@@ -12,11 +12,13 @@
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
  * - SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
+ * - 상점 재고(marketInventories)와 구매 준비(marketPurchasePreparation)를 WorldSaveData에 저장한다.
  *
  * Usage for Team Members
  * - JsonSaveService가 SaveData를 생성, 로드, 저장한다.
  * - runtime caravan 객체와의 변환은 CaravanSaveDataMapper를 통해 수행한다.
  * - 대기 정산 결과 변환은 PendingSettlementSaveDataMapper를 통해 수행한다.
+ * - 상점 적재 초안·확정 화물은 caravan.cargo(CargoEntrySaveData)에 매핑하며 loadedLines를 별도 저장하지 않는다.
  * - 새 저장 필드를 추가할 때는 CurrentVersion과 NormalizeData 정책을 함께 검토한다.
  *
  * Main Public APIs
@@ -28,7 +30,9 @@
  * - 시간 값은 UTC DateTime.Ticks 기준으로 저장된다.
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
  * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
+ * - 상점 재고·구매 준비 필드는 version 5를 유지한 채 추가되며, 구 세이브의 null은 JsonSaveService.NormalizeData가 보정한다.
  * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/JJH/0714_Progression MarketInventory_Change_Request.md
  */
 using System;
 using System.Collections.Generic;
@@ -80,7 +84,7 @@ namespace ND.Framework
         public PendingSettlementSaveData pendingSettlement = new PendingSettlementSaveData();
 
         /// <summary>
-        /// 월드 계절, 재난, unlock 목록을 저장하는 데이터이다.
+        /// 월드 계절, 재난, unlock 목록, 상점 재고·구매 준비를 저장하는 데이터이다.
         /// </summary>
         public WorldSaveData world = new WorldSaveData();
 
@@ -369,7 +373,7 @@ namespace ND.Framework
     }
 
     /// <summary>
-    /// 월드 계절, 재난, unlock 목록을 저장하는 DTO이다.
+    /// 월드 계절, 재난, unlock 목록, 상점 재고·구매 준비를 저장하는 DTO이다.
     /// </summary>
     [Serializable]
     public sealed class WorldSaveData
@@ -398,6 +402,105 @@ namespace ND.Framework
         /// 완료된 route ID 목록이다.
         /// </summary>
         public List<string> completedRouteIds = new List<string>();
+
+        /// <summary>
+        /// 상점별 재고 스냅샷 목록이다. 동일 marketId는 하나의 항목으로 유지한다.
+        /// </summary>
+        public List<MarketInventorySaveData> marketInventories = new List<MarketInventorySaveData>();
+
+        /// <summary>
+        /// 상점 구매 초안·확정 준비 상태이다. 적재 품목 자체는 caravan.cargo에 저장한다.
+        /// </summary>
+        public MarketPurchasePreparationSaveData marketPurchasePreparation = new MarketPurchasePreparationSaveData();
+    }
+
+    /// <summary>
+    /// 한 상점의 재고 갱신 구간과 품목 수량을 저장하는 DTO이다.
+    /// </summary>
+    /// <remarks>
+    /// refreshIndex와 nextRefreshUtcTicks는 UTC 시간 구간 기반 재고 갱신에 사용한다.
+    /// seed는 worldSeed·marketId·refreshIndex로부터 유도된 결정적 생성 시드이다.
+    /// </remarks>
+    [Serializable]
+    public sealed class MarketInventorySaveData
+    {
+        /// <summary>
+        /// 상점 식별자이다.
+        /// </summary>
+        public string marketId = string.Empty;
+
+        /// <summary>
+        /// 현재 UTC 시간 구간에 대응하는 재고 갱신 인덱스이다.
+        /// </summary>
+        public long refreshIndex;
+
+        /// <summary>
+        /// 다음 재고 갱신 시각의 UTC ticks 값이다.
+        /// </summary>
+        public long nextRefreshUtcTicks;
+
+        /// <summary>
+        /// 해당 갱신 구간의 결정적 재고 생성 시드이다.
+        /// </summary>
+        public int seed;
+
+        /// <summary>
+        /// 상점에 노출된 품목 재고 목록이다.
+        /// </summary>
+        public List<MarketStockSaveData> stocks = new List<MarketStockSaveData>();
+    }
+
+    /// <summary>
+    /// 상점 재고 한 품목의 itemId, 수량, 단가를 저장하는 DTO이다.
+    /// </summary>
+    [Serializable]
+    public sealed class MarketStockSaveData
+    {
+        /// <summary>
+        /// 거래 품목 ID이다.
+        /// </summary>
+        public string itemId = string.Empty;
+
+        /// <summary>
+        /// 현재 판매 가능 수량이다.
+        /// </summary>
+        public int quantity;
+
+        /// <summary>
+        /// 해당 재고 갱신 구간의 단가이다. 단위: abstract trade money (long).
+        /// </summary>
+        public long unitPrice;
+    }
+
+    /// <summary>
+    /// 상점 구매 초안·확정 준비 상태를 저장하는 DTO이다.
+    /// </summary>
+    /// <remarks>
+    /// isCommitted가 true이면 지갑 차감과 재고 차감이 완료된 확정 상태이다.
+    /// 적재 품목 목록은 caravan.cargo에 TradeItemSaveData + quantity로 매핑한다.
+    /// </remarks>
+    [Serializable]
+    public sealed class MarketPurchasePreparationSaveData
+    {
+        /// <summary>
+        /// 구매 준비가 속한 상점 ID이다.
+        /// </summary>
+        public string marketId = string.Empty;
+
+        /// <summary>
+        /// 구매가 확정되어 지갑·재고가 반영되었는지 여부이다.
+        /// </summary>
+        public bool isCommitted;
+
+        /// <summary>
+        /// 확정 또는 초안 기준 총 구매 비용이다. 단위: abstract trade money (long).
+        /// </summary>
+        public long totalCost;
+
+        /// <summary>
+        /// 현재 적재 구성의 해시이다. 동일 구성 재확정 시 중복 차감을 방지한다.
+        /// </summary>
+        public int cargoHash;
     }
 
     /// <summary>
