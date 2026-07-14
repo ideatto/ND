@@ -351,7 +351,9 @@ DateTime CurrentUtc { get; }
 
 저장 schema version: **5** (`SaveData.CurrentVersion`)
 
-`version 5`부터 `pendingSettlement`(대기 정산 결과)를 포함한다. v4 이하 세이브는 마이그레이션 없이 새 게임으로 복구될 수 있다.
+`version 5`부터 `pendingSettlement`(대기 정산 결과)를 포함한다.  
+같은 version 5에 `world.marketInventories` / `world.marketPurchasePreparation`(상점 재고·구매 준비)도 포함되며, 구 세이브의 null은 `JsonSaveService.NormalizeData`가 보정한다. version bump 없음.  
+v4 이하 세이브는 마이그레이션 없이 새 게임으로 복구될 수 있다.
 
 ### `TradeProgressSaveData`
 
