@@ -6,18 +6,17 @@
 - **팀 인원:** 5명
 - **제출 마감:** 2026-07-16 23:59
 - **작업일:** 2026-07-14, 2026-07-15, 2026-07-16
-- **문서 효력:** 본 문서는 `Docs/Planning_Milestone`의 **1차 빌드 공식 마일스톤**이다. 2026-07-14 Update 공지 기준으로 이전 원본(제출 10:00·M0~M5 등)을 대체한다. 초안 보관본: `Docs/Personal_Documents/CSU/0714_Idle_Trade_First_Build_Docs/`
+- **문서 효력:** 본 Update 묶음은 팀 공지 기준 **1차 빌드 공식 마일스톤**이다. 이전 공식 `Planning_Milestone` 원본과의 차이는 Update 공지로 대체한다.
 - **일정 원칙:** 주말과 공휴일에 작업을 배정하지 않는다. 제출 범위를 넘는 업무는 야간·주말 연장으로 처리하지 않고 2차 빌드 이후 다음 평일로 이관한다.
 - **현재 단계:** 신규 시스템 개발이 아니라 플레이어 UX 연결, 통합, 회귀 테스트, 결함 수정 단계
 
 개인 마일스톤 문서:
 
-1. `01_Core_Gameplay_Milestone.md`
-2. `02_Framework_Integration_Milestone.md`
-3. `03_UI_Data_Milestone.md`
-4. `04_Content_Tools_Milestone.md`
-5. `05_Progression_System_Milestone.md`
-6. `Earn_Money_While_Lying_Down_Game_Design.md`
+1. `01_Core_Gameplay_Milestone_Updated_2026-07-14.md`
+2. `02_Framework_Integration_Milestone_Updated_2026-07-14.md`
+3. `03_UI_Data_Milestone_Updated_2026-07-14.md`
+4. `04_Content_Tools_Milestone_Updated_2026-07-14.md`
+5. `05_Progression_System_Milestone_Updated_2026-07-14.md`
 
 ---
 

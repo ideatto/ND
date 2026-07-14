@@ -30,7 +30,7 @@
  * - CurrentSaveData는 서비스들이 공유하는 runtime 저장 데이터 참조이므로 직접 수정 시 저장 시점에 주의해야 한다.
  * - SettlementUiBridge는 FrameworkRoot GameObject에 runtime component로 추가된다.
  * - Loading 완료 시 ApplyOfflineProgressOnLoad → RestorePendingSettlement 순으로 호출한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
 using UnityEngine;

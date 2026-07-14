@@ -21,7 +21,7 @@
  * Important Notes
  * - Editor 전용이며 Player build에 포함되지 않는다.
  * - JsonSaveService는 persistentDataPath에 저장할 수 있으나 테스트는 in-memory SaveData 참조를 우선 사용한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 #if UNITY_EDITOR
 using System;

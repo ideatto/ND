@@ -93,7 +93,7 @@ API 구현은 [`feature/framework/world-force-debug-commands`](world-force-debug
 ### 참조 가이드
 
 - [`Docs/Guide/Framework_World_Force_Debug_API_Guide.md`](../../Guide/Framework_World_Force_Debug_API_Guide.md)
-- [`Docs/Personal_Documents/CSU/world-force-debug-commands.md`](world-force-debug-commands.md)
+- [`Docs/Personal_Documents/CSU/0711_world-force-debug-commands.md`](0711_world-force-debug-commands.md)
 
 ### ContextMenu
 
@@ -180,11 +180,11 @@ Console 오류: 없음 (`foodAmount` int 할당 수정 후 CS0266 해소)
 |------|------|
 | `Scripts/Debug/TradeStartDebugHarness.cs` | Pause / Failed / Force World smoke ContextMenu |
 | `Editor/FrameworkM1LoopE2EEditorTests.cs` | Pause / Failed Editor 회귀 |
-| `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | 본 문서 |
+| `Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md` | 본 문서 |
 | `Docs/Guide/Framework_CoreServices_Team_Usage_Guide.md` | 팀 가이드 smoke 메뉴·검증 경로 |
 | `Docs/Policy/GitRules.md` | 기본 통합 브랜치 `dev2` 명시 |
 | `.cursor/rules/git-base-branch-dev2.mdc` | Agent alwaysApply base=`dev2` |
-| `Docs/Personal_Documents/CSU/user-rule-dev2-base-branch-patch.md` | User Rules 수동 패치 안내 |
+| `Docs/Personal_Documents/CSU/0711_user-rule-dev2-base-branch-patch.md` | User Rules 수동 패치 안내 |
 
 ---
 

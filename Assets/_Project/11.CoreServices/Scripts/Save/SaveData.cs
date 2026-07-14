@@ -31,7 +31,7 @@
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
  * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
  * - 상점 재고·구매 준비 필드는 version 5를 유지한 채 추가되며, 구 세이브의 null은 JsonSaveService.NormalizeData가 보정한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  * - Related Documentation: Docs/Personal_Documents/JJH/0714_Progression MarketInventory_Change_Request.md
  */
 using System;

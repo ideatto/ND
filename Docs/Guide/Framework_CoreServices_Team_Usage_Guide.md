@@ -54,9 +54,9 @@ Boot → Title → New Game → Loading → InGame
 ```
 
 포함 항목: loop integrity · Economy E2E · 인게임 식량 · Pause 식량 정지 · Failed 정산 화면 · PendingSettlement 복구 · **Offline 진행 복구**.  
-M3 대기 정산 로직: [`Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)  
-M3 오프라인 진행: [`Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)  
-M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md)
+M3 대기 정산 로직: [`Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md`](../Personal_Documents/CSU/0712_m3-pending-settlement-persist.md)  
+M3 오프라인 진행: [`Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)  
+M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md)
 ---
 
 ## 2. FrameworkRoot 서비스 맵
@@ -286,8 +286,8 @@ CompleteLoadingAndEnterGame
 
 상세:
 
-- Offline: [`m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
-- Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)
+- Offline: [`0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)
+- Pending: [`0712_m3-pending-settlement-persist.md`](../Personal_Documents/CSU/0712_m3-pending-settlement-persist.md)
 
 검증: `Framework/Run Offline Progress Smoke`, `Framework/Run Pending Settlement Restore Smoke`
 
@@ -427,9 +427,9 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 검증 기록:
 
-- M3 Offline: [`m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
-- M3 Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md) (2026-07-12 **Pass**)
-- M2 Pause/Failed/Force: [`m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
+- M3 Offline: [`0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)
+- M3 Pending: [`0712_m3-pending-settlement-persist.md`](../Personal_Documents/CSU/0712_m3-pending-settlement-persist.md) (2026-07-12 **Pass**)
+- M2 Pause/Failed/Force: [`0711_m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
 ---
 
 ## 12. 팀별 빠른 경로
@@ -460,15 +460,13 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 | 문서 | 내용 |
 |------|------|
-| `Docs/Personal_Documents/CSU/Core-services-M1-sync.md` | M1/M2 아키텍처 동기화 |
-| `Docs/Personal_Documents/CSU/M1_Trade_Loop_Integrity.md` | 무역 loop 무결성 |
-| `Docs/Personal_Documents/CSU/caravan-ingame-food-sync.md` | 식량·인게임 시간 |
-| `Docs/Personal_Documents/CSU/world-force-debug-commands.md` | Force* 구현 로직 |
-| `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
-| `Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
-| `Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
-| `Docs/Personal_Documents/CSU/0714_framework_market_inventory_save_schema_work_summary.md` | version 5 상점 재고·구매 준비 Save 스키마 작업 요약 |
-| `Docs/Personal_Documents/CSU/0714_economy_currency_wallet_trade_purchase_request.md` | Economy `ApplyTradePurchase`/`ApplyTradeRefund` 요청 (VNEXT 켤 때) |
+| `Docs/Personal_Documents/CSU/0711_Core-services-M1-sync.md` | M1/M2 아키텍처 동기화 |
+| `Docs/Personal_Documents/CSU/0710_M1_Trade_Loop_Integrity.md` | 무역 loop 무결성 |
+| `Docs/Personal_Documents/CSU/0711_caravan-ingame-food-sync.md` | 식량·인게임 시간 |
+| `Docs/Personal_Documents/CSU/0711_world-force-debug-commands.md` | Force* 구현 로직 |
+| `Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
+| `Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
+| `Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
 
 ### 테스트 씬 (선택)
 
