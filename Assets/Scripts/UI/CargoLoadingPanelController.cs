@@ -19,8 +19,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     [SerializeField] private int[] initialStocks = Array.Empty<int>();
 
     [Header("무역 준비 값")]
+    [SerializeField] private WagonData selectedWagon;
+    [SerializeField] private RouteData selectedRoute;
+    [SerializeField] private DraftAnimalData[] selectedDraftAnimals = Array.Empty<DraftAnimalData>();
     [SerializeField, Min(0)] private long currentGold = 2000;
     [SerializeField, Min(0f)] private float maximumLoad = 100f;
+    [Tooltip("Fallback used only when no RouteData is selected.")]
     [SerializeField, Min(0)] private int requiredFood = 5;
 
     [Header("단계 전환 대상 (선택)")]
@@ -72,7 +76,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private TMP_Text currentLoadText;
     private TMP_Text currentMoneyText;
     private TMP_Text pendingCostText;
-    private TMP_Text requiredFoodText;
+    private TMP_Text feedConsumptionText;
     private TMP_Text loadedFoodText;
     private TMP_Text foodWarningText;
     private Button nextButton;
@@ -82,6 +86,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private RectTransform[] shopSlots = Array.Empty<RectTransform>();
     private RectTransform[] loadedSlots = Array.Empty<RectTransform>();
+    private ScrollRect shopScrollRect;
+    private ScrollRect loadedScrollRect;
 
     private int selectedShopIndex = -1;
     private int selectedPurchaseCount = 1;
@@ -91,18 +97,64 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public long CurrentGold => currentGold;
     public long PendingPurchaseCost => pendingPurchaseCost;
+    public WagonData SelectedWagon => selectedWagon;
+    public RouteData SelectedRoute => selectedRoute;
+    public IReadOnlyList<DraftAnimalData> SelectedDraftAnimals => selectedDraftAnimals;
+    public float TotalFeedConsumption => selectedDraftAnimals == null
+        ? 0f
+        : selectedDraftAnimals
+            .Where(animal => animal != null)
+            .Sum(animal => animal.FeedConsumption);
+    public int RequiredFood => selectedRoute == null
+        ? requiredFood
+        : selectedRoute.BaseRequiredFoodQuantity;
+    public int InventorySlotLimit => selectedWagon == null
+        ? loadedSlots.Length
+        : selectedWagon.InventorySlotCount;
     public float CurrentLoad => loadedLines.Sum(line => line.Item == null ? 0f : line.Item.Weight * line.Quantity);
+    public float MaximumLoad => GetCoreMaximumLoad();
     public int LoadedFood => loadedLines
         .Where(line => line.Item != null && IsFood(line.Item))
         .Sum(line => line.Quantity);
     public bool CanProceed => pendingPurchaseCost <= currentGold
-        && CurrentLoad <= maximumLoad + 0.0001f
-        && LoadedFood >= requiredFood;
+        && CurrentLoad <= MaximumLoad + 0.0001f;
     public long MercenaryBudget => Math.Max(0L, currentGold - pendingPurchaseCost);
+
+    private float GetCoreMaximumLoad()
+    {
+        if (selectedWagon == null)
+            return maximumLoad;
+
+        var caravan = new CaravanData
+        {
+            wagon = new imsiWagonData
+            {
+                maxLoad = selectedWagon.MaxLoad
+            }
+        };
+
+        if (selectedDraftAnimals != null)
+        {
+            foreach (DraftAnimalData animal in selectedDraftAnimals)
+            {
+                if (animal == null)
+                    continue;
+
+                caravan.animals.Add(new imsiAnimalData
+                {
+                    increaseMaxLoad = animal.IncreaseMaxLoad
+                });
+            }
+        }
+
+        return CaravanCalculator.GetMaxLoad(caravan);
+    }
 
     private void Awake()
     {
         CacheHierarchy();
+        EnsureDynamicSlots();
+        EnsureGridScrollViews();
         EnsureActionButtons();
         ApplySection9LayoutAndPalette();
         EnsureMercenaryHirePanel();
@@ -145,20 +197,90 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         shopItems = items ?? Array.Empty<TradeItemData>();
         initialStocks = stocks ?? Array.Empty<int>();
 
+        EnsureDynamicSlots();
+        WireSlotInteractions();
         InitializeState();
         RefreshAll();
+    }
+
+    public void Configure(
+        long availableGold,
+        float maxLoad,
+        int foodRequirement,
+        TradeItemData[] items,
+        int[] stocks,
+        WagonData wagon)
+    {
+        selectedWagon = wagon;
+        Configure(availableGold, maxLoad, foodRequirement, items, stocks);
+    }
+
+    public bool SetSelectedWagon(WagonData wagon)
+    {
+        int nextSlotLimit = wagon == null
+            ? loadedSlots.Length
+            : wagon.InventorySlotCount;
+        int usedSlotCount = loadedLines.Count(line => line.Item != null && line.Quantity > 0);
+
+        if (usedSlotCount > nextSlotLimit)
+        {
+            Debug.LogWarning(
+                $"Cannot change wagon: cargo uses {usedSlotCount} slots but the selected wagon allows {nextSlotLimit}.",
+                this);
+            return false;
+        }
+
+        selectedWagon = wagon;
+        EnsureDynamicSlots();
+        WireSlotInteractions();
+        RefreshAll();
+        return true;
+    }
+
+    public void SetSelectedRoute(RouteData route)
+    {
+        selectedRoute = route;
+        RefreshAll();
+    }
+
+    public void SetSelectedDraftAnimals(IEnumerable<DraftAnimalData> animals)
+    {
+        selectedDraftAnimals = animals?
+            .Where(animal => animal != null)
+            .ToArray()
+            ?? Array.Empty<DraftAnimalData>();
+        RefreshAll();
+    }
+
+    public void Configure(
+        long availableGold,
+        float maxLoad,
+        TradeItemData[] items,
+        int[] stocks,
+        RouteData route,
+        WagonData wagon)
+    {
+        selectedRoute = route;
+        selectedWagon = wagon;
+        Configure(
+            availableGold,
+            maxLoad,
+            route == null ? requiredFood : route.BaseRequiredFoodQuantity,
+            items,
+            stocks);
     }
 
     public TradeItemBundle[] BuildTradeItemBundles()
     {
         return loadedLines
             .Where(line => line.Item != null && line.Quantity > 0)
-            .Select(line => new TradeItemBundle
+            .GroupBy(line => line.Item)
+            .Select(group => new TradeItemBundle
             {
-                itemId = line.Item.ItemId,
-                quantity = line.Quantity,
-                purchaseUnitPrice = line.UnitPrice,
-                sellUnitPrice = line.Item.BaseSellPrice
+                itemId = group.Key.ItemId,
+                quantity = group.Sum(line => line.Quantity),
+                purchaseUnitPrice = group.First().UnitPrice,
+                sellUnitPrice = group.Key.BaseSellPrice
             })
             .ToArray();
     }
@@ -236,6 +358,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         gameObject.SetActive(true);
     }
 
+    public void ResetAfterTradeCompleted()
+    {
+        ResetCargo();
+    }
+
     public void CancelTradeFromMercenaryHire()
     {
 #if ND_MARKET_SAVE_SCHEMA_VNEXT
@@ -302,7 +429,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         currentLoadText = FindText("CurrentLoadText");
         currentMoneyText = FindText("CurrentMoneyText");
         pendingCostText = FindText("PendingCostText");
-        requiredFoodText = FindText("RequiredFoodText");
+        feedConsumptionText = FindText("FeedConsumptionText") ?? FindText("RequiredFoodText");
         loadedFoodText = FindText("LoadedFoodText");
         foodWarningText = FindText("FoodWarningText");
 
@@ -316,6 +443,113 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         loadedSlots = loadedGrid == null
             ? Array.Empty<RectTransform>()
             : loadedGrid.Cast<Transform>().OfType<RectTransform>().ToArray();
+    }
+
+    private void EnsureDynamicSlots()
+    {
+        int requiredShopSlots = Mathf.Max(1, shopItems?.Length ?? 0);
+        int requiredLoadedSlots = Mathf.Max(1, selectedWagon == null
+            ? loadedSlots.Length
+            : selectedWagon.InventorySlotCount);
+
+        EnsureSlotCapacity(shopGrid, requiredShopSlots, "ShopItemSlot");
+        EnsureSlotCapacity(loadedGrid, requiredLoadedSlots, "LoadedItemSlot");
+
+        shopSlots = shopGrid == null
+            ? Array.Empty<RectTransform>()
+            : shopGrid.Cast<Transform>().OfType<RectTransform>().ToArray();
+        loadedSlots = loadedGrid == null
+            ? Array.Empty<RectTransform>()
+            : loadedGrid.Cast<Transform>().OfType<RectTransform>().ToArray();
+    }
+
+    private static void EnsureSlotCapacity(RectTransform grid, int requiredCount, string slotNamePrefix)
+    {
+        if (grid == null || requiredCount <= grid.childCount || grid.childCount == 0)
+            return;
+
+        GameObject template = grid.GetChild(0).gameObject;
+        for (int index = grid.childCount; index < requiredCount; index++)
+        {
+            GameObject clone = Instantiate(template, grid, false);
+            clone.name = $"{slotNamePrefix}_{index + 1}";
+            clone.SetActive(true);
+            StyleSection9Slot(clone.transform as RectTransform, 14f);
+        }
+    }
+
+    private void EnsureGridScrollViews()
+    {
+        shopScrollRect = EnsureVerticalScroll(shopGrid, "ShopScrollbar");
+        loadedScrollRect = EnsureVerticalScroll(loadedGrid, "LoadedInventoryScrollbar");
+    }
+
+    private static ScrollRect EnsureVerticalScroll(RectTransform content, string scrollbarName)
+    {
+        if (content == null || !(content.parent is RectTransform viewport))
+            return null;
+
+        ScrollRect scrollRect = viewport.GetComponent<ScrollRect>();
+        if (scrollRect == null)
+            scrollRect = viewport.gameObject.AddComponent<ScrollRect>();
+
+        if (viewport.GetComponent<RectMask2D>() == null)
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+        Scrollbar scrollbar = FindDeepChild(viewport, scrollbarName)?.GetComponent<Scrollbar>();
+        if (scrollbar == null)
+            scrollbar = CreateVerticalScrollbar(viewport, scrollbarName);
+
+        scrollRect.content = content;
+        scrollRect.viewport = viewport;
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.inertia = true;
+        scrollRect.scrollSensitivity = 32f;
+        scrollRect.verticalScrollbar = scrollbar;
+        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+        scrollRect.verticalScrollbarSpacing = -4f;
+        return scrollRect;
+    }
+
+    private static Scrollbar CreateVerticalScrollbar(RectTransform parent, string objectName)
+    {
+        GameObject scrollbarObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(Scrollbar));
+        scrollbarObject.transform.SetParent(parent, false);
+
+        RectTransform scrollbarRect = scrollbarObject.GetComponent<RectTransform>();
+        scrollbarRect.anchorMin = new Vector2(1f, 0f);
+        scrollbarRect.anchorMax = new Vector2(1f, 1f);
+        scrollbarRect.pivot = new Vector2(1f, 0.5f);
+        scrollbarRect.anchoredPosition = new Vector2(-4f, 0f);
+        scrollbarRect.sizeDelta = new Vector2(14f, -8f);
+        scrollbarObject.GetComponent<Image>().color = new Color(0.16f, 0.14f, 0.14f, 0.45f);
+
+        GameObject handleObject = new GameObject(
+            "Handle",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        handleObject.transform.SetParent(scrollbarRect, false);
+        RectTransform handleRect = handleObject.GetComponent<RectTransform>();
+        handleRect.anchorMin = Vector2.zero;
+        handleRect.anchorMax = Vector2.one;
+        handleRect.offsetMin = new Vector2(2f, 2f);
+        handleRect.offsetMax = new Vector2(-2f, -2f);
+        Image handleImage = handleObject.GetComponent<Image>();
+        handleImage.color = new Color(0.78f, 0.72f, 0.68f, 0.95f);
+
+        Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
+        scrollbar.handleRect = handleRect;
+        scrollbar.targetGraphic = handleImage;
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+        return scrollbar;
     }
 
     private void EnsureMercenaryHirePanel()
@@ -617,6 +851,17 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             nextButton.onClick.AddListener(ContinueToMercenaryHire);
         }
 
+        WireSlotInteractions();
+
+        popupMinusButton?.onClick.AddListener(() => SetPopupCount(selectedPurchaseCount - 1));
+        popupPlusButton?.onClick.AddListener(() => SetPopupCount(selectedPurchaseCount + 1));
+        popupMinButton?.onClick.AddListener(() => SetPopupCount(1));
+        popupMaxButton?.onClick.AddListener(() => SetPopupCount(GetMaximumPurchaseCount()));
+        popupLoadButton?.onClick.AddListener(ConfirmPurchase);
+    }
+
+    private void WireSlotInteractions()
+    {
         for (int i = 0; i < shopSlots.Length; i++)
         {
             int slotIndex = i;
@@ -633,12 +878,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
             handler.Initialize(this, i);
         }
-
-        popupMinusButton?.onClick.AddListener(() => SetPopupCount(selectedPurchaseCount - 1));
-        popupPlusButton?.onClick.AddListener(() => SetPopupCount(selectedPurchaseCount + 1));
-        popupMinButton?.onClick.AddListener(() => SetPopupCount(1));
-        popupMaxButton?.onClick.AddListener(() => SetPopupCount(GetMaximumPurchaseCount()));
-        popupLoadButton?.onClick.AddListener(ConfirmPurchase);
     }
 
     private void RefreshAll()
@@ -684,6 +923,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (button != null)
                 button.interactable = remainingStocks[i] > 0 && GetAffordableCount(item) > 0;
         }
+
+        UpdateGridContentHeight(shopGrid, shopItems?.Length ?? 0);
     }
 
     private void RefreshLoadedSlots()
@@ -692,6 +933,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         for (int i = 0; i < loadedSlots.Length; i++)
         {
+            bool isAvailable = i < InventorySlotLimit;
+            loadedSlots[i].gameObject.SetActive(isAvailable);
+            if (!isAvailable)
+                continue;
+
             bool hasLine = i < visibleLines.Count;
             LoadedLine line = hasLine ? visibleLines[i] : null;
             Image icon = FindDeepChild(loadedSlots[i], "ItemIcon")?.GetComponent<Image>();
@@ -718,12 +964,53 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 foodBadge.text = isFood ? "Food" : string.Empty;
             }
         }
+
+        UpdateGridContentHeight(loadedGrid, InventorySlotLimit);
+    }
+
+    private void UpdateGridContentHeight(RectTransform grid, int visibleSlotCount)
+    {
+        if (grid == null)
+            return;
+
+        GridLayoutGroup layout = grid.GetComponent<GridLayoutGroup>();
+        if (layout == null)
+            return;
+
+        int columnCount = layout.constraint == GridLayoutGroup.Constraint.FixedColumnCount
+            ? Mathf.Max(1, layout.constraintCount)
+            : Mathf.Max(1, visibleSlotCount);
+        int rowCount = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(0, visibleSlotCount) / (float)columnCount));
+        float height = layout.padding.top
+            + layout.padding.bottom
+            + rowCount * layout.cellSize.y
+            + Mathf.Max(0, rowCount - 1) * layout.spacing.y;
+
+        if (grid == loadedGrid)
+        {
+            grid.anchorMin = new Vector2(0f, 1f);
+            grid.anchorMax = new Vector2(0f, 1f);
+            grid.pivot = new Vector2(0f, 1f);
+            grid.anchoredPosition = new Vector2(20f, grid.anchoredPosition.y);
+            grid.sizeDelta = new Vector2(476f, grid.sizeDelta.y);
+        }
+        else
+        {
+            grid.anchorMin = new Vector2(0f, 1f);
+            grid.anchorMax = new Vector2(1f, 1f);
+            grid.pivot = new Vector2(0.5f, 1f);
+            grid.anchoredPosition = new Vector2(0f, grid.anchoredPosition.y);
+            grid.sizeDelta = new Vector2(0f, grid.sizeDelta.y);
+        }
+
+        grid.sizeDelta = new Vector2(grid.sizeDelta.x, height);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(grid);
     }
 
     private void RefreshStatus()
     {
         if (currentLoadText != null)
-            currentLoadText.text = $"Load  {CurrentLoad:0.##} / {maximumLoad:0.##}";
+            currentLoadText.text = $"Load  {CurrentLoad:0.##} / {MaximumLoad:0.##}";
 
         if (currentMoneyText != null)
             currentMoneyText.text = $"Gold  {currentGold:N0} G";
@@ -736,20 +1023,15 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 : Color.white;
         }
 
-        if (requiredFoodText != null)
-            requiredFoodText.text = $"Required Food  {requiredFood}";
+        if (feedConsumptionText != null)
+            feedConsumptionText.text = $"Feed Consumption  {TotalFeedConsumption:0.##}/s";
 
         if (loadedFoodText != null)
             loadedFoodText.text = $"Loaded Food  {LoadedFood}";
 
         if (foodWarningText != null)
         {
-            if (LoadedFood < requiredFood)
-            {
-                foodWarningText.text = $"Need {requiredFood - LoadedFood} more food.";
-                foodWarningText.color = new Color(1f, 0.46f, 0.28f);
-            }
-            else if (CurrentLoad > maximumLoad)
+            if (CurrentLoad > MaximumLoad)
             {
                 foodWarningText.text = "Maximum load exceeded.";
                 foodWarningText.color = new Color(1f, 0.34f, 0.3f);
@@ -877,10 +1159,28 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         int byMoney = GetAffordableCount(item);
         int byWeight = item.Weight <= 0f
             ? byStock
-            : Mathf.FloorToInt(Mathf.Max(0f, maximumLoad - CurrentLoad) / item.Weight);
+            : Mathf.FloorToInt(Mathf.Max(0f, MaximumLoad - CurrentLoad) / item.Weight);
 
-        int byStack = item.CanStack ? item.MaxCount : 1;
-        return Mathf.Max(0, Mathf.Min(byStock, byMoney, byWeight, byStack));
+        int bySlotCapacity = GetAvailableSlotCapacity(item);
+        return Mathf.Max(0, Mathf.Min(byStock, byMoney, byWeight, bySlotCapacity));
+    }
+
+    private int GetAvailableSlotCapacity(TradeItemData item)
+    {
+        if (item == null)
+            return 0;
+
+        int usedSlotCount = loadedLines.Count(line => line.Item != null && line.Quantity > 0);
+        int emptySlotCount = Mathf.Max(0, InventorySlotLimit - usedSlotCount);
+
+        if (!item.CanStack)
+            return emptySlotCount;
+
+        int partialStackCapacity = loadedLines
+            .Where(line => line.Item == item && line.Quantity > 0 && line.Quantity < item.MaxCount)
+            .Sum(line => item.MaxCount - line.Quantity);
+
+        return partialStackCapacity + emptySlotCount * item.MaxCount;
     }
 
     private int GetAffordableCount(TradeItemData item)
@@ -903,22 +1203,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (item == null || purchaseCount <= 0)
             return;
 
-        LoadedLine line = loadedLines.FirstOrDefault(existing => existing.Item == item);
-        if (line == null)
-        {
-            if (loadedLines.Count(existing => existing.Quantity > 0) >= loadedSlots.Length)
-                return;
+        if (!TryAddLoadedQuantity(item, purchaseCount, item.BaseBuyPrice))
+            return;
 
-            line = new LoadedLine
-            {
-                Item = item,
-                Quantity = 0,
-                UnitPrice = item.BaseBuyPrice
-            };
-            loadedLines.Add(line);
-        }
-
-        line.Quantity += purchaseCount;
         remainingStocks[selectedShopIndex] -= purchaseCount;
         pendingPurchaseCost += item.BaseBuyPrice * purchaseCount;
 
@@ -928,6 +1215,42 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         ClosePurchasePopup();
         RefreshAll();
+    }
+
+    private bool TryAddLoadedQuantity(TradeItemData item, int quantity, long unitPrice)
+    {
+        if (item == null || quantity <= 0 || GetAvailableSlotCapacity(item) < quantity)
+            return false;
+
+        int remaining = quantity;
+        int stackLimit = item.CanStack ? item.MaxCount : 1;
+
+        if (item.CanStack)
+        {
+            foreach (LoadedLine line in loadedLines.Where(line => line.Item == item && line.Quantity < stackLimit))
+            {
+                int added = Mathf.Min(stackLimit - line.Quantity, remaining);
+                line.Quantity += added;
+                remaining -= added;
+
+                if (remaining <= 0)
+                    return true;
+            }
+        }
+
+        while (remaining > 0)
+        {
+            int added = Mathf.Min(stackLimit, remaining);
+            loadedLines.Add(new LoadedLine
+            {
+                Item = item,
+                Quantity = added,
+                UnitPrice = unitPrice
+            });
+            remaining -= added;
+        }
+
+        return true;
     }
 
     private void ReturnToShop(LoadedLine line, int requestedCount)
@@ -1028,12 +1351,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (shopIndex < 0)
                 continue;
 
-            loadedLines.Add(new LoadedLine
+            if (!TryAddLoadedQuantity(saved.Item, saved.Quantity, saved.UnitPrice))
             {
-                Item = saved.Item,
-                Quantity = saved.Quantity,
-                UnitPrice = saved.UnitPrice
-            });
+                Debug.LogWarning($"Saved cargo exceeds the visible slot capacity: {saved.Item.ItemId}", this);
+                continue;
+            }
 
             if (!persistentPurchaseCommitted)
             {
@@ -1047,11 +1369,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         return loadedLines
             .Where(line => line.Item != null && line.Quantity > 0)
-            .Select(line => new CargoPurchaseRequest
+            .GroupBy(line => line.Item)
+            .Select(group => new CargoPurchaseRequest
             {
-                Item = line.Item,
-                Quantity = line.Quantity,
-                UnitPrice = line.UnitPrice
+                Item = group.Key,
+                Quantity = group.Sum(line => line.Quantity),
+                UnitPrice = group.First().UnitPrice
             })
             .ToList();
     }
