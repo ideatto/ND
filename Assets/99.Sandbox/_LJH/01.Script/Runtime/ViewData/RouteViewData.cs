@@ -13,7 +13,7 @@ public class RouteViewData
 
     public float distance;
     public float estimatedTime;
-    public int requiredFoodQuantity;
+    public int requiredDraftAnimalFoodQuantity;
     public int requiredMercenaryPower;
     public float riskLevel;
 
