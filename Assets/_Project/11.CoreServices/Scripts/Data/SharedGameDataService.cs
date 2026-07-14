@@ -3,16 +3,20 @@
  * - Responsible Discipline: Framework & Integration
  *
  * Script Purpose
- * - Sandbox ScriptableObject seed data를 로드하고 Framework 공용 데이터 view로 변환한다.
- * - InGame 진입 전에 공용 기준 데이터의 필수 ID와 참조 무결성을 검증한다.
+ * - Sandbox/Project ScriptableObject seed data를 로드하고 Framework 공용 데이터 view로 변환한다.
+ * - InGame 진입 전에 공용 기준 데이터의 필수 ID, 참조 무결성, catalog drift를 검증한다.
  *
  * Main Features
  * - Resources catalog를 우선 로드하고, catalog가 없으면 Unity Editor에서 Sandbox asset path fallback을 사용한다.
  * - Town, Market, TradeItem, Wagon, DraftAnimal, Route 데이터를 ID 기반 스냅샷으로 변환한다.
- * - M0 차단 오류와 최신 계약 충돌 경고를 분리해 로그로 제공한다.
+ * - watch root(02.Data, Sandbox Legacy) SO와 catalog를 GUID 기준으로 비교한다.
+ * - Editor Play는 미등록 SO를 경고만 남기고, Player는 ProjectData 미등록을 차단 오류로 처리한다.
  *
  * Important Notes
- * - Player build에서는 Resources catalog가 필요하다. Editor path fallback은 Unity Editor 통합 확인용이다.
+ * - Player build에서는 Resources catalog와 SharedGameDataWatchInventory가 필요하다.
+ * - Editor path fallback은 Unity Editor 통합 확인용이며, catalog가 있을 때는 사용하지 않는다.
+ * - Sandbox Legacy watch root drift는 Player에서도 경고만 남기고 InGame 진입을 막지 않는다.
+ * - Player drift 검사는 inventory 스냅샷에 의존하므로 빌드 전 inventory refresh가 필요하다.
  * - Sandbox DraftAnimalData.IncreaseMaxLoad는 최신 계약상 사용하지 않으며 경고만 남긴다.
  * - TradeItem modifier는 Economy M1 가격 계산용 PriceModifierInput 스냅샷으로 변환한다.
  */
@@ -30,6 +34,8 @@ namespace ND.Framework
     /// </summary>
     public sealed class SharedGameDataService
     {
+        // fallback 경로도 SharedGameDataWatchRoots.SandboxLegacyRoot 하위 하드코딩 경로이다.
+        // catalog가 없을 때만 사용하며, 정상 runtime 경로는 Resources catalog이다.
         private const string BaseCampTownPath = "Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset";
         private const string DummyTownPath = "Assets/99.Sandbox/_LJH/02.SO/TownSO/TownData_Dummy.asset";
         private const string DummyMarketPath = "Assets/99.Sandbox/_LJH/02.SO/TownMarketSO/Market_DummyTown.asset";
@@ -62,16 +68,21 @@ namespace ND.Framework
         }
 
         /// <summary>
-        /// Sandbox seed data를 로드하고 공용 데이터 view를 생성한다.
+        /// Sandbox/Project seed data를 로드하고 공용 데이터 view를 생성한다.
         /// </summary>
-        /// <returns>필수 데이터 검증을 통과하면 true, InGame 진입을 막아야 하면 false.</returns>
+        /// <returns>
+        /// 필수 데이터·참조 무결성 검증을 통과하고 Player ProjectData drift가 없으면 true를 반환한다.
+        /// 검증 실패 또는 Player ProjectData drift가 있으면 false를 반환하며 InGame 진입을 막아야 한다.
+        /// Editor Play의 catalog 미등록 SO는 경고만 남기고 true를 반환할 수 있다.
+        /// </returns>
         public bool LoadInitialData()
         {
             LastErrorSummary = string.Empty;
             LastWarningSummary = string.Empty;
             CurrentData = null;
 
-            var source = LoadSource();
+            SandboxSharedGameDataCatalog catalog;
+            var source = LoadSource(out catalog);
             var errors = new List<string>();
             var warnings = new List<string>();
 
@@ -84,6 +95,7 @@ namespace ND.Framework
 
             var view = BuildView(source, errors, warnings);
             ValidateReferences(view, errors);
+            ApplyCatalogDriftCheck(catalog, errors, warnings);
 
             if (errors.Count > 0)
             {
@@ -97,9 +109,9 @@ namespace ND.Framework
             return true;
         }
 
-        private SharedGameDataSource LoadSource()
+        private SharedGameDataSource LoadSource(out SandboxSharedGameDataCatalog catalog)
         {
-            var catalog = explicitCatalog != null
+            catalog = explicitCatalog != null
                 ? explicitCatalog
                 : Resources.Load<SandboxSharedGameDataCatalog>(SandboxSharedGameDataCatalog.ResourceName);
 
@@ -115,8 +127,137 @@ namespace ND.Framework
             }
 
             // Resources catalog가 아직 없을 때도 Editor 통합 단계에서 Sandbox seed data를 검증할 수 있게 한다.
+            // fallback 경로도 SharedGameDataWatchRoots.SandboxLegacyRoot 하위 하드코딩 경로이다.
             FrameworkLog.Warning("SandboxSharedGameDataCatalog resource was not found. Trying Unity Editor Sandbox path fallback.");
             return LoadEditorSandboxSource();
+        }
+
+        private void ApplyCatalogDriftCheck(
+            SandboxSharedGameDataCatalog catalog,
+            List<string> errors,
+            List<string> warnings)
+        {
+            if (catalog == null)
+            {
+                warnings.Add("Shared game data catalog drift check was skipped because catalog was not loaded.");
+                return;
+            }
+
+            // Editor: AssetDatabase 실시간 스캔. Player: Resources inventory 스냅샷.
+            List<SharedGameDataDriftFinding> findings;
+            if (Application.isEditor)
+            {
+                findings = CollectEditorDriftFindings(catalog);
+            }
+            else
+            {
+                var inventory = Resources.Load<SharedGameDataWatchInventory>(
+                    SharedGameDataWatchInventory.ResourceName);
+                if (inventory == null)
+                {
+                    errors.Add(
+                        "SharedGameDataWatchInventory resource was not found. " +
+                        "Player catalog drift check cannot run. Refresh inventory before building.");
+                    return;
+                }
+
+                findings = CollectPlayerDriftFindings(inventory);
+            }
+
+            if (findings == null)
+            {
+                return;
+            }
+
+            for (var index = 0; index < findings.Count; index++)
+            {
+                var finding = findings[index];
+                if (finding == null)
+                {
+                    continue;
+                }
+
+                var message = finding.ToLogMessage();
+                if (!Application.isEditor && finding.BlocksPlayerBuild)
+                {
+                    errors.Add(message);
+                }
+                else
+                {
+                    warnings.Add(message);
+                }
+            }
+        }
+
+        private static List<SharedGameDataDriftFinding> CollectEditorDriftFindings(
+            SandboxSharedGameDataCatalog catalog)
+        {
+            // Runtime assembly가 UnityEditor를 직접 참조하지 않도록 Editor checker를 reflection으로 호출한다.
+            var checkerType = Type.GetType(
+                "ND.Framework.Editor.SharedGameDataCatalogDriftChecker, Assembly-CSharp-Editor");
+            if (checkerType == null)
+            {
+                FrameworkLog.Warning(
+                    "SharedGameDataCatalogDriftChecker was not found. Editor catalog drift check was skipped.");
+                return null;
+            }
+
+            var method = checkerType.GetMethod(
+                "CollectUnregisteredAssets",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                new[] { typeof(SandboxSharedGameDataCatalog) },
+                null);
+            if (method == null)
+            {
+                FrameworkLog.Warning(
+                    "SharedGameDataCatalogDriftChecker.CollectUnregisteredAssets was not found. Editor catalog drift check was skipped.");
+                return null;
+            }
+
+            return method.Invoke(null, new object[] { catalog }) as List<SharedGameDataDriftFinding>;
+        }
+
+        private static List<SharedGameDataDriftFinding> CollectPlayerDriftFindings(
+            SharedGameDataWatchInventory inventory)
+        {
+            var registeredGuids = new HashSet<string>(StringComparer.Ordinal);
+            var catalogGuids = inventory.CatalogRegisteredGuids;
+            for (var index = 0; index < catalogGuids.Length; index++)
+            {
+                var guid = catalogGuids[index];
+                if (!string.IsNullOrEmpty(guid))
+                {
+                    registeredGuids.Add(guid);
+                }
+            }
+
+            var findings = new List<SharedGameDataDriftFinding>();
+            var entries = inventory.Entries;
+            for (var index = 0; index < entries.Length; index++)
+            {
+                var entry = entries[index];
+                if (entry == null || string.IsNullOrEmpty(entry.assetGuid))
+                {
+                    continue;
+                }
+
+                if (registeredGuids.Contains(entry.assetGuid))
+                {
+                    continue;
+                }
+
+                findings.Add(new SharedGameDataDriftFinding
+                {
+                    AssetGuid = entry.assetGuid,
+                    AssetPath = entry.assetPath,
+                    TypeName = entry.typeName,
+                    DataId = entry.dataId,
+                    WatchRootKind = entry.watchRootKind
+                });
+            }
+
+            return findings;
         }
 
         private static SharedGameDataSource LoadEditorSandboxSource()

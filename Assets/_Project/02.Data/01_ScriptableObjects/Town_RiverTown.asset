@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: RiverTown
   displayName: RiverTown
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 7f6aa2670c8c95c4fa81836ec43b44a6, type: 3}
   unlockedByDefault: 1
   description: River Side Town
   market: {fileID: 11400000, guid: 24facdcdcd1273e4a901c56ee267a402, type: 2}

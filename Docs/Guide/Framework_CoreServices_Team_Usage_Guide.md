@@ -163,7 +163,9 @@ if (data != null && data.IsLoaded)
 | 항목 | 내용 |
 |------|------|
 | 카탈로그 | `Resources/SandboxSharedGameDataCatalog.asset` |
-| 규칙 | Sandbox SO 타입을 다른 feature에서 직접 참조하지 말 것 |
+| Watch inventory | `Resources/SharedGameDataWatchInventory.asset` (Player drift 검사용, 빌드 전 refresh) |
+| Seed SO | `Assets/_Project/02.Data/01_ScriptableObjects/` |
+| 규칙 | Sandbox/Project SO 타입을 다른 feature에서 직접 참조하지 말 것 |
 | 상세 | [`Framework_Shared_Game_Data_Guide.md`](./Framework_Shared_Game_Data_Guide.md) |
 
 ---
