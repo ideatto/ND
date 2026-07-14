@@ -1,0 +1,1297 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using TMPro;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+using ND.Framework.CargoLoading;
+using ND.Framework;
+#endif
+
+public sealed class CargoLoadingPanelController : MonoBehaviour
+{
+    [Header("상점 데이터")]
+    [SerializeField] private TradeItemData[] shopItems = Array.Empty<TradeItemData>();
+    [SerializeField] private int[] initialStocks = Array.Empty<int>();
+
+    [Header("무역 준비 값")]
+    [SerializeField, Min(0)] private long currentGold = 2000;
+    [SerializeField, Min(0f)] private float maximumLoad = 100f;
+    [SerializeField, Min(0)] private int requiredFood = 5;
+
+    [Header("단계 전환 대상 (선택)")]
+    [SerializeField] private GameObject previousStepPanel;
+    [SerializeField] private GameObject mercenaryStepPanel;
+
+    [Header("단계 이벤트")]
+    [SerializeField] private UnityEvent onBackRequested = new UnityEvent();
+    [SerializeField] private UnityEvent onTradeCancelled = new UnityEvent();
+    [SerializeField] private UnityEvent onMercenaryHireRequested = new UnityEvent();
+
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+    [Header("Temporary market persistence integration")]
+    [SerializeField] private bool enablePersistentMarketIntegration = true;
+    [SerializeField] private string persistentMarketId = "testjjh-market";
+    [SerializeField, Min(1)] private int generatedMarketItemCount = 4;
+    [SerializeField, Min(1)] private int generatedMaximumStock = 30;
+    [SerializeField, Min(1f)] private float marketRefreshIntervalSeconds = 3600f;
+    [SerializeField] private int marketWorldSeed = 20260714;
+
+    private MarketInventorySession persistentMarketSession;
+    private bool persistentPurchaseCommitted;
+#endif
+
+    private sealed class LoadedLine
+    {
+        public TradeItemData Item;
+        public int Quantity;
+        public long UnitPrice;
+    }
+
+    private readonly List<LoadedLine> loadedLines = new List<LoadedLine>();
+    private int[] remainingStocks = Array.Empty<int>();
+
+    private RectTransform panelRect;
+    private RectTransform shopGrid;
+    private RectTransform loadedGrid;
+    private GameObject popupOverlay;
+    private RectTransform popupRect;
+    private TMP_Text popupTitleText;
+    private TMP_Text popupInfoText;
+    private TMP_Text popupCountText;
+    private Button popupMinusButton;
+    private Button popupPlusButton;
+    private Button popupMinButton;
+    private Button popupMaxButton;
+    private Button popupLoadButton;
+
+    private TMP_Text currentLoadText;
+    private TMP_Text currentMoneyText;
+    private TMP_Text pendingCostText;
+    private TMP_Text requiredFoodText;
+    private TMP_Text loadedFoodText;
+    private TMP_Text foodWarningText;
+    private Button nextButton;
+    private Button closeButton;
+    private Button backButton;
+    private MercenaryHirePanelController mercenaryHireController;
+
+    private RectTransform[] shopSlots = Array.Empty<RectTransform>();
+    private RectTransform[] loadedSlots = Array.Empty<RectTransform>();
+
+    private int selectedShopIndex = -1;
+    private int selectedPurchaseCount = 1;
+    private long pendingPurchaseCost;
+    private Coroutine panelAnimation;
+    private Coroutine popupAnimation;
+
+    public long CurrentGold => currentGold;
+    public long PendingPurchaseCost => pendingPurchaseCost;
+    public float CurrentLoad => loadedLines.Sum(line => line.Item == null ? 0f : line.Item.Weight * line.Quantity);
+    public int LoadedFood => loadedLines
+        .Where(line => line.Item != null && IsFood(line.Item))
+        .Sum(line => line.Quantity);
+    public bool CanProceed => pendingPurchaseCost <= currentGold
+        && CurrentLoad <= maximumLoad + 0.0001f
+        && LoadedFood >= requiredFood;
+    public long MercenaryBudget => Math.Max(0L, currentGold - pendingPurchaseCost);
+
+    private void Awake()
+    {
+        CacheHierarchy();
+        EnsureActionButtons();
+        ApplySection9LayoutAndPalette();
+        EnsureMercenaryHirePanel();
+        BuildPurchasePopup();
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (!TryInitializePersistentMarket())
+            InitializeState();
+#else
+        InitializeState();
+#endif
+        WireInteractions();
+        RefreshAll();
+        ClosePurchasePopupImmediate();
+    }
+
+    private void OnEnable()
+    {
+        if (!Application.isPlaying)
+            return;
+
+        panelRect ??= transform as RectTransform;
+        panelRect.localScale = Vector3.zero;
+
+        if (panelAnimation != null)
+            StopCoroutine(panelAnimation);
+
+        panelAnimation = StartCoroutine(ScaleRoutine(panelRect, Vector3.one, 0.22f, null));
+    }
+
+    public void Configure(
+        long availableGold,
+        float maxLoad,
+        int foodRequirement,
+        TradeItemData[] items,
+        int[] stocks)
+    {
+        currentGold = Math.Max(0, availableGold);
+        maximumLoad = Mathf.Max(0f, maxLoad);
+        requiredFood = Mathf.Max(0, foodRequirement);
+        shopItems = items ?? Array.Empty<TradeItemData>();
+        initialStocks = stocks ?? Array.Empty<int>();
+
+        InitializeState();
+        RefreshAll();
+    }
+
+    public TradeItemBundle[] BuildTradeItemBundles()
+    {
+        return loadedLines
+            .Where(line => line.Item != null && line.Quantity > 0)
+            .Select(line => new TradeItemBundle
+            {
+                itemId = line.Item.ItemId,
+                quantity = line.Quantity,
+                purchaseUnitPrice = line.UnitPrice,
+                sellUnitPrice = line.Item.BaseSellPrice
+            })
+            .ToArray();
+    }
+
+    public void BackToPreviousStep()
+    {
+        ClosePurchasePopupImmediate();
+        HidePanel(() =>
+        {
+            if (previousStepPanel != null)
+                previousStepPanel.SetActive(true);
+
+            onBackRequested.Invoke();
+        });
+    }
+
+    public void CancelTradePreparation()
+    {
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (persistentMarketSession != null)
+        {
+            CargoIntegrationResult result = persistentMarketSession.CancelPreparation(BuildPersistentRequests());
+            if (!result.Success)
+            {
+                Debug.LogError($"Cargo cancellation failed: {result.ErrorCode}", this);
+                return;
+            }
+
+            currentGold = result.TradingCurrencyAfter;
+        }
+#endif
+        ResetCargo();
+        HidePanel(() => onTradeCancelled.Invoke());
+    }
+
+    public void ContinueToMercenaryHire()
+    {
+        if (!CanProceed)
+            return;
+
+        if (mercenaryHireController == null)
+            EnsureMercenaryHirePanel();
+
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (persistentMarketSession != null)
+        {
+            CargoIntegrationResult result = persistentMarketSession.Commit(BuildPersistentRequests());
+            if (!result.Success)
+            {
+                Debug.LogError($"Cargo purchase commit failed: {result.ErrorCode}", this);
+                RefreshAll();
+                return;
+            }
+
+            currentGold = result.TradingCurrencyAfter;
+            pendingPurchaseCost = 0L;
+            persistentPurchaseCommitted = true;
+        }
+#endif
+
+        ClosePurchasePopupImmediate();
+        HidePanel(() =>
+        {
+            if (mercenaryHireController != null)
+                mercenaryHireController.Show(MercenaryBudget);
+            else if (mercenaryStepPanel != null)
+                mercenaryStepPanel.SetActive(true);
+
+            onMercenaryHireRequested.Invoke();
+        });
+    }
+
+    public void ReturnFromMercenaryHire()
+    {
+        gameObject.SetActive(true);
+    }
+
+    public void CancelTradeFromMercenaryHire()
+    {
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (persistentMarketSession != null)
+        {
+            CargoIntegrationResult result = persistentMarketSession.CancelPreparation(BuildPersistentRequests());
+            if (!result.Success)
+            {
+                Debug.LogError($"Cargo cancellation failed: {result.ErrorCode}", this);
+                return;
+            }
+
+            currentGold = result.TradingCurrencyAfter;
+        }
+#endif
+        ResetCargo();
+        onTradeCancelled.Invoke();
+    }
+
+    public void DecrementLoadedSlot(int slotIndex)
+    {
+        LoadedLine line = GetVisibleLoadedLine(slotIndex);
+        if (line == null)
+            return;
+
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (!EnsurePersistentDraftEditable())
+            return;
+#endif
+
+        ReturnToShop(line, 1);
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        PersistCurrentDraft();
+#endif
+        RefreshAll();
+    }
+
+    public void ClearLoadedSlot(int slotIndex)
+    {
+        LoadedLine line = GetVisibleLoadedLine(slotIndex);
+        if (line == null)
+            return;
+
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (!EnsurePersistentDraftEditable())
+            return;
+#endif
+
+        ReturnToShop(line, line.Quantity);
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        PersistCurrentDraft();
+#endif
+        RefreshAll();
+    }
+
+    private void CacheHierarchy()
+    {
+        panelRect = transform as RectTransform;
+        shopGrid = FindDeepChild(transform, "ShopGrid") as RectTransform;
+        loadedGrid = transform.Find("LoadedInventoryArea/LoadedInventoryGrid") as RectTransform;
+        popupOverlay = FindDeepChild(transform, "PurchasePopupOverlay")?.gameObject;
+        popupRect = FindDeepChild(transform, "PurchaseAmountPopup") as RectTransform;
+
+        currentLoadText = FindText("CurrentLoadText");
+        currentMoneyText = FindText("CurrentMoneyText");
+        pendingCostText = FindText("PendingCostText");
+        requiredFoodText = FindText("RequiredFoodText");
+        loadedFoodText = FindText("LoadedFoodText");
+        foodWarningText = FindText("FoodWarningText");
+
+        nextButton = FindDeepChild(transform, "NextButton")?.GetComponent<Button>();
+        closeButton = FindDeepChild(transform, "CloseButton")?.GetComponent<Button>();
+
+        shopSlots = shopGrid == null
+            ? Array.Empty<RectTransform>()
+            : shopGrid.Cast<Transform>().OfType<RectTransform>().ToArray();
+
+        loadedSlots = loadedGrid == null
+            ? Array.Empty<RectTransform>()
+            : loadedGrid.Cast<Transform>().OfType<RectTransform>().ToArray();
+    }
+
+    private void EnsureMercenaryHirePanel()
+    {
+        if (mercenaryStepPanel == null)
+        {
+            Transform existing = transform.parent == null
+                ? null
+                : transform.parent.Find("MercenaryHirePanel");
+
+            mercenaryHireController = existing == null
+                ? MercenaryHirePanelController.CreateForCargo(this)
+                : existing.GetComponent<MercenaryHirePanelController>();
+
+            if (mercenaryHireController != null)
+                mercenaryStepPanel = mercenaryHireController.gameObject;
+        }
+        else
+        {
+            mercenaryHireController = mercenaryStepPanel.GetComponent<MercenaryHirePanelController>();
+            if (mercenaryHireController == null)
+                mercenaryHireController = mercenaryStepPanel.AddComponent<MercenaryHirePanelController>();
+
+            mercenaryHireController.Initialize(this);
+        }
+    }
+
+    private void ApplySection9LayoutAndPalette()
+    {
+        if (panelRect == null)
+            return;
+
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.anchoredPosition = Vector2.zero;
+        panelRect.sizeDelta = new Vector2(1176f, 740f);
+
+        SetRect("Header", new Vector2(1176f, 104f), Vector2.zero);
+        SetRect("ShopArea", new Vector2(1116f, 412f), new Vector2(32f, -104f));
+        SetRect("LoadedInventoryArea", new Vector2(516f, 172f), new Vector2(32f, -536f));
+        SetRect("LoadStatusArea", new Vector2(568f, 172f), new Vector2(580f, -536f));
+
+        SetImageColor(transform, new Color32(184, 177, 177, 255));
+        SetImageColor("Header", new Color32(184, 177, 177, 255));
+        SetImageColor("TitleBackground", new Color32(248, 246, 243, 255));
+        SetImageColor("ShopArea", new Color32(105, 94, 93, 255));
+        SetImageColor("LoadedInventoryArea", new Color32(242, 239, 237, 255));
+        SetImageColor("LoadStatusArea", new Color32(242, 239, 237, 255));
+        SetImageColor("ShopAreaLabel", new Color32(105, 94, 93, 255));
+        SetImageColor("LoadUiBadge", new Color32(69, 142, 39, 255));
+        SetImageColor("CloseButton", new Color32(190, 87, 87, 255));
+        SetImageColor("NextButton", new Color32(255, 232, 70, 255));
+        SetImageColor("BackButton", new Color32(105, 94, 93, 255));
+
+        SetTextColor("TitleText", new Color32(35, 31, 30, 255));
+        SetTextColor("CurrentLoadText", new Color32(45, 40, 39, 255));
+        SetTextColor("CurrentMoneyText", new Color32(45, 40, 39, 255));
+        SetTextColor("PendingCostText", new Color32(45, 40, 39, 255));
+        SetTextColor("RequiredFoodText", new Color32(45, 40, 39, 255));
+        SetTextColor("LoadedFoodText", new Color32(45, 40, 39, 255));
+
+        StyleLabel("ShopAreaLabel", "Store", 22f, Color.white);
+        StyleLabel("LoadedInventoryLabel", "Load Inventory", 22f, Section9TextColor());
+        StyleLabel("DataLabel", "Data", 22f, Section9TextColor());
+        StyleLabel("CurrentLoadText", null, 22f, Section9TextColor());
+        StyleLabel("CurrentMoneyText", null, 22f, Section9TextColor());
+        StyleLabel("PendingCostText", null, 22f, Section9TextColor());
+        StyleLabel("RequiredFoodText", null, 19f, Section9TextColor());
+        StyleLabel("LoadedFoodText", null, 19f, Section9TextColor());
+        StyleLabel("FoodWarningText", null, 18f, new Color32(176, 54, 54, 255));
+
+        foreach (RectTransform slot in shopSlots)
+            StyleSection9Slot(slot, 14f);
+        foreach (RectTransform slot in loadedSlots)
+            StyleSection9Slot(slot, 14f);
+    }
+
+    private static Color Section9TextColor()
+    {
+        return new Color32(45, 40, 39, 255);
+    }
+
+    private void StyleLabel(string objectName, string replacement, float size, Color color)
+    {
+        TMP_Text text = FindText(objectName);
+        if (text == null)
+            return;
+
+        if (!string.IsNullOrEmpty(replacement))
+            text.text = replacement;
+        text.fontSize = size;
+        text.color = color;
+    }
+
+    private static void StyleSection9Slot(RectTransform slot, float minimumFontSize)
+    {
+        if (slot == null)
+            return;
+
+        Image background = slot.GetComponent<Image>();
+        if (background == null)
+            background = slot.gameObject.AddComponent<Image>();
+        background.color = new Color32(248, 246, 243, 255);
+        background.raycastTarget = true;
+
+        Outline outline = slot.GetComponent<Outline>();
+        if (outline == null)
+            outline = slot.gameObject.AddComponent<Outline>();
+        outline.effectColor = new Color32(91, 80, 79, 255);
+        outline.effectDistance = new Vector2(2f, -2f);
+        outline.useGraphicAlpha = true;
+
+        foreach (TMP_Text text in slot.GetComponentsInChildren<TMP_Text>(true))
+        {
+            text.fontSize = Mathf.Max(text.fontSize, minimumFontSize);
+            text.color = new Color32(45, 40, 39, 255);
+        }
+    }
+
+    private void SetRect(string objectName, Vector2 size, Vector2 position)
+    {
+        RectTransform rect = FindDeepChild(transform, objectName) as RectTransform;
+        if (rect == null)
+            return;
+
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.sizeDelta = size;
+        rect.anchoredPosition = position;
+    }
+
+    private void SetImageColor(string objectName, Color color)
+    {
+        Transform target = FindDeepChild(transform, objectName);
+        SetImageColor(target, color);
+    }
+
+    private static void SetImageColor(Transform target, Color color)
+    {
+        Image image = target == null ? null : target.GetComponent<Image>();
+        if (image != null)
+            image.color = color;
+    }
+
+    private void SetTextColor(string objectName, Color color)
+    {
+        TMP_Text text = FindText(objectName);
+        if (text != null)
+            text.color = color;
+    }
+
+    private void EnsureActionButtons()
+    {
+        Transform header = FindDeepChild(transform, "Header");
+        if (header == null)
+            return;
+
+        Transform existing = FindDeepChild(header, "BackButton");
+        backButton = existing == null
+            ? CreateButton(header, "BackButton", "Back", new Vector2(112f, 56f), new Vector2(-510f, 0f))
+            : existing.GetComponent<Button>();
+
+        if (backButton != null)
+        {
+            RectTransform backRect = backButton.transform as RectTransform;
+            backRect.anchorMin = new Vector2(0.5f, 0.5f);
+            backRect.anchorMax = new Vector2(0.5f, 0.5f);
+            backRect.pivot = new Vector2(0.5f, 0.5f);
+            backRect.sizeDelta = new Vector2(112f, 56f);
+            backRect.anchoredPosition = new Vector2(-510f, 0f);
+        }
+
+        TMP_Text title = FindText("TitleText");
+        if (title != null)
+        {
+            title.text = "Cargo Loading";
+            title.fontSize = 34f;
+        }
+
+        TMP_Text nextLabel = nextButton == null ? null : nextButton.GetComponentInChildren<TMP_Text>(true);
+        if (nextLabel != null)
+        {
+            nextLabel.text = "Hire";
+            nextLabel.fontSize = 22f;
+        }
+
+        if (nextButton != null)
+        {
+            RectTransform nextRect = nextButton.transform as RectTransform;
+            nextRect.sizeDelta = new Vector2(180f, 44f);
+            nextRect.anchoredPosition = new Vector2(364f, -116f);
+        }
+
+        TMP_Text closeLabel = closeButton == null ? null : closeButton.GetComponentInChildren<TMP_Text>(true);
+        if (closeLabel != null)
+        {
+            closeLabel.text = "X";
+            closeLabel.fontSize = 28f;
+            closeLabel.fontStyle = FontStyles.Bold;
+        }
+    }
+
+    private void BuildPurchasePopup()
+    {
+        if (popupOverlay == null || popupRect == null)
+            return;
+
+        Image overlayImage = popupOverlay.GetComponent<Image>();
+        if (overlayImage == null)
+            overlayImage = popupOverlay.AddComponent<Image>();
+
+        overlayImage.color = new Color(0f, 0f, 0f, 0.62f);
+        overlayImage.raycastTarget = true;
+
+        Button overlayButton = popupOverlay.GetComponent<Button>();
+        if (overlayButton == null)
+            overlayButton = popupOverlay.AddComponent<Button>();
+
+        overlayButton.transition = Selectable.Transition.None;
+        overlayButton.onClick.RemoveAllListeners();
+        overlayButton.onClick.AddListener(ClosePurchasePopup);
+
+        if (popupRect.GetComponent<CargoPopupClickBlocker>() == null)
+            popupRect.gameObject.AddComponent<CargoPopupClickBlocker>();
+
+        popupRect.anchorMin = new Vector2(0.5f, 0.5f);
+        popupRect.anchorMax = new Vector2(0.5f, 0.5f);
+        popupRect.pivot = new Vector2(0.5f, 0.5f);
+        popupRect.anchoredPosition = Vector2.zero;
+        popupRect.sizeDelta = new Vector2(560f, 420f);
+
+        Image popupImage = popupRect.GetComponent<Image>();
+        if (popupImage == null)
+            popupImage = popupRect.gameObject.AddComponent<Image>();
+
+        popupImage.color = new Color(0.12f, 0.13f, 0.16f, 0.98f);
+        popupImage.raycastTarget = true;
+
+        popupTitleText = EnsureText(popupRect, "PopupTitleText", "Select Cargo", 28f,
+            new Vector2(500f, 44f), new Vector2(0f, 172f), TextAlignmentOptions.Center, FontStyles.Bold);
+
+        popupInfoText = EnsureText(popupRect, "PopupInfoText", string.Empty, 19f,
+            new Vector2(490f, 180f), new Vector2(0f, 55f), TextAlignmentOptions.TopLeft, FontStyles.Normal);
+
+        popupCountText = EnsureText(popupRect, "PopupCountText", "1", 25f,
+            new Vector2(86f, 48f), new Vector2(0f, -78f), TextAlignmentOptions.Center, FontStyles.Bold);
+
+        popupMinButton = EnsureButton(popupRect, "PopupMinButton", "min",
+            new Vector2(72f, 46f), new Vector2(-184f, -78f));
+        popupMinusButton = EnsureButton(popupRect, "PopupMinusButton", "-1",
+            new Vector2(72f, 46f), new Vector2(-98f, -78f));
+        popupPlusButton = EnsureButton(popupRect, "PopupPlusButton", "+1",
+            new Vector2(72f, 46f), new Vector2(98f, -78f));
+        popupMaxButton = EnsureButton(popupRect, "PopupMaxButton", "max",
+            new Vector2(72f, 46f), new Vector2(184f, -78f));
+        popupLoadButton = EnsureButton(popupRect, "PopupLoadButton", "Load",
+            new Vector2(220f, 54f), new Vector2(0f, -154f));
+
+        Button popupClose = EnsureButton(popupRect, "PopupCloseButton", "×",
+            new Vector2(44f, 40f), new Vector2(246f, 186f));
+        popupClose.onClick.RemoveAllListeners();
+        popupClose.onClick.AddListener(ClosePurchasePopup);
+    }
+
+    private void InitializeState()
+    {
+        loadedLines.Clear();
+        pendingPurchaseCost = 0;
+        selectedShopIndex = -1;
+        selectedPurchaseCount = 1;
+
+        remainingStocks = new int[shopItems?.Length ?? 0];
+        for (int i = 0; i < remainingStocks.Length; i++)
+        {
+            int configured = i < initialStocks.Length ? initialStocks[i] : 10;
+            remainingStocks[i] = Mathf.Max(0, configured);
+        }
+    }
+
+    private void WireInteractions()
+    {
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveAllListeners();
+            closeButton.onClick.AddListener(CancelTradePreparation);
+        }
+
+        if (backButton != null)
+        {
+            backButton.onClick.RemoveAllListeners();
+            backButton.onClick.AddListener(BackToPreviousStep);
+        }
+
+        if (nextButton != null)
+        {
+            nextButton.onClick.RemoveAllListeners();
+            nextButton.onClick.AddListener(ContinueToMercenaryHire);
+        }
+
+        for (int i = 0; i < shopSlots.Length; i++)
+        {
+            int slotIndex = i;
+            Button button = EnsureSlotButton(shopSlots[i]);
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => OpenPurchasePopup(slotIndex));
+        }
+
+        for (int i = 0; i < loadedSlots.Length; i++)
+        {
+            CargoLoadedSlotClickHandler handler = loadedSlots[i].GetComponent<CargoLoadedSlotClickHandler>();
+            if (handler == null)
+                handler = loadedSlots[i].gameObject.AddComponent<CargoLoadedSlotClickHandler>();
+
+            handler.Initialize(this, i);
+        }
+
+        popupMinusButton?.onClick.AddListener(() => SetPopupCount(selectedPurchaseCount - 1));
+        popupPlusButton?.onClick.AddListener(() => SetPopupCount(selectedPurchaseCount + 1));
+        popupMinButton?.onClick.AddListener(() => SetPopupCount(1));
+        popupMaxButton?.onClick.AddListener(() => SetPopupCount(GetMaximumPurchaseCount()));
+        popupLoadButton?.onClick.AddListener(ConfirmPurchase);
+    }
+
+    private void RefreshAll()
+    {
+        RefreshShopSlots();
+        RefreshLoadedSlots();
+        RefreshStatus();
+        RefreshPopup();
+    }
+
+    private void RefreshShopSlots()
+    {
+        for (int i = 0; i < shopSlots.Length; i++)
+        {
+            bool hasItem = i < shopItems.Length && shopItems[i] != null;
+            shopSlots[i].gameObject.SetActive(hasItem);
+            if (!hasItem)
+                continue;
+
+            TradeItemData item = shopItems[i];
+            Image icon = FindDeepChild(shopSlots[i], "IconArea")?.GetComponent<Image>();
+            if (icon != null)
+            {
+                icon.sprite = item.Icon;
+                icon.color = item.Icon == null ? new Color(0.24f, 0.27f, 0.31f) : Color.white;
+                icon.preserveAspect = true;
+            }
+
+            TMP_Text nameText = shopSlots[i].GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault(text => text.name == "ItemNameBackground");
+            TMP_Text countText = FindDeepChild(shopSlots[i], "PriceOrCountText")?.GetComponent<TMP_Text>();
+            TMP_Text priceText = shopSlots[i].GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault(text => text.name == "Text (TMP)");
+
+            if (nameText != null)
+                nameText.text = item.DisplayName;
+            if (countText != null)
+                countText.text = $"Stock {remainingStocks[i]}";
+            if (priceText != null)
+                priceText.text = $"{item.BaseBuyPrice:N0} G";
+
+            Button button = shopSlots[i].GetComponent<Button>();
+            if (button != null)
+                button.interactable = remainingStocks[i] > 0 && GetAffordableCount(item) > 0;
+        }
+    }
+
+    private void RefreshLoadedSlots()
+    {
+        List<LoadedLine> visibleLines = loadedLines.Where(line => line.Quantity > 0).ToList();
+
+        for (int i = 0; i < loadedSlots.Length; i++)
+        {
+            bool hasLine = i < visibleLines.Count;
+            LoadedLine line = hasLine ? visibleLines[i] : null;
+            Image icon = FindDeepChild(loadedSlots[i], "ItemIcon")?.GetComponent<Image>();
+            TMP_Text quantity = FindDeepChild(loadedSlots[i], "QuantityText")?.GetComponent<TMP_Text>();
+            TMP_Text foodBadge = FindDeepChild(loadedSlots[i], "FoodBadge")?.GetComponent<TMP_Text>();
+
+            if (icon != null)
+            {
+                icon.enabled = hasLine;
+                icon.sprite = hasLine ? line.Item.Icon : null;
+                icon.color = hasLine && line.Item.Icon == null
+                    ? new Color(0.24f, 0.27f, 0.31f)
+                    : Color.white;
+                icon.preserveAspect = true;
+            }
+
+            if (quantity != null)
+                quantity.text = hasLine ? line.Quantity.ToString() : string.Empty;
+
+            if (foodBadge != null)
+            {
+                bool isFood = hasLine && IsFood(line.Item);
+                foodBadge.gameObject.SetActive(isFood);
+                foodBadge.text = isFood ? "Food" : string.Empty;
+            }
+        }
+    }
+
+    private void RefreshStatus()
+    {
+        if (currentLoadText != null)
+            currentLoadText.text = $"Load  {CurrentLoad:0.##} / {maximumLoad:0.##}";
+
+        if (currentMoneyText != null)
+            currentMoneyText.text = $"Gold  {currentGold:N0} G";
+
+        if (pendingCostText != null)
+        {
+            pendingCostText.text = $"Purchase  {pendingPurchaseCost:N0} G";
+            pendingCostText.color = pendingPurchaseCost > currentGold
+                ? new Color(1f, 0.34f, 0.3f)
+                : Color.white;
+        }
+
+        if (requiredFoodText != null)
+            requiredFoodText.text = $"Required Food  {requiredFood}";
+
+        if (loadedFoodText != null)
+            loadedFoodText.text = $"Loaded Food  {LoadedFood}";
+
+        if (foodWarningText != null)
+        {
+            if (LoadedFood < requiredFood)
+            {
+                foodWarningText.text = $"Need {requiredFood - LoadedFood} more food.";
+                foodWarningText.color = new Color(1f, 0.46f, 0.28f);
+            }
+            else if (CurrentLoad > maximumLoad)
+            {
+                foodWarningText.text = "Maximum load exceeded.";
+                foodWarningText.color = new Color(1f, 0.34f, 0.3f);
+            }
+            else
+            {
+                foodWarningText.text = "Ready to hire mercenaries.";
+                foodWarningText.color = new Color(0.45f, 0.9f, 0.5f);
+            }
+        }
+
+        if (nextButton != null)
+            nextButton.interactable = CanProceed;
+    }
+
+    private void OpenPurchasePopup(int shopIndex)
+    {
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (!EnsurePersistentDraftEditable())
+            return;
+#endif
+        if (shopIndex < 0 || shopIndex >= shopItems.Length || shopItems[shopIndex] == null)
+            return;
+
+        selectedShopIndex = shopIndex;
+        selectedPurchaseCount = 1;
+
+        if (GetMaximumPurchaseCount() < 1)
+            return;
+
+        popupOverlay.SetActive(true);
+        popupRect.localScale = Vector3.zero;
+
+        if (popupAnimation != null)
+            StopCoroutine(popupAnimation);
+
+        popupAnimation = StartCoroutine(ScaleRoutine(popupRect, Vector3.one, 0.18f, null));
+        RefreshPopup();
+    }
+
+    private void ClosePurchasePopup()
+    {
+        if (popupOverlay == null || !popupOverlay.activeSelf)
+            return;
+
+        if (popupAnimation != null)
+            StopCoroutine(popupAnimation);
+
+        popupAnimation = StartCoroutine(ScaleRoutine(
+            popupRect,
+            Vector3.zero,
+            0.14f,
+            () => popupOverlay.SetActive(false)));
+    }
+
+    private void ClosePurchasePopupImmediate()
+    {
+        if (popupOverlay == null)
+            return;
+
+        if (popupAnimation != null)
+            StopCoroutine(popupAnimation);
+
+        popupRect.localScale = Vector3.zero;
+        popupOverlay.SetActive(false);
+        selectedShopIndex = -1;
+    }
+
+    private void RefreshPopup()
+    {
+        if (selectedShopIndex < 0 || selectedShopIndex >= shopItems.Length)
+            return;
+
+        TradeItemData item = shopItems[selectedShopIndex];
+        if (item == null)
+            return;
+
+        int maximum = GetMaximumPurchaseCount();
+        selectedPurchaseCount = Mathf.Clamp(selectedPurchaseCount, maximum > 0 ? 1 : 0, maximum);
+
+        if (popupTitleText != null)
+            popupTitleText.text = item.DisplayName;
+
+        if (popupInfoText != null)
+        {
+            string specialty = item.LocalSpecialty ? "Local specialty" : "Standard goods";
+            popupInfoText.text =
+                $"{item.Description}\n\n" +
+                $"Type  {item.Category}    Rarity  {item.Rarity}\\n" +
+                $"Price  {item.BaseBuyPrice:N0} G    Weight  {item.Weight:0.##}\\n" +
+                $"{specialty}    Stock  {remainingStocks[selectedShopIndex]}";
+        }
+
+        if (popupCountText != null)
+            popupCountText.text = selectedPurchaseCount.ToString();
+
+        popupMinusButton.interactable = selectedPurchaseCount > 1;
+        popupPlusButton.interactable = selectedPurchaseCount < maximum;
+        popupMinButton.interactable = maximum > 0 && selectedPurchaseCount != 1;
+        popupMaxButton.interactable = maximum > 0 && selectedPurchaseCount != maximum;
+        popupLoadButton.interactable = maximum > 0 && selectedPurchaseCount > 0;
+
+        TMP_Text loadLabel = popupLoadButton.GetComponentInChildren<TMP_Text>(true);
+        if (loadLabel != null)
+            loadLabel.text = $"Load  {(item.BaseBuyPrice * selectedPurchaseCount):N0} G";
+    }
+
+    private void SetPopupCount(int value)
+    {
+        int maximum = GetMaximumPurchaseCount();
+        selectedPurchaseCount = Mathf.Clamp(value, maximum > 0 ? 1 : 0, maximum);
+        RefreshPopup();
+    }
+
+    private int GetMaximumPurchaseCount()
+    {
+        if (selectedShopIndex < 0 || selectedShopIndex >= shopItems.Length)
+            return 0;
+
+        TradeItemData item = shopItems[selectedShopIndex];
+        if (item == null)
+            return 0;
+
+        int byStock = remainingStocks[selectedShopIndex];
+        int byMoney = GetAffordableCount(item);
+        int byWeight = item.Weight <= 0f
+            ? byStock
+            : Mathf.FloorToInt(Mathf.Max(0f, maximumLoad - CurrentLoad) / item.Weight);
+
+        int byStack = item.CanStack ? item.MaxCount : 1;
+        return Mathf.Max(0, Mathf.Min(byStock, byMoney, byWeight, byStack));
+    }
+
+    private int GetAffordableCount(TradeItemData item)
+    {
+        long available = Math.Max(0, currentGold - pendingPurchaseCost);
+        if (item.BaseBuyPrice <= 0)
+            return int.MaxValue;
+
+        return (int)Math.Min(int.MaxValue, available / item.BaseBuyPrice);
+    }
+
+    private void ConfirmPurchase()
+    {
+        if (selectedShopIndex < 0 || selectedPurchaseCount <= 0)
+            return;
+
+        TradeItemData item = shopItems[selectedShopIndex];
+        int maximum = GetMaximumPurchaseCount();
+        int purchaseCount = Mathf.Clamp(selectedPurchaseCount, 0, maximum);
+        if (item == null || purchaseCount <= 0)
+            return;
+
+        LoadedLine line = loadedLines.FirstOrDefault(existing => existing.Item == item);
+        if (line == null)
+        {
+            if (loadedLines.Count(existing => existing.Quantity > 0) >= loadedSlots.Length)
+                return;
+
+            line = new LoadedLine
+            {
+                Item = item,
+                Quantity = 0,
+                UnitPrice = item.BaseBuyPrice
+            };
+            loadedLines.Add(line);
+        }
+
+        line.Quantity += purchaseCount;
+        remainingStocks[selectedShopIndex] -= purchaseCount;
+        pendingPurchaseCost += item.BaseBuyPrice * purchaseCount;
+
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        PersistCurrentDraft();
+#endif
+
+        ClosePurchasePopup();
+        RefreshAll();
+    }
+
+    private void ReturnToShop(LoadedLine line, int requestedCount)
+    {
+        int count = Mathf.Clamp(requestedCount, 0, line.Quantity);
+        if (count <= 0)
+            return;
+
+        line.Quantity -= count;
+        pendingPurchaseCost = Math.Max(0, pendingPurchaseCost - line.UnitPrice * count);
+
+        int shopIndex = Array.IndexOf(shopItems, line.Item);
+        if (shopIndex >= 0 && shopIndex < remainingStocks.Length)
+            remainingStocks[shopIndex] += count;
+
+        if (line.Quantity <= 0)
+            loadedLines.Remove(line);
+    }
+
+    private LoadedLine GetVisibleLoadedLine(int slotIndex)
+    {
+        return loadedLines
+            .Where(line => line.Quantity > 0)
+            .Skip(slotIndex)
+            .FirstOrDefault();
+    }
+
+    private void ResetCargo()
+    {
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+        if (persistentMarketSession != null)
+            ApplyPersistentMarketStocks();
+#endif
+        InitializeState();
+        ClosePurchasePopupImmediate();
+        RefreshAll();
+    }
+
+#if ND_MARKET_SAVE_SCHEMA_VNEXT
+    private bool TryInitializePersistentMarket()
+    {
+        if (!enablePersistentMarketIntegration)
+            return false;
+
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root == null || root.CurrentSaveData == null || root.SaveService == null || root.GameTime == null)
+        {
+            Debug.LogWarning("Persistent market integration is waiting for FrameworkRoot; prototype data will be used.", this);
+            return false;
+        }
+
+        string marketId = string.IsNullOrWhiteSpace(persistentMarketId)
+            ? root.CurrentSaveData.player?.currentTownId
+            : persistentMarketId;
+        TradeItemData[] catalog = shopItems?.Where(item => item != null).ToArray()
+            ?? Array.Empty<TradeItemData>();
+
+        bool opened = MarketInventorySession.TryOpen(
+            root.CurrentSaveData,
+            root.SaveService,
+            root.GameTime,
+            marketId,
+            catalog,
+            Math.Min(Math.Max(1, generatedMarketItemCount), Math.Max(1, shopSlots.Length)),
+            generatedMaximumStock,
+            marketRefreshIntervalSeconds,
+            marketWorldSeed,
+            out persistentMarketSession,
+            out string error);
+
+        if (!opened)
+        {
+            Debug.LogError($"Persistent market initialization failed: {error}", this);
+            return false;
+        }
+
+        ApplyPersistentMarketStocks();
+        currentGold = persistentMarketSession.TradingCurrency;
+        InitializeState();
+        RestorePersistentCargo();
+        return true;
+    }
+
+    private void ApplyPersistentMarketStocks()
+    {
+        IReadOnlyList<MarketStockView> stocks = persistentMarketSession.Stocks;
+        shopItems = stocks.Select(stock => stock.Item).ToArray();
+        initialStocks = stocks.Select(stock => stock.Quantity).ToArray();
+    }
+
+    private void RestorePersistentCargo()
+    {
+        IReadOnlyList<CargoPurchaseRequest> savedCargo = persistentMarketSession.RestoreSavedCargo();
+        persistentPurchaseCommitted = persistentMarketSession.IsCommitted;
+        foreach (CargoPurchaseRequest saved in savedCargo)
+        {
+            int shopIndex = Array.IndexOf(shopItems, saved.Item);
+            if (shopIndex < 0)
+                continue;
+
+            loadedLines.Add(new LoadedLine
+            {
+                Item = saved.Item,
+                Quantity = saved.Quantity,
+                UnitPrice = saved.UnitPrice
+            });
+
+            if (!persistentPurchaseCommitted)
+            {
+                remainingStocks[shopIndex] = Math.Max(0, remainingStocks[shopIndex] - saved.Quantity);
+                pendingPurchaseCost = checked(pendingPurchaseCost + saved.UnitPrice * saved.Quantity);
+            }
+        }
+    }
+
+    private List<CargoPurchaseRequest> BuildPersistentRequests()
+    {
+        return loadedLines
+            .Where(line => line.Item != null && line.Quantity > 0)
+            .Select(line => new CargoPurchaseRequest
+            {
+                Item = line.Item,
+                Quantity = line.Quantity,
+                UnitPrice = line.UnitPrice
+            })
+            .ToList();
+    }
+
+    private bool EnsurePersistentDraftEditable()
+    {
+        if (persistentMarketSession == null || !persistentPurchaseCommitted)
+            return true;
+
+        CargoIntegrationResult result = persistentMarketSession.ReopenCommittedAsDraft(BuildPersistentRequests());
+        if (!result.Success)
+        {
+            Debug.LogError($"Committed cargo could not be reopened: {result.ErrorCode}", this);
+            return false;
+        }
+
+        currentGold = result.TradingCurrencyAfter;
+        pendingPurchaseCost = loadedLines.Sum(line => line.UnitPrice * line.Quantity);
+        persistentPurchaseCommitted = false;
+        return true;
+    }
+
+    private void PersistCurrentDraft()
+    {
+        if (persistentMarketSession == null)
+            return;
+
+        CargoIntegrationResult result = persistentMarketSession.PersistDraft(BuildPersistentRequests());
+        if (!result.Success)
+            Debug.LogError($"Cargo draft persistence failed: {result.ErrorCode}", this);
+    }
+#endif
+
+    private void HidePanel(Action afterHidden)
+    {
+        if (!gameObject.activeInHierarchy)
+        {
+            afterHidden?.Invoke();
+            return;
+        }
+
+        if (panelAnimation != null)
+            StopCoroutine(panelAnimation);
+
+        panelAnimation = StartCoroutine(ScaleRoutine(panelRect, Vector3.zero, 0.18f, () =>
+        {
+            afterHidden?.Invoke();
+            gameObject.SetActive(false);
+        }));
+    }
+
+    private static bool IsFood(TradeItemData item)
+    {
+        return item != null &&
+               (item.Category == TradeItemCategory.Food ||
+                item.Category == TradeItemCategory.DraftAnimalsFood);
+    }
+
+    private TMP_Text FindText(string objectName)
+    {
+        return FindDeepChild(transform, objectName)?.GetComponent<TMP_Text>();
+    }
+
+    private static Transform FindDeepChild(Transform root, string objectName)
+    {
+        if (root == null)
+            return null;
+
+        if (root.name == objectName)
+            return root;
+
+        foreach (Transform child in root)
+        {
+            Transform found = FindDeepChild(child, objectName);
+            if (found != null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static Button EnsureSlotButton(RectTransform slot)
+    {
+        Image image = slot.GetComponent<Image>();
+        if (image == null)
+        {
+            image = slot.gameObject.AddComponent<Image>();
+            image.color = new Color(1f, 1f, 1f, 0.001f);
+        }
+
+        image.raycastTarget = true;
+
+        Button button = slot.GetComponent<Button>();
+        if (button == null)
+            button = slot.gameObject.AddComponent<Button>();
+
+        button.targetGraphic = image;
+        return button;
+    }
+
+    private static TMP_Text EnsureText(
+        Transform parent,
+        string objectName,
+        string value,
+        float fontSize,
+        Vector2 size,
+        Vector2 position,
+        TextAlignmentOptions alignment,
+        FontStyles fontStyle)
+    {
+        Transform existing = FindDeepChild(parent, objectName);
+        TMP_Text text = existing == null ? null : existing.GetComponent<TMP_Text>();
+        if (text == null)
+        {
+            GameObject go = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            text = go.GetComponent<TextMeshProUGUI>();
+        }
+
+        RectTransform rect = text.rectTransform;
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = size;
+        rect.anchoredPosition = position;
+
+        text.text = value;
+        text.fontSize = fontSize;
+        text.alignment = alignment;
+        text.fontStyle = fontStyle;
+        text.color = Color.white;
+        text.textWrappingMode = TextWrappingModes.Normal;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    private static Button EnsureButton(
+        Transform parent,
+        string objectName,
+        string label,
+        Vector2 size,
+        Vector2 position)
+    {
+        Transform existing = FindDeepChild(parent, objectName);
+        Button button = existing == null ? null : existing.GetComponent<Button>();
+        if (button == null)
+            button = CreateButton(parent, objectName, label, size, position);
+
+        TMP_Text text = button.GetComponentInChildren<TMP_Text>(true);
+        if (text != null)
+            text.text = label;
+
+        return button;
+    }
+
+    private static Button CreateButton(
+        Transform parent,
+        string objectName,
+        string label,
+        Vector2 size,
+        Vector2 position)
+    {
+        GameObject go = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        go.transform.SetParent(parent, false);
+
+        RectTransform rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = size;
+        rect.anchoredPosition = position;
+
+        Image image = go.GetComponent<Image>();
+        image.color = new Color(0.82f, 0.61f, 0.18f, 1f);
+
+        Button button = go.GetComponent<Button>();
+        button.targetGraphic = image;
+
+        TMP_Text text = EnsureText(go.transform, "Label", label, 20f, size, Vector2.zero,
+            TextAlignmentOptions.Center, FontStyles.Bold);
+        text.color = new Color(0.08f, 0.07f, 0.05f);
+
+        return button;
+    }
+
+    private static IEnumerator ScaleRoutine(
+        RectTransform target,
+        Vector3 destination,
+        float duration,
+        Action completed)
+    {
+        if (target == null)
+        {
+            completed?.Invoke();
+            yield break;
+        }
+
+        Vector3 start = target.localScale;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = 1f - Mathf.Pow(1f - t, 3f);
+            target.localScale = Vector3.LerpUnclamped(start, destination, eased);
+            yield return null;
+        }
+
+        target.localScale = destination;
+        completed?.Invoke();
+    }
+}
+
+public sealed class CargoLoadedSlotClickHandler : MonoBehaviour, IPointerClickHandler
+{
+    private CargoLoadingPanelController controller;
+    private int slotIndex;
+
+    public void Initialize(CargoLoadingPanelController owner, int index)
+    {
+        controller = owner;
+        slotIndex = index;
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (controller == null)
+            return;
+
+        if (eventData.button == PointerEventData.InputButton.Right)
+            controller.ClearLoadedSlot(slotIndex);
+        else if (eventData.button == PointerEventData.InputButton.Left)
+            controller.DecrementLoadedSlot(slotIndex);
+    }
+}
+
+public sealed class CargoPopupClickBlocker : MonoBehaviour, IPointerClickHandler
+{
+    public void OnPointerClick(PointerEventData eventData)
+    {
+    }
+}
