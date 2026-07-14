@@ -1183,7 +1183,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         text.alignment = alignment;
         text.fontStyle = fontStyle;
         text.color = Color.white;
-        text.enableWordWrapping = true;
+        text.textWrappingMode = TextWrappingModes.Normal;
         text.raycastTarget = false;
         return text;
     }
