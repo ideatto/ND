@@ -10,7 +10,7 @@
  * - 온라인·오프라인·식량 계산은 동일한 변환 규칙을 사용한다.
  * - 음수 현실 경과는 0으로 보정한다.
  * - TryResolveOfflineEvaluationUtc는 시간 역행과 최대 오프라인 상한을 판정한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
 

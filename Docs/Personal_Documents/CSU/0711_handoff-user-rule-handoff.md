@@ -3,7 +3,7 @@
 **작성일:** 2026-07-11  
 **브랜치:** `fix/framework/caravan-ingame-food-sync`  
 **Feature 루트:** 미확인 (문서·Rule 설정 작업)  
-**관련 문서:** `Docs/Personal_Documents/CSU/handoff-user-rule-setup.md`
+**관련 문서:** `Docs/Personal_Documents/CSU/0711_handoff-user-rule-setup.md`
 
 ---
 
@@ -39,8 +39,8 @@
 ## 4. 변경 파일
 
 ### 생성
-- `Docs/Personal_Documents/CSU/handoff-user-rule-setup.md` — User Rules 복사용 블록 및 설정 가이드
-- `Docs/Personal_Documents/CSU/handoff-user-rule-handoff.md` — 본 핸드오프 문서 (워크플로 검증용)
+- `Docs/Personal_Documents/CSU/0711_handoff-user-rule-setup.md` — User Rules 복사용 블록 및 설정 가이드
+- `Docs/Personal_Documents/CSU/0711_handoff-user-rule-handoff.md` — 본 핸드오프 문서 (워크플로 검증용)
 
 ### 수정
 - 없음
@@ -95,8 +95,8 @@
 
 ## 9. 다음 세션 읽기 순서
 
-1. `@Docs/Personal_Documents/CSU/handoff-user-rule-handoff.md`
-2. `@Docs/Personal_Documents/CSU/handoff-user-rule-setup.md`
+1. `@Docs/Personal_Documents/CSU/0711_handoff-user-rule-handoff.md`
+2. `@Docs/Personal_Documents/CSU/0711_handoff-user-rule-setup.md`
 
 ---
 

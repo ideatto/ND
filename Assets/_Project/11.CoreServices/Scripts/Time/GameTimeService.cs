@@ -30,7 +30,7 @@
  * - SetTimeScale은 inGameTimeMultiplier를 변경하지 않는다.
  * - Release 빌드에서는 SetInGameTimeMultiplier가 무시된다.
  * - pause 중에는 인게임 경과 시간이 증가하지 않는다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
 using UnityEngine;

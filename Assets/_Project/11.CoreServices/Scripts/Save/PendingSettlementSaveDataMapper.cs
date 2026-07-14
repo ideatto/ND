@@ -15,7 +15,7 @@
  *
  * Important Notes
  * - TryToRuntime은 검증 실패 시 false를 반환하며 JourneyResultData를 만들지 않는다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  */
 namespace ND.Framework
 {

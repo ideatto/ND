@@ -40,7 +40,7 @@
  * - restore 시 Economy pending은 TryCalculateAndFill로 재구성하고, UI 표시 금액은 저장값을 우선한다.
  * - claim 시 Economy pending 결과를 SaveData 화폐에 반영하고 pendingSettlement를 clear한다.
  * - 오프라인 elapsed는 tradeStart→evaluationUtc 절대값 overwrite이므로 재로드 시 이중 소모되지 않는다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
 

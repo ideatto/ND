@@ -78,7 +78,7 @@ offlineElapsedInGameSeconds = (evaluationUtc - tradeStartUtc) × inGameTimeMulti
 - call site: `TradeProgressCoordinator.ApplyOfflineProgressOnLoad` → `GetOfflineElapsedInGameSeconds` / `GetElapsedInGameSecondsForActiveTrade`
 - `loadUtc < lastSavedUtc`이면 `TimeRollbackDetected`를 발행하고 오프라인 적용을 건너뛴다
 - 공식 변경 시 `InGameTimeConversionPolicy.GetOfflineElapsedInGameSeconds(...)` 한 곳만 수정한다
-- 상세: [`Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
+- 상세: [`Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)
 
 ---
 
@@ -521,7 +521,7 @@ Release에서는 **defaultInGameTimeMultiplier**만 초기값으로 사용된다
 | `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressCoordinator.cs` | progress·elapsed 갱신 · ApplyOfflineProgressOnLoad |
 | `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressRecorder.cs` | 출발 시 배율 스냅샷 |
 | `Assets/_Project/11.CoreServices/Scripts/Save/SaveData.cs` | 저장 schema v5 (`pendingSettlement` 포함) |
-| `Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md` | 오프라인 복구 로직·테스트 |
+| `Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md` | 오프라인 복구 로직·테스트 |
 | `Assets/Scripts/InGameTimeTextDisplay.cs` | UI 표시 예시 |
 
 ---

@@ -28,7 +28,7 @@
  * - 시간 값은 UTC DateTime.Ticks 기준으로 저장된다.
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
  * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  */
 using System;
 using System.Collections.Generic;

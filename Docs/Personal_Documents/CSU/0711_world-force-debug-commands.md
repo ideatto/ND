@@ -252,4 +252,4 @@ Boot → Title → New Game → Loading → InGame
 
 - `Docs/Personal_Documents/CSU/2026-07-11-framework-m2-planning-handoff.md`
 - `Docs/Planning_Milestone/02_Framework_Integration_Milestone.md` (Force\* 체크리스트)
-- `Docs/Personal_Documents/CSU/caravan-ingame-food-sync.md` (선행 M2 P0-1)
+- `Docs/Personal_Documents/CSU/0711_caravan-ingame-food-sync.md` (선행 M2 P0-1)
