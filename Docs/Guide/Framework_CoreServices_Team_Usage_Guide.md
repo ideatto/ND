@@ -132,8 +132,18 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 | `pendingSettlement.claimed` | 이미 수령한 pending (복구·재수령 차단) |
 | `world.currentSeasonId` | 계절 (Economy 입력) |
 | `world.currentDisasterId` | 재난 (빈 문자열 = 없음) |
+| `world.marketInventories` | 상점별 재고 스냅샷 목록 (`MarketInventorySaveData`) |
+| `world.marketPurchasePreparation` | 상점 구매 초안·확정 준비 상태 |
+| `caravan.cargo` | 적재 화물 (`CargoEntrySaveData`). 상점 적재 초안·확정도 여기 매핑 (별도 loadedLines 없음) |
 | `caravan.elapsedInGameSeconds` | 인게임 경과(식량) |
 | `player.tradingCurrency` | 무역 화폐 |
+
+정규화 (`JsonSaveService.NormalizeData`):
+
+- `world.marketInventories`가 null이면 빈 리스트
+- 각 inventory의 `stocks`가 null이면 빈 리스트
+- `world.marketPurchasePreparation`이 null이면 기본 객체
+- **version은 5를 유지**한다. 구 version 5 세이브에 위 필드가 없어도 wipe하지 않고 Normalize로 채운다.
 
 디버그 출력:
 
@@ -142,6 +152,9 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 
 버전 불일치 시 마이그레이션 없이 새 게임 데이터가 될 수 있다.  
 **v4 이하 세이브는 v5 코드에서 새 게임으로 복구될 수 있으므로**, M3 통합 전에는 New Game으로 맞추는 것을 권장한다.
+
+상점 재고 UI 연동(`ND_MARKET_SAVE_SCHEMA_VNEXT`)과 Economy 구매·환불 API는 Save 스키마와 별도 단계다.  
+요약: `Docs/Personal_Documents/CSU/0714_framework_market_inventory_save_schema_work_summary.md`
 
 ---
 
@@ -454,6 +467,8 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 | `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
 | `Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
 | `Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
+| `Docs/Personal_Documents/CSU/0714_framework_market_inventory_save_schema_work_summary.md` | version 5 상점 재고·구매 준비 Save 스키마 작업 요약 |
+| `Docs/Personal_Documents/CSU/0714_economy_currency_wallet_trade_purchase_request.md` | Economy `ApplyTradePurchase`/`ApplyTradeRefund` 요청 (VNEXT 켤 때) |
 
 ### 테스트 씬 (선택)
 

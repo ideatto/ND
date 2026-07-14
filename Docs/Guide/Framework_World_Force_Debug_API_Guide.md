@@ -186,6 +186,8 @@ FrameworkEvents.RouteEventForced += (tradeId, eventId) =>
 Economy는 정산 조립 시 `WorldSaveData`의 season/disaster를 읽는다.  
 Force\* 직후 자동 settle은 하지 않으므로, 가격 확인은 **기존 무역 정산 흐름**을 이어서 실행한다.
 
+`WorldSaveData`의 `marketInventories` / `marketPurchasePreparation`(상점 재고·구매 준비)는 ForceSeason / ForceDisaster가 **건드리지 않는다.**
+
 ---
 
 ## 8. 실패했을 때
