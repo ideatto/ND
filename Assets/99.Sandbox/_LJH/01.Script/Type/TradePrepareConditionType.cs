@@ -3,7 +3,7 @@ public enum TradePrepareConditionType
     Available,
     TradeAlreadyActive,
     NotEnoughMoney,
-    NotEnoughFood,
+    NotEnoughDraftAnimalFood,
     NotEnoughMercenaryPower,
     OverloadWarning,
     LoadExceeded,
@@ -17,10 +17,8 @@ public enum TradePrepareConditionType
     InvalidDraftAnimalType,
     InvalidDraftAnimalSelection,
     MixedDraftAnimalType,
+    InvalidCargoSelection,
     NoCargo,
     InventorySlotExceeded,
-    InvalidSellQuantity,
-    PreDepartureSellingUnsupported,
-    CargoTypeLimitExceeded,
     InvalidMercenarySelection
 }

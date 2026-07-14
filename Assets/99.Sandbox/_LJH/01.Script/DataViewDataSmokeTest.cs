@@ -28,8 +28,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             currentTownId = town.TownId,
             selectedDestinationTownId = route.ToTownId,
-            selectedRouteId = route.RouteId,
-            loadedFoodQuantity = route.BaseRequiredFoodQuantity
+            selectedRouteId = route.RouteId
         };
 
         prepareDraft.selectedAnimals.Add(new DraftAnimalSelectionData
@@ -65,19 +64,14 @@ public class DataViewDataSmokeTest : MonoBehaviour
         draftStore.SetBuyItemQuantity(item.ItemId, 0);
         var storeZeroQuantityRemovedItem = draftStore.Current.selectedBuyItems.Count == 0;
 
-        draftStore.SetFoodQuantity(-1);
-        var storeFoodQuantityClamped = draftStore.Current.loadedFoodQuantity == 0;
-
         draftStore.SelectMercenary("smoke-mercenary");
         draftStore.SelectMercenary("smoke-mercenary");
         var storePreventedDuplicateMercenary = draftStore.Current.SelectedMercenaryIds.Count == 1;
 
         draftStore.SetBuyItemQuantity(item.ItemId, 1);
-        draftStore.SetSellItemQuantity(item.ItemId, 1);
         draftStore.SelectWagon("smoke-wagon-b");
         var storeClearedAnimalsAfterWagonChange = draftStore.Current.selectedAnimals.Count == 0;
-        var storeClearedCargoAfterWagonChange = draftStore.Current.selectedBuyItems.Count == 0
-            && draftStore.Current.selectedSellItems.Count == 0;
+        var storeClearedCargoAfterWagonChange = draftStore.Current.selectedBuyItems.Count == 0;
 
         draftStore.Cancel();
         var storeCancelClearedDraft = string.IsNullOrEmpty(draftStore.Current.currentTownId)
@@ -144,7 +138,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             toTownName = route.ToTownName,
             distance = route.Distance,
             estimatedTime = route.DefaultElapsedTime,
-            requiredFoodQuantity = route.BaseRequiredFoodQuantity,
+            requiredDraftAnimalFoodQuantity = route.BaseRequiredDraftAnimalFoodQuantity,
             requiredMercenaryPower = route.BaseRequiredMercenaryPower,
             riskLevel = route.BaseRiskLevel,
             isUnlocked = saveData.world.unlockedRouteIds.Contains(route.RouteId),
@@ -162,7 +156,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             toTownName = routeViewData.toTownName,
             distance = routeViewData.distance,
             estimatedTime = routeViewData.estimatedTime,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower,
             riskLevel = routeViewData.riskLevel,
             isUnlocked = false,
@@ -183,8 +177,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -202,8 +196,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -221,8 +215,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -240,8 +234,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -259,8 +253,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = 0,
-            requiredFoodQuantity = Mathf.Max(1, routeViewData.requiredFoodQuantity),
+            loadedDraftAnimalFoodQuantity = 0,
+            requiredDraftAnimalFoodQuantity = Mathf.Max(1, routeViewData.requiredDraftAnimalFoodQuantity),
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -278,8 +272,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = 120,
             overloadLimit = 80,
             maxLoad = 100,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -297,8 +291,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = 90,
             overloadLimit = 80,
             maxLoad = 100,
-            loadedFoodQuantity = 0,
-            requiredFoodQuantity = Mathf.Max(1, routeViewData.requiredFoodQuantity),
+            loadedDraftAnimalFoodQuantity = 0,
+            requiredDraftAnimalFoodQuantity = Mathf.Max(1, routeViewData.requiredDraftAnimalFoodQuantity),
             selectedMercenaryPower = 0,
             requiredMercenaryPower = Mathf.Max(1, routeViewData.requiredMercenaryPower)
         };
@@ -316,8 +310,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = 0,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -345,8 +339,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -366,8 +360,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             currentLoad = saveData.caravan.currentLoad,
             overloadLimit = saveData.caravan.maxLoad,
             maxLoad = saveData.caravan.maxLoad,
-            loadedFoodQuantity = routeViewData.requiredFoodQuantity,
-            requiredFoodQuantity = routeViewData.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = routeViewData.requiredDraftAnimalFoodQuantity,
             selectedMercenaryPower = routeViewData.requiredMercenaryPower,
             requiredMercenaryPower = routeViewData.requiredMercenaryPower
         };
@@ -398,8 +392,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             totalPurchaseCost = successInput.totalPurchaseCost,
             totalPreparationCost = successInput.totalPreparationCost,
 
-            loadedFoodQuantity = successInput.loadedFoodQuantity,
-            requiredFoodQuantity = successInput.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = successInput.loadedDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = successInput.requiredDraftAnimalFoodQuantity,
 
             selectedMercenaryPower = successInput.selectedMercenaryPower,
             requiredMercenaryPower = successInput.requiredMercenaryPower,
@@ -430,8 +424,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             totalPurchaseCost = notEnoughMoneyInput.totalPurchaseCost,
             totalPreparationCost = notEnoughMoneyInput.totalPreparationCost,
 
-            loadedFoodQuantity = notEnoughMoneyInput.loadedFoodQuantity,
-            requiredFoodQuantity = notEnoughMoneyInput.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = notEnoughMoneyInput.loadedDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = notEnoughMoneyInput.requiredDraftAnimalFoodQuantity,
 
             selectedMercenaryPower = notEnoughMoneyInput.selectedMercenaryPower,
             requiredMercenaryPower = notEnoughMoneyInput.requiredMercenaryPower,
@@ -460,8 +454,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             totalPurchaseCost = notEnoughFoodInput.totalPurchaseCost,
             totalPreparationCost = notEnoughFoodInput.totalPreparationCost,
 
-            loadedFoodQuantity = notEnoughFoodInput.loadedFoodQuantity,
-            requiredFoodQuantity = notEnoughFoodInput.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = notEnoughFoodInput.loadedDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = notEnoughFoodInput.requiredDraftAnimalFoodQuantity,
 
             selectedMercenaryPower = notEnoughFoodInput.selectedMercenaryPower,
             requiredMercenaryPower = notEnoughFoodInput.requiredMercenaryPower,
@@ -490,8 +484,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             totalPurchaseCost = loadExceededInput.totalPurchaseCost,
             totalPreparationCost = loadExceededInput.totalPreparationCost,
 
-            loadedFoodQuantity = loadExceededInput.loadedFoodQuantity,
-            requiredFoodQuantity = loadExceededInput.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = loadExceededInput.loadedDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = loadExceededInput.requiredDraftAnimalFoodQuantity,
 
             selectedMercenaryPower = loadExceededInput.selectedMercenaryPower,
             requiredMercenaryPower = loadExceededInput.requiredMercenaryPower,
@@ -520,8 +514,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             totalPurchaseCost = multipleWarningInput.totalPurchaseCost,
             totalPreparationCost = multipleWarningInput.totalPreparationCost,
 
-            loadedFoodQuantity = multipleWarningInput.loadedFoodQuantity,
-            requiredFoodQuantity = multipleWarningInput.requiredFoodQuantity,
+            loadedDraftAnimalFoodQuantity = multipleWarningInput.loadedDraftAnimalFoodQuantity,
+            requiredDraftAnimalFoodQuantity = multipleWarningInput.requiredDraftAnimalFoodQuantity,
 
             selectedMercenaryPower = multipleWarningInput.selectedMercenaryPower,
             requiredMercenaryPower = multipleWarningInput.requiredMercenaryPower,
@@ -561,7 +555,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(storeAnimalSelectionUpdated, "Draft Store Smoke Test failed: animal selection should update without duplicates.");
         Debug.Assert(storeItemSelectionUpdated, "Draft Store Smoke Test failed: item selection should update without duplicates.");
         Debug.Assert(storeZeroQuantityRemovedItem, "Draft Store Smoke Test failed: zero item quantity should remove the selection.");
-        Debug.Assert(storeFoodQuantityClamped, "Draft Store Smoke Test failed: food quantity should not be negative.");
         Debug.Assert(storePreventedDuplicateMercenary, "Draft Store Smoke Test failed: mercenary IDs should not be duplicated.");
         Debug.Assert(storeClearedAnimalsAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear animal selections.");
         Debug.Assert(storeClearedCargoAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear cargo selections.");

@@ -50,6 +50,8 @@ public class RouteData : ScriptableObject, IIdentifiableData
     // Route assets must keep both serialized legacy costs at 0.
     public long BaseFoodCost => baseFoodCost > 0 ? baseFoodCost : 0;
     public long BaseMercenaryCost => baseMercenaryCost > 0 ? baseMercenaryCost : 0;
+    public int BaseRequiredDraftAnimalFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
+    // Framework shared-data conversion still uses the old general name.
     public int BaseRequiredFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
     public int BaseRequiredMercenaryPower => Mathf.Max(0, baseRequiredMercenaryPower);
     public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);

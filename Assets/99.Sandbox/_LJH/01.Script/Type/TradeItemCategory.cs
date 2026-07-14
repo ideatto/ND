@@ -1,8 +1,8 @@
 public enum TradeItemCategory
 {
-    Food,
+    Food, // for trade
     Material,
     Valuable,
     LuxuryGoods,
-    DraftAnimalsFood
+    DraftAnimalsFood // for use draftAnimals
 }

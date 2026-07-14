@@ -23,8 +23,8 @@ public class TradePrepareViewData
 
     public long totalPurchaseCost;
 
-    public int loadedFoodQuantity;
-    public int requiredFoodQuantity;
+    public int loadedDraftAnimalFoodQuantity;
+    public int requiredDraftAnimalFoodQuantity;
 
     public int selectedMercenaryPower;
     public int requiredMercenaryPower;
@@ -38,7 +38,7 @@ public class TradePrepareViewData
 
     public string selectedWagonId;
 
-    public long foodCost;
+    public long draftAnimalFoodCost;
     public long mercenaryCost;
     public long totalPreparationCost;
     public long estimatedSellRevenue;
