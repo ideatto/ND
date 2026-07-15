@@ -17,5 +17,11 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/07.Scenes/04_InGame/InGame.unity
     guid: 8b749529777b573478de81938523b354
+  - enabled: 1
+    path: Assets/_Project/07.Scenes/04_InGame/InGameMainUITest.unity
+    guid: aba2226a65edb604aa2073cb96affe7f
+  - enabled: 1
+    path: Assets/_Project/07.Scenes/04_InGame/Village_Home.unity
+    guid: 47eba7b7f8804fc43b1853223f61fcd6
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
