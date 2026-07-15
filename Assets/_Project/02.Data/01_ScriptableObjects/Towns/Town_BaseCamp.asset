@@ -19,6 +19,6 @@ MonoBehaviour:
   description: BaseCamp
   market: {fileID: 11400000, guid: 2c96b46f441c50c41af162d300042fdf, type: 2}
   availableRoutes:
-  - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
+  - {fileID: 11400000, guid: 10113bd0c38b8394d9cc07cfc15a1443, type: 2}
   canContribute: 0
   maximumContributionLimit: 0

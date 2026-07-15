@@ -10,7 +10,18 @@ public sealed class TemporaryTradeCycleSmokeTest : MonoBehaviour
         var commit = new TradePrepareCommitData
         {
             tradeId = "temporary-smoke-trade",
+            currentTownId = "temporary-origin-town",
+            selectedDestinationTownId = "temporary-destination-town",
             routeId = "temporary-smoke-route",
+            selectedWagonId = "temporary-wagon",
+            selectedAnimals = new[]
+            {
+                new DraftAnimalSelectionData
+                {
+                    draftAnimalId = "temporary-animal",
+                    quantity = 2
+                }
+            },
             purchaseCost = 100L,
             foodCost = 0L,
             mercenaryCost = 1L,
@@ -21,6 +32,14 @@ public sealed class TemporaryTradeCycleSmokeTest : MonoBehaviour
         long currencyAtDeparture = 1000L;
         bool staged = sink.TryStage(commit);
         Debug.Assert(staged, "Temporary trade smoke test failed: commit should be staged.");
+        commit.selectedAnimals[0].quantity = 99;
+        Debug.Assert(sink.TryGet(commit.tradeId, out TradePrepareCommitData stagedSnapshot)
+            && stagedSnapshot.currentTownId == "temporary-origin-town"
+            && stagedSnapshot.selectedDestinationTownId == "temporary-destination-town"
+            && stagedSnapshot.selectedWagonId == "temporary-wagon"
+            && stagedSnapshot.selectedAnimals.Length == 1
+            && stagedSnapshot.selectedAnimals[0].quantity == 2,
+            "Temporary trade smoke test failed: staged route configuration must be deep-copied.");
         Debug.Assert(currencyAtDeparture == 1000L,
             "Temporary trade smoke test failed: departure must not deduct currency.");
 

@@ -21,18 +21,27 @@ public sealed class TemporaryTradeSettlementService
     public const string ErrorTradeNotFound = "TRADE_NOT_FOUND";
     public const string ErrorInsufficientCurrency = "INSUFFICIENT_CURRENCY";
 
-    private readonly InMemoryTradePrepareCommitSink commitSink;
+    private readonly ITradePrepareCommitSource commitSource;
+    private readonly ITradePrepareCommitCompletion commitCompletion;
 
-    public TemporaryTradeSettlementService(InMemoryTradePrepareCommitSink commitSink)
+    public TemporaryTradeSettlementService(
+        ITradePrepareCommitSource commitSource,
+        ITradePrepareCommitCompletion commitCompletion)
     {
-        this.commitSink = commitSink;
+        this.commitSource = commitSource;
+        this.commitCompletion = commitCompletion;
+    }
+
+    public TemporaryTradeSettlementService(InMemoryTradePrepareCommitSink commitStore)
+        : this(commitStore, commitStore)
+    {
     }
 
     public TemporaryTradeSettlementResult TryClaim(string tradeId, long currentCurrency)
     {
         long normalizedCurrency = currentCurrency > 0L ? currentCurrency : 0L;
-        if (commitSink == null
-            || !commitSink.TryGet(tradeId, out TradePrepareCommitData commitData))
+        if (commitSource == null
+            || !commitSource.TryGet(tradeId, out TradePrepareCommitData commitData))
         {
             return new TemporaryTradeSettlementResult
             {
@@ -62,7 +71,8 @@ public sealed class TemporaryTradeSettlementService
             };
         }
 
-        if (!commitSink.TryComplete(tradeId, out commitData))
+        if (commitCompletion == null
+            || !commitCompletion.TryComplete(tradeId, out commitData))
         {
             return new TemporaryTradeSettlementResult
             {

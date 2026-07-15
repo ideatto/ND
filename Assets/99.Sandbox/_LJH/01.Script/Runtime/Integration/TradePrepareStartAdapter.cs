@@ -220,7 +220,11 @@ public sealed class TradePrepareStartAdapter
         return new TradePrepareCommitData
         {
             tradeId = tradeId,
+            currentTownId = draft.currentTownId,
+            selectedDestinationTownId = draft.selectedDestinationTownId,
             routeId = routeId,
+            selectedWagonId = draft.selectedWagonId,
+            selectedAnimals = CreateSelectedAnimalSnapshots(draft),
             purchaseCost = Math.Max(0L, viewData.totalPurchaseCost - viewData.draftAnimalFoodCost),
             foodCost = viewData.draftAnimalFoodCost > 0L ? viewData.draftAnimalFoodCost : 0L,
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
@@ -228,6 +232,28 @@ public sealed class TradePrepareStartAdapter
             purchasedItems = CreatePurchasedItemSnapshots(draft, viewData),
             selectedMercenaryIds = mercenaryIds
         };
+    }
+
+    private static DraftAnimalSelectionData[] CreateSelectedAnimalSnapshots(
+        TradePrepareDraft draft)
+    {
+        if (draft == null || draft.selectedAnimals == null)
+        {
+            return new DraftAnimalSelectionData[0];
+        }
+
+        var result = new DraftAnimalSelectionData[draft.selectedAnimals.Count];
+        for (int index = 0; index < draft.selectedAnimals.Count; index++)
+        {
+            DraftAnimalSelectionData selected = draft.selectedAnimals[index];
+            result[index] = selected == null ? null : new DraftAnimalSelectionData
+            {
+                draftAnimalId = selected.draftAnimalId ?? string.Empty,
+                quantity = selected.quantity > 0 ? selected.quantity : 0
+            };
+        }
+
+        return result;
     }
 
     private static TradeItemBundle[] CreatePurchasedItemSnapshots(

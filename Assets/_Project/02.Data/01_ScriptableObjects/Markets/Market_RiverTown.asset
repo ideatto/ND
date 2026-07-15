@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7df7a3265402c9043839408fb7059f03, type: 3}
+  m_Name: Market_RiverTown
+  m_EditorClassIdentifier: Assembly-CSharp::MarketData
+  marketId: RiverTownMarket
+  itemMaxQuantity: 10
+  itemRenewalCycle: 1
+  tradeItems:
+  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  draftAnimalItems:
+  - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
+  - {fileID: 11400000, guid: 76f8d2c8354dee44ba423e15d4531cf5, type: 2}
+  wagonItems:
+  - {fileID: 11400000, guid: d1f29cbc4f6fb5d489d1ac675ed655df, type: 2}
+  localSpecialtyItems:
+  - {fileID: 11400000, guid: d3e0661c62971554698aecafac846371, type: 2}
