@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: Town_Windy
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: town_a
-  displayName: Windy Village
+  displayName: "\uBC14\uB78C\uB9C8\uC744"
   icon: {fileID: 0}
   unlockedByDefault: 1
-  description: A breezy trading hub on the plains.
+  description: "\uBC14\uB78C\uC774 \uB9CE\uC774 \uBD80\uB294 \uC5B8\uB355 \uC704\uC758
+    \uC791\uC740 \uB9C8\uC744. \uBC00\uACFC \uC591\uD138\uC774 \uD2B9\uC0B0\uD488\uC774\uB2E4."
   market: {fileID: 0}
   availableRoutes:
   - {fileID: 11400000, guid: ae37837cf901c0f4fb5d3b8db9b9fbe9, type: 2}

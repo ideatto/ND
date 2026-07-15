@@ -31,4 +31,9 @@ public class TradePrepareDemoData : ScriptableObject
 
     [Header("④ 아이템 (TradeItemData)")]
     public TradeItemData[] items;
+
+    [Header("④ 적재(상점) 데모 값 — Cargo 패널(정헌님)에 전달")]
+    public long gold = 2000;       // 시작 소지 골드(데모)
+    public int requiredFood = 3;   // 반드시 적재해야 하는 먹이 수(데모)
+    public int[] itemStocks;       // 상점 재고(items와 같은 순서, 모자라면 10으로 간주)
 }

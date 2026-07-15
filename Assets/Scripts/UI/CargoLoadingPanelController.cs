@@ -612,9 +612,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         SetTextColor("RequiredFoodText", new Color32(45, 40, 39, 255));
         SetTextColor("LoadedFoodText", new Color32(45, 40, 39, 255));
 
-        StyleLabel("ShopAreaLabel", "Store", 22f, Color.white);
-        StyleLabel("LoadedInventoryLabel", "Load Inventory", 22f, Section9TextColor());
-        StyleLabel("DataLabel", "Data", 22f, Section9TextColor());
+        StyleLabel("ShopAreaLabel", "상점", 22f, Color.white);
+        StyleLabel("LoadedInventoryLabel", "적재 인벤토리", 22f, Section9TextColor());
+        StyleLabel("DataLabel", "적재 상태", 22f, Section9TextColor());
         StyleLabel("CurrentLoadText", null, 22f, Section9TextColor());
         StyleLabel("CurrentMoneyText", null, 22f, Section9TextColor());
         StyleLabel("PendingCostText", null, 22f, Section9TextColor());
@@ -711,7 +711,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         Transform existing = FindDeepChild(header, "BackButton");
         backButton = existing == null
-            ? CreateButton(header, "BackButton", "Back", new Vector2(112f, 56f), new Vector2(-510f, 0f))
+            ? CreateButton(header, "BackButton", "뒤로", new Vector2(112f, 56f), new Vector2(-510f, 0f))
             : existing.GetComponent<Button>();
 
         if (backButton != null)
@@ -727,14 +727,14 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         TMP_Text title = FindText("TitleText");
         if (title != null)
         {
-            title.text = "Cargo Loading";
+            title.text = "무역 물품 적재";
             title.fontSize = 34f;
         }
 
         TMP_Text nextLabel = nextButton == null ? null : nextButton.GetComponentInChildren<TMP_Text>(true);
         if (nextLabel != null)
         {
-            nextLabel.text = "Hire";
+            nextLabel.text = "용병 고용";
             nextLabel.fontSize = 22f;
         }
 
@@ -790,7 +790,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         popupImage.color = new Color(0.12f, 0.13f, 0.16f, 0.98f);
         popupImage.raycastTarget = true;
 
-        popupTitleText = EnsureText(popupRect, "PopupTitleText", "Select Cargo", 28f,
+        popupTitleText = EnsureText(popupRect, "PopupTitleText", "물품 구매", 28f,
             new Vector2(500f, 44f), new Vector2(0f, 172f), TextAlignmentOptions.Center, FontStyles.Bold);
 
         popupInfoText = EnsureText(popupRect, "PopupInfoText", string.Empty, 19f,
@@ -799,15 +799,15 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         popupCountText = EnsureText(popupRect, "PopupCountText", "1", 25f,
             new Vector2(86f, 48f), new Vector2(0f, -78f), TextAlignmentOptions.Center, FontStyles.Bold);
 
-        popupMinButton = EnsureButton(popupRect, "PopupMinButton", "min",
+        popupMinButton = EnsureButton(popupRect, "PopupMinButton", "최소",
             new Vector2(72f, 46f), new Vector2(-184f, -78f));
         popupMinusButton = EnsureButton(popupRect, "PopupMinusButton", "-1",
             new Vector2(72f, 46f), new Vector2(-98f, -78f));
         popupPlusButton = EnsureButton(popupRect, "PopupPlusButton", "+1",
             new Vector2(72f, 46f), new Vector2(98f, -78f));
-        popupMaxButton = EnsureButton(popupRect, "PopupMaxButton", "max",
+        popupMaxButton = EnsureButton(popupRect, "PopupMaxButton", "최대",
             new Vector2(72f, 46f), new Vector2(184f, -78f));
-        popupLoadButton = EnsureButton(popupRect, "PopupLoadButton", "Load",
+        popupLoadButton = EnsureButton(popupRect, "PopupLoadButton", "적재",
             new Vector2(220f, 54f), new Vector2(0f, -154f));
 
         Button popupClose = EnsureButton(popupRect, "PopupCloseButton", "×",
@@ -915,7 +915,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (nameText != null)
                 nameText.text = item.DisplayName;
             if (countText != null)
-                countText.text = $"Stock {remainingStocks[i]}";
+                countText.text = $"재고 {remainingStocks[i]}";
             if (priceText != null)
                 priceText.text = $"{item.BaseBuyPrice:N0} G";
 
@@ -961,7 +961,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             {
                 bool isFood = hasLine && IsFood(line.Item);
                 foodBadge.gameObject.SetActive(isFood);
-                foodBadge.text = isFood ? "Food" : string.Empty;
+                foodBadge.text = isFood ? "먹이" : string.Empty;
             }
         }
 
@@ -1013,11 +1013,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             currentLoadText.text = $"Load  {CurrentLoad:0.##} / {MaximumLoad:0.##}";
 
         if (currentMoneyText != null)
-            currentMoneyText.text = $"Gold  {currentGold:N0} G";
+            currentMoneyText.text = $"소지 골드  {currentGold:N0} G";
 
         if (pendingCostText != null)
         {
-            pendingCostText.text = $"Purchase  {pendingPurchaseCost:N0} G";
+            pendingCostText.text = $"구매 금액  {pendingPurchaseCost:N0} G";
             pendingCostText.color = pendingPurchaseCost > currentGold
                 ? new Color(1f, 0.34f, 0.3f)
                 : Color.white;
@@ -1027,18 +1027,18 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             feedConsumptionText.text = $"Feed Consumption  {TotalFeedConsumption:0.##}/s";
 
         if (loadedFoodText != null)
-            loadedFoodText.text = $"Loaded Food  {LoadedFood}";
+            loadedFoodText.text = $"적재 먹이  {LoadedFood}";
 
         if (foodWarningText != null)
         {
             if (CurrentLoad > MaximumLoad)
             {
-                foodWarningText.text = "Maximum load exceeded.";
+                foodWarningText.text = "최대 적재량을 초과했습니다.";
                 foodWarningText.color = new Color(1f, 0.34f, 0.3f);
             }
             else
             {
-                foodWarningText.text = "Ready to hire mercenaries.";
+                foodWarningText.text = "용병 고용으로 진행할 수 있습니다.";
                 foodWarningText.color = new Color(0.45f, 0.9f, 0.5f);
             }
         }
@@ -1117,12 +1117,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         if (popupInfoText != null)
         {
-            string specialty = item.LocalSpecialty ? "Local specialty" : "Standard goods";
+            string specialty = item.LocalSpecialty ? "특산품" : "일반 상품";
             popupInfoText.text =
                 $"{item.Description}\n\n" +
-                $"Type  {item.Category}    Rarity  {item.Rarity}\\n" +
-                $"Price  {item.BaseBuyPrice:N0} G    Weight  {item.Weight:0.##}\\n" +
-                $"{specialty}    Stock  {remainingStocks[selectedShopIndex]}";
+                $"분류  {item.Category}    등급  {item.Rarity}\n" +
+                $"가격  {item.BaseBuyPrice:N0} G    무게  {item.Weight:0.##}\n" +
+                $"{specialty}    재고  {remainingStocks[selectedShopIndex]}";
         }
 
         if (popupCountText != null)
@@ -1136,7 +1136,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         TMP_Text loadLabel = popupLoadButton.GetComponentInChildren<TMP_Text>(true);
         if (loadLabel != null)
-            loadLabel.text = $"Load  {(item.BaseBuyPrice * selectedPurchaseCount):N0} G";
+            loadLabel.text = $"적재  {(item.BaseBuyPrice * selectedPurchaseCount):N0} G";
     }
 
     private void SetPopupCount(int value)

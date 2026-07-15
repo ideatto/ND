@@ -11,7 +11,7 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
     [Serializable]
     public sealed class MercenaryOffer
     {
-        public string displayName = "Mercenary";
+        public string displayName = "용병";
         [Min(0)] public int combatPower;
         [Min(0)] public long hireCost;
     }
@@ -103,9 +103,9 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
 
         RectTransform header = CreatePanel(transform, "Header", new Vector2(1176f, 104f), Vector2.zero, FrameColor);
         RectTransform titleBackground = CreatePanel(header, "TitleBackground", new Vector2(460f, 76f), new Vector2(358f, -14f), new Color32(248, 246, 243, 255));
-        CreateText(titleBackground, "TitleText", "Hire Mercenaries", 34f, new Vector2(440f, 68f), new Vector2(230f, -38f), TextAlignmentOptions.Center, FontStyles.Bold);
-        Button back = CreateButton(header, "BackButton", "Back", new Vector2(116f, 56f), new Vector2(76f, -52f), DarkColor);
-        Button cancel = CreateButton(header, "CloseButton", "Cancel", new Vector2(116f, 56f), new Vector2(1100f, -52f), new Color32(190, 87, 87, 255));
+        CreateText(titleBackground, "TitleText", "용병 고용", 34f, new Vector2(440f, 68f), new Vector2(230f, -38f), TextAlignmentOptions.Center, FontStyles.Bold);
+        Button back = CreateButton(header, "BackButton", "뒤로", new Vector2(116f, 56f), new Vector2(76f, -52f), DarkColor);
+        Button cancel = CreateButton(header, "CloseButton", "무역 취소", new Vector2(116f, 56f), new Vector2(1100f, -52f), new Color32(190, 87, 87, 255));
         back.onClick.AddListener(BackToCargo);
         cancel.onClick.AddListener(CancelTrade);
 
@@ -124,9 +124,9 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
         moneySummaryText = CreateText(summary, "MoneySummaryText", string.Empty, 23f, new Vector2(840f, 48f), new Vector2(450f, -112f), TextAlignmentOptions.Left, FontStyles.Bold);
 
         RectTransform action = CreatePanel(transform, "ActionArea", new Vector2(184f, 172f), new Vector2(964f, -536f), ContentColor);
-        confirmButton = CreateButton(action, "ConfirmButton", "Confirm", new Vector2(148f, 52f), new Vector2(92f, -118f), ActionColor);
+        confirmButton = CreateButton(action, "ConfirmButton", "확인", new Vector2(148f, 52f), new Vector2(92f, -118f), ActionColor);
         confirmButton.onClick.AddListener(Confirm);
-        CreateText(action, "OptionalText", "Hiring is optional", 17f, new Vector2(160f, 56f), new Vector2(92f, -48f), TextAlignmentOptions.Center, FontStyles.Normal);
+        CreateText(action, "OptionalText", "용병 고용은 선택입니다", 17f, new Vector2(160f, 56f), new Vector2(92f, -48f), TextAlignmentOptions.Center, FontStyles.Normal);
 
         Refresh();
     }
@@ -138,11 +138,11 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
 
         offers = new[]
         {
-            NewOffer("Scout", 0, 0),
-            NewOffer("Road Guards", 10, 120),
-            NewOffer("Veteran Pair", 40, 420),
-            NewOffer("Iron Company", 100, 980),
-            NewOffer("Travel Alone", 0, 0)
+            NewOffer("정찰병", 0, 0),
+            NewOffer("가도 경비대", 10, 120),
+            NewOffer("베테랑 2인조", 40, 420),
+            NewOffer("강철 용병단", 100, 980),
+            NewOffer("단독 여행", 0, 0)
         };
     }
 
@@ -158,8 +158,8 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
         CreatePanel(cardRect, "Portrait", new Vector2(168f, 210f), new Vector2(16f, -16f), new Color32(255, 255, 255, 255));
         CreateText(cardRect, "NameText", offer.displayName, 21f, new Vector2(168f, 54f), new Vector2(100f, -258f), TextAlignmentOptions.Center, FontStyles.Bold);
         RectTransform powerStrip = CreatePanel(cardRect, "PowerStrip", new Vector2(168f, 44f), new Vector2(16f, -286f), DetailColor);
-        CreateText(powerStrip, "PowerText", $"Power  {offer.combatPower}", 19f, new Vector2(160f, 40f), new Vector2(84f, -22f), TextAlignmentOptions.Center, FontStyles.Bold);
-        CreateText(cardRect, "CostText", offer.hireCost == 0 ? "Free" : $"{offer.hireCost:N0} G", 18f, new Vector2(168f, 34f), new Vector2(100f, -348f), TextAlignmentOptions.Center, FontStyles.Normal);
+        CreateText(powerStrip, "PowerText", $"전투력  {offer.combatPower}", 19f, new Vector2(160f, 40f), new Vector2(84f, -22f), TextAlignmentOptions.Center, FontStyles.Bold);
+        CreateText(cardRect, "CostText", offer.hireCost == 0 ? "무료" : $"{offer.hireCost:N0} G", 18f, new Vector2(168f, 34f), new Vector2(100f, -348f), TextAlignmentOptions.Center, FontStyles.Normal);
         return card;
     }
 
@@ -172,9 +172,9 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
     private void Refresh()
     {
         if (riskSummaryText != null)
-            riskSummaryText.text = $"Expected risk  {expectedRisk}   /   Hired power  {SelectedCombatPower}";
+            riskSummaryText.text = $"예상 위험도  {expectedRisk}   /   고용 전투력  {SelectedCombatPower}";
         if (moneySummaryText != null)
-            moneySummaryText.text = $"Current money  {availableGold:N0} G   /   Hire price  {SelectedHireCost:N0} G";
+            moneySummaryText.text = $"소지 금액  {availableGold:N0} G   /   고용 비용  {SelectedHireCost:N0} G";
 
         for (int i = 0; i < offerButtons.Count; i++)
         {

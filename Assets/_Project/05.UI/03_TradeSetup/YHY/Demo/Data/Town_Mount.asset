@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: Town_Mount
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: town_c
-  displayName: Mountaintop
+  displayName: "\uC0B0\uAF2D\uB300\uAE30\uB9C8\uC744"
   icon: {fileID: 0}
   unlockedByDefault: 0
-  description: A mountain mining outpost.
+  description: "\uC0B0\uAF2D\uB300\uAE30\uC758 \uAD11\uC0B0 \uB9C8\uC744. \uAD11\uC11D\uACFC
+    \uBCF4\uC11D\uC774 \uB09C\uB2E4."
   market: {fileID: 0}
   availableRoutes:
   - {fileID: 11400000, guid: 63f433cf68199a24596bf8593ddd0ce0, type: 2}

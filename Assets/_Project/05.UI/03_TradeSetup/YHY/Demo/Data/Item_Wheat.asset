@@ -13,17 +13,22 @@ MonoBehaviour:
   m_Name: Item_Wheat
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: it_wheat
-  displayName: Wheat
+  displayName: "\uBC00"
   icon: {fileID: 0}
-  description: 
+  description: "\uAE30\uBCF8 \uC2DD\uB7C9 \uC791\uBB3C. \uB3D9\uBB3C \uBA39\uC774\uB85C\uB3C4
+    \uC4F8 \uC218 \uC788\uB2E4."
   rarity: 0
   category: 0
-  baseBuyPrice: 0
-  baseSellPrice: 0
-  canStack: 0
+  baseBuyPrice: 8
+  baseSellPrice: 10
+  canStack: 1
   maxCount: 20
   weight: 1
   isConsumable: 0
   affectModify: 0
-  modifiers: []
+  modifiers:
+  - modifierType: 0
+    sourceId: 
+    displayName: 
+    modifierBundles: []
   localSpecialty: 0

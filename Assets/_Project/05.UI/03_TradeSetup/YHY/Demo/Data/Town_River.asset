@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: Town_River
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: town_b
-  displayName: Riverside
+  displayName: "\uAC15\uAC00\uB9C8\uC744"
   icon: {fileID: 0}
   unlockedByDefault: 1
-  description: A riverside fishing town.
+  description: "\uAC15\uAC00\uC5D0 \uC790\uB9AC\uD55C \uC5B4\uCD0C \uB9C8\uC744.
+    \uC0DD\uC120\uACFC \uBE44\uB2E8 \uAD50\uC5ED\uC73C\uB85C \uC720\uBA85\uD558\uB2E4."
   market: {fileID: 0}
   availableRoutes:
   - {fileID: 11400000, guid: df98b1e734de27943a45ec056580953f, type: 2}

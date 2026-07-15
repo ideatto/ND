@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Route_CliffRoad
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
   routeId: r_c1
-  fromTown: {fileID: 11400000, guid: ea62894387461794b9cde56a76cbd3cf, type: 2}
-  toTown: {fileID: 11400000, guid: 75dd785947d27554f8fbd2e7f016d235, type: 2}
-  displayName: Cliff Road
+  fromTown: {fileID: 11400000, guid: 16a23802f33d25546ad1607a21440693, type: 2}
+  toTown: {fileID: 11400000, guid: ea62894387461794b9cde56a76cbd3cf, type: 2}
+  displayName: "\uC808\uBCBD\uAE38"
   unlockedByDefault: 0
   distance: 40
   defaultElapsedTime: 0

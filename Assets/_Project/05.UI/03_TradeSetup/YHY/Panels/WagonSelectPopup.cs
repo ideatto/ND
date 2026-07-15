@@ -55,12 +55,20 @@ public class WagonSelectPopup : MonoBehaviour
             Button b = Instantiate(buttonPrefab, listContainer);
             TMP_Text t = b.GetComponentInChildren<TMP_Text>();
             if (t != null)
-                t.text = $"{w.name}  [{w.type}]  slots {w.slotCount}" +
-                         (w.type == TransportType.Wagon ? $"  animals {w.minAnimals}~{w.maxAnimals}" : "");
+                t.text = $"{w.name}  [{TypeLabel(w.type)}]  칸 {w.slotCount}" +
+                         (w.type == TransportType.Wagon ? $"  동물 {w.minAnimals}~{w.maxAnimals}" : "");
             TransportSelectPanel.TransportEntry captured = w;   // 캡처 방지
             b.onClick.AddListener(() => Choose(captured));
             spawned.Add(b);
         }
+    }
+
+    /// <summary>이동수단 타입의 한글 표기.</summary>
+    private static string TypeLabel(TransportType t)
+    {
+        if (t == TransportType.Wagon) return "마차";
+        if (t == TransportType.Mount) return "탈것";
+        return "도보";
     }
 
     /// <summary>웨건 선택 → 콜백 + 닫기.</summary>

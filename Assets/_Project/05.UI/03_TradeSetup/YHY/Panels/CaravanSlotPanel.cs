@@ -61,7 +61,7 @@ public class CaravanSlotPanel : MonoBehaviour
             bool isEmpty = string.IsNullOrEmpty(filled);
             Button card = Instantiate(slotPrefab, col.transform);
             TMP_Text t = card.GetComponentInChildren<TMP_Text>();
-            if (t != null) t.text = isEmpty ? $"Slot {i + 1}\n[ Empty ]" : $"Slot {i + 1}\n{filled}";
+            if (t != null) t.text = isEmpty ? $"슬롯 {i + 1}\n[ 비어있음 ]" : $"슬롯 {i + 1}\n{filled}";
             SetColor(card, emptyColor);
             int idx = i;   // 캡처 방지
             card.onClick.AddListener(() => Select(idx));
@@ -89,7 +89,7 @@ public class CaravanSlotPanel : MonoBehaviour
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
         TextMeshProUGUI label = labelGO.AddComponent<TextMeshProUGUI>();
         if (TMP_Settings.defaultFontAsset != null) label.font = TMP_Settings.defaultFontAsset;
-        label.text = "Edit"; label.fontSize = 26; label.color = Color.black; label.alignment = TextAlignmentOptions.Center;
+        label.text = "편집"; label.fontSize = 26; label.color = Color.black; label.alignment = TextAlignmentOptions.Center;
 
         btn.onClick.AddListener(() => OnEditRequested?.Invoke(idx));
         return go;
