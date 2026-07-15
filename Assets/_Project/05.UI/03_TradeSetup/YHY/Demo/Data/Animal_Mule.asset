@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Animal_Mule
   m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
   draftAnimalId: an_mule
-  displayName: Mule
+  displayName: "\uB178\uC0C8"
   icon: {fileID: 0}
   prefab: {fileID: 0}
   description: 

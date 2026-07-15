@@ -30,3 +30,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9dae00940fbf3814da62a51860b21184, type: 2}
   - {fileID: 11400000, guid: ba526349a1038024e9c9c18ab6cce4ec, type: 2}
   - {fileID: 11400000, guid: ac3ae27bdbddcc24f84ac916739bde41, type: 2}
+  - {fileID: 11400000, guid: 7826bbe83379fae42862e83bade08d5f, type: 2}
+  - {fileID: 11400000, guid: 0e182e6249e965042a5a4322cab1b86b, type: 2}
+  gold: 2000
+  requiredFood: 3
+  itemStocks: 

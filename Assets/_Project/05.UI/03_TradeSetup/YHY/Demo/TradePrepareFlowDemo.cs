@@ -1,138 +1,58 @@
 // =============================================================================
-// TradePrepareFlowDemo — 무역 준비 플로우 데모 드라이버 (Test 씬 전용)
+// TradePrepareFlowDemo — 무역 준비 데모 데이터 공급자 (Test 씬 전용)
 // =============================================================================
 // [담당] Core Gameplay (윤호영)  /  [용도] 와이어프레임 확인용 데모. 실제 빌드엔 안 씀.
 //
-// [플로우] (Section 9 와이어프레임 + 팀 결정 반영)
-//   ① 도시+루트  : 아코디언(도시 클릭 → 아래로 루트 펼침). 루트 클릭 → ②.
-//                  도시 롱프레스(0.5초) → 도시 정보 팝업.
-//   ② 상단 슬롯  : 내 상단 슬롯(새 게임=전부 빈칸). 슬롯 선택 → 아래 Edit 노출 + Next 활성.
-//                  · Edit  → 항상 ③(구성/편집. 저장된 슬롯이면 웨건+동물 복원)
-//                  · Next  → 빈 슬롯=③(구성), 저장된 슬롯=④(적재, 저장 구성 사용)
-//   ③ 동물(구성) : 왼쪽=웨건(Edit로 넣기/Remove로 빼기, 이미지+슬롯), 오른쪽=동물 인벤토리(그리드).
-//                  동물 클릭=바로 1마리 슬롯에, 슬롯 클릭=1마리 빼기. 우상단 Save 체크=슬롯에 저장.
-//   ④ 적재       : 아이템 수량 적재(웨건 칸 수만큼 종류 제한). Next → ⑤.
-//   ⑤ 요약       : 고른 값 집계 + 출발(데모 로그).
+// [역할] 화면 전환·상태 관리는 전부 TradePrepareUIManager(제품 코드)가 한다.
+//        여기는 "더미 SO → 패널 DTO 어댑터"와 프로바이더 주입, Begin() 호출만 담당.
+//        실제 게임 통합 시 이 파일 대신 진짜 데이터 소스가 같은 프로바이더를 주입하면 된다.
 //
 // [데이터] 하드코딩 없음 — 더미 값은 TradePrepareDemoData(SO) 에셋에서 읽는다.
-//          규칙 검증은 각 패널/CaravanValidator가 담당(여긴 흐름만).
 // =============================================================================
 
 using System.Collections.Generic;
-using System.Text;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
-/// <summary>무역 준비 플로우를 더미 SO 데이터로 이어주는 데모 드라이버. [Test 씬 전용]</summary>
+/// <summary>무역 준비 플로우에 더미 SO 데이터를 공급하는 데모 드라이버. [Test 씬 전용]</summary>
 public class TradePrepareFlowDemo : MonoBehaviour
 {
     [Header("더미 데이터(SO)")]
-    [SerializeField] private TradePrepareDemoData data;   // 도시/이동수단/동물/아이템 더미 값
+    [SerializeField] private TradePrepareDemoData data;   // 도시/이동수단/동물/아이템/골드 더미 값
 
-    [Header("화면 패널")]
-    [SerializeField] private TownRoutePanel townRoutePanel;        // ① 도시+루트
-    [SerializeField] private CaravanSlotPanel caravanSlotPanel;    // ② 상단 슬롯
-    [SerializeField] private AnimalInventoryPanel animalPanel;     // ③ 동물(구성)
-    [SerializeField] private ItemLoadPanel itemPanel;              // ④ 적재
-    [SerializeField] private GameObject summaryPanel;              // ⑤ 요약(루트 오브젝트)
+    [Header("UI 매니저(제품 코드)")]
+    [SerializeField] private TradePrepareUIManager ui;    // 플로우 총괄 매니저
 
-    [Header("상단 슬롯")]
-    [SerializeField] private int caravanSlotCount = 4;   // 슬롯 개수(새 게임=전부 빈칸)
-
-    [Header("구성 저장")]
-    [SerializeField] private Toggle saveToggle;          // 3번 우상단 "구성 저장" 체크박스
-
-    [Header("진행(Next) 버튼")]
-    [SerializeField] private Button slotNext;        // ② 슬롯 선택 후 하단 Next
-    [SerializeField] private Button animalNext;      // ③ → ④
-    [SerializeField] private Button itemNext;        // ④ → ⑤
-    [SerializeField] private Button departButton;    // ⑤ 출발
-
-    [Header("뒤로(Back) 버튼")]
-    [SerializeField] private Button slotBack;        // ② → ①
-    [SerializeField] private Button animalBack;      // ③ → ②
-    [SerializeField] private Button itemBack;        // ④ → ③
-    [SerializeField] private Button summaryBack;     // ⑤ → ④
-
-    [Header("요약")]
-    [SerializeField] private TMP_Text summaryText;
-
-    // ── 선택 상태 ────────────────────────────────
-    private string townName = "-", routeName = "-";
-    private float distanceKm;
-    private bool hasTransport;
-    private TransportSelectPanel.TransportEntry transport;
-    private string[] caravanSlots;      // 슬롯별 표시 요약(""=빈칸)
-    private SlotComp[] slotData;        // 슬롯별 구조화 저장(웨건+동물)
-    private int composingSlotIndex = -1; // 지금 구성 중인 슬롯
-    private bool itemsFromSavedSlot;     // 적재(④)에 저장슬롯 Next로 직행했나 → Back 목적지 분기
-
-    /// <summary>슬롯 하나에 저장된 상단 구성(구조화).</summary>
-    private class SlotComp
-    {
-        public bool filled;
-        public bool hasWagon;
-        public TransportSelectPanel.TransportEntry wagon;
-        public List<AnimalInventoryPanel.AnimalPick> animals = new List<AnimalInventoryPanel.AnimalPick>();
-    }
-    private readonly List<AnimalInventoryPanel.AnimalPick> pickedAnimals = new List<AnimalInventoryPanel.AnimalPick>();
-    private readonly List<ItemLoadPanel.ItemLoad> pickedItems = new List<ItemLoadPanel.ItemLoad>();
-
-    // 이름표(요약에 id 대신 이름) — data에서 자동 생성
-    private readonly Dictionary<string, string> townNames = new Dictionary<string, string>();
-    private readonly Dictionary<string, string> routeNames = new Dictionary<string, string>();
-    private readonly Dictionary<string, string> animalNames = new Dictionary<string, string>();
-    private readonly Dictionary<string, string> itemNames = new Dictionary<string, string>();
+    // id → 표시 이름 표(도시·루트·동물·아이템 통합, 요약 표시용)
+    private readonly Dictionary<string, string> names = new Dictionary<string, string>();
 
     private void Start()
     {
-        if (data == null)
+        if (data == null || ui == null)
         {
-            Debug.LogWarning("[Prepare Demo] TradePrepareDemoData(SO)가 비었음 — FlowDemo의 data 필드에 더미 에셋을 연결하세요.");
+            Debug.LogWarning("[Prepare Demo] data(SO) 또는 ui(매니저)가 비었음 — FlowDemo 인스펙터를 확인하세요.");
             return;
         }
 
-        // ── 구독 ──
-        if (townRoutePanel != null) townRoutePanel.OnRouteSelected += OnRouteSelected;
-        if (caravanSlotPanel != null) { caravanSlotPanel.OnSlotSelected += OnSlotSelected; caravanSlotPanel.OnEditRequested += OnEditRequested; }
-        if (animalPanel != null)
-        {
-            animalPanel.OnSelectionChanged += OnAnimalsChanged;
-            animalPanel.OnWagonSelected += OnWagonPlaced;
-            animalPanel.OnWagonRemoved += OnWagonRemoved;
-        }
-        if (itemPanel != null)      itemPanel.OnLoadChanged += OnItemsChanged;
-        if (saveToggle != null)    saveToggle.onValueChanged.AddListener(OnSaveToggle);
+        BuildNameTable();
 
-        // ── Next ──
-        if (slotNext != null)      slotNext.onClick.AddListener(FromSlotNext);   // 슬롯 선택 후 진행
-        if (animalNext != null)    animalNext.onClick.AddListener(GoItems);
-        if (itemNext != null)      itemNext.onClick.AddListener(GoSummary);
-        if (departButton != null)  departButton.onClick.AddListener(Depart);
+        // ── 매니저에 데이터 프로바이더 주입 ──
+        ui.TownProvider = BuildTownEntries;
+        ui.AnimalProvider = BuildAnimalEntries;
+        ui.OwnedWagonProvider = BuildOwnedWagons;
+        ui.CargoProvider = BuildCargoConfig;
+        ui.SummaryStatsProvider = BuildSummaryStats;   // ⑥ 요약 계산(Core 계산기 사용)
+        ui.NameResolver = Resolve;
 
-        // ── Back ──
-        if (slotBack != null)      slotBack.onClick.AddListener(GoTownRoute);
-        if (animalBack != null)    animalBack.onClick.AddListener(GoCaravanSlot);   // 동물 → 상단 슬롯
-        if (itemBack != null)      itemBack.onClick.AddListener(BackFromItems);
-        if (summaryBack != null)   summaryBack.onClick.AddListener(GoItems);
+        // ── 결과 이벤트(데모는 로그만) ──
+        ui.OnDepart += OnDepart;
+        ui.OnCancelled += OnCancelled;
+        ui.OnJourneyFinished += OnJourneyFinished;
 
-        // ── 슬롯 저장소 초기화(전부 빈칸) ──
-        int n = Mathf.Max(1, caravanSlotCount);
-        caravanSlots = new string[n];                                // 표시 요약
-        slotData = new SlotComp[n];                                  // 구조화 저장
-        for (int i = 0; i < n; i++) slotData[i] = new SlotComp();
-
-        BuildNameTables();
-
-        // ① 도시+루트는 시작 시 한 번 채운다(진짜 SO → DTO 변환).
-        if (townRoutePanel != null) townRoutePanel.Populate(BuildTownEntries());
-
-        GoTownRoute();
+        ui.Begin();
     }
 
-    // ══ 어댑터: 진짜 SO → 패널 DTO ═══════════════════
-    // 패널은 이종현님 SO 타입을 모른다(중립 DTO만 받음). 변환은 데모 드라이버가 담당.
+    // ══ 어댑터: 진짜 SO → 패널 DTO ═══════════════════════════════
+    // 패널은 이종현님 SO 타입을 모른다(중립 DTO만 받음). 변환은 여기서 담당.
 
     /// <summary>TownData[] → 도시+루트 DTO (루트는 TownData.AvailableRoutes에서).</summary>
     private List<TownRoutePanel.TownEntry> BuildTownEntries()
@@ -178,33 +98,7 @@ public class TradePrepareFlowDemo : MonoBehaviour
         return result;
     }
 
-    /// <summary>도시별 특산품 더미(데모). 이름 + 마우스오버 툴팁(아이템 정보).</summary>
-    private List<TownRoutePanel.Specialty> DummySpecialties(string townId)
-    {
-        string[] names;
-        if (townId == "town_a") names = new string[] { "Wheat", "Wool" };
-        else if (townId == "town_b") names = new string[] { "Fish", "Silk" };
-        else if (townId == "town_c") names = new string[] { "Ore", "Gems" };
-        else names = new string[0];
-
-        List<TownRoutePanel.Specialty> result = new List<TownRoutePanel.Specialty>();
-        foreach (string n in names) result.Add(new TownRoutePanel.Specialty(n, ItemTooltip(n)));
-        return result;
-    }
-
-    /// <summary>아이템 이름으로 TradeItemData를 찾아 툴팁 문자열을 만든다(없으면 일반).</summary>
-    private string ItemTooltip(string itemName)
-    {
-        if (data.items != null)
-            foreach (TradeItemData it in data.items)
-                if (it != null && it.DisplayName == itemName)
-                    return $"{it.DisplayName}\nWeight {it.Weight:0.#}\nCategory {it.Category}\n" +
-                           $"Buy {it.BaseBuyPrice} / Sell {it.BaseSellPrice}";
-        return $"{itemName}\n(specialty item)";
-    }
-
-    /// <summary>웨건 선택 팝업용 목록 — 도보(None)는 항상, 마차/자동차(Mount)는 소지분만.
-    /// None/Mount는 동물 요구량 0~0이라 동물 없이 바로 요구량 충족(OK)이 된다.</summary>
+    /// <summary>웨건 선택 팝업용 목록 — 도보(None)는 항상, 마차/자동차(Mount)는 소지분만.</summary>
     private List<TransportSelectPanel.TransportEntry> BuildOwnedWagons()
     {
         List<TransportSelectPanel.TransportEntry> result = new List<TransportSelectPanel.TransportEntry>();
@@ -229,18 +123,178 @@ public class TradePrepareFlowDemo : MonoBehaviour
         return result;
     }
 
-    /// <summary>TradeItemData[] → 아이템 DTO.</summary>
-    private List<ItemLoadPanel.ItemEntry> BuildItemEntries()
+    /// <summary>④ 적재(Cargo·정헌님)용 값 묶음 — 골드·먹이·상점 아이템·재고.</summary>
+    private TradePrepareUIManager.CargoConfig BuildCargoConfig()
     {
-        List<ItemLoadPanel.ItemEntry> result = new List<ItemLoadPanel.ItemEntry>();
-        if (data.items == null) return result;
-        foreach (TradeItemData it in data.items)
-            if (it != null)
-                result.Add(new ItemLoadPanel.ItemEntry(it.ItemId, it.DisplayName, it.Weight, it.MaxCount));
+        TradePrepareUIManager.CargoConfig cfg = new TradePrepareUIManager.CargoConfig();
+        cfg.gold = data.gold;
+        cfg.requiredFood = data.requiredFood;
+        cfg.shopItems = data.items;
+        // 재고: itemStocks에서(부족하면 10으로 간주)
+        int n = data.items != null ? data.items.Length : 0;
+        cfg.stocks = new int[n];
+        for (int i = 0; i < n; i++)
+            cfg.stocks[i] = (data.itemStocks != null && i < data.itemStocks.Length) ? data.itemStocks[i] : 10;
+        return cfg;
+    }
+
+    // ══ ⑥ 요약 계산 (와이어프레임 6번) ═══════════════════════════
+    // 시간·음식은 진짜 Core 계산기(CaravanCalculator)를 쓴다.
+    // SO(이종현님) → imsi(Core 초안 타입) 매핑은 데모(여기)가 담당 — 매핑 규칙은 주석 참고.
+
+    /// <summary>매니저 질의(선택값) → 요약 계산 결과.</summary>
+    private TradePrepareUIManager.SummaryStats BuildSummaryStats(TradePrepareUIManager.SummaryQuery q)
+    {
+        TradePrepareUIManager.SummaryStats st = new TradePrepareUIManager.SummaryStats();
+        st.viaText = "";   // 경유 데이터가 SO에 아직 없음(와이어프레임 '경유 기능 필요') → 매니저가 "없음" 처리
+
+        // 출발 도시·예상 위험도 — 루트 SO에서
+        RouteData route = FindRoute(q.routeId);
+        if (route != null)
+        {
+            st.fromTownName = route.FromTownName;
+            // 예상 위험도: 루트 내 가장 높은 '습격(Combat)' 이벤트 값. 없으면 0 (와이어프레임 규칙)
+            int best = 0;
+            foreach (RouteEventData ev in route.RouteEvents)
+                if (ev != null && ev.eventType == RouteEvent.Combat)
+                    best = Mathf.Max(best, Mathf.RoundToInt(ev.eventValue));
+            st.expectedRisk = best;
+        }
+
+        // 예상 시간·음식 — Core 계산기(속도 공식·초당 소모)를 그대로 사용
+        CaravanData cv = BuildCaravanForCalc(q);
+        st.durationSeconds = CaravanCalculator.GetTravelSeconds(cv, q.distanceKm);
+        st.expectedFood = CaravanCalculator.GetEstimatedFood(cv, q.distanceKm, 1f);   // 인게임 배율 1(데모)
+        return st;
+    }
+
+    /// <summary>계산용 CaravanData 조립 — SO 값 → imsi(Core 초안 타입) 매핑.
+    /// · 동물 speed: imsi는 '말=1 기준 배수' → SO BaseMoveSpeed를 말(6)로 나눠 정규화 [데모 매핑]
+    /// · 웨건 speedModifier: SO BaseMoveSpeed는 절대값이라 배수로 못 씀 → 0(중립 1.0) [데모 매핑]</summary>
+    private CaravanData BuildCaravanForCalc(TradePrepareUIManager.SummaryQuery q)
+    {
+        CaravanData cv = new CaravanData();
+
+        // 웨건
+        if (q.hasTransport)
+        {
+            WagonData w = FindWagon(q.transport.id);
+            if (w != null)
+            {
+                imsiWagonData iw = new imsiWagonData();
+                iw.wagonName = w.DisplayName;
+                iw.overLoad = w.Overload;
+                iw.maxLoad = w.MaxLoad;
+                iw.minAnimals = w.MinRequireAnimals;
+                iw.maxAnimals = w.MaxPullAnimals;
+                iw.inventorySlotCount = w.InventorySlotCount;
+                cv.wagon = iw;
+            }
+        }
+
+        // 동물 (수량만큼 1마리씩)
+        if (q.animals != null)
+            foreach (AnimalInventoryPanel.AnimalPick p in q.animals)
+            {
+                DraftAnimalData a = FindAnimal(p.animalId);
+                if (a == null) continue;
+                for (int i = 0; i < p.count; i++)
+                {
+                    imsiAnimalData ia = new imsiAnimalData();
+                    ia.animalName = a.DisplayName;
+                    ia.speed = a.BaseMoveSpeed / 6f;         // 말(6)=1.0 기준 정규화 [데모 매핑]
+                    ia.foodPerKm = a.FeedConsumption;         // 초당 소모율 (필드명은 Core에서 rename 예정)
+                    ia.increaseOverLoad = a.IncreaseOverLoad;
+                    ia.increaseMaxLoad = a.IncreaseMaxLoad;
+                    ia.animalType = a.AnimalType;
+                    cv.animals.Add(ia);
+                }
+            }
+
+        // 적재 물품
+        if (q.cargo != null)
+            foreach (TradeItemBundle b in q.cargo)
+            {
+                TradeItemData it = FindItem(b.itemId);
+                if (it == null) continue;
+                imsiTradeItemData ii = new imsiTradeItemData();
+                ii.id = it.ItemId;
+                ii.itemName = it.DisplayName;
+                ii.weight = it.Weight;
+                ii.basePrice = it.BaseSellPrice;
+                ii.maxCount = it.MaxCount;
+                CargoEntry ce = new CargoEntry();
+                ce.item = ii;
+                ce.quantity = b.quantity;
+                cv.cargo.Add(ce);
+            }
+        cv.foodAmount = q.loadedFood;
+        return cv;
+    }
+
+    // ── SO 조회 헬퍼(데모 데이터에서 id로 찾기) ──
+    private RouteData FindRoute(string routeId)
+    {
+        if (data.towns != null)
+            foreach (TownData t in data.towns)
+            {
+                if (t == null) continue;
+                foreach (RouteData r in t.AvailableRoutes)
+                    if (r != null && r.RouteId == routeId) return r;
+            }
+        return null;
+    }
+
+    private WagonData FindWagon(string wagonId)
+    {
+        if (data.transports != null)
+            foreach (WagonData w in data.transports)
+                if (w != null && w.WagonId == wagonId) return w;
+        return null;
+    }
+
+    private DraftAnimalData FindAnimal(string animalId)
+    {
+        if (data.animals != null)
+            foreach (DraftAnimalData a in data.animals)
+                if (a != null && a.DraftAnimalId == animalId) return a;
+        return null;
+    }
+
+    private TradeItemData FindItem(string itemId)
+    {
+        if (data.items != null)
+            foreach (TradeItemData it in data.items)
+                if (it != null && it.ItemId == itemId) return it;
+        return null;
+    }
+
+    /// <summary>도시별 특산품 더미(데모). 이름 + 마우스오버 툴팁(아이템 정보).</summary>
+    private List<TownRoutePanel.Specialty> DummySpecialties(string townId)
+    {
+        string[] specNames;
+        if (townId == "town_a") specNames = new string[] { "밀", "양털" };
+        else if (townId == "town_b") specNames = new string[] { "생선", "비단" };
+        else if (townId == "town_c") specNames = new string[] { "광석", "보석" };
+        else specNames = new string[0];
+
+        List<TownRoutePanel.Specialty> result = new List<TownRoutePanel.Specialty>();
+        foreach (string n in specNames) result.Add(new TownRoutePanel.Specialty(n, ItemTooltip(n)));
         return result;
     }
 
-    /// <summary>WagonType(이종현님) → TransportType(데모 분기용) 매핑.</summary>
+    /// <summary>아이템 이름으로 TradeItemData를 찾아 툴팁 문자열을 만든다(없으면 일반).</summary>
+    private string ItemTooltip(string itemName)
+    {
+        if (data.items != null)
+            foreach (TradeItemData it in data.items)
+                if (it != null && it.DisplayName == itemName)
+                    return $"{it.DisplayName}\n무게 {it.Weight:0.#}\n분류 {it.Category}\n" +
+                           $"구매 {it.BaseBuyPrice} / 판매 {it.BaseSellPrice}";
+        return $"{itemName}\n(특산품)";
+    }
+
+    /// <summary>WagonType(이종현님) → TransportType(패널 분기용) 매핑.</summary>
     private static TransportType MapType(WagonType t)
     {
         if (t == WagonType.WagonWithAnimals) return TransportType.Wagon;
@@ -248,256 +302,48 @@ public class TradePrepareFlowDemo : MonoBehaviour
         return TransportType.None;
     }
 
-    /// <summary>SO에서 id→이름 표를 만든다(요약 표시용).</summary>
-    private void BuildNameTables()
+    /// <summary>SO에서 id→이름 표를 만든다(요약 표시용, 도시·루트·동물·아이템 통합).</summary>
+    private void BuildNameTable()
     {
-        townNames.Clear(); routeNames.Clear(); animalNames.Clear(); itemNames.Clear();
+        names.Clear();
         if (data.towns != null)
             foreach (TownData t in data.towns)
             {
                 if (t == null) continue;
-                townNames[t.TownId] = t.DisplayName;
+                names[t.TownId] = t.DisplayName;
                 foreach (RouteData r in t.AvailableRoutes)
-                    if (r != null) routeNames[r.RouteId] = r.DisplayName;
+                    if (r != null) names[r.RouteId] = r.DisplayName;
             }
         if (data.animals != null)
             foreach (DraftAnimalData a in data.animals)
-                if (a != null) animalNames[a.DraftAnimalId] = a.DisplayName;
+                if (a != null) names[a.DraftAnimalId] = a.DisplayName;
         if (data.items != null)
             foreach (TradeItemData it in data.items)
-                if (it != null) itemNames[it.ItemId] = it.DisplayName;
+                if (it != null) names[it.ItemId] = it.DisplayName;
     }
 
-    // ── ① 루트 선택 → ② 이동수단 ──
-    private void OnRouteSelected(string townId, string routeId, float distance)
+    /// <summary>id → 표시 이름(없으면 id 그대로).</summary>
+    private string Resolve(string id)
     {
-        distanceKm = distance;
-        townName = NameOrId(townNames, townId);
-        routeName = $"{NameOrId(routeNames, routeId)} ({distance:0.#}km)";
-        GoCaravanSlot();
+        return names.TryGetValue(id, out string n) ? n : id;
     }
 
-    // ── ② 상단 슬롯 선택 → 하단 Next만 활성(자동 진행 안 함). Edit는 별도 버튼. ──
-    private void OnSlotSelected(int slotIndex)
+    // ══ 결과 이벤트(데모는 로그만) ═══════════════════════════════
+
+    private void OnDepart(TradePrepareUIManager.DepartData d)
     {
-        composingSlotIndex = slotIndex;   // 구성 대상 슬롯 기억
-        if (slotNext != null) slotNext.interactable = slotIndex >= 0;
+        Debug.Log($"[Prepare Demo] Depart! town={Resolve(d.townId)} route={Resolve(d.routeId)} " +
+                  $"transport={(d.hasTransport ? d.transport.name : "-")} animals={d.animals.Count}종 " +
+                  $"cargo={(d.cargo != null ? d.cargo.Length : 0)}종/{d.cargoCost:N0}G merc={d.mercenaryPower}/{d.mercenaryCost:N0}G");
     }
 
-    // 선택 슬롯의 [Edit] → 항상 3번(구성/편집). 빈 슬롯이든 저장된 슬롯이든.
-    private void OnEditRequested(int slotIndex)
+    private void OnCancelled()
     {
-        hasTransport = false;   // 3번에서 웨건부터 다시 넣음(편집)
-        GoAnimals();
+        Debug.Log("[Prepare Demo] 무역 취소 — 준비 데이터 초기화, 도시 선택으로 복귀.");
     }
 
-    // 하단 [Next] → 빈 슬롯이면 3번(구성), 저장된 슬롯이면 4번(적재).
-    private void FromSlotNext()
+    private void OnJourneyFinished()
     {
-        bool empty = caravanSlotPanel != null && caravanSlotPanel.IsSelectedEmpty();
-        if (empty)
-        {
-            hasTransport = false;
-            GoAnimals();   // 빈 슬롯 → 3번(구성)
-        }
-        else
-        {
-            // 저장된 슬롯 → 4번(적재). "그 슬롯에 저장된" 웨건·동물을 그대로 사용.
-            SlotComp s = (slotData != null && composingSlotIndex >= 0 && composingSlotIndex < slotData.Length)
-                         ? slotData[composingSlotIndex] : null;
-            hasTransport = s != null && s.filled && s.hasWagon;
-            if (hasTransport) transport = s.wagon;
-            pickedAnimals.Clear();
-            if (s != null) pickedAnimals.AddRange(s.animals);   // 요약이 저장된 동물을 보여주도록
-            itemsFromSavedSlot = true;                          // 적재 Back → 슬롯화면으로
-            GoItems();
-        }
-    }
-
-    // 동물 화면에서 웨건을 넣었을 때 — 이후 적재 슬롯 수 계산에 사용
-    private void OnWagonPlaced(TransportSelectPanel.TransportEntry w)
-    {
-        transport = w;
-        hasTransport = true;
-    }
-
-    // 동물 화면에서 웨건을 뺐을 때 — 드라이버 상태 동기화.
-    // 웨건 없는 구성은 저장 대상이 아니므로, 저장돼 있었으면 저장도 해제한다.
-    private void OnWagonRemoved()
-    {
-        hasTransport = false;
-        if (saveToggle != null && saveToggle.isOn)
-        {
-            saveToggle.SetIsOnWithoutNotify(false);
-            OnSaveToggle(false);   // 슬롯 저장 해제(빈칸으로)
-        }
-    }
-
-    // ── ③ 동물 선택 변경 → Next(요구량 충족 시) ──
-    private void OnAnimalsChanged(IReadOnlyList<AnimalInventoryPanel.AnimalPick> picks, bool valid)
-    {
-        pickedAnimals.Clear();
-        pickedAnimals.AddRange(picks);
-        if (animalNext != null) animalNext.interactable = valid;
-        // 저장 체크돼 있으면 슬롯 요약도 실시간 갱신
-        if (saveToggle != null && saveToggle.isOn) OnSaveToggle(true);
-    }
-
-    // ── ④ 적재 변경 ──
-    private void OnItemsChanged(IReadOnlyList<ItemLoadPanel.ItemLoad> load)
-    {
-        pickedItems.Clear();
-        pickedItems.AddRange(load);
-    }
-
-    // ══ 화면 전환 ══════════════════════════════════
-    private void GoTownRoute() { ShowOnly(0); }
-
-    private void GoCaravanSlot()
-    {
-        if (caravanSlotPanel != null)
-        {
-            List<string> slots = new List<string>();
-            for (int i = 0; i < caravanSlotCount; i++)
-                slots.Add((caravanSlots != null && i < caravanSlots.Length) ? (caravanSlots[i] ?? "") : "");
-            caravanSlotPanel.Populate(slots);   // 저장된 슬롯은 요약 표시, 나머지는 빈칸
-            caravanSlotPanel.ResetSelection();
-        }
-        if (slotNext != null) slotNext.interactable = false;   // 슬롯 고르기 전엔 Next 잠금
-        ShowOnly(1);
-    }
-
-
-    private void GoAnimals()
-    {
-        itemsFromSavedSlot = false;   // 동물(구성)을 거치면 적재 Back은 동물로
-        pickedAnimals.Clear();
-        if (animalNext != null) animalNext.interactable = false;   // 기본 잠금(복원되면 아래서 다시 켜짐)
-
-        if (animalPanel != null)
-        {
-            animalPanel.Populate(BuildAnimalEntries(), BuildOwnedWagons());   // 웨건은 화면 안 Edit로 선택
-            // 저장된 슬롯을 Edit로 열면 웨건+동물 그대로 복원 (OnAnimalsChanged로 pickedAnimals·Next 갱신됨)
-            if (slotData != null && composingSlotIndex >= 0 && composingSlotIndex < slotData.Length
-                && slotData[composingSlotIndex].filled && slotData[composingSlotIndex].hasWagon)
-            {
-                animalPanel.RestoreComposition(slotData[composingSlotIndex].wagon, slotData[composingSlotIndex].animals);
-            }
-        }
-        // 저장 체크박스: 이 슬롯이 이미 저장돼 있으면 체크 상태로(알림 없이)
-        if (saveToggle != null)
-        {
-            bool saved = composingSlotIndex >= 0 && composingSlotIndex < caravanSlots.Length
-                         && !string.IsNullOrEmpty(caravanSlots[composingSlotIndex]);
-            saveToggle.SetIsOnWithoutNotify(saved);
-        }
-        ShowOnly(2);
-    }
-
-    // 3번 우상단 "구성 저장" 체크박스 → 슬롯에 저장/해제 (구조화 + 표시요약)
-    private void OnSaveToggle(bool on)
-    {
-        if (slotData == null || composingSlotIndex < 0 || composingSlotIndex >= slotData.Length) return;
-        SlotComp s = slotData[composingSlotIndex];
-        if (on)
-        {
-            s.filled = true;
-            s.hasWagon = hasTransport;
-            s.wagon = transport;
-            s.animals = new List<AnimalInventoryPanel.AnimalPick>(pickedAnimals);
-            caravanSlots[composingSlotIndex] = BuildCaravanSummary();
-        }
-        else
-        {
-            s.filled = false; s.hasWagon = false; s.animals.Clear();
-            caravanSlots[composingSlotIndex] = "";
-        }
-    }
-
-    // 지금 구성 중인 상단을 슬롯에 표시할 요약으로.
-    private string BuildCaravanSummary()
-    {
-        string wag = hasTransport ? transport.name : "-";
-        if (pickedAnimals.Count == 0) return wag;
-        List<string> parts = new List<string>();
-        foreach (AnimalInventoryPanel.AnimalPick a in pickedAnimals)
-            parts.Add($"{NameOrId(animalNames, a.animalId)}x{a.count}");
-        return $"{wag}\n{string.Join(",", parts)}";
-    }
-
-    private void GoItems()
-    {
-        if (itemPanel != null)
-            itemPanel.Populate(BuildItemEntries(), hasTransport ? transport.slotCount : 2);
-        ShowOnly(3);
-    }
-
-    // 적재의 Back — 저장슬롯에서 직행했으면 슬롯화면(②)으로, 구성을 거쳤으면 동물(③)로.
-    private void BackFromItems()
-    {
-        if (itemsFromSavedSlot) GoCaravanSlot();
-        else GoAnimals();
-    }
-
-    private void GoSummary()
-    {
-        if (summaryText != null) summaryText.text = BuildSummary();
-        ShowOnly(4);
-    }
-
-    private void Depart()
-    {
-        Debug.Log("[Prepare Demo] Depart!\n" + BuildSummary());
-    }
-
-    /// <summary>화면 인덱스만 켠다. 0:도시루트 1:상단슬롯 2:동물 3:적재 4:요약</summary>
-    private void ShowOnly(int idx)
-    {
-        SetActive(townRoutePanel, idx == 0);
-        SetActive(caravanSlotPanel, idx == 1);
-        SetActive(animalPanel, idx == 2);
-        SetActive(itemPanel, idx == 3);
-        if (summaryPanel != null) summaryPanel.SetActive(idx == 4);
-    }
-
-    private static void SetActive(Component panel, bool on)
-    {
-        if (panel != null) panel.gameObject.SetActive(on);
-    }
-
-    /// <summary>고른 값 요약 텍스트.</summary>
-    private string BuildSummary()
-    {
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("== Trade Prepare Summary ==");
-        sb.AppendLine($"Town: {townName}");
-        sb.AppendLine($"Route: {routeName}");
-        sb.AppendLine($"Transport: {(hasTransport ? $"{transport.name} [{transport.type}]" : "-")}");
-
-        sb.Append("Animals: ");
-        if (pickedAnimals.Count == 0) sb.AppendLine("(none)");
-        else
-        {
-            List<string> parts = new List<string>();
-            foreach (AnimalInventoryPanel.AnimalPick a in pickedAnimals)
-                parts.Add($"{NameOrId(animalNames, a.animalId)} x{a.count}");
-            sb.AppendLine(string.Join(", ", parts));
-        }
-
-        sb.Append("Cargo: ");
-        if (pickedItems.Count == 0) sb.AppendLine("(none)");
-        else
-        {
-            List<string> parts = new List<string>();
-            foreach (ItemLoadPanel.ItemLoad it in pickedItems)
-                parts.Add($"{NameOrId(itemNames, it.itemId)} x{it.count}");
-            sb.AppendLine(string.Join(", ", parts));
-        }
-        return sb.ToString();
-    }
-
-    private static string NameOrId(Dictionary<string, string> map, string id)
-    {
-        return map != null && map.TryGetValue(id, out string n) ? n : id;
+        Debug.Log("[Prepare Demo] 무역 종료(도착) — 정산(⑧) 자리. 데모는 도시 선택으로 복귀.");
     }
 }

@@ -56,9 +56,9 @@ public class TownRoutePanel : MonoBehaviour
 
         foreach (TownEntry town in towns)
         {
-            // 도시 버튼 — 짧게 탭=선택(펼침), 길게=정보 팝업. 잠긴 도시는 [Lock] 표기.
+            // 도시 버튼 — 짧게 탭=선택(펼침), 길게=정보 팝업. 잠긴 도시는 [잠김] 표기.
             Button tb = Instantiate(townButtonPrefab, listContainer);
-            SetLabel(tb, town.unlocked ? town.name : $"{town.name}  [Lock]");
+            SetLabel(tb, town.unlocked ? town.name : $"{town.name}  [잠김]");
             string tid = town.id;         // foreach 캡처 방지
             TownEntry captured = town;    // 팝업용 전체 정보 캡처
             LongPressTrigger lp = tb.gameObject.AddComponent<LongPressTrigger>();
@@ -71,7 +71,7 @@ public class TownRoutePanel : MonoBehaviour
                 foreach (RouteEntry route in town.routes)
                 {
                     Button rb = Instantiate(routeButtonPrefab != null ? routeButtonPrefab : townButtonPrefab, listContainer);
-                    string via = route.viaCount > 0 ? $" · via {route.viaCount}" : " · direct";
+                    string via = route.viaCount > 0 ? $" · 경유 {route.viaCount}" : " · 직행";
                     SetLabel(rb, $"└ {route.name} ({route.distanceKm:0.#}km{via})");
                     string rTid = town.id; string rid = route.id; float dist = route.distanceKm;
                     rb.onClick.AddListener(() => OnRouteSelected?.Invoke(rTid, rid, dist));

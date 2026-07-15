@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Wagon_A
   m_EditorClassIdentifier: Assembly-CSharp::WagonData
   wagonId: t_wagonA
-  displayName: Wagon A
+  displayName: "\uB9C8\uCC28 A"
   icon: {fileID: 0}
   prefab: {fileID: 0}
   description: 

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Wagon_Cart
   m_EditorClassIdentifier: Assembly-CSharp::WagonData
   wagonId: t_mount
-  displayName: Cart
+  displayName: "\uC218\uB808"
   icon: {fileID: 0}
   prefab: {fileID: 0}
   description: 

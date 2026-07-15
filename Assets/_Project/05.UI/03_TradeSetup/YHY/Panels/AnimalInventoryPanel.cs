@@ -103,8 +103,8 @@ public class AnimalInventoryPanel : MonoBehaviour
                 // 마우스오버 툴팁 부착
                 AnimalTooltipTrigger trig = b.gameObject.AddComponent<AnimalTooltipTrigger>();
                 trig.Init(tooltip,
-                    $"{a.name}\nMove speed {a.moveSpeed:0.#}\nFeed/sec {a.feedConsumption:0.#}\n" +
-                    $"Load+ avg {a.incOverLoad:0.#} / max {a.incMaxLoad:0.#}");
+                    $"{a.name}\n이동속도 {a.moveSpeed:0.#}\n초당 먹이 {a.feedConsumption:0.#}\n" +
+                    $"적재+ 평균 {a.incOverLoad:0.#} / 최대 {a.incMaxLoad:0.#}");
                 invButtons.Add(b);
                 counts[a.id] = 0;
             }
@@ -254,10 +254,10 @@ public class AnimalInventoryPanel : MonoBehaviour
         if (wagonInfoText != null)
         {
             float curSpeed = wagonBaseSpeed + sumSpeed;
-            string state = IsValid() ? "OK" : (total < minReq ? "too few" : "too many");
+            string state = IsValid() ? "충족" : (total < minReq ? "부족" : "초과");
             wagonInfoText.text =
-                $"[{wagonName}]  animals {minReq}~{maxReq} · {total} · {state}\n" +
-                $"Move speed {curSpeed:0.#}  ·  Load+ avg {sumOver:0.#} / max {sumMax:0.#}";
+                $"[{wagonName}]  동물 {minReq}~{maxReq} · 현재 {total} · {state}\n" +
+                $"이동속도 {curSpeed:0.#}  ·  적재+ 평균 {sumOver:0.#} / 최대 {sumMax:0.#}";
         }
     }
 

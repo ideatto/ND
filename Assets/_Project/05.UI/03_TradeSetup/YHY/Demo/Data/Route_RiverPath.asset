@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Route_RiverPath
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
   routeId: r_b1
-  fromTown: {fileID: 11400000, guid: 16a23802f33d25546ad1607a21440693, type: 2}
-  toTown: {fileID: 11400000, guid: 75dd785947d27554f8fbd2e7f016d235, type: 2}
-  displayName: River Path
+  fromTown: {fileID: 11400000, guid: 75dd785947d27554f8fbd2e7f016d235, type: 2}
+  toTown: {fileID: 11400000, guid: 16a23802f33d25546ad1607a21440693, type: 2}
+  displayName: "\uAC15\uBCC0\uAE38"
   unlockedByDefault: 0
   distance: 20
   defaultElapsedTime: 0

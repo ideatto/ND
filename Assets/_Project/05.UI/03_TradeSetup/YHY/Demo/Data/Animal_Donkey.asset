@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Animal_Donkey
   m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
   draftAnimalId: an_donkey
-  displayName: Donkey
+  displayName: "\uB2F9\uB098\uADC0"
   icon: {fileID: 0}
   prefab: {fileID: 0}
   description: 

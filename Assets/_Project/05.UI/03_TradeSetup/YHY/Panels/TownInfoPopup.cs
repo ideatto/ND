@@ -45,10 +45,10 @@ public class TownInfoPopup : MonoBehaviour
     {
         EnsureWired();
         if (nameText != null) nameText.text = town.name;
-        if (descText != null) descText.text = string.IsNullOrEmpty(town.description) ? "(no description)" : town.description;
-        if (statusText != null) statusText.text = town.unlocked ? "Active" : "Locked";
+        if (descText != null) descText.text = string.IsNullOrEmpty(town.description) ? "(설명 없음)" : town.description;
+        if (statusText != null) statusText.text = town.unlocked ? "개방" : "잠김";
         if (contribText != null)
-            contribText.text = $"Contribution\n{town.contributionCurrent:0} / {town.contributionMax:0}";
+            contribText.text = $"기여도\n{town.contributionCurrent:0} / {town.contributionMax:0}";
         BuildSpecialties(town.specialties);
         gameObject.SetActive(true);
     }
