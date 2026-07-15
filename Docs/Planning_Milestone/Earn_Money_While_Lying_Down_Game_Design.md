@@ -1,1903 +1,631 @@
-# Earn Money While Lying Down
+# 누워서 돈벌기 — 게임 기획서
 
-## One-Line Overview
+## 문서 정보
 
-An idle trading management simulation set in a fantasy world, where trading cities are structured as nodes and the player operates multiple caravans while repeatedly trading goods, generating profit, and developing both the caravans and the hub city.
-
-## Genre
-
-Idle Game, Trading Management Simulation
-
-**Document updated:** 2026-07-09  
-**Update scope:** Caravan terminology; wagon slots and efficient-load rules; draft-animal efficiency; overload speed effects; road-event responses; in-game-time-based food consumption; first-build save stability and auto-save policy; second-build HMAC integrity protection
-
----
-
-## First Build Goals
-
-The first build is intended to verify whether the game's core trading loop and economic structure can provide genuine enjoyment and a tangible sense of progression.
-
-Rather than merely listing features, the goal is to complete a Vertical Slice in which players can understand the purpose of their next action and the results of their growth even during a short play session.
-
-### 1) Validate the Core Gameplay Loop
-
-The player must be able to repeatedly complete the following flow through actual gameplay.
-
-```text
-Prepare a caravan in the hub city
-→ Select a trading city and trade route
-→ Select trade goods, food, wagon, draft animals, and mercenaries
-→ Depart on a trade journey
-→ Encounter events based on distance and travel time
-→ Arrive at the destination city
-→ Settle profits and combat results
-→ Develop the player, caravan, and hub city
-→ Prepare for the next trade journey
-```
-
-#### Minimum Implementation Scope
-
-* 1 hub city
-* At least 3 trading cities
-* 1 operable caravan
-* Buying and selling trade goods
-* Loading food
-* Selecting a wagon and draft animals
-* Hiring mercenaries
-* Selecting a trade route
-* Travel time progression
-* Trade route events
-* Profit and loss settlement
-* Purchasing progression upgrades
-* Repeatable trade journeys
-
-#### Success Criteria
-
-* The player can complete one full cycle from trade preparation to settlement.
-* The available choices for the next trade journey change depending on the previous result.
-* The player can feel differences in speed, carrying capacity, profit, or risk before and after progression.
-* The player can confirm at least one progression result within a short play session of approximately 10 minutes.
+- **장르:** 방치형 무역 경영 시뮬레이션
+- **프로젝트 인원:** 5명
+- **문서 업데이트:** 2026-07-14
+- **1차 빌드 제출:** 2026-07-16 23:59
+- **문서 효력:** 본 문서는 `Docs/Planning_Milestone`의 **1차 빌드 공식 기획서**이다. 2026-07-14 Update 공지 기준으로 이전 원본 및 0713 축소안과의 차이를 대체한다. 초안 보관본: `Docs/Personal_Documents/CSU/0714_Idle_Trade_First_Build_Docs/`
+- **§1~8:** 축소된 1차 빌드 범위·통과 조건·핵심 규칙의 **확정본**이다.
+- **§9:** 2차 이후 **후보·탐색**이다. 1차 통과 조건·7/16 구현 대상이 아니며, 항목별 팀 합의 후에만 마일스톤에 올린다. §9.4(데이터 드리븐)는 확정 기획이 아니라 조사·소규모 시도 수준이다.
+- **이번 업데이트 목적:** 현재 구현 상태와 축소된 1차 빌드 범위를 기준으로 플레이 가능한 최소 Vertical Slice를 재정의한다. §9는 후속 후보를 공식 문서에 모아 두되 1차 범위와 혼동하지 않게 한다.
+- **일정 원칙:** 주말 및 공휴일에는 작업을 배정하지 않는다. 제출 전 작업일은 2026-07-14, 2026-07-15, 2026-07-16이며, 이 기간에는 UX 구현과 디버깅만 진행한다.
 
 ---
 
-### 2) Item Data and City-Specific Product Generation Structure
+# 1. 게임 개요
 
-Trade goods and city product lineups are managed through a data-driven structure, and each city's available products are refreshed at regular intervals.
+플레이어가 거점에서 Caravan을 준비하고, 무역품과 식량을 적재하여 다른 도시로 출발한 뒤, 시간 경과에 따라 무역을 완료하고 정산하는 방치형 무역 경영 시뮬레이션이다.
 
-#### Minimum `TradeItemSO` Data
-
-* Item ID
-* Item name
-* Base price
-* Rarity
-* Weight
-* Maximum generated quantity
-* Icon
-* Item description
-* Item category
-* Seasonal price modifier
-* Disaster price modifier
-
-#### City-Specific Product Generation Structure
-
-* General products are randomly selected from the complete trade goods list, while products appropriate to each city's characteristics and surrounding environment are assigned directly.
-* The quantity of each selected product is determined without exceeding that product's maximum generated quantity.
-* Each city's specialty products are managed in a separate list from general products.
-* Specialty products always appear in their associated city or have a high probability of appearing.
-* After a set period, the existing product list is cleared and generated again.
-* Product lineups must be restorable after reconnecting through the same random seed or saved data.
-
-#### Success Criteria
-
-* New items can be added without modifying code.
-* Each city generates a different product lineup.
-* The generation rules for specialty products and general products are separated.
-* The product refresh cycle functions correctly.
-* Product information remains consistent after saving and loading.
+장기적으로는 도시별 시장, 계절·재난, 로드 이벤트, 용병과 약탈, 성장, 기부, 투자, 대출, 여러 Caravan 운영을 포함한다. 다만 1차 빌드에서는 해당 전체 기획을 구현하지 않고, **준비 → 이동 → 정산 → 재출발**이 실제 UI에서 끊기지 않는지를 검증한다.
 
 ---
 
-### 3) Seasons, Disasters, and Market Price Fluctuation
+# 2. 현재 프로젝트 상태
 
-Seasons change as in-game time passes, and seasons and disasters affect product prices and trade results.
+## 2.1 백엔드·디버그 경로 검증 완료
 
-#### Minimum Implementation Scope
+다음 항목은 2026-07-14 기준 **Framework API·디버그/Smoke 경로**로 동작을 확인했다. 플레이어 Title/InGame 버튼 UX와는 구분한다.
 
-* In-game date and time
-* At least 2 seasons
+- Boot → Title → Loading → InGame → Title 씬 흐름
+- 새 게임·이어하기의 **백엔드 API** (저장 기반 Continue)
+- FrameworkRoot 중복 생성 방지
+- 무역 시작 시간·종료 예정 시간 기록
+- Traveling 상태 저장 및 재실행 후 진행률 복구
+- 오프라인 경과 시간 반영
+- 정산 대기 상태와 정산 결과의 재실행 후 복구
+- Claim 이후 재화 반영 및 중복 Claim 차단
+- 성공 정산 후 다음 무역 재출발
+- 실패 정산 후 Claim하고 다음 무역 재출발
+- 무역 루프 3회 연속 실행
+- 최대 적재량 초과 출발 차단
+- 최종 적정 적재량 초과·최대 적재량 이하의 과적 출발 허용
+- 서로 다른 견인 동물 혼합 출발 차단
+- 최소 견인 동물 수 미달 출발 차단
+- 인게임 시간 기준 식량 감소
+- 식량 부족 상태 지속 후 실패 정산 진입
+- 정산 수익·비용·순이익의 재화 반영
 
-  * Summer
-  * Winter
-* At least 2 disasters
+## 2.2 현재 진행 중 (플레이어 UX)
 
-  * Drought
-  * Flood
-* Seasonal product price modifiers
-* Disaster-based product price modifiers
-* City-specific inventory changes
-* Price changes caused by trends or rumors
-* Reduced selling prices caused by oversupply
+- 디버그 Context Menu가 아닌 플레이어용 Caravan 준비 UX
+- 도시·무역로·상품·식량·마차·견인 동물 선택 UI
+- 용병 고용 UI **단순 틀**(제출 루프 포함, 실기능·연결은 2차)
+- 플레이어용 출발 버튼과 출발 불가 사유 표시
+- Traveling 진행 화면
+- Settlement 결과 화면과 Claim UX
+- Title: SaveData 없을 때 Continue 비활성화, Reset SaveData 확인 창
+- 전체 화면 연결, 레이아웃, 텍스트, 해상도 대응
+- 최종 빌드 회귀 테스트와 Blocker 수정
 
-#### Example Profit Calculation
+## 2.3 확인된 결함 및 정리 대상
 
-```text
-Final Profit
-= Base Sales Margin
-× Distance Modifier
-× Seasonal Modifier
-× Disaster Modifier
-× City Event Modifier
-× Player Sales Markup
-× Oversupply Modifier
-- Food Cost
-- Mercenary Hiring Cost
-- Wagon Maintenance Loss
-```
-
-#### Success Criteria
-
-* The same product has different prices depending on the season and disaster state.
-* The cause of each price change can be checked through the UI.
-* Repeatedly selling only one product triggers an oversupply penalty.
-* Seasons and disasters affect actual decision-making rather than serving only as visual presentation.
-
----
-
-### 4) Distance-Based Trade Routes and Event System
-
-Longer trade routes provide more possible events and greater rewards.
-
-#### Minimum Implementation Scope
-
-* Distance data between cities
-* Base travel time for each trade route
-* Target event counts for each distance range
-* 2 city events
-* 2 trade route events
-* Trade route risk level
-* Distance modifiers applied to trade completion rewards
-
-#### Example Distance-Based Event Rules
-
-```text
-Short Route: 0–1 events
-Medium Route: 1–2 events
-Long Route: 2–4 events
-```
-
-#### Success Criteria
-
-* Longer trade routes provide more event opportunities and greater risk.
-* Increased rewards for longer distances are balanced against the possibility of loss.
-* The player can choose between a safe short route and a dangerous long route.
+1. **Title Continue / Reset:** 제출용 제품 UX는 SaveData가 없으면 Continue를 비활성화하고, Reset SaveData는 확인 창으로 한 번 더 묻는다. 현재 빌드의 일부 Continue 동작은 **백엔드·디버그 검증용**이며, 제출 전 제품 UX로 맞춰야 한다.
+2. 식량 부족으로 발생한 무역 실패가 정산에서 `WagonBroken`으로 표시될 가능성이 높다.
+3. Traveling 중 내구도 0 실패는 **전투 이벤트 실패로 인한 내구도 감소**에서 발생할 수 있다. 해당 전투 이벤트는 아직 미구현이다. 일반 거리 마모만으로 1차 무역을 `WagonBroken` 실패 처리하지 않도록 정리한다.
+4. `DraftAnimalData`의 최대 적재량 증가 값이 무시된다는 경고가 반복된다. 견인 동물은 최대 적재량이 아니라 최종 적정 적재량만 증가시켜야 한다.
+5. 디버그 테스트용 Trade ID가 반복 사용된다. 1차 빌드 플레이 흐름에서는 런타임 무역 단위를 안전하게 식별해야 한다.
+6. 플레이어 UX가 완성되기 전까지 핵심 기능은 디버그 도구를 통해서만 조작 가능하다.
 
 ---
 
-### 5) Trading City Donation System
+# 3. 축소된 1차 빌드 목표
 
-The player can donate funds to individual trading cities, and accumulated donations change the state of the city and its trade routes.
+## 3.1 한 줄 목표
 
-#### Minimum Scope for the First Build
+플레이어가 별도의 개발자 도구 없이 다음 흐름을 한 번 이상 완료하고, 저장 후 재실행해 같은 상태를 이어갈 수 있는 빌드를 제출한다.
 
-* Accumulated donations for each city
-* Limits on available donation amounts
-* Donation increases and decreases
-* 1 positive city event based on donations
-* 1 negative city event based on donations
-* 1 positive trade route event based on donations
-* 1 negative trade route event based on donations
-* 1 hidden trade good unlocked by a donation condition
-* Display of city-specific contribution or development level
+```text
+새 게임 또는 이어하기
+→ Caravan 준비
+→ 무역 출발
+→ 이동 진행
+→ 성공 또는 실패 정산
+→ Claim
+→ 다음 무역 준비
+```
 
-#### Success Criteria
+## 3.2 1차 빌드 포함 범위
 
-* Changes to a city or trade route are clearly visible before and after a donation.
-* Donations are connected to profit, risk reduction, or product unlocks rather than functioning only as a currency sink.
-* Choosing not to donate remains a strategically valid option.
-* Donation results are explained through the UI, logs, or city presentation.
+### 씬과 시작 흐름
+
+- Boot, Title, Loading, InGame
+- 새 게임
+- SaveData가 있을 때만 Continue 활성·정상 이어하기
+- SaveData가 없을 때 Continue 비활성
+- Reset SaveData 시 확인 창으로 한 번 확인
+- InGame에서 Title 복귀
+- 화면 전환 중복 입력 방지
+
+### Caravan 준비
+
+- 운영 가능한 Caravan 1개
+- 시연 가능한 도시·무역로 최소 1세트
+- 무역품과 식량 적재
+- 마차 선택
+- 견인 동물 종류와 수 선택
+- 용병 고용 UI **단순화된 틀**(화면·흐름만 제출 루프에 포함)
+- 현재 적재량 및 적재 한도 표시
+- 출발 가능 여부와 차단 사유 표시
+
+기존에 제작된 추가 도시·상품·마차·동물 데이터는 사용할 수 있으나, 1차 빌드 통과 조건을 콘텐츠 수량 확대로 잡지 않는다.
+
+### 출발 검증
+
+- 필수 구성 누락 차단
+- 슬롯 또는 중첩 한도 검증
+- 최대 적재량 초과 차단
+- 최종 적정 적재량 초과·최대 적재량 이하 과적 허용
+- 과적 상태 및 속도 영향 반영
+- 한 Caravan에 서로 다른 견인 동물 종류 혼합 차단
+- 마차의 최소 견인 동물 수 미달 차단
+
+### 이동과 식량
+
+- 무역 시작 시간과 종료 예정 시간 기록
+- 인게임 시간 기준 진행률
+- 인게임 시간 기준 식량 소모
+- 식량 부족 시 속도 저하 로직을 **구현하되**, 제출 빌드에서 적용 여부는 **설정(플래그)으로 선택** 가능해야 한다. QA 결과에 따라 On/Off를 결정한다.
+- 식량 부족 상태가 허용 시간 이상 지속되면 실패
+- 온라인과 오프라인에 같은 시간 변환 정책 적용
+- 재실행 후 Traveling 상태와 진행률 복구
+
+### 정산과 반복
+
+- 성공 또는 실패 결과 생성
+- 구매 비용, 판매 수익, 총비용, 순이익 표시
+- 실패 원인 표시
+- Claim 시 재화 반영
+- 동일 정산 중복 Claim 방지
+- 정산 대기 중 종료해도 결과 복구
+- Claim 후 Preparation 복귀
+- 성공과 실패 이후 모두 다음 무역 가능
+
+### 저장
+
+- 새 게임 기본 데이터
+- JSON 저장과 불러오기
+- 무역 출발·진행·정산 대기·Claim 결과 저장
+- 오프라인 진행 복구
+- 저장된 Caravan 원본 구성 복구
+- 파생값은 복구 후 재계산
+
+고급 원자적 저장, 다중 복구 후보, HMAC·암호화는 1차 빌드 제출의 통과 조건으로 사용하지 않는다. 이미 구현된 부분은 유지하되, 제출 전 신규 확장 작업은 하지 않는다.
+
+### 최소 UX
+
+- 플레이어가 디버그 Context Menu 없이 무역을 준비하고 출발할 수 있다.
+- Preparation, Traveling, Settlement 상태를 구분할 수 있다.
+- 잘못된 구성의 이유를 화면에서 확인할 수 있다.
+- 정산 결과와 Claim 가능 여부를 화면에서 확인할 수 있다.
+- 필수 버튼이 목표 해상도에서 정상 작동한다.
 
 ---
 
-### 6) Raid Events and Mercenary System
+# 4. 1차 빌드 제외 범위
 
-Raid event outcomes are determined using the combat power ratio between mercenaries and monsters.
+다음 기능은 기획에서 삭제하지 않고 2차 빌드 이후로 이관한다.
 
-#### Minimum Implementation Scope
+- 플레이어·Caravan 성장 구매와 성장 효과
+- 발전용 재화
+- 견인 동물 성장과 등급
+- 기부와 도시 기여도
+- 투자와 신규 지역 해금
+- 파산과 대출
+- 튜토리얼과 마스코트 안내
+- 계절과 재난
+- 도시별 상품 자동 갱신과 랜덤 시드 복원
+- 과공급과 유행·소문
+- 로드 이벤트의 전체 발생·선택·정산 시스템
+- 용병 고용의 **실기능·전투/약탈 연결**(1차는 고용 UI 틀만)
+- 약탈 전투 및 전투 실패에 따른 상품·마차·용병 손실
+- 여러 Caravan 동시 운영
+- 자동 재출발과 고급 추천 UX
+- 도시 외형 성장과 장기 메타 연출
+- 저장 데이터 암호화와 HMAC
 
-* Mercenary combat power stat
-* Monster combat power stat
-* Mercenary hiring cost
-* Number of mercenary contract uses
-* Defense success probability based on combat power ratio
-* Loss of trade goods when combat fails
-* Reduced wagon durability when combat fails
-* Reduced remaining mercenary contract uses
-* Possibility of losing a mercenary after combat failure
-* Combat result settlement UI
-
-#### Example Combat Resolution
-
-```text
-Defense Ratio = Mercenary Combat Power / Monster Combat Power
-```
-
-* When mercenary combat power is higher than monster combat power, the probability of successful defense increases.
-* When mercenary combat power is insufficient, the player may lose trade goods, wagon durability, or the mercenary.
-* Combat results display the reasons for success or failure.
-
-#### Success Criteria
-
-* Whether mercenaries are hired and their grade affect raid outcomes.
-* The player can compare mercenary costs against expected losses.
-* Combat failure does not immediately end the game and instead causes recoverable losses.
+성장 계산기·지갑 API 등 **이미 코드에 있는 기능**도, 1차 통과 조건·플레이어 UX에서 쓰지 않으면 실패로 보지 않는다. 제외 범위가 미구현이거나 제출 경로에서 비활성인 것은 1차 빌드 실패로 판정하지 않는다.
 
 ---
 
-### 7) Food and Trade Failure System
+# 5. 핵심 규칙
 
-Food is a core Caravan resource. Consumption is based on elapsed **in-game time**, not deducted only from route distance at departure.
+## 5.1 Caravan
 
-#### Minimum Implementation Scope
+Caravan은 다음 원본 상태를 가진 무역 운영 단위다.
 
-* Estimated food consumption based on expected in-game travel time
-* Food consumption based on Caravan composition
-* Per-unit-time food consumption for draft animals and other Caravan members
-* Loaded food quantity
-* Food shortage warning
-* Reduced movement speed during food shortages
-* Trade failure when food remains insufficient for a specified duration
-* Rechecking travel conditions when draft animals are lost in combat
-* Reduced speed or trade failure when the wagon lacks the minimum required number of draft animals
-* Recalculation of expected food consumption when overload or road events change travel time
-* Application of the same in-game-time conversion rule to offline progress
+- 마차
+- 견인 동물
+- 무역품
+- 식량
+- 현재 무역 진행 상태
 
-#### Food Consumption Rule
+용병 **고용 UI 틀**은 1차 제출 루프에 포함한다. 고용 수치·전투·약탈 등 **실기능과 UI 연결은 2차 빌드**에서 진행한다.
+
+## 5.2 적재량
 
 ```text
-Food Consumed
-= Elapsed In-Game Time
-× Food Consumption Per In-Game-Time Unit
-× Caravan Composition Modifier
-× Active Event Modifier
-```
-
-When real elapsed time is converted by an in-game time multiplier:
-
-```text
-Elapsed In-Game Time
-= Real Elapsed Time × In-Game Time Multiplier
-```
-
-Food is consumed using the converted in-game time. When in-game time is paused, food consumption also pauses. Offline elapsed real time is converted through the same policy before food consumption is calculated.
-
-#### Trade Failure Flow
-
-```text
-Normal Travel
-→ Food Shortage or Insufficient Draft Animals
-→ Reduced Movement Speed
-→ Problem Is Not Resolved Within the Time Limit
-→ Trade Failure
-→ Settle Losses and Return to the Hub City
-```
-
-#### Success Criteria
-
-* The estimated food requirement can be checked before departure.
-* Loading too little food creates meaningful risk.
-* Loading too much food reduces the cargo space available for trade goods.
-* Overload and road-event delays can increase actual food consumption.
-* Online and offline progress apply the same in-game-time food-consumption rule.
-* Food selection functions as a clear risk-versus-reward decision.
-
-### 8) Caravan, Wagon, Draft Animal, Load, and Road-Event Systems
-
-#### 8.1 Terminology
-
-The former term for the trading unit is standardized as **Caravan**.
-
-A Caravan is the operational unit that performs a trade journey and contains:
-
-* Wagon
-* Draft animals
-* Loaded trade goods
-* Food
-* Mercenaries
-* Current trade-progression state
-
-A wagon is equipment assigned to a Caravan. It determines item-slot capacity, base efficient load, maximum load, durability, minimum required draft animals, and road-event response traits.
-
-Draft animals affect Caravan movement speed, efficient-load capacity, and food consumption.
-
-#### 8.2 Wagon Data
-
-Each wagon contains the following data.
-
-##### Existing Data
-
-* Wagon ID
-* Maximum durability
-* Current durability
-* Maximum load
-* Minimum required draft-animal count
-
-`Maximum durability` belongs to wagon definition data. `Current durability` is runtime/save state for the owned wagon instance.
-
-##### Added Data
-
-* Maximum item-slot count
-* Stackable flag for each slot definition
-* Maximum stack quantity for each slot definition
-* Base efficient load
-* Road-event response ID or tag list
-* Positive road-event effect modifier
-
-| Data | Description |
-|---|---|
-| Maximum item-slot count | Maximum number of occupied item slots available in the wagon |
-| Stackable flag | Whether identical items may share the applicable slot |
-| Maximum stack quantity | Maximum quantity of the same item in one applicable slot |
-| Base efficient load | Load supported without a movement-efficiency penalty before draft-animal bonuses |
-| Maximum load | Physical upper limit of total loaded weight |
-| Road-event response list | Road-event IDs or tags whose effects the wagon can negate or enhance |
-| Positive-event modifier | Modifier applied when a supported positive road event occurs |
-
-```text
-0 ≤ Wagon Base Efficient Load ≤ Wagon Maximum Load
-```
-
-#### 8.3 Draft Animal Data
-
-##### Confirmed Data
-
-* Draft animal ID
-* Base movement speed
-* Food consumption
-* Additional efficient load
-* Purchase price
-
-##### Unconfirmed Data
-
-The following are not confirmed fields and are excluded from the first-build data contract:
-
-* Draft-animal progression information
-* Draft-animal grade
-* Stats by progression stage
-* Movement-speed differences by grade
-* Additional-efficient-load differences by grade
-* Purchase-price changes caused by progression or grade
-
-These features may be reviewed after the progression and content-expansion direction is confirmed.
-
-#### 8.4 Additional Efficient Load
-
-**Additional Efficient Load** is the amount by which one draft animal raises the Caravan's efficient-load threshold.
-
-It does not increase the wagon's physical maximum load. It only increases the load at which the Caravan begins to receive an overload movement penalty.
-
-```text
-Design Name: Additional Efficient Load
-Code Example: additionalEfficientLoad
-```
-
-```text
-Total Additional Efficient Load
-= Additional Efficient Load Per Draft Animal
-× Assigned Draft-Animal Count
-```
-
-```text
-Final Efficient Load
+최종 적정 적재량
 = Min(
-    Wagon Base Efficient Load
-    + Total Additional Efficient Load,
-    Wagon Maximum Load
+    마차 기본 적정 적재량
+    + 견인 동물 1마리당 추가 효율 적재량 × 배치 수,
+    마차 최대 적재량
 )
 ```
 
-`Final Efficient Load` is derived from the current wagon and draft-animal assignment. It is recalculated at runtime rather than stored as independent base data.
+견인 동물은 마차의 물리적 최대 적재량을 증가시키지 않는다.
 
-A future progression modifier may be added only after the related progression system is confirmed:
-
-```text
-Final Efficient Load
-= Min(
-    Wagon Base Efficient Load
-    + Total Draft-Animal Additional Efficient Load
-    + Confirmed Progression Efficient-Load Bonus,
-    Wagon Maximum Load
-)
-```
-
-#### 8.5 Item-Slot Rules
-
-Loading trade goods or food must satisfy all of the following conditions:
-
-```text
-Occupied Item Slots ≤ Maximum Item-Slot Count
-```
-
-```text
-Quantity in One Slot ≤ Maximum Stack Quantity for That Slot
-```
-
-```text
-Total Loaded Weight ≤ Wagon Maximum Load
-```
-
-A non-stackable item consumes one slot per item. A stackable item shares a slot up to the applicable maximum stack quantity; excess quantity consumes additional slots.
-
-```text
-Maximum Stack Quantity: 10
-Loaded Quantity: 24
-Required Slots = Ceil(24 / 10) = 3
-```
-
-#### 8.6 Load States
-
-| Load State | Condition | Result |
+| 상태 | 조건 | 결과 |
 |---|---|---|
-| Efficient load | Current load is at or below final efficient load | No movement-speed penalty |
-| Overloaded | Current load exceeds final efficient load but does not exceed maximum load | Movement speed decreases according to overload ratio |
-| Invalid load | Current load exceeds maximum load | Departure is blocked |
+| 적정 적재 | 현재 적재량 ≤ 최종 적정 적재량 | 속도 패널티 없음 |
+| 과적 | 최종 적정 적재량 < 현재 적재량 ≤ 최대 적재량 | 출발 가능, 속도 감소 |
+| 적재 불가 | 현재 적재량 > 최대 적재량 | 출발 차단 |
+
+## 5.3 견인 동물
+
+- 한 Caravan에는 한 종류만 배치한다.
+- 마차의 최소 필요 수를 충족해야 한다.
+- 이동속도, 추가 효율 적재량, 식량 소모에 영향을 준다.
+- 견인 동물의 성장·등급은 1차 빌드에서 사용하지 않는다.
+
+## 5.4 식량 부족
 
 ```text
-Current Load ≤ Final Efficient Load
-→ Efficient Load
-→ No Movement Penalty
+정상 이동
+→ 식량 0
+→ 식량 부족 상태
+→ (옵션 On일 때) 이동속도 감소
+→ 허용 시간 내 해결되지 않음
+→ 무역 실패
+→ 실패 정산
 ```
+
+식량이 0이 되는 순간 즉시 실패하지 않는다. 실패 결과에는 식량 부족을 나타내는 별도 원인이 기록되어야 하며, 일반 실패를 `WagonBroken`으로 일괄 표시하지 않는다.
+
+**식량 부족 시 이동속도 감소**는 Core에 구현한다. 다만 1차 제출에서 실제로 적용할지는 **런타임/설정 플래그로 On·Off** 할 수 있어야 하며, QA 후 팀 결정으로 켠다. 유예 후 실패 자체는 1차 통과 조건에 포함한다.
+
+## 5.5 마차 내구도
+
+축소된 1차 빌드에서 마차 내구도는 **일반 거리 마모만으로 Traveling 실패를 만들지 않는다.**
+
+- 정상 무역 성공 시 정해진 양을 감소시키는 방향은 유지할 수 있다.
+- Traveling 중 내구도 0이 되어 `WagonBroken` 실패로 이어지는 경우는, **아직 미구현인 전투 이벤트 실패로 내구도가 깎일 때**를 전제로 한다.
+- 1차에서는 전투 이벤트가 없으므로, 식량 실패 등이 `WagonBroken`으로 오인·덮어쓰이지 않게 원인 분리한다.
+- 내구도 0 마차의 출발 제한 등은 후속 정책으로 확정한다.
+
+## 5.6 경제 정산
 
 ```text
-Final Efficient Load < Current Load ≤ Maximum Load
-→ Overloaded
-→ Movement Penalty Based on Overload Ratio
+순이익 = 판매 수익 - 구매 비용 - 적용된 기타 비용
 ```
+
+정산 화면은 최소한 다음 값을 표시한다.
+
+- 판매 수익
+- 총비용
+- 순이익
+- 성공 또는 실패
+- 실패 원인
+
+성장, 계절, 재난, 기부, 투자, 대출 보정은 축소된 1차 빌드 **제출 경로·통과 공식**에 포함하지 않는다. 성장 관련 코드(`GrowthCalculator`, `ApplyGrowthPurchase` 등)가 저장소에 있어도, 1차 플레이어 루프와 기본 정산에 섞이지 않게 동결·우회한다.
+
+## 5.7 씬 소유권 (SceneOwners)
+
+기본은 **기존 담당 소유권**으로 진행한다. `InGame=UI / Title=Framework` 분담은 1차 제출을 위한 **일시적 비상책**이었다.
+
+- 평상시: 기존 SceneOwners 규칙을 따른다.
+- 일정·충돌이 있을 때만 **협의 후 일시적으로** 씬 소유권자를 바꿀 수 있다.
+- 같은 씬을 두 명이 동시에 수정하지 않는다.
+
+---
+
+# 6. 1차 빌드 통과 조건
+
+## 플레이 흐름
+
+- 새 게임에서 플레이어용 UI로 무역을 시작할 수 있다.
+- SaveData가 있을 때 Continue로 이어하기가 가능하다.
+- SaveData가 없을 때 Continue가 비활성이다.
+- Reset SaveData는 확인 창을 거친다.
+- Preparation → (용병 고용 UI 틀 포함 가능) → Traveling → Settlement → Preparation을 완료한다.
+- 성공 후 재출발할 수 있다.
+- 실패 후 Claim하고 재출발할 수 있다.
+
+## 데이터와 계산
+
+- 적재·과적·견인 동물 검증 결과가 실제 출발 가능 여부와 일치한다.
+- 식량이 인게임 경과 시간에 따라 감소한다.
+- 식량 부족 유예 후 실패가 발생한다.
+- 식량 부족 속도 저하 로직은 구현되어 있고, 제출 적용 On/Off는 QA·팀 결정으로 선택한다.
+- 실패 원인이 실제 원인과 일치한다. 식량 실패가 `WagonBroken`으로 표시되지 않는다.
+- 정산의 수익·비용·순이익과 재화 변화가 일치한다.
+- 1차 제출 경로 정산에 성장·메타 보정이 섞이지 않는다.
+
+## 저장과 복구
+
+- Traveling 상태에서 종료 후 진행률이 복구된다.
+- SettlementPending 상태에서 종료 후 같은 정산이 복구된다.
+- Claim한 정산이 재실행 후 다시 나타나지 않는다.
+- 동일 정산이 두 번 지급되지 않는다.
+
+## 품질
+
+- 무역 루프를 3회 연속 실행한다.
+- Console Error가 없다.
+- 플레이를 막는 Warning이 없다.
+- 핵심 버튼이 중복 실행되지 않는다.
+- 목표 해상도에서 필수 UI가 잘리거나 겹치지 않는다.
+
+---
+
+# 7. 제출 전 작업 정책
+
+## 2026-07-14
+
+- 기존 런타임 기능을 플레이어 UX에 연결한다.
+- 공용 API와 계산식을 동결한다.
+- 현재 확인된 결함을 재현 가능한 상태로 정리한다.
+
+## 2026-07-15
+
+- 전체 루프를 UI에서 통합 테스트한다.
+- 저장·오프라인·성공·실패·정산 회귀 테스트를 진행한다.
+- Blocker와 Critical 결함을 수정한다.
+
+## 2026-07-16
+
+- 신규 기능을 추가하지 않는다.
+- RC 빌드 생성, 독립 실행 테스트, 최종 결함 수정만 진행한다.
+- 제출 빌드와 소스 커밋을 확정하고 23:59까지 제출한다.
+
+주말 또는 공휴일에 작업을 이월하지 않는다. 제출 범위를 벗어난 작업은 2차 빌드의 다음 평일 마일스톤으로 다시 계획한다.
+
+---
+
+# 8. 2차 빌드 이후 유지할 장기 기획
+
+축소로 인해 제외된 시스템은 다음 순서로 재검토한다.
+
+1. 플레이어·Caravan 성장 UX와 발전용 재화 (코드 기반 확장)
+2. 정산 원인 표시 강화와 가격 보정 상세화
+3. 계절·재난과 도시별 시장 변화
+4. 로드 이벤트와 마차 대응 특성
+5. 용병 고용 실기능·UI 연결 및 약탈 전투
+6. 기부·투자·대출
+7. 튜토리얼과 반복 플레이 저피로도 UX
+8. 여러 Caravan과 장기 운영
+9. 고급 저장 복구, HMAC 및 데이터 보호
+
+각 후속 기능은 현재 1차 빌드의 데이터 계약과 반복 가능한 무역 루프를 깨지 않는 방식으로 추가한다.
+
+상세 후보 초안은 **§9. 추가 기획안**을 참고한다. §9는 위 목록의 우선순위나 1차 통과 조건을 바꾸지 않는다.
+
+---
+
+# 9. 추가 기획안 (2차 이후 후보 · 1차 통과조건 아님)
+
+## 9.0 공통 적용 정책
+
+본 장은 **확정된 1차 기획이 아니다.** §9.1~9.3은 2차 빌드 이후 검토할 **설계 후보**이고, §9.4는 **조사·소규모 시도** 수준의 탐색 항목이다. 항목별 범위·담당·완료 기준은 팀 합의 후에만 마일스톤에 올린다.
+
+추가 기획안은 1차 빌드 범위에 포함하지 않는다. 1차 빌드 제출 전에는 신규 구현하지 않으며, 2차 빌드 기간과 최종 제출 준비 기간에 우선순위를 정해 단계적으로 검토·구현한다. 현재 1차 빌드 기간에는 기존 확정 범위(§1~8)의 UX 연결, 통합 및 디버깅만 수행한다.
+
+따라서 이 장에 포함된 기능은 2026-07-16 23:59까지의 구현 대상이나 1차 빌드 통과 조건으로 사용하지 않는다. 1차 빌드 기간에는 향후 기능을 위한 신규 API, 저장 필드, 데이터 정책, UI 패널 또는 콘텐츠 제작을 추가하지 않는다. 단, 이미 구현된 공용 인터페이스와 데이터 연결 구조에서 발생하는 오류 수정 및 기존 UX 연결 작업은 현재 확정 범위의 안정화 작업으로 처리한다.
+
+| 절 | 성격 | 비고 |
+|---|---|---|
+| 9.1 마차 수리 | 2차 이후 설계 후보 | 팀 합의 전 착수 금지 |
+| 9.2 중도 포기·실패 전소실 | 2차 이후 설계 후보 | 패널티가 강하므로 **별도 합의 필수** |
+| 9.3 준비 취소 | 2차 이후 설계 후보 | 1차 Preparation UX와 혼동하지 않음 |
+| 9.4 데이터 드리븐 | 조사·스파이크 | **확정 기획 아님**. 전면 전환은 본 문서만으로 확정하지 않음 |
+
+## 9.1 마차 내구도 수리 및 수리 비용 시스템
+
+**지위:** 2차 이후 설계 후보 (1차 통과조건 아님)
+
+### 목적
+
+마차의 내구도를 단순한 소모 수치가 아니라 지속적인 운영 비용을 발생시키는 관리 요소로 활용한다.
+
+고성능 또는 높은 레어리티의 마차는 무역 효율이 높은 대신 수리 비용도 증가하도록 설계하여, 상위 마차 사용에 경제적 리스크와 유지 비용을 부여한다.
+
+### 기본 규칙
+
+- 마차는 무역 또는 이벤트의 결과로 내구도가 감소할 수 있다.
+- 감소한 내구도는 수리 기능을 통해 회복할 수 있다.
+- 수리 비용은 실제로 회복하는 내구도 수치에 비례하여 계산한다.
+- 마차의 레어리티가 높을수록 내구도 1당 수리 비용에 더 높은 배율을 적용한다.
+- 마차의 현재 내구도가 최대 내구도와 같으면 수리할 수 없다.
+- 플레이어의 보유 재화가 수리 비용보다 부족한 경우 수리를 실행할 수 없다.
+
+### 수리 비용 계산 기준
+
+수리 비용은 다음 요소를 기준으로 계산한다.
+
+- 수리할 내구도 수치
+- 내구도 1당 기본 수리 비용
+- 마차 레어리티별 수리 비용 배율
+
+권장 계산식은 다음과 같다.
 
 ```text
-Current Load > Maximum Load
-→ Invalid Load
-→ Departure Blocked
+최종 수리 비용
+= 수리 내구도 × 내구도당 기본 수리 비용 × 레어리티 수리 비용 배율
 ```
 
-Additional efficient load expands the efficient-load range but never increases maximum load.
+### 필요한 데이터 예시
 
-#### 8.7 Overload Ratio
+마차 데이터 또는 별도의 수리 비용 정책 데이터에 다음 항목을 정의한다.
 
-```text
-Overload Weight
-= Current Load - Final Efficient Load
+- 최대 내구도
+- 현재 내구도
+- 내구도 1당 기본 수리 비용
+- 마차 레어리티
+- 레어리티별 수리 비용 배율
+
+레어리티별 수리 비용 배율은 개별 마차 데이터에 직접 입력하기보다 공통 정책 데이터에서 관리하는 방식을 우선 검토한다.
+
+### 적용 시점
+
+이 기능은 1차 빌드 범위에 포함하지 않으며, 1차 빌드 제출 전에는 신규 구현하지 않는다. 마차 수리 기능, 수리 비용 공식, 레어리티별 비용 정책 및 관련 UI는 팀 합의 후 2차 빌드 기간과 최종 제출 준비 기간에 우선순위를 정해 단계적으로 구현한다. 현재 1차 빌드 기간에는 기존 마차 내구도 데이터와 확정된 무역 루프의 UX 연결 및 오류 수정만 수행한다.
+
+---
+
+## 9.2 무역 중도 포기 및 무역 실패 패널티
+
+**지위:** 2차 이후 설계 후보 (1차 통과조건 아님). 전자산 소실 규칙이므로 **팀 별도 합의 없이 기정사실로 취급하지 않는다.**
+
+### 목적
+
+무역 출발 이후의 의사 결정에 위험성을 부여하고, 무리한 무역 출발이나 준비 부족으로 인한 실패에 명확한 손실을 발생시킨다.
+
+### 적용 조건
+
+다음 상황에서 무역 실패 패널티를 적용한다.
+
+- 플레이어가 진행 중인 무역을 중도 포기한 경우
+- 무역 진행 중 실패 조건이 충족된 경우
+- 무역 결과가 최종적으로 실패로 확정된 경우
+
+### 패널티 규칙 (후보)
+
+무역 중도 포기 또는 실패 시 해당 무역에 투입된 Caravan 구성 요소를 모두 소실하는 방안을 후보로 둔다.
+
+소실 대상 후보는 다음과 같다.
+
+- 사용 중인 마차
+- 배정된 견인 동물
+- 적재된 무역품
+- 고용된 용병
+- 적재된 식량
+
+패널티는 해당 무역에 실제로 배정된 자산에만 적용하며, 보관소나 다른 Caravan에 속한 자산에는 영향을 주지 않는 방향을 검토한다.
+
+### 처리 시점
+
+자산 소실은 무역 실패 또는 중도 포기가 확정되는 시점에 한 번만 처리해야 한다.
+
+중복 호출이나 저장 데이터 복구 과정에서 동일한 자산이 여러 번 차감되지 않도록 다음 정보의 기록을 검토한다.
+
+- 무역 ID
+- 실패 또는 포기 사유
+- 패널티 처리 여부
+- 소실된 자산 목록
+- 패널티 처리 시각
+
+### UI 요구사항
+
+무역 중도 포기 버튼을 실행하기 전 다음 내용을 포함한 확인 안내를 표시한다.
+
+- 중도 포기 시 복구할 수 없다는 점
+- 소실되는 마차, 견인 동물, 무역품, 용병, 식량 목록
+- 최종 확인 및 취소 버튼
+
+### 적용 시점
+
+중도 포기 기능과 전체 자산 소실 패널티는 1차 빌드 범위에 포함하지 않으며, 1차 빌드 제출 전에는 신규 구현하거나 관련 저장 필드와 데이터 계약을 확장하지 않는다. 중도 포기 API, 자산 소실 처리, 중복 패널티 방지 기록 및 확인 UI는 팀 합의 후 2차 빌드 기간과 최종 제출 준비 기간에 우선순위를 정해 단계적으로 구현한다. 현재 1차 빌드 기간에는 기존 실패 정산, Claim, 저장 복구 흐름의 UX 연결과 디버깅만 수행한다.
+
+---
+
+## 9.3 무역 출발 전 준비 취소 기능
+
+**지위:** 2차 이후 설계 후보 (1차 통과조건 아님). 1차 Preparation의 선택·출발 UX와 혼동하지 않는다.
+
+### 목적
+
+플레이어가 무역 준비 과정에서 마차, 견인 동물, 무역품, 식량 및 용병을 배정한 이후에도 실제 출발 전이라면 준비 상태를 안전하게 초기화할 수 있도록 한다.
+
+### 적용 범위
+
+무역 준비 취소는 실제 무역 출발이 확정되기 전까지만 사용할 수 있다.
+
+다음과 같은 준비 정보가 존재하는 상태를 대상으로 한다.
+
+- 선택한 무역로
+- 선택한 마차
+- 배정한 견인 동물
+- 적재한 무역품
+- 적재한 식량
+- 고용하거나 배정한 용병
+
+### 기능 규칙
+
+- 무역 준비 화면에 `무역 출발 취소` 또는 `준비 초기화` 버튼을 제공한다.
+- 버튼을 누르면 일반 UI 값만 초기화하지 않고 무역 준비 취소 전용 API를 호출한다.
+- 전용 API는 준비 중인 무역 데이터를 일괄 초기화한다.
+- 실제 인벤토리 또는 보유 자산에서 아직 확정 차감되지 않은 항목은 원래 상태로 복구한다.
+- 임시로 예약된 마차, 견인 동물, 무역품, 식량 및 용병의 할당 상태를 해제한다.
+- 초기화가 완료되면 무역 준비 화면의 기본 상태로 복귀한다.
+
+### API 분리 원칙
+
+무역 준비 취소는 무역 중도 포기와 별개의 기능으로 처리한다.
+
+- 준비 취소: 출발 전 임시 선택과 할당을 초기화
+- 중도 포기: 출발 후 진행 중인 무역을 종료하고 실패 패널티 적용
+- 무역 실패: 게임 규칙에 따라 무역이 실패하고 실패 패널티 적용
+
+각 기능은 서로 다른 API 또는 명확히 구분되는 처리 경로를 사용해야 한다.
+
+### 권장 API 예시
+
+```csharp
+bool TryCancelTradePreparation();
 ```
 
-```text
-Overload Range
-= Maximum Load - Final Efficient Load
-```
+반환값은 다음 의미를 가진다.
 
-```text
-Overload Ratio
-= Overload Weight / Overload Range
-```
+- `true`: 준비 데이터 초기화 및 자산 할당 해제 성공
+- `false`: 현재 상태에서 취소할 수 없거나 초기화 처리 실패
 
-```text
-0 ≤ Overload Ratio ≤ 1
-```
+필요한 경우 실패 원인을 별도의 결과 객체나 오류 코드로 반환하는 방식을 검토한다.
 
-Example:
+### 적용 시점
 
-```text
-Final Efficient Load: 140
-Maximum Load: 200
-Current Load: 170
-
-Overload Weight = 30
-Overload Range = 60
-Overload Ratio = 0.5
-```
-
-When `Final Efficient Load` equals `Maximum Load`, no valid overload interval exists. In that case, load at or below maximum load has an overload ratio of `0`, while load above maximum load is invalid.
-
-The exact speed-penalty curve and minimum movement speed are defined by Progression & System.
-
-#### 8.8 Caravan Movement Speed
-
-Caravan movement speed is affected by:
-
-* Draft-animal base movement speed
-* Assigned draft-animal count
-* Wagon minimum required draft-animal count
-* Whether current load exceeds final efficient load
-* Overload ratio
-* Active road events
-* Confirmed progression and upgrade effects
-
-```text
-Final Movement Speed
-= Draft-Animal Base Movement Speed
-× Draft-Animal Count Modifier
-× Load Modifier
-× Road-Event Modifier
-× Confirmed Progression Modifier
-```
-
-```text
-Current Load ≤ Final Efficient Load
-→ Load Modifier = 1
-```
-
-```text
-Current Load > Final Efficient Load
-→ Load Modifier Decreases According to Overload Ratio
-```
-
-If the assigned draft-animal count is below the wagon's minimum requirement, apply a movement-speed penalty or trade-failure rule.
-
-#### 8.9 Draft-Animal Assignment Rules
-
-One Caravan may use only one draft-animal type at a time.
-
-```text
-Allowed
-- 2 horses
-- 3 oxen
-
-Not Allowed
-- 1 horse + 1 ox
-```
-
-Multiple animals of the same type add their additional-efficient-load values by count.
-
-The first build does not define a wagon-specific maximum draft-animal count. The following remain later-build review items:
-
-* Maximum draft-animal count by wagon
-* Mixed draft-animal types
-* Diminishing efficiency by animal count
-* Synergies or compatibility among draft animals
-
-#### 8.10 Road Events and Wagon Responses
-
-Wagons hold a list of supported road-event IDs or tags. Direct references to mutable event runtime objects should be avoided in definition data.
-
-```text
-Occurred Event Matches Wagon Response List
-→ Inspect Event Polarity
-→ Apply Wagon Response
-```
-
-```text
-Supported Negative Event
-→ Negate the Negative Effect
-```
-
-```text
-Supported Positive Event
-→ Enhance the Positive Effect
-```
-
-Unsupported events apply their normal effects. Wagon responses must be recorded in the event log and settlement result.
-
-#### 8.11 Food-Planning Relationship
-
-Overload and road events can reduce movement speed. A reduced speed increases in-game travel time and may increase total food consumption.
-
-Before departure, the player considers:
-
-* Base expected travel time
-* Base expected food consumption
-* Current load
-* Final efficient load
-* Overload ratio
-* Expected delay caused by overload
-* Possible road events on the selected route
-* Maximum plausible delay caused by those events
-
-The preparation screen provides at least:
-
-* Base expected food consumption
-* Recommended food amount
-* Estimated time supported by loaded food
-* Additional expected consumption caused by overload
-* Food-shortage risk under event delays
-
-#### 8.12 Departure Information
-
-Before dispatching a Caravan, the UI must be able to display:
-
-##### Slot Information
-
-* Occupied item-slot count
-* Maximum item-slot count
-* Stackability
-* Maximum stack quantity
-
-##### Load Information
-
-* Current load
-* Wagon base efficient load
-* Total draft-animal additional efficient load
-* Final efficient load
-* Wagon maximum load
-* Current overload state
-* Current overload ratio
-* Expected movement-speed penalty
-
-##### Draft-Animal Information
-
-* Assigned draft-animal type
-* Assigned count
-* Additional efficient load per animal
-* Total additional efficient load
-* Minimum required draft-animal count
-* Draft-animal food consumption
-
-##### Time and Food Information
-
-* Base expected travel time
-* Expected travel time after overload
-* Expected travel-time range considering road events
-* Base expected food consumption
-* Recommended food amount
-* Food-shortage risk
-
-#### 8.13 Settlement and Result Records
-
-Trade completion or failure results include:
-
-* Actual in-game travel time
-* Total food consumed
-* Departure load
-* Wagon base efficient load
-* Total draft-animal additional efficient load
-* Final efficient load
-* Departure overload ratio
-* Additional travel time caused by overload
-* Occurred road events
-* Negative events negated by the wagon
-* Positive events enhanced by the wagon
-* Travel-time changes caused by events
-* Food-shortage status
-* Final arrival or failure result
-
-#### 8.14 Responsibility Boundaries
-
-| Area | Responsibility |
-|---|---|
-| Core Gameplay | Slot use, current load, final efficient load, overload state and ratio, departure validation, movement-speed application, time-based food consumption, minimum-animal validation |
-| Framework & Integration | In-game time source, time multiplier, offline elapsed-time conversion, raw Caravan state saving/restoration, trade start and completion timestamps |
-| UI & Data | Slot display, wagon and animal selection, load thresholds, overload and speed-penalty display, expected travel time and food display |
-| Content & Tools | Wagon slot/load values, draft-animal speed/additional-load/food values, road-event response IDs, validation presets |
-| Progression & System | Overload speed curve, minimum speed, animal-count modifier, food-consumption balance, and only confirmed progression modifiers |
-
-#### 8.15 First-Build Scope
-
-* Standardize the Caravan terminology and data contract
-* Wagon maximum item-slot count
-* Item stackability and maximum stack quantity
-* Wagon base efficient load and maximum load
-* Draft-animal additional efficient load
-* Sum additional efficient load by assigned count
-* Calculate final efficient load
-* Determine overload state and overload ratio
-* Reduce speed according to overload ratio
-* Allow only one draft-animal type per Caravan
-* Validate minimum required draft-animal count
-* Wagon road-event response list
-* Negate supported negative events
-* Enhance supported positive events
-* Consume food by elapsed in-game time
-* Apply the time multiplier to food consumption
-* Display load, overload, expected time, and expected food before departure
-* Record overload and event-response details in settlement
-
-#### 8.16 Later-Build Review Scope
-
-* Maximum draft-animal count by wagon
-* Mixed draft-animal types
-* Diminishing additional-efficient-load returns
-* Draft-animal progression or grades
-* Draft-animal fatigue
-* Draft-animal durability or health
-* Draft-animal equipment
-* Individual slot size or weight limits
-* Wagon parts that expand slots
-* Wagon maximum-load upgrades
-* Multiple road-event resistance levels
-* Partial reduction instead of complete negative-event negation
-* Event-specific positive-effect enhancement values
-* Wagon repair and part replacement
-* Food spoilage or quality systems
-
-#### Success Criteria
-
-* Wagon and draft-animal selection changes load efficiency and travel strategy.
-* A load above final efficient load but at or below maximum load can depart with a visible speed penalty.
-* A load above maximum load cannot depart.
-* Draft animals increase efficient load without increasing physical maximum load.
-* Road-event responses affect actual results and are visible in settlement.
-* Food consumption remains consistent with elapsed in-game time online and offline.
-* Unconfirmed draft-animal progression and grade data are not required by the first-build implementation.
-
-### 9) Settlement System
-
-When a trade journey succeeds or fails, the player must be able to review profit, losses, combat, donations, and progression results on a single screen.
-
-#### Minimum Implementation Scope
-
-* Purchase cost
-* Sales revenue
-* Base sales margin
-* Distance modifier
-* Seasonal and disaster modifiers
-* City event modifier
-* Mercenary hiring cost
-* Food cost
-* Lost trade goods
-* Combat result
-* Wagon durability loss
-* Actual in-game travel time
-* Total food consumed
-* Departure load and final efficient load
-* Departure overload ratio and overload delay
-* Road events negated or enhanced by the wagon
-* Player progression experience or progression currency
-* Final net profit
-
-#### Success Criteria
-
-* The player can understand why a profit or loss occurred.
-* The player can immediately proceed to the next progression action from the settlement screen.
-* Settlement entries display both numerical values and the reasons for increases or decreases.
+준비 취소 기능은 1차 빌드 범위에 포함하지 않으며, 1차 빌드 제출 전에는 신규 구현하지 않는다. `TryCancelTradePreparation()`과 관련 자산 할당 해제, 준비 초기화 UI는 팀 합의 후 2차 빌드 기간과 최종 제출 준비 기간에 우선순위를 정해 단계적으로 구현한다. 현재 1차 빌드 기간에는 이미 확정된 Preparation 화면의 선택·출발 UX 연결과 결함 수정만 수행한다.
 
 ---
 
-### 10) Detailed Progression System
+## 9.4 UI 및 게임 데이터의 데이터 드리븐 관리
 
-Progression is divided into four areas: player, caravan, hub city, and trading city.
+**지위:** 확정 기획이 아니다. UI·밸런스 수치를 코드 밖에서 관리할 수 있는지 **조사·소규모 시도(스파이크)** 하는 수준의 탐색 항목이다. 전면 전환·공용 정책 에셋 대량 추가·하드코딩 일괄 제거는 본 문서만으로 확정하지 않는다. 시도 범위·담당·완료 기준은 별도 합의 후 마일스톤에 올린다.
 
-#### Player Progression
+### 탐색 목적
 
-* Purchase discount rate
-* Sales markup rate
-* Reduced loss after trade failure
-* Gradual or exponential increases in upgrade costs
-* Optional random choices for selected progression categories
+UI에 표시되는 게임 데이터와 콘텐츠 데이터를 코드 내부에 직접 작성하지 않고 외부 데이터 에셋으로 관리하는 방식이 팀에 맞는지 알아본다.
 
-#### Caravan Progression
+기대 효과(검증 대상)는 다음과 같다.
 
-* Movement speed
-* Maximum carrying capacity
-* Food efficiency
-* Number of operable caravans
-* Mercenary slots or maximum hireable grade
+- 데이터 수정 시 코드 변경을 줄일 수 있는지
+- UI·데이터 담당이 표시 정보·밸런스 값을 상대적으로 독립적으로 다룰 수 있는지
 
-#### Hub City Progression
+### 조사·시도 후보 대상
 
-* Mercenary combat power
-* Available wagon tiers
-* Maximum number of draft animals
-* Number of operable caravans
-* Development facility unlocks
+우선 다음을 데이터 드리븐으로 둘 수 있는지 **검토·소규모 시도**한다. 아래 목록 전체가 확정 적용 범위는 아니다.
 
-#### Trading City Progression
+- 도시 정보
+- 무역로 정보
+- 무역품 정보
+- 마차 정보
+- 견인 동물 정보
+- 용병 정보
+- 마차 레어리티 및 수리 비용 정책
+- UI 표시 이름
+- 설명 문구
+- 아이콘
+- 가격 및 수치 정보
+- 선택 목록과 정렬 기준
 
-* Contribution
-* Development level
-* Rumor occurrence probability
-* Maximum donation amount
-* Hidden trade goods
-* City event probability
+### 시도 시 참고 원칙 (확정 계약 아님)
 
-#### Success Criteria
+소규모 시도에서 다음을 참고할 수 있다. 본 절만으로 공용 API·저장 계약을 바꾸지 않는다.
 
-* Each progression category strengthens different functions.
-* The player can choose which area to invest in first.
-* Rising progression costs suppress late-game currency inflation.
+- UI가 개별 ScriptableObject나 임시 데이터를 직접 탐색하지 않는 방향
+- 공용 데이터 제공 인터페이스 또는 ViewData로 전달받는 방향
+- ID와 표시 이름 분리
+- 원본 데이터와 UI 표시용 데이터 분리 여부 검토
+- 목록 기반 구조로 콘텐츠 추가 시 UI 수정 최소화 가능성 확인
+- 필수 데이터 누락 시 기본값·유효성 검사
+- 필드 변경 시 UI·시스템 영향 확인
 
----
-### 11) Dual-Currency Structure and Inflation Control
+### 담당 논의 범위 (합의 전)
 
-Currency used for trading is separated from currency used to develop the hub city, clarifying each progression objective.
+시도 범위를 정할 때 대략 다음 역할을 논의한다.
 
-#### Currency Types
+#### UI & Data
 
-* Trading currency
+- UI에 필요한 데이터 항목 정의
+- ScriptableObject 또는 공용 데이터 에셋 구성
+- 표시용 ViewData 구조 정의
+- 아이콘, 표시 이름, 설명 및 수치 데이터 연결
+- 데이터 누락 및 잘못된 참조 검증
 
-  * Purchasing products
-  * Purchasing food
-  * Hiring mercenaries
-  * Purchasing wagons and draft animals
-  * Donating to cities
-* Hub city development currency
+#### Framework & Integration
 
-  * Upgrading hub facilities
-  * Unlocking wagon tiers
-  * Increasing the maximum number of draft animals
-  * Increasing mercenary combat power
-  * Increasing the number of operable caravans
+- 공용 데이터 제공 인터페이스
+- 데이터 로딩 시점과 완료 이벤트
+- UI에서 사용할 조회 API
+- 원본 데이터에서 ViewData로의 변환
+- 씬 진입 시 데이터 초기화 순서
 
-#### Development Currency Acquisition
+#### 각 기능 담당
 
-* Rewards from a trading city's development level or contribution
-* Delivery of specified trade goods
-* City event rewards
-* Long-distance trade rewards
-* Hidden trade good transaction rewards
+각 기능 담당자는 자신이 소유한 원본 데이터의 규칙과 유효성 검사 기준을 제공한다.
 
-#### Inflation Control Measures
+### 단계적 시도 순서 (제안)
 
-* Exponential increases in progression costs
-* City donations
-* Hiring and rehiring mercenaries
-* Purchasing and replacing wagons
-* Wagon durability
-* Investment in unexplored regions
-* Losses from failed trade journeys
+전면 전환이 아니라 다음처럼 좁게 시도하는 것을 제안한다.
 
-#### Success Criteria
+1. 현재 UI에서 실제로 사용하는 데이터 항목을 식별한다.
+2. 하드코딩된 표시 데이터 일부를 외부 데이터로 분리해 본다.
+3. 공용 조회 방식을 맞출 수 있는지 확인한다.
+4. 데이터 누락과 중복 ID를 검증한다.
+5. 소규모로 콘텐츠 추가가 코드 수정 없이 가능한지 시험한다.
+6. 결과가 안정적이면 그때 적용 범위 확대를 **별도 합의**한다.
 
-* The purposes of the two currencies are clearly separated.
-* Trading currency does not accumulate indefinitely and is continuously consumed.
-* Development currency functions as a long-term progression objective.
+### 적용 시점 및 현재 프로젝트와의 연결
 
----
+데이터 드리븐의 **신규 확장·전면 전환**은 1차 빌드 범위에 포함하지 않으며, 1차 빌드 제출 전에는 신규 데이터 유형 전환, 공용 정책 에셋 대량 추가, 하드코딩 일괄 제거, 무코드 콘텐츠 추가 구조를 구현하지 않는다. 합의 전에도 본 절을 근거로 본격 전환에 착수하지 않는다.
 
-### 12) Investment and Unexplored Region Unlocks
-
-Instead of automatically unlocking cities through city-to-city connections, the player invests in unexplored regions to discover new trading cities or trade routes.
-
-#### Minimum Scope for the First Build
-
-* 1 locked unexplored region
-* Investment cost
-* Investment progress
-* Unlocking a new city or trade route when investment is completed
-* Currency consumption through investment
-* New products or higher-profit opportunities after the unlock
-
-#### Success Criteria
-
-* Investment functions as a mid- to late-game currency sink.
-* Unlocking a new region provides a clear long-term goal.
-* The unlocked region offers products or risks that differ from existing regions.
-
----
-
-### 13) Loan and Bankruptcy Recovery System
-
-Loans function as a safety mechanism that prevents players from becoming unable to continue after a failed trade journey.
-
-#### Minimum Scope for the First Build
-
-* Loan eligibility conditions
-* Loan principal
-* Repayment amount
-* Repayment deadline or automatic repayment percentage
-* Restrictions on additional loans
-* Guaranteed minimum funds
-* Bankruptcy state detection
-* Provision of a basic wagon or minimum trading capital
-
-#### Success Criteria
-
-* The player can begin trading again after a failed trade journey.
-* Loans cannot be exploited as an unlimited source of duplicated funds.
-* Taking a loan has a cost, such as interest, reduced revenue, or functional restrictions.
-
----
-
-### 14) Offline Progression, Saving, and Loading
-
-The first build verifies time calculation, save-file integrity, and data recovery, which are core technical risks in an idle game.
-
-#### Minimum Implementation Scope
-
-* Save trade start time
-* Save expected trade completion time
-* Save game exit time
-* Save each caravan's progression state
-* Save each city's product list
-* Save season and disaster states
-* Save city donations and development levels
-* Save wagon durability
-* Save loan state
-* JSON-based loading
-* Calculate elapsed offline time
-* Automatically settle completed trade journeys
-
-#### Save Stability and Recovery
-
-* Do not overwrite the current main save file directly.
-* Write new save data to a temporary file first.
-* Validate the temporary save before replacing the main save.
-* Preserve the previous valid main save as a backup file.
-* Store the save-data version, save sequence number, and save timestamp.
-* On startup, inspect the main, temporary, and backup save files.
-* Load the newest valid candidate according to its save sequence number.
-* Do not immediately delete a corrupted save or overwrite it with default data.
-* Offer a new-game transition only when all available save candidates are invalid.
-
-#### Auto-Save Policy
-
-* Mark save data as changed when persistent gameplay state is modified.
-* Check for dirty save data every 10 seconds and save only when changes exist.
-* Save immediately when a critical state is confirmed, including trade departure, settlement completion, progression purchases, donations, investments, and loans.
-* Do not save immediately for temporary UI selections, previews, or unconfirmed inputs.
-* Coalesce repeated save requests into a single operation.
-* Prevent two save operations from writing at the same time.
-* Attempt to save when the application is paused or closed normally, but do not rely only on shutdown callbacks.
-
-#### Success Criteria
-
-* Progress is restored after closing and relaunching the game.
-* Trade completion during offline time is determined accurately.
-* The progression states of multiple caravans can be saved individually.
-* A valid main, temporary, or backup save can be selected and restored after an interrupted write.
-* Corrupted save files are preserved for diagnosis and do not automatically erase the last valid progress.
-* Auto-save does not write repeatedly when no persistent state has changed.
-* Critical state transitions are saved without waiting for the regular 10-second interval.
-* Basic defensive handling exists for system time changes or abnormal termination.
-
----
-
-### 15) Programmatic Scene Structure
-
-Scene transitions and initialization order are clearly separated to reduce dependencies between systems.
-
-#### Basic Scene Flow
-
-```text
-Boot
-→ Title
-→ Loading
-→ InGame
-→ Title
-```
-
-#### Minimum Implementation Scope
-
-* `BootScene`
-
-  * Initialize shared managers
-  * Load saved data
-  * Determine the initial scene
-* `TitleScene`
-
-  * New Game
-  * Continue
-  * Options
-  * Exit
-* `LoadingScene`
-
-  * Asynchronous scene loading
-  * Progress display
-  * Data initialization
-* `InGameScene`
-
-  * Hub city
-  * World map
-  * Trading city screen
-  * May be divided into multiple in-game scenes when necessary
-* Return to the title from in-game
-* Prevent duplicate input during scene transitions
-
-#### Success Criteria
-
-* The responsibility of each scene is clearly separated.
-* New Game and Continue are distinguished based on whether saved data exists.
-* Shared managers are not created more than once when additional in-game scenes are added.
-
----
-
-### 16) Early-Game Tutorial
-
-The tutorial is structured around completing the first trade journey directly rather than presenting a sequence of explanation windows.
-
-#### Example Tutorial Flow
-
-```text
-Introduction: Inherit the Caravan Business
-→ Purchase the First Trade Goods
-→ Load Food
-→ Select a Wagon and Mercenaries
-→ Depart for a Nearby City
-→ Experience the First Event
-→ Complete the First Settlement
-→ Purchase the First Upgrade
-```
-
-#### Minimum Implementation Scope
-
-* Introduction to the character and world setting
-* Guided first trade journey
-* Highlighting required UI elements
-* Protective balancing to prevent failure during the first trade journey
-* First-settlement bonus
-* First progression choice
-* Tutorial skip or replay confirmation
-
-#### Success Criteria
-
-* The player can complete the first trade journey without reading a separate manual.
-* The player experiences the core loop once before the tutorial ends.
-* The tutorial transitions naturally into the normal game flow.
-
----
-
-### 17) Character Concept and Mascot
-
-The player character is a person exhausted by office life who unexpectedly inherits a caravan business and begins developing it.
-
-#### Player Character Concept
-
-* Appearance of an office worker in their 30s or 40s
-* Tired but realistic facial expression
-* A novice caravan master who unexpectedly inherited the business
-* A character who learns trading and management alongside the player
-* Clothing or posture may change as the character progresses
-
-#### Functional Role of the Mascot
-
-* Tutorial guidance
-* Trade completion notifications
-* Risk warnings
-* Reactions to settlement results
-* Explanations of cities and products
-* Brief feedback on repetitive player actions
-* Reinforcement of the game's comedic tone and setting
-
-#### First Build Goals
-
-* Define the mascot's role
-* Finalize one basic design direction
-* Create basic expressions or poses
-* Include the mascot in the tutorial and settlement screen
-* Create a minimum set of notification dialogue
-
----
-
-### 18) Low-Fatigue UX and Tangible Progression
-
-The game is designed to reduce the fatigue of repetition and allow players to confirm meaningful results even during short sessions.
-
-#### Minimum Implementation Scope
-
-* Save frequently used trade configurations
-* Load the previous trade configuration
-* Display recommended trade goods
-* Display expected profit and expected risk
-* Minimize the number of clicks required to depart
-* Batch settlement of completed trade journeys
-* Notifications for available progression upgrades
-* Emphasize key values in settlement results
-* Provide at least one reward or progression opportunity during a short session
-* Minimize unnecessary confirmation pop-ups
-
-#### Success Criteria
-
-* Preparing a repeated trade journey does not take excessively long.
-* The player can easily understand the current objective and recommended action.
-* The player can settle profits and perform a progression action shortly after logging in.
-* Progress continues without requiring extended play sessions.
-
----
-
-### 19) First Build Completion Criteria
-
-The first build is considered complete when all of the following conditions are met.
-
-* The core trading loop can be played from beginning to end.
-* Items and city products are generated through a data-driven structure.
-* A season or disaster affects prices and profits.
-* Event counts and rewards differ by route distance.
-* A city or trade route changes according to donation amounts.
-* Raid outcomes are determined using mercenary and monster combat power.
-* Food, wagon durability, item-slot limits, and maximum load affect departure or trade failure.
-* Draft-animal additional efficient load changes the threshold at which overload penalties begin without changing wagon maximum load.
-* Overload and road-event delays affect travel time and food consumption.
-* Profit and losses can be reviewed on the settlement screen.
-* Progression can be felt in at least two of the following areas: player, caravan, and hub city.
-* Trading currency and development currency are used for different purposes.
-* One new region can be unlocked through investment in an unexplored area.
-* The player can recover from bankruptcy through a loan or minimum-funds guarantee.
-* Trade progression is restored after the game is closed.
-* Interrupted or corrupted saves can recover from the newest valid main, temporary, or backup file.
-* Auto-save records critical confirmed state changes and avoids unnecessary writes when no persistent data has changed.
-* The Boot → Title → Loading → InGame → Title flow functions correctly.
-* The first trade journey can be completed through the tutorial.
-* The mascot is used in the tutorial or settlement screen.
-* Progression or rewards can be felt even during a short play session.
-
----
-
-## Second Build Goals
-
-The second build expands the core systems validated in the first build and develops the content production pipeline and long-term progression structure.
-
-### 1) Expand the Trading City Donation System
-
-* Expand city-specific donation tiers
-* Add positive and negative city events
-* Add positive and negative trade route events
-* Further divide contribution and development levels
-* Add visual changes to cities
-* Expand shop inventories based on donations
-* Add hidden trade goods
-* Increase the maximum donation amount through progression
-* Differentiate donation efficiency by city
-* Balance development currency earned through donations
-
----
-
-### 2) Expand Unexplored Region Expeditions and Investment
-
-* Reduce reliance on a linear city-to-city unlock structure
-* Add unexplored expedition destinations
-* Add expedition investment stages
-* Add random events during investment
-* Add investment failure or delay
-* Require delivery of trade goods for investment
-* Unlock new cities when investment is completed
-* Unlock new trade routes when investment is completed
-* Unlock unique products when investment is completed
-* Balance the system as a long-term currency sink
-
----
-
-### 3) Expand the Loan System
-
-* Multiple loan products
-* Loan limits
-* Credit rating or repayment history
-* Automatic repayment
-* Interest rates
-* Late-payment penalties
-* Restrictions on additional loans
-* Limits on bankruptcy protection uses
-* Balance the minimum-funds guarantee
-* Display loan usage on the settlement screen
-* Rules preventing loan exploitation
-
----
-
-### 4) Expand Content
-
-* Add trading cities
-* Differentiate regional environments and products
-* Add trade goods
-* Add specialty products
-* Add seasons
-* Add disasters
-* Add city events
-* Add trade route events
-* Add raid events
-* Add monster types
-* Add mercenary types and grades
-* Add wagon types
-* Add draft animal types
-* Review draft-animal progression or grade only if approved after first-build validation
-* Add hidden trade goods
-* Add post-tutorial scenarios
-* Add mascot dialogue and presentation
-
----
-
-### 5) Progression and Economy Balancing
-
-* Balance the player's purchase discount rate
-* Balance the player's sales markup rate
-* Adjust Caravan speed, overload-penalty, and carrying-capacity progression curves
-* Adjust hub city upgrade costs
-* Adjust trading city donation costs
-* Adjust mercenary hiring and rehiring costs
-* Adjust costs by wagon tier
-* Adjust wagon durability loss
-* Adjust the exponential rate of progression cost increases
-* Adjust losses from failed trade journeys
-* Adjust acquisition and consumption rates for the dual-currency structure
-* Verify late-game inflation
-
----
-
-### 6) Convenience Features and UX Expansion
-
-* Operate multiple caravans
-* Settle multiple trade journeys simultaneously
-* Trade configuration presets
-* Recommended trade routes
-* Recommended products
-* Expected profit comparison
-* Expected risk comparison
-* Review an automatic redeparture option
-* City and product search
-* Event history
-* Economic change logs
-* Tutorial replay
-* Mascot notification settings
-
----
-
-### 7) Save Data Protection
-
-* Apply an HMAC-based integrity check to detect save-data modification.
-* Verify the HMAC before accepting and deserializing the protected payload.
-* Treat an HMAC mismatch as an invalid save candidate and continue recovery using another valid candidate when available.
-* Do not store the HMAC secret as a plain-text string literal in the game code.
-* Obtain or construct the secret through a platform-secure storage mechanism, a build-time injection process, or another separated key-management layer appropriate to the target platform.
-* Keep save protection separate from JSON serialization and physical file storage.
-* Preserve compatibility with the first-build main, temporary, and backup recovery flow.
-* Document that client-side HMAC raises the cost of casual save editing but does not provide absolute protection against reverse engineering.
-
-#### Success Criteria
-
-* Modified payloads fail integrity verification.
-* Valid protected saves continue to load through the existing recovery flow.
-* The serializer, HMAC protector, validator, and file-storage responsibilities can be tested independently.
-* The HMAC secret is not committed as a readable plain-text literal in the source repository.
-
----
-
-## Deferred and Lower-Priority Features
-
-The following features will be reevaluated for workload and impact after the core gameplay has been validated.
-
-* Reduced idle-game penalties
-
-  * Adjust only when offline progression is excessively disadvantageous compared with online progression
-* Slave system
-
-  * Requires review of ethical presentation and compatibility with the world setting
-  * May make the combat outcome system unnecessarily complex
-* Mid- to late-game transportation expansion
-
-  * Ships
-  * Large wagons
-  * Flying transportation
-* Customization of purchasable animal types
-* Draft-animal progression or grade system (unconfirmed)
-* Wagon component customization
-* Time-based mercenary contracts
-* Wagon repair system
-* Final mascot design
-
-  * Proposal 1: Anthropomorphic crow character
-  * Proposal 2: Strange cat-like character
-
----
-## Detailed Feature Overview
-
-### 1) Core Gameplay
-
-* Prepare a caravan in the hub city.
-* Select a trading city and trade route.
-* Configure products, food, wagon, draft animals, and mercenaries.
-* Dispatch the caravan.
-* Resolve events that occur during travel.
-* Settle profits and losses after arrival.
-* Use acquired currency to strengthen the next trade journey.
-
----
-
-### 2) Multiple Caravan Operation
-
-* The player can initially operate 1 caravan.
-* Increase the maximum number of caravans through hub city progression.
-* Manage each caravan's origin, destination, products, food, speed, and carrying capacity.
-* Save each caravan's trade start time and expected completion time.
-* Separate events and settlement results for each caravan.
-* Batch-settle the completed results of multiple caravans.
-
----
-
-### 3) Item Data
-
-* Item ID
-* Name
-* Base price
-* Rarity
-* Weight
-* Maximum quantity
-* Icon
-* Description
-* Category
-* Seasonal modifier
-* Disaster modifier
-* Availability by city
-* Specialty product status
-
----
-
-### 4) City-Specific Product Generation
-
-* Randomly select general products from the complete product list.
-* Generate inventory within each product's maximum quantity.
-* Generate specialty products from a separate list.
-* Manage each city's product refresh time.
-* Restore inventory and prices through saved data.
-* Increase product slots according to the city's development level.
-
----
-
-### 5) Market Prices
-
-* Calculate purchase and selling prices based on the base price.
-* Product prices change according to the season.
-* Disasters change the price and quantity of specific products.
-* City events change prices.
-* Trends and rumors increase demand for specific products.
-* Repeated sales apply an oversupply penalty.
-* Profit modifiers are applied according to distance and risk.
-
----
-
-### 6) Seasons and Disasters
-
-* Change seasons according to the in-game date.
-* Use product modifier tables for each season.
-* Maintain disasters such as droughts and floods for a set duration.
-* Disasters affect product prices, inventory, and event probability.
-* Display season and disaster states on the world map and city UI.
-
----
-
-### 7) Trade Routes and Distance
-
-* Manage cities as nodes.
-* Trade routes connect two cities.
-* Each trade route has distance, travel time, risk, and an event list.
-* Longer distances increase the target number of events.
-* Higher distance and risk increase expected profit.
-* Locked trade routes are unlocked through investment or city development.
-
----
-
-### 8) City Donations
-
-* Save accumulated donations for each city.
-* Set an upper limit on donation amounts.
-* Change city events according to donation totals.
-* Change trade route events according to donation totals.
-* Unlock hidden products when donations reach specified thresholds.
-* Events may reduce donations or development levels.
-* Present city development results through UI and visuals.
-
----
-
-### 9) City Contribution and Development Level
-
-* Contribution represents how much the player has contributed to a city.
-* Development level represents the city's overall state of growth.
-* Contribution increases through donations, trading, and event resolution.
-* Development level increases through contribution or investment results.
-* Product count, product grade, and maximum donations increase with development level.
-* Contribution and development are used for rumor probability and hidden product unlocks.
-
----
-
-### 10) City Events
-
-* Positive events provide price discounts, increased inventory, rare product appearances, and similar benefits.
-* Negative events cause higher prices, reduced inventory, lower donation totals, and similar penalties.
-* Events occur according to city development, season, disaster, and donations.
-* Display each event's remaining duration.
-* Restore prices and inventory to their normal state after an event ends.
-
----
-
-### 11) Trade Route Events
-
-* Raids
-* Blocked roads
-* Encounters with traveling merchants
-* Discovery of lost cargo
-* Severe weather
-* Discovery of shortcuts
-* Safety events based on city donation status
-* Risk events based on disaster status
-* Event count adjustment by distance
-* Record event outcomes in settlement data
-
----
-
-### 12) Raids and Combat
-
-* Mercenaries and monsters have combat power values.
-* Calculate defense success probability using the combat power ratio.
-* Successful combat protects cargo and the wagon.
-* Failed combat may cause the loss of products, wagon durability, or mercenaries.
-* Mercenaries have a limited number of contract uses.
-* Mercenaries must be rehired after their contract uses are depleted.
-* Mercenaries may be lost after combat failure.
-* Explain combat outcomes on the settlement screen.
-
----
-
-### 13) Mercenaries
-
-* Purchase mercenaries
-* Mercenary combat power
-* Mercenary grade
-* Mercenary hiring cost
-* Number of contract uses
-* Disappearance probability after combat failure
-* Unlock higher-grade mercenaries through hub city progression
-* Assign mercenaries to individual caravans
-* Expand mercenary slots
-
----
-
-### 14) Wagons
-
-* Wagon ID and tier
-* Maximum item-slot count
-* Stackability and maximum stack quantity by slot definition
-* Base efficient load
-* Maximum load
-* Maximum durability as definition data
-* Current durability as runtime/save state
-* Minimum required draft-animal count
-* Road-event response ID or tag list
-* Positive road-event effect modifier
-* Durability reduction after completing a trade journey
-* Additional durability loss after combat failure
-* Usage restriction when durability is depleted
-* Unlock higher tiers through hub city progression
-
----
-
-### 15) Draft Animals
-
-#### Confirmed First-Build Data
-
-* Draft-animal ID and type
-* Base movement speed
-* Food consumption per in-game-time unit
-* Additional efficient load
-* Purchase price
-* Assigned count
-* Assignment to individual Caravans
-* Only one draft-animal type per Caravan
-
-#### Derived Effects
-
-* Total additional efficient load equals per-animal value multiplied by assigned count.
-* Final efficient load is capped at wagon maximum load.
-* Draft animals can reduce or eliminate overload penalties by raising final efficient load.
-* Adding animals may also increase total food consumption.
-
-#### Not Confirmed for the First Build
-
-* Draft-animal progression
-* Draft-animal grade
-* Stats by progression stage or grade
-* Grade-based purchase-price changes
-* Mixed draft-animal types
-* Wagon-specific maximum animal count
-
----
-
-### 16) Food
-
-* Calculate expected consumption using expected in-game travel time and Caravan composition.
-* Consume food according to elapsed in-game time.
-* Convert real elapsed time through the same in-game-time multiplier for online and offline progress.
-* Food consumes wagon load and item slots according to the same loading rules as other items.
-* Movement speed decreases when food is insufficient.
-* Trade fails when food shortages continue.
-* Loading more food reduces the load and slots available for products.
-* Overload and road-event delays can increase actual food consumption.
-* Display base consumption, recommended food, expected support time, and shortage risk before departure.
-
-### 17) Trade Failure
-
-* Food shortage
-* Insufficient number of draft animals
-* Depleted wagon durability
-* Inability to continue after a raid
-* Loss of remaining products after failure
-* Reduced wagon durability after failure
-* Return to the hub city after failure
-* Recovery through minimum funds or a loan
-
----
-
-### 18) Settlement
-
-* Product purchase cost
-* Product sales revenue
-* Distance modifier
-* Seasonal modifier
-* Disaster modifier
-* Event modifier
-* Player discounts and markups
-* Food cost
-* Mercenary cost
-* Product loss
-* Wagon durability loss
-* Actual in-game travel time and food consumed
-* Departure load, final efficient load, and overload ratio
-* Overload delay
-* Negated negative road events and enhanced positive road events
-* Final net profit
-* Development currency earned
-
----
-
-### 19) Player Progression
-
-* Purchase discount rate
-* Sales markup rate
-* Reduced losses after trade failure
-* Progression choices
-* Rising progression costs
-* Selected randomized progression choices
-* Player level or reputation
-
----
-
-### 20) Caravan Progression
-
-* Movement speed
-* Maximum carrying capacity
-* Food efficiency
-* Mercenary slots
-* Number of operable caravans
-* Access to long-distance trade
-* Automated trade support features
-
----
-
-### 21) Hub City Progression
-
-* Mercenary combat power
-* Wagon tiers
-* Maximum number of draft animals
-* Maximum number of operable caravans
-* Development facilities
-* Use of development currency
-* New feature unlocks
-* Long-term progression objectives
-
----
-
-### 22) Trading City Progression
-
-* Contribution
-* Development level
-* Rumor probability
-* Maximum donation amount
-* Product slots
-* Rare product appearance probability
-* Hidden products
-* Expanded city events
-
----
-
-### 23) Dual-Currency Structure
-
-* Trading currency is used for products and trade preparation.
-* Development currency is used for hub city progression.
-* Development currency is acquired from trading cities.
-* The two currencies support different progression objectives.
-* When necessary, they may be exchanged at a restricted rate.
-
----
-
-### 24) Investment in Unexplored Regions
-
-* Select a locked region.
-* Check the required currency and products.
-* Invest a specified amount.
-* Accumulate investment progress.
-* Unlock a city or trade route when investment is completed.
-* New regions provide new products and risks.
-
----
-
-### 25) Loans and Bankruptcy Recovery
-
-* Detect bankruptcy conditions.
-* Calculate the available loan amount.
-* Guarantee minimum trading capital.
-* Repay through interest or revenue deductions.
-* Restrict consecutive loans.
-* Guarantee a basic wagon or the funds needed to purchase basic products.
-
----
-
-### 26) Offline Progression
-
-* Save trade start and completion times.
-* Compare them with the current time when the player reconnects.
-* Move completed trade journeys into a pending settlement state.
-* Display the remaining time for ongoing trade journeys.
-* An upper limit may be applied to offline progression time.
-* Include basic defensive logic against system time manipulation.
-
----
-
-### 27) Saving and Loading
-
-#### Persistent Gameplay Data
-
-* Player currency
-* Development currency
-* Caravan states
-* City product inventories
-* Seasons and disasters
-* City donations
-* City development levels
-* Investment progress
-* Wagons and draft animals
-* Mercenaries
-* Loans
-* Tutorial progress
-* Option settings
-
-#### Save Metadata
-
-* Save-data version
-* Monotonically increasing save sequence number
-* UTC save timestamp
-* Payload validation information
-
-#### Save Stability and Recovery
-
-* Write new data to a temporary save instead of overwriting the main save directly.
-* Validate the temporary save before promotion.
-* Preserve the previous valid main save as a backup.
-* Inspect the main, temporary, and backup candidates during loading.
-* Select the newest valid candidate by save sequence number.
-* Preserve corrupted candidates for diagnosis rather than immediately deleting or overwriting them.
-* Request a new game only when every available candidate is invalid.
-
-#### Auto-Save Behavior
-
-* Use a dirty flag so unchanged data is not written repeatedly.
-* Check for pending changes every 10 seconds.
-* Save immediately after confirmed critical state transitions.
-* Exclude temporary UI selections and previews from immediate saves.
-* Merge repeated save requests and serialize only one write operation at a time.
-* Attempt a final save on pause and normal shutdown without treating those callbacks as the only protection against data loss.
-
-#### Second-Build Protection
-
-* Add HMAC-based save-data modification detection.
-* Keep HMAC protection separate from serialization and file storage.
-* Do not store the HMAC secret as a plain-text string literal in source code.
-
----
-
-### 28) Scene Structure
-
-* Initialize shared systems in Boot.
-* Provide New Game and Continue in Title.
-* Handle asynchronous scene loading in Loading.
-* Conduct actual trading and progression in InGame.
-* If necessary, separate the hub city, world map, and trading city into individual in-game scenes.
-* Save and return to the title from in-game.
-
----
-
-### 29) Tutorial
-
-* Present the introduction in which the player inherits the caravan business.
-* Guide the first product purchase.
-* Guide food loading.
-* Guide wagon and mercenary selection.
-* Dispatch the first trade journey.
-* Let the player experience the first event.
-* Complete the first settlement and progression purchase.
-* Provide tutorial skip and replay options.
-
----
-
-### 30) Character and Mascot
-
-* The player is a novice caravan master exhausted by office life.
-* The player character expresses emotional changes throughout the progression process.
-* The mascot handles guidance, warnings, notifications, and settlement reactions.
-* The mascot reinforces the game's comedic atmosphere.
-* The mascot's final appearance is determined according to the production status of the first build.
-
----
-
-### 31) Low-Fatigue UX
-
-* Load the previous trade configuration
-* Trade presets
-* Recommended products
-* Expected profit
-* Expected risk
-* Batch settlement
-* Notifications for available progression
-* Redeparture with minimal clicks
-* Prioritize key information
-* Minimize unnecessary pop-ups
-* Provide progression rewards during short sessions
-
----
-## Risks and Alternatives
-
-### 1) Excessive Scope for the First Build
-
-#### Risk
-
-Including the economy, combat, donations, investment, loans, tutorial, and scene structure in the first build may result in a workload closer to a Beta build.
-
-#### Alternative
-
-Limit each system to the minimum scope required for one meaningful validation.
-
-* 3 cities
-* Approximately 5 products
-* 2 seasons
-* 2 disasters
-* 2 city events
-* 2 trade route events
-* 1 raid event
-* 2 mercenary types
-* 2 wagon types
-* 2 draft animal types
-* 1 wagon slot/stacking rule set
-* 1 overload speed-penalty curve
-* At least 1 wagon response to a negative road event and 1 response to a positive road event
-* 1 hidden product
-* 1 unexplored region unlock
-* 1 loan type
-* 1 tutorial trade journey
-
----
-
-### 2) Increasing Economic System Complexity
-
-#### Risk
-
-When season, disaster, distance, donations, oversupply, and progression stats are all applied to prices simultaneously, the result may be difficult to understand.
-
-#### Alternative
-
-* Fix the order of price calculations.
-* Display every modifier on the settlement screen.
-* Limit modifier ranges in the initial build.
-* Combine overlapping modifiers into a single group.
-
----
-
-### 3) Confusion Caused by the Dual-Currency Structure
-
-#### Risk
-
-If trading currency and development currency have overlapping uses, players may struggle to understand the difference between them.
-
-#### Alternative
-
-* Use distinct colors and icons for each currency.
-* Display acquisition sources and uses in the UI.
-* Do not require both currencies for the same function.
-* Restrict development currency usage to the hub city in the first build.
-
----
-
-### 4) Insufficient Impact of the Donation System
-
-#### Risk
-
-If donations only change probability values, players may not feel their effects.
-
-#### Alternative
-
-* Product unlocks
-* Price discounts
-* Increased inventory
-* Reduced event frequency
-* Visual city changes
-* Display donation effects on the settlement screen
-
----
-
-### 5) Loan System Exploitation
-
-#### Risk
-
-Players may repeatedly take loans to secure funds without meaningful losses.
-
-#### Alternative
-
-* Loan limits
-* Limit the player to 1 active loan
-* Automatic repayment
-* Interest
-* Reduced sales revenue for a set period
-* Limits on consecutive bankruptcy protection
-
----
-
-### 6) Frustration Caused by Randomized Progression
-
-#### Risk
-
-If essential progression options appear only at random, progression may be blocked or choice-related stress may increase.
-
-#### Alternative
-
-* Provide essential progression categories as fixed purchases.
-* Use randomized choices only for secondary progression.
-* Allow the player to select a desired option after a specified number of attempts.
-
----
-
-### 7) Excessive Losses from Raid Outcomes
-
-#### Risk
-
-If the player loses both mercenaries and a wagon at the same time, recovery may become excessively difficult.
-
-#### Alternative
-
-* Set a maximum loss limit
-* Protect the player from the first failure
-* Preserve a minimum amount of products
-* Provide a basic wagon
-* Guarantee a loan or minimum funds
-* Prevent raid failure during the tutorial section
-
----
-
-### 8) Overengineering the Programmatic Scene Structure
-
-#### Risk
-
-Dividing the in-game experience into multiple scenes too early may complicate data transfer and loading architecture.
-
-#### Alternative
-
-Use a single `InGameScene` in the first build and switch between screens and states within it.
-Separate the hub city, world map, and trading city into different scenes only when their content becomes sufficiently large.
-
----
-
-### 9) Delays in Mascot and Character Production
-
-#### Risk
-
-Character design and animation production may delay development of the core systems.
-
-#### Alternative
-
-* Use static images and expression swaps in the first build.
-* Minimize mascot animation.
-* Prioritize use in the tutorial and settlement screen.
-* Finalize the design after system validation.
-
----
-
-### 10) Offline Time Manipulation
-
-#### Risk
-
-Players may change the system clock to complete trade journeys instantly or repeatedly obtain rewards.
-
-#### Alternative
-
-* Detect times earlier than the last saved time
-* Limit the maximum duration of offline rewards
-* Log abnormal time changes
-* Expand to server time or external time verification when necessary
-
----
-
-### 11) Save Corruption and Excessive Auto-Save Writes
-
-#### Risk
-
-Directly overwriting one JSON file can destroy the latest valid progress if the application closes during the write. Saving every input immediately can also cause unnecessary disk writes, overlapping operations, and partially confirmed gameplay states to be persisted.
-
-#### Alternative
-
-* Use temporary, main, and backup save candidates.
-* Validate a temporary save before replacing the main save.
-* Store a save sequence number and load the newest valid candidate.
-* Use a dirty flag and write only when persistent state has changed.
-* Save critical confirmed state transitions immediately.
-* Coalesce repeated non-critical save requests.
-* Allow only one file-write operation at a time.
-* Preserve invalid files for diagnosis and prompt for a new game only when all candidates fail validation.
+현재 Framework의 공용 데이터 제공 인터페이스와 UI용 ViewData 연결은 기존 구현 기반으로 유지한다. 1차 빌드 기간에는 이미 확정된 Preparation·Traveling·Settlement UX에 필요한 기존 데이터 연결을 완성하고, 누락 참조·표시 오류·초기화 순서 문제를 디버깅한다. 조사·스파이크는 1차 제출 범위 밖이며, 확대 적용은 팀 합의 후 2차 이후 마일스톤에서 다룬다.

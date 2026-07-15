@@ -18,7 +18,7 @@
  * Important Notes
  * - Unity JsonUtility 직렬화를 위해 public field 중심이다.
  * - Economy 내부 타입(EconomyM1LoopResult)은 저장하지 않는다.
- * - Related Documentation: Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  */
 using System;
 

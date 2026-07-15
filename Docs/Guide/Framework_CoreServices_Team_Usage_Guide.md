@@ -54,9 +54,9 @@ Boot → Title → New Game → Loading → InGame
 ```
 
 포함 항목: loop integrity · Economy E2E · 인게임 식량 · Pause 식량 정지 · Failed 정산 화면 · PendingSettlement 복구 · **Offline 진행 복구**.  
-M3 대기 정산 로직: [`Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)  
-M3 오프라인 진행: [`Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)  
-M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md)
+M3 대기 정산 로직: [`Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md`](../Personal_Documents/CSU/0712_m3-pending-settlement-persist.md)  
+M3 오프라인 진행: [`Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)  
+M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md)
 ---
 
 ## 2. FrameworkRoot 서비스 맵
@@ -132,8 +132,18 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 | `pendingSettlement.claimed` | 이미 수령한 pending (복구·재수령 차단) |
 | `world.currentSeasonId` | 계절 (Economy 입력) |
 | `world.currentDisasterId` | 재난 (빈 문자열 = 없음) |
+| `world.marketInventories` | 상점별 재고 스냅샷 목록 (`MarketInventorySaveData`) |
+| `world.marketPurchasePreparation` | 상점 구매 초안·확정 준비 상태 |
+| `caravan.cargo` | 적재 화물 (`CargoEntrySaveData`). 상점 적재 초안·확정도 여기 매핑 (별도 loadedLines 없음) |
 | `caravan.elapsedInGameSeconds` | 인게임 경과(식량) |
 | `player.tradingCurrency` | 무역 화폐 |
+
+정규화 (`JsonSaveService.NormalizeData`):
+
+- `world.marketInventories`가 null이면 빈 리스트
+- 각 inventory의 `stocks`가 null이면 빈 리스트
+- `world.marketPurchasePreparation`이 null이면 기본 객체
+- **version은 5를 유지**한다. 구 version 5 세이브에 위 필드가 없어도 wipe하지 않고 Normalize로 채운다.
 
 디버그 출력:
 
@@ -142,6 +152,9 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 
 버전 불일치 시 마이그레이션 없이 새 게임 데이터가 될 수 있다.  
 **v4 이하 세이브는 v5 코드에서 새 게임으로 복구될 수 있으므로**, M3 통합 전에는 New Game으로 맞추는 것을 권장한다.
+
+상점 재고 UI 연동(`ND_MARKET_SAVE_SCHEMA_VNEXT`)과 Economy 구매·환불 API는 Save 스키마와 별도 단계다.  
+요약: `Docs/Personal_Documents/CSU/0714_framework_market_inventory_save_schema_work_summary.md`
 
 ---
 
@@ -273,8 +286,8 @@ CompleteLoadingAndEnterGame
 
 상세:
 
-- Offline: [`m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
-- Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md)
+- Offline: [`0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)
+- Pending: [`0712_m3-pending-settlement-persist.md`](../Personal_Documents/CSU/0712_m3-pending-settlement-persist.md)
 
 검증: `Framework/Run Offline Progress Smoke`, `Framework/Run Pending Settlement Restore Smoke`
 
@@ -414,9 +427,9 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 검증 기록:
 
-- M3 Offline: [`m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/m3-offline-progress-pipeline.md)
-- M3 Pending: [`m3-pending-settlement-persist.md`](../Personal_Documents/CSU/m3-pending-settlement-persist.md) (2026-07-12 **Pass**)
-- M2 Pause/Failed/Force: [`m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
+- M3 Offline: [`0712_m3-offline-progress-pipeline.md`](../Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md)
+- M3 Pending: [`0712_m3-pending-settlement-persist.md`](../Personal_Documents/CSU/0712_m3-pending-settlement-persist.md) (2026-07-12 **Pass**)
+- M2 Pause/Failed/Force: [`0711_m2-pause-failed-force-smoke.md`](../Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md) (2026-07-11 **Pass**)
 ---
 
 ## 12. 팀별 빠른 경로
@@ -447,13 +460,13 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 | 문서 | 내용 |
 |------|------|
-| `Docs/Personal_Documents/CSU/Core-services-M1-sync.md` | M1/M2 아키텍처 동기화 |
-| `Docs/Personal_Documents/CSU/M1_Trade_Loop_Integrity.md` | 무역 loop 무결성 |
-| `Docs/Personal_Documents/CSU/caravan-ingame-food-sync.md` | 식량·인게임 시간 |
-| `Docs/Personal_Documents/CSU/world-force-debug-commands.md` | Force* 구현 로직 |
-| `Docs/Personal_Documents/CSU/m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
-| `Docs/Personal_Documents/CSU/m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
-| `Docs/Personal_Documents/CSU/m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
+| `Docs/Personal_Documents/CSU/0711_Core-services-M1-sync.md` | M1/M2 아키텍처 동기화 |
+| `Docs/Personal_Documents/CSU/0710_M1_Trade_Loop_Integrity.md` | 무역 loop 무결성 |
+| `Docs/Personal_Documents/CSU/0711_caravan-ingame-food-sync.md` | 식량·인게임 시간 |
+| `Docs/Personal_Documents/CSU/0711_world-force-debug-commands.md` | Force* 구현 로직 |
+| `Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
+| `Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
+| `Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
 
 ### 테스트 씬 (선택)
 

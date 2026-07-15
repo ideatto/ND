@@ -16,10 +16,13 @@ public class RouteData : ScriptableObject, IIdentifiableData
     [SerializeField] private float distance;
     [SerializeField] private float defaultElapsedTime;
 
-    [Header("Route_Base_Require")]
-    [SerializeField] private long baseFoodCost; // TODO : change data
-    [SerializeField] private long baseMercenaryCost; // TODO : changed data
+    [Header("Route_Legacy_Cost_Compatibility")]
+    [Tooltip("Legacy serialized field kept for external compatibility. Keep this value at 0; use BaseRequiredFoodQuantity for the route requirement.")]
+    [SerializeField] private long baseFoodCost;
+    [Tooltip("Legacy serialized field kept for external compatibility. Keep this value at 0; use BaseRequiredMercenaryPower for the route requirement.")]
+    [SerializeField] private long baseMercenaryCost;
 
+    [Header("Route_Base_Requirement")]
     [SerializeField] private int baseRequiredFoodQuantity;
     [SerializeField] private int baseRequiredMercenaryPower;
 
@@ -43,8 +46,12 @@ public class RouteData : ScriptableObject, IIdentifiableData
     public float Distance => Mathf.Max(0f, distance);
     public bool UnlockedByDefault => unlockedByDefault;
     public float DefaultElapsedTime => Mathf.Max(0f, defaultElapsedTime);
+    // Legacy accessors remain because Framework shared-data conversion still references them.
+    // Route assets must keep both serialized legacy costs at 0.
     public long BaseFoodCost => baseFoodCost > 0 ? baseFoodCost : 0;
     public long BaseMercenaryCost => baseMercenaryCost > 0 ? baseMercenaryCost : 0;
+    public int BaseRequiredDraftAnimalFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
+    // Framework shared-data conversion still uses the old general name.
     public int BaseRequiredFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
     public int BaseRequiredMercenaryPower => Mathf.Max(0, baseRequiredMercenaryPower);
     public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);
