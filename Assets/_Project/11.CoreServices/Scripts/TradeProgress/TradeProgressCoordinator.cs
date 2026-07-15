@@ -32,6 +32,7 @@
  * - RestorePendingSettlement(...): 저장된 대기 정산으로 runtime cache를 복구한다.
  * - ForceCompleteActiveTrade(): 현재 active trade를 즉시 도착 처리한다.
  * - ClearPendingSettlementSave(...): SaveData의 pendingSettlement DTO를 비운다.
+ * - TryGetMapProgress(...): 월드맵 등 읽기 전용 소비자를 위한 진행 스냅샷을 반환한다.
  *
  * Important Notes
  * - 생성자에서 FrameworkEvents.CompleteTradeRequested를 구독한다.
@@ -40,7 +41,9 @@
  * - restore 시 Economy pending은 TryCalculateAndFill로 재구성하고, UI 표시 금액은 저장값을 우선한다.
  * - claim 시 Economy pending 결과를 SaveData 화폐에 반영하고 pendingSettlement를 clear한다.
  * - 오프라인 elapsed는 tradeStart→evaluationUtc 절대값 overwrite이므로 재로드 시 이중 소모되지 않는다.
+ * - TryGetMapProgress는 저장·정산·출발을 변경하지 않는다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
+ * - Related Documentation: Docs/Guide/Framework_World_Map_API_Guide.md
  */
 using System;
 
@@ -127,6 +130,78 @@ namespace ND.Framework
         public void SetActiveCaravan(CaravanData caravan)
         {
             activeCaravan = caravan;
+        }
+
+        /// <summary>
+        /// 월드맵 등 읽기 전용 표시를 위한 무역 진행 스냅샷을 반환한다.
+        /// </summary>
+        /// <param name="snapshot">조회에 성공하면 채워지는 진행 스냅샷.</param>
+        /// <returns>
+        /// SaveData와 tradeProgress가 있고 Traveling 또는 SettlementPending 상태이면 true를 반환한다.
+        /// SaveData가 없거나 맵에 표시할 active trade가 없으면 false를 반환하며 snapshot은 기본값이다.
+        /// </returns>
+        /// <remarks>
+        /// 저장 데이터, 정산, 무역 출발 상태는 변경하지 않는다.
+        /// Traveling 중 pause이면 ActiveCaravan.progress01을 우선해 화면 진행이 멈추도록 한다.
+        /// SettlementPending이면 Progress01은 1로 고정한다.
+        /// Progress01 계산은 내부 CalculateProgress와 동일한 UTC tick 공식을 사용한다.
+        /// </remarks>
+        public bool TryGetMapProgress(out TradeMapProgressSnapshot snapshot)
+        {
+            snapshot = default;
+
+            var saveData = GetSaveData();
+            if (saveData?.tradeProgress == null)
+            {
+                return false;
+            }
+
+            var progress = saveData.tradeProgress;
+            var state = progress.state;
+            if (state != TradeProgressState.Traveling && state != TradeProgressState.SettlementPending)
+            {
+                return false;
+            }
+
+            float progress01;
+            if (state == TradeProgressState.SettlementPending)
+            {
+                progress01 = JourneyRunner.ArrivalProgress;
+            }
+            else if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
+            {
+                var caravan = EnsureActiveCaravan();
+                progress01 = caravan != null
+                    ? caravan.progress01
+                    : CalculateProgress(progress, gameTimeProvider != null ? gameTimeProvider.CurrentUtc : DateTime.UtcNow);
+            }
+            else if (gameTimeProvider != null)
+            {
+                progress01 = CalculateProgress(progress, gameTimeProvider.CurrentUtc);
+            }
+            else
+            {
+                progress01 = CalculateProgress(progress, DateTime.UtcNow);
+            }
+
+            if (progress01 < 0f)
+            {
+                progress01 = 0f;
+            }
+            else if (progress01 > JourneyRunner.ArrivalProgress)
+            {
+                progress01 = JourneyRunner.ArrivalProgress;
+            }
+
+            snapshot = new TradeMapProgressSnapshot(
+                hasActiveTrade: true,
+                activeTradeId: progress.activeTradeId,
+                activeRouteId: progress.activeRouteId,
+                state: state,
+                progress01: progress01,
+                tradeStartUtcTick: progress.tradeStartUtcTick,
+                expectedTradeEndUtcTick: progress.expectedTradeEndUtcTick);
+            return true;
         }
 
         /// <summary>
