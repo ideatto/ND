@@ -77,10 +77,19 @@ public class TransportSelectPanel : MonoBehaviour
         }
     }
 
+    public void Populate(TradePrepareViewData viewData)
+    {
+        List<TransportEntry> entries = new List<TransportEntry>();
+        if (viewData != null && viewData.wagons != null)
+            foreach (WagonViewData wagon in viewData.wagons)
+                if (wagon != null) entries.Add(new TransportEntry(wagon));
+        Populate(entries);
+    }
+
     /// <summary>도보(None)는 항상 선택 가능, 그 외(마차/자동차)는 소지 개수>0일 때만.</summary>
     private static bool IsOwned(TransportEntry e)
     {
-        return e.type == TransportType.None || e.owned > 0;
+        return e.canSelect && (e.type == TransportType.None || e.owned > 0);
     }
 
     /// <summary>idx 카드를 선택(같은 걸 다시 누르면 해제). 색 갱신 + 통지.</summary>
@@ -133,6 +142,9 @@ public class TransportSelectPanel : MonoBehaviour
         if (e.type == TransportType.Wagon) line += $"\nanimals {e.minAnimals}~{e.maxAnimals}";
         if (e.type == TransportType.None) line += "\n(on foot)";              // 도보는 소지 개념 없음
         else line += e.owned > 0 ? $"\nowned {e.owned}" : "\n(empty)";        // 미소지 = 빈 슬롯
+        if (e.maxDurability > 0) line += $"\ndurability {e.currentDurability}/{e.maxDurability}";
+        line += $"\nload {e.overLoad:0.#}/{e.maxLoad:0.#}";
+        if (!e.canSelect && !string.IsNullOrWhiteSpace(e.disabledReason)) line += $"\n{e.disabledReason}";
         return line;
     }
 
@@ -149,6 +161,11 @@ public class TransportSelectPanel : MonoBehaviour
         public int maxAnimals;    // 최대 요구 동물 수 (Wagon만 의미)
         public float baseMoveSpeed; // 마차 기본 이동속도 (Wagon은 0, 동물 화면 속도계산에 사용)
         public int owned;         // 소지 개수(0 = 미소지 빈 슬롯). 도보(None)는 무시하고 항상 사용 가능
+        public float overLoad;
+        public int currentDurability;
+        public int maxDurability;
+        public bool canSelect;
+        public string disabledReason;
 
         public TransportEntry(string id, string name, TransportType type, int slotCount, float maxLoad,
                               int minAnimals, int maxAnimals, float baseMoveSpeed, int owned)
@@ -162,6 +179,30 @@ public class TransportSelectPanel : MonoBehaviour
             this.maxAnimals = maxAnimals;
             this.baseMoveSpeed = baseMoveSpeed;
             this.owned = owned;
+            overLoad = 0f;
+            currentDurability = 0;
+            maxDurability = 0;
+            canSelect = true;
+            disabledReason = "";
+        }
+
+        public TransportEntry(WagonViewData viewData)
+        {
+            id = viewData.wagonId;
+            name = viewData.displayName;
+            type = viewData.wagonType == WagonType.None ? TransportType.None :
+                   viewData.wagonType == WagonType.Mount ? TransportType.Mount : TransportType.Wagon;
+            slotCount = viewData.inventorySlotCount;
+            maxLoad = viewData.maxLoad;
+            minAnimals = viewData.minRequireAnimals;
+            maxAnimals = viewData.maxPullAnimals;
+            baseMoveSpeed = viewData.baseMoveSpeed;
+            owned = viewData.ownedAmount;
+            overLoad = viewData.overLoad;
+            currentDurability = viewData.currentDurability;
+            maxDurability = viewData.maxDurability;
+            canSelect = viewData.canSelect && (viewData.isOwned || viewData.wagonType == WagonType.None);
+            disabledReason = viewData.disabledReason;
         }
     }
 }

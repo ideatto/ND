@@ -59,6 +59,7 @@ public class WagonSelectPopup : MonoBehaviour
                          (w.type == TransportType.Wagon ? $"  동물 {w.minAnimals}~{w.maxAnimals}" : "");
             TransportSelectPanel.TransportEntry captured = w;   // 캡처 방지
             b.onClick.AddListener(() => Choose(captured));
+            b.interactable = w.canSelect;
             spawned.Add(b);
         }
     }

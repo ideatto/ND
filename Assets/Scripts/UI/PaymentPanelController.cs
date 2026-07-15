@@ -30,6 +30,7 @@ public sealed class PaymentPanelController : MonoBehaviour
     [SerializeField, HideInInspector] private RectTransform paperRect;
     private Coroutine animationRoutine;
     private EconomyM1SettlementViewData currentViewData;
+    private bool currentCanConfirm;
 
     public UnityEvent PaymentCompleted => onPaymentCompleted;
 
@@ -55,15 +56,20 @@ public sealed class PaymentPanelController : MonoBehaviour
 
     public void Show(EconomyM1SettlementViewData viewData, RouteData route, float elapsedSeconds)
     {
+        string title = route == null ? "출발지 → 목적지" : $"{DisplayTown(route.FromTownName, route.FromTownId)} → {DisplayTown(route.ToTownName, route.ToTownId)}";
+        Show(viewData, title, elapsedSeconds, viewData != null && viewData.Success);
+    }
+
+    public void Show(EconomyM1SettlementViewData viewData, string routeTitle, float elapsedSeconds, bool canConfirm)
+    {
         if (!enabled || !HasRequiredReferences())
             return;
         currentViewData = viewData;
-        routeText.text = route == null
-            ? "출발지 → 목적지"
-            : $"{DisplayTown(route.FromTownName, route.FromTownId)} → {DisplayTown(route.ToTownName, route.ToTownId)}";
+        routeText.text = string.IsNullOrWhiteSpace(routeTitle) ? "출발지 → 목적지" : routeTitle;
         elapsedText.text = $"소요 시간  {FormatElapsed(elapsedSeconds)}";
         summaryText.text = BuildSummary(viewData);
-        stampButton.interactable = viewData != null && viewData.Success && viewData.Settlement != null;
+        currentCanConfirm = canConfirm && viewData != null && viewData.Settlement != null;
+        stampButton.interactable = currentCanConfirm;
         stampRect.localScale = Vector3.one;
         stampRect.localRotation = Quaternion.identity;
         gameObject.SetActive(true);
@@ -73,7 +79,7 @@ public sealed class PaymentPanelController : MonoBehaviour
 
     public void ConfirmPayment()
     {
-        if (currentViewData == null || !currentViewData.Success || currentViewData.Settlement == null)
+        if (currentViewData == null || !currentCanConfirm || currentViewData.Settlement == null)
             return;
         stampButton.interactable = false;
         PlaySound(stampSound);

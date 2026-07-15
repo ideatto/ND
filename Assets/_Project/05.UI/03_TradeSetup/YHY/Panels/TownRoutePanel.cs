@@ -48,6 +48,46 @@ public class TownRoutePanel : MonoBehaviour
         Rebuild();
     }
 
+    /// <summary>Framework가 만든 무역 준비 ViewData를 도시/경로 목록에 연결한다.</summary>
+    public void Populate(TradePrepareViewData viewData)
+    {
+        towns.Clear();
+        expandedTownId = null;
+
+        if (viewData == null || viewData.towns == null)
+        {
+            Rebuild();
+            return;
+        }
+
+        foreach (TownViewData townView in viewData.towns)
+        {
+            if (townView == null) continue;
+
+            TownEntry town = new TownEntry(townView.townId, townView.displayName, new List<RouteEntry>())
+            {
+                description = townView.description,
+                unlocked = townView.isUnlocked,
+                canSelect = townView.canSelect,
+                disabledReason = townView.disabledReason
+            };
+
+            if (viewData.routes != null)
+            {
+                foreach (RouteViewData routeView in viewData.routes)
+                {
+                    if (routeView == null || !IsRouteForTown(routeView, viewData.currentTownId, townView.townId))
+                        continue;
+                    town.routes.Add(new RouteEntry(routeView));
+                }
+            }
+
+            towns.Add(town);
+        }
+
+        Rebuild();
+    }
+
     /// <summary>현재 상태(펼친 도시 반영)로 버튼 리스트를 다시 만든다.</summary>
     private void Rebuild()
     {
@@ -58,7 +98,8 @@ public class TownRoutePanel : MonoBehaviour
         {
             // 도시 버튼 — 짧게 탭=선택(펼침), 길게=정보 팝업. 잠긴 도시는 [잠김] 표기.
             Button tb = Instantiate(townButtonPrefab, listContainer);
-            SetLabel(tb, town.unlocked ? town.name : $"{town.name}  [잠김]");
+            string townState = !town.unlocked ? " [잠김]" : (!town.canSelect ? " [선택 불가]" : string.Empty);
+            SetLabel(tb, $"{town.name}{townState}");
             string tid = town.id;         // foreach 캡처 방지
             TownEntry captured = town;    // 팝업용 전체 정보 캡처
             LongPressTrigger lp = tb.gameObject.AddComponent<LongPressTrigger>();
@@ -71,10 +112,14 @@ public class TownRoutePanel : MonoBehaviour
                 foreach (RouteEntry route in town.routes)
                 {
                     Button rb = Instantiate(routeButtonPrefab != null ? routeButtonPrefab : townButtonPrefab, listContainer);
-                    string via = route.viaCount > 0 ? $" · 경유 {route.viaCount}" : " · 직행";
-                    SetLabel(rb, $"└ {route.name} ({route.distanceKm:0.#}km{via})");
+                    string availability = route.canSelect ? string.Empty : $"\n{FallbackReason(route.disabledReason)}";
+                    SetLabel(rb,
+                        $"└ {route.name} ({route.distanceKm:0.#}km / {route.estimatedTime:0.#}시간)" +
+                        $"\n식량 {route.requiredFood} · 전투력 {route.requiredMercenaryPower} · 위험도 {route.riskLevel:0.#}" +
+                        availability);
                     string rTid = town.id; string rid = route.id; float dist = route.distanceKm;
                     rb.onClick.AddListener(() => OnRouteSelected?.Invoke(rTid, rid, dist));
+                    rb.interactable = route.canSelect;
                     spawned.Add(rb.gameObject);
                 }
             }
@@ -92,6 +137,20 @@ public class TownRoutePanel : MonoBehaviour
     {
         expandedTownId = (expandedTownId == townId) ? null : townId;
         Rebuild();
+    }
+
+    private static bool IsRouteForTown(RouteViewData route, string currentTownId, string townId)
+    {
+        if (string.IsNullOrEmpty(townId)) return false;
+        if (!string.IsNullOrEmpty(currentTownId))
+            return (route.fromTownId == currentTownId && route.toTownId == townId) ||
+                   (route.toTownId == currentTownId && route.fromTownId == townId);
+        return route.fromTownId == townId || route.toTownId == townId;
+    }
+
+    private static string FallbackReason(string reason)
+    {
+        return string.IsNullOrWhiteSpace(reason) ? "선택할 수 없습니다." : reason;
     }
 
     /// <summary>생성된 버튼을 모두 제거한다.
@@ -122,6 +181,8 @@ public class TownRoutePanel : MonoBehaviour
         // ── 정보 팝업용(롱프레스) ──
         public string description;
         public bool unlocked;
+        public bool canSelect;
+        public string disabledReason;
         public float contributionCurrent;
         public float contributionMax;
         public List<Specialty> specialties;
@@ -133,6 +194,8 @@ public class TownRoutePanel : MonoBehaviour
             this.routes = routes;
             description = "";
             unlocked = true;
+            canSelect = true;
+            disabledReason = "";
             contributionCurrent = 0f;
             contributionMax = 0f;
             specialties = null;
@@ -161,6 +224,12 @@ public class TownRoutePanel : MonoBehaviour
         public string name;
         public float distanceKm;
         public int viaCount;   // 경유 도시 수(0 = 직행)
+        public float estimatedTime;
+        public int requiredFood;
+        public int requiredMercenaryPower;
+        public float riskLevel;
+        public bool canSelect;
+        public string disabledReason;
 
         public RouteEntry(string id, string name, float distanceKm, int viaCount)
         {
@@ -168,6 +237,26 @@ public class TownRoutePanel : MonoBehaviour
             this.name = name;
             this.distanceKm = distanceKm;
             this.viaCount = viaCount;
+            estimatedTime = 0f;
+            requiredFood = 0;
+            requiredMercenaryPower = 0;
+            riskLevel = 0f;
+            canSelect = true;
+            disabledReason = "";
+        }
+
+        public RouteEntry(RouteViewData viewData)
+        {
+            id = viewData.routeId;
+            name = viewData.displayName;
+            distanceKm = viewData.distance;
+            viaCount = 0;
+            estimatedTime = viewData.estimatedTime;
+            requiredFood = viewData.requiredDraftAnimalFoodQuantity;
+            requiredMercenaryPower = viewData.requiredMercenaryPower;
+            riskLevel = viewData.riskLevel;
+            canSelect = viewData.isUnlocked && viewData.canSelect;
+            disabledReason = viewData.disabledReason;
         }
     }
 }
