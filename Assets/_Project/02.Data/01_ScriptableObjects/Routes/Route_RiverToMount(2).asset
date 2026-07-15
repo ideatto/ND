@@ -10,18 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d6ca5c35337d5bd4594d2809d4a7c844, type: 3}
-  m_Name: Route_BaseToRiver
+  m_Name: Route_RiverToMount(2)
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
-  routeId: BaseRoute
-  fromTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
-  toTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
-  displayName: BaseToRiver
+  routeId: RiverToMount2
+  fromTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
+  toTown: {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
+  displayName: "\uC0B0 \uAE38"
   unlockedByDefault: 1
-  distance: 20
-  defaultElapsedTime: 100
-  baseFoodCost: 1
+  distance: 28
+  defaultElapsedTime: 140
+  baseFoodCost: 0
   baseMercenaryCost: 0
-  baseRequiredFoodQuantity: 5
+  baseRequiredFoodQuantity: 7
   baseRequiredMercenaryPower: 0
   baseRiskLevel: 0
   routeEvents: []

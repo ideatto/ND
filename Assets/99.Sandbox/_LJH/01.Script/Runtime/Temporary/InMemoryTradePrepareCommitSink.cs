@@ -4,7 +4,10 @@ using System.Collections.Generic;
 // Temporary storage for the hand-off between departure and settlement.
 // Replace this implementation with a Framework-owned sink without changing
 // TradePrepareStartAdapter or the UI binding.
-public sealed class InMemoryTradePrepareCommitSink : ITradePrepareCommitSink
+public sealed class InMemoryTradePrepareCommitSink :
+    ITradePrepareCommitSink,
+    ITradePrepareCommitSource,
+    ITradePrepareCommitCompletion
 {
     private readonly Dictionary<string, TradePrepareCommitData> stagedByTradeId =
         new Dictionary<string, TradePrepareCommitData>(StringComparer.Ordinal);

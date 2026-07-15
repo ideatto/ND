@@ -2,7 +2,11 @@
 public sealed class TradePrepareCommitData
 {
     public string tradeId;
+    public string currentTownId;
+    public string selectedDestinationTownId;
     public string routeId;
+    public string selectedWagonId;
+    public DraftAnimalSelectionData[] selectedAnimals = new DraftAnimalSelectionData[0];
     // Departure-time previews for the temporary settlement only. Production
     // settlement may replace these with event-adjusted Economy results.
     public long purchaseCost;
@@ -19,7 +23,11 @@ public sealed class TradePrepareCommitData
         return new TradePrepareCommitData
         {
             tradeId = tradeId ?? string.Empty,
+            currentTownId = currentTownId ?? string.Empty,
+            selectedDestinationTownId = selectedDestinationTownId ?? string.Empty,
             routeId = routeId ?? string.Empty,
+            selectedWagonId = selectedWagonId ?? string.Empty,
+            selectedAnimals = CloneSelectedAnimals(selectedAnimals),
             purchaseCost = NormalizeMoney(purchaseCost),
             foodCost = NormalizeMoney(foodCost),
             mercenaryCost = mercenaryCost > 0L ? mercenaryCost : 0L,
@@ -29,6 +37,28 @@ public sealed class TradePrepareCommitData
                 ? (string[])selectedMercenaryIds.Clone()
                 : new string[0]
         };
+    }
+
+    private static DraftAnimalSelectionData[] CloneSelectedAnimals(
+        DraftAnimalSelectionData[] source)
+    {
+        if (source == null || source.Length == 0)
+        {
+            return new DraftAnimalSelectionData[0];
+        }
+
+        var result = new DraftAnimalSelectionData[source.Length];
+        for (int index = 0; index < source.Length; index++)
+        {
+            DraftAnimalSelectionData animal = source[index];
+            result[index] = animal == null ? null : new DraftAnimalSelectionData
+            {
+                draftAnimalId = animal.draftAnimalId ?? string.Empty,
+                quantity = animal.quantity > 0 ? animal.quantity : 0
+            };
+        }
+
+        return result;
     }
 
     private static long NormalizeMoney(long value)
@@ -77,4 +107,18 @@ public interface ITradePrepareCommitSink
 
     // Restore the Framework-owned state if departure fails after staging.
     void Rollback(string tradeId);
+}
+
+// Read access is separated from staging so settlement can consume Framework-owned
+// persisted data without depending on a concrete storage implementation.
+public interface ITradePrepareCommitSource
+{
+    bool TryGet(string tradeId, out TradePrepareCommitData commitData);
+}
+
+// Completing a settlement returns the committed snapshot and removes it atomically
+// so the same trade cannot be claimed twice.
+public interface ITradePrepareCommitCompletion
+{
+    bool TryComplete(string tradeId, out TradePrepareCommitData commitData);
 }

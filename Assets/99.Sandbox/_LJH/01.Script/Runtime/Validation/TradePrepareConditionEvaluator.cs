@@ -154,8 +154,8 @@ public class TradePrepareConditionEvaluator
             case TradePrepareConditionType.MixedDraftAnimalType:
                 return new TradePrepareConditionResult
                 {
-                    canStart = false,
-                    disabledReason = "Selected draft animal types cannot be mixed.",
+                    canStart = true,
+                    disabledReason = string.Empty,
                     hasWarning = false,
                     warningMessages = new List<string>()
                 };
@@ -163,10 +163,13 @@ public class TradePrepareConditionEvaluator
             case TradePrepareConditionType.NoCargo:
                 return new TradePrepareConditionResult
                 {
-                    canStart = false,
-                    disabledReason = "No cargo is loaded.",
-                    hasWarning = false,
-                    warningMessages = new List<string>()
+                    canStart = true,
+                    disabledReason = string.Empty,
+                    hasWarning = true,
+                    warningMessages = new List<string>
+                    {
+                        "No trade cargo is loaded. Trade can start, but no cargo sale revenue is expected."
+                    }
                 };
 
             case TradePrepareConditionType.InvalidCargoSelection:
@@ -244,15 +247,10 @@ public class TradePrepareConditionEvaluator
             if (!AreSelectedDraftAnimalsAllowed(input.selectedDraftAnimalCount, input.selectedDraftAnimalTypes, input.eligibleDraftAnimalTypes))
                 return Create(TradePrepareConditionType.InvalidDraftAnimalType);
 
-            if (!AreSelectedDraftAnimalTypesUniform(input.selectedDraftAnimalCount, input.selectedDraftAnimalTypes))
-                return Create(TradePrepareConditionType.MixedDraftAnimalType);
         }
 
         if (input.hasInvalidCargoSelection)
             return Create(TradePrepareConditionType.InvalidCargoSelection);
-
-        if (!input.hasCargo)
-            return Create(TradePrepareConditionType.NoCargo);
 
         if (input.usedInventorySlotCount > input.maxInventorySlotCount)
             return Create(TradePrepareConditionType.InventorySlotExceeded);
@@ -264,6 +262,9 @@ public class TradePrepareConditionEvaluator
             return Create(TradePrepareConditionType.LoadExceeded);
 
         var warningMessages = new List<string>();
+
+        if (!input.hasCargo)
+            warningMessages.Add("No trade cargo is loaded. Trade can start, but no cargo sale revenue is expected.");
 
         if (input.loadedDraftAnimalFoodQuantity < input.requiredDraftAnimalFoodQuantity)
             warningMessages.Add("Draft animal food is insufficient. Trade can start, but risk may increase.");
@@ -313,21 +314,4 @@ public class TradePrepareConditionEvaluator
         return true;
     }
 
-    private bool AreSelectedDraftAnimalTypesUniform(int selectedCount, DraftAnimalType[] selectedTypes)
-    {
-        if (selectedCount <= 1)
-            return true;
-
-        if (selectedTypes == null || selectedTypes.Length < selectedCount)
-            return false;
-
-        var firstType = selectedTypes[0];
-        for (var index = 1; index < selectedCount; index++)
-        {
-            if (selectedTypes[index] != firstType)
-                return false;
-        }
-
-        return true;
-    }
 }

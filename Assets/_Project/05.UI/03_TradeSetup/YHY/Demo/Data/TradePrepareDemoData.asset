@@ -13,25 +13,23 @@ MonoBehaviour:
   m_Name: TradePrepareDemoData
   m_EditorClassIdentifier: Assembly-CSharp::TradePrepareDemoData
   towns:
-  - {fileID: 11400000, guid: 75dd785947d27554f8fbd2e7f016d235, type: 2}
-  - {fileID: 11400000, guid: 16a23802f33d25546ad1607a21440693, type: 2}
-  - {fileID: 11400000, guid: ea62894387461794b9cde56a76cbd3cf, type: 2}
+  - {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  - {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
+  - {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
   transports:
-  - {fileID: 11400000, guid: e082aa6818194fc49856af95f0469927, type: 2}
-  - {fileID: 11400000, guid: 5f8cbdbffb75bdd449be07002431c40d, type: 2}
-  - {fileID: 11400000, guid: b8b6f674d5faaab4dad0d0bb9635b993, type: 2}
-  - {fileID: 11400000, guid: d2349be329ef7264dbb63a7f155a7b7f, type: 2}
-  transportOwned: 01000000010000000100000001000000
+  - {fileID: 11400000, guid: d1f29cbc4f6fb5d489d1ac675ed655df, type: 2}
+  - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
+  transportOwned: 0100000001000000
   animals:
-  - {fileID: 11400000, guid: 7c93421647e11d241b29d249ea3928a5, type: 2}
-  - {fileID: 11400000, guid: 460a99e13ae3a6a498f8c11f92c3bf2b, type: 2}
-  - {fileID: 11400000, guid: c39ba009abd23f940ba23f55b6934935, type: 2}
+  - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
+  - {fileID: 11400000, guid: 76f8d2c8354dee44ba423e15d4531cf5, type: 2}
   items:
-  - {fileID: 11400000, guid: 9dae00940fbf3814da62a51860b21184, type: 2}
-  - {fileID: 11400000, guid: ba526349a1038024e9c9c18ab6cce4ec, type: 2}
-  - {fileID: 11400000, guid: ac3ae27bdbddcc24f84ac916739bde41, type: 2}
-  - {fileID: 11400000, guid: 7826bbe83379fae42862e83bade08d5f, type: 2}
-  - {fileID: 11400000, guid: 0e182e6249e965042a5a4322cab1b86b, type: 2}
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: d3e0661c62971554698aecafac846371, type: 2}
+  - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
+  - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
+  - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
   gold: 2000
   requiredFood: 3
   itemStocks: 

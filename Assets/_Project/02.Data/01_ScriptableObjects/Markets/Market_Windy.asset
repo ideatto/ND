@@ -10,16 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7df7a3265402c9043839408fb7059f03, type: 3}
-  m_Name: Market_BaseCamp
+  m_Name: Market_Windy
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
-  marketId: BaseCampMarket
+  marketId: 
   itemMaxQuantity: 10
   itemRenewalCycle: 1
   tradeItems:
-  - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
   draftAnimalItems: []
-  wagonItems:
-  - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
-  localSpecialtyItems:
-  - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
+  wagonItems: []
+  localSpecialtyItems: []
