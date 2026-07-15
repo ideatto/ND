@@ -114,6 +114,23 @@ public class AnimalInventoryPanel : MonoBehaviour
         UpdateInventoryLabels(); // 잔량 표시
     }
 
+    public void Populate(TradePrepareViewData viewData)
+    {
+        List<AnimalEntry> animalEntries = new List<AnimalEntry>();
+        List<TransportSelectPanel.TransportEntry> wagonEntries = new List<TransportSelectPanel.TransportEntry>();
+
+        if (viewData != null && viewData.draftAnimals != null)
+            foreach (DraftAnimalViewData animal in viewData.draftAnimals)
+                if (animal != null) animalEntries.Add(new AnimalEntry(animal));
+
+        if (viewData != null && viewData.wagons != null)
+            foreach (WagonViewData wagon in viewData.wagons)
+                if (wagon != null && wagon.wagonType == WagonType.WagonWithAnimals)
+                    wagonEntries.Add(new TransportSelectPanel.TransportEntry(wagon));
+
+        Populate(animalEntries, wagonEntries);
+    }
+
     /// <summary>[Edit] → 웨건 선택 팝업 열기.</summary>
     private void OpenWagonPopup()
     {
@@ -177,7 +194,7 @@ public class AnimalInventoryPanel : MonoBehaviour
             int placed = counts.TryGetValue(a.id, out int c) ? c : 0;
             int remain = a.ownedCount - placed;
             SetLabel(invButtons[i], $"{a.name}\n(x{remain})");
-            if (invButtons[i] != null) invButtons[i].interactable = hasWagon && remain > 0 && !full;
+            if (invButtons[i] != null) invButtons[i].interactable = hasWagon && a.canSelect && remain > 0 && !full;
         }
     }
 
@@ -321,6 +338,8 @@ public class AnimalInventoryPanel : MonoBehaviour
         public float incOverLoad;    // 평균(적정) 적재량 증가치
         public float incMaxLoad;     // 최대 적재량 증가치
         public float feedConsumption; // 초당 음식 소모량(툴팁 표시용)
+        public bool canSelect;
+        public string disabledReason;
 
         public AnimalEntry(string id, string name, int ownedCount,
                            float moveSpeed, float incOverLoad, float incMaxLoad, float feedConsumption)
@@ -332,6 +351,21 @@ public class AnimalInventoryPanel : MonoBehaviour
             this.incOverLoad = incOverLoad;
             this.incMaxLoad = incMaxLoad;
             this.feedConsumption = feedConsumption;
+            canSelect = true;
+            disabledReason = "";
+        }
+
+        public AnimalEntry(DraftAnimalViewData viewData)
+        {
+            id = viewData.draftAnimalId;
+            name = viewData.displayName;
+            ownedCount = viewData.ownedAmount;
+            moveSpeed = viewData.baseMoveSpeed;
+            incOverLoad = viewData.increaseOverLoad;
+            incMaxLoad = viewData.increaseMaxLoad;
+            feedConsumption = viewData.feedConsumption;
+            canSelect = viewData.canSelect && viewData.isEligibleForSelectedWagon;
+            disabledReason = viewData.disabledReason;
         }
     }
 

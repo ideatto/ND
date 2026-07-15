@@ -35,9 +35,18 @@ public class TradePreparePanel : MonoBehaviour
     [SerializeField] private TMP_Text foodText;      // 예상 필요 식량
     [SerializeField] private TMP_Text timeText;      // 예상 이동 시간
 
+    [Header("준비 요약 (선택 연결)")]
+    [SerializeField] private TMP_Text combatPowerText;
+    [SerializeField] private TMP_Text costText;
+    [SerializeField] private TMP_Text profitText;
+    [SerializeField] private TMP_Text currencyText;
+
     [Header("출발")]
     [SerializeField] private Button departButton;        // 출발 버튼
     [SerializeField] private TMP_Text blockReasonText;   // 출발 불가 사유
+
+    [Header("공식 무역 준비 데이터")]
+    [SerializeField] private TradePrepareRuntimeContextProvider runtimeContext;
 
     [Header("무역로")]
     [SerializeField] private string routeId = "route_01";  // 선택된 무역로 ID (임시 기본값 — 라우트 선택에서 세팅 예정)
@@ -46,12 +55,69 @@ public class TradePreparePanel : MonoBehaviour
     private CaravanData caravan;
     private float distanceKm;
     private float inGameTimeMultiplier = 1f;
+    private TradePrepareViewData currentViewData;
 
     private void Awake()
     {
         // 출발 버튼을 Framework 출발 API 호출에 연결한다.
         if (departButton != null)
             departButton.onClick.AddListener(Depart);
+    }
+
+    private void OnEnable()
+    {
+        if (runtimeContext == null) return;
+        runtimeContext.ViewDataChanged += Bind;
+        Bind(runtimeContext.CurrentViewData);
+    }
+
+    private void OnDisable()
+    {
+        if (runtimeContext != null)
+            runtimeContext.ViewDataChanged -= Bind;
+    }
+
+    /// <summary>Builder가 계산한 공식 ViewData만 표시하며 UI에서 값을 재계산하지 않는다.</summary>
+    public void Bind(TradePrepareViewData viewData)
+    {
+        currentViewData = viewData;
+        if (viewData == null)
+        {
+            if (departButton != null) departButton.interactable = false;
+            SetText(blockReasonText, "무역 준비 데이터를 불러오지 못했습니다.");
+            return;
+        }
+
+        SetText(loadText, $"짐무게 {viewData.currentLoad:0.#}");
+        SetText(limitText, $"적정 {viewData.overloadLimit:0.#} / 최대 {viewData.maxLoad:0.#}");
+        SetText(slotText, $"칸 {viewData.usedInventorySlotCount}/{viewData.maxInventorySlotCount}");
+        SetText(overloadText, viewData.currentLoad > viewData.overloadLimit ? "과적" : "정상");
+
+        SetText(foodText,
+            $"식량 {viewData.loadedDraftAnimalFoodQuantity}/{viewData.requiredDraftAnimalFoodQuantity}");
+        SetText(timeText, $"예상 이동 시간 {viewData.finalExpectedTravelTime:0.#}");
+        SetText(combatPowerText,
+            $"전투력 {viewData.selectedMercenaryPower}/{viewData.requiredMercenaryPower}");
+        SetText(costText,
+            $"준비 비용 {viewData.totalPreparationCost:N0} (상품 {viewData.totalPurchaseCost:N0} / " +
+            $"식량 {viewData.draftAnimalFoodCost:N0} / 용병 {viewData.mercenaryCost:N0})");
+        SetText(profitText,
+            $"예상 매출 {viewData.estimatedSellRevenue:N0} / 순이익 {viewData.estimatedNetProfit:N0}");
+        SetText(currencyText, $"보유 화폐 {viewData.currentTradingCurrency:N0}");
+
+        TradePrepareConditionResult condition = viewData.startCondition;
+        bool canStart = condition != null && condition.canStart;
+        if (departButton != null) departButton.interactable = canStart;
+
+        string message = canStart ? string.Empty :
+            (condition == null || string.IsNullOrWhiteSpace(condition.disabledReason)
+                ? "출발 조건을 확인할 수 없습니다."
+                : condition.disabledReason);
+        if (condition != null && condition.hasWarning && condition.warningMessages != null && condition.warningMessages.Count > 0)
+            message = string.IsNullOrEmpty(message)
+                ? string.Join("\n", condition.warningMessages)
+                : message + "\n" + string.Join("\n", condition.warningMessages);
+        SetText(blockReasonText, message);
     }
 
     /// <summary>준비 상단·거리·배율로 표시를 갱신한다(출발에 쓸 값도 저장). Core 계산기·검증기를 그대로 사용.</summary>
@@ -85,6 +151,24 @@ public class TradePreparePanel : MonoBehaviour
     /// <summary>출발 버튼 — 가이드의 Framework API(TradeStart.TryStartTrade)를 직접 호출한다.</summary>
     private void Depart()
     {
+        if (currentViewData != null)
+        {
+            if (runtimeContext == null)
+            {
+                Debug.LogWarning("[무역 준비 패널] TradePrepareRuntimeContextProvider가 연결되지 않았습니다.", this);
+                return;
+            }
+
+            TradePrepareStartResult startResult = runtimeContext.TryStartTrade(Guid.NewGuid().ToString());
+            if (!startResult.succeeded)
+            {
+                SetText(blockReasonText, string.IsNullOrWhiteSpace(startResult.errorMessage)
+                    ? "출발 요청에 실패했습니다."
+                    : startResult.errorMessage);
+            }
+            return;
+        }
+
         if (caravan == null) return;
 
         FrameworkRoot root = FrameworkRoot.Instance;

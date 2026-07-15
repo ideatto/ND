@@ -9,8 +9,9 @@ using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using ND.Economy;
+using ND.Framework;
 
-public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClickHandler
+public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClickHandler, ISettlementView
 {
     [Header("Presentation")]
     [SerializeField] private Sprite receiptBackgroundSprite;
@@ -36,6 +37,9 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
     private EconomyM1SettlementViewData currentViewData;
     private RouteData currentRoute;
     private float currentElapsedSeconds;
+    private bool currentCanClaim;
+    private string currentRouteTitle = "출발지 → 목적지";
+    private string currentFailureMessage = string.Empty;
     private bool paymentCompletionWired;
 
     public bool IsTyping => typing;
@@ -63,12 +67,43 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
 
     public void Show(EconomyM1LoopResult result, RouteData route, float elapsedSeconds)
     {
-        ShowInternal(EconomyM1SettlementViewAdapter.Create(result), route, elapsedSeconds);
+        Show(EconomyM1SettlementViewAdapter.Create(result), route, elapsedSeconds);
     }
 
     public void Show(EconomyM1SettlementViewData viewData, RouteData route, float elapsedSeconds)
     {
+        currentCanClaim = viewData != null && viewData.Success;
+        currentFailureMessage = viewData != null && !viewData.Success ? viewData.ErrorCode : string.Empty;
+        currentRouteTitle = BuildRouteTitle(route);
         ShowInternal(viewData, route, elapsedSeconds);
+    }
+
+    public void ShowSettlement(SettlementViewData viewData)
+    {
+        if (viewData == null) { ShowNoSettlement("No settlement result."); return; }
+        currentCanClaim = viewData.CanClaim;
+        currentFailureMessage = viewData.IsFailed ? $"실패 사유  {viewData.FailureReason}" : string.Empty;
+        currentRouteTitle = ResolveFrameworkRouteTitle();
+        var settlement = new SettlementBreakdown {
+            TradeId = viewData.TradeId, TotalRevenue = viewData.Revenue,
+            TotalExpense = viewData.Cost, GrossTradeProfit = viewData.Revenue - viewData.Cost,
+            NetProfit = viewData.NetProfit
+        };
+        if (viewData.Revenue > 0) settlement.Entries.Add(new SettlementEntry { EntryType = SettlementEntryType.ItemSaleRevenue, Amount = viewData.Revenue, IsPositive = true, SourceId = "trade" });
+        if (viewData.Cost > 0) settlement.Entries.Add(new SettlementEntry { EntryType = SettlementEntryType.ItemPurchaseCost, Amount = viewData.Cost, IsPositive = false, SourceId = "trade" });
+        ShowInternal(new EconomyM1SettlementViewData { Success = true, Settlement = settlement }, null, viewData.TravelSeconds);
+    }
+
+    public void ShowNoSettlement(string reason)
+    {
+        currentCanClaim = false; currentFailureMessage = reason ?? string.Empty; currentRouteTitle = "출발지 → 목적지";
+        ShowInternal(new EconomyM1SettlementViewData { Success = false, ErrorCode = currentFailureMessage }, null, 0f);
+    }
+
+    public void SetClaimInteractable(bool interactable)
+    {
+        currentCanClaim = interactable;
+        if (paymentButton != null) paymentButton.interactable = interactable;
     }
 
     private void ShowInternal(EconomyM1SettlementViewData viewData, RouteData route, float elapsedSeconds)
@@ -84,12 +119,11 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         currentElapsedSeconds = Mathf.Max(0f, elapsedSeconds);
         completeReceipt = BuildReceipt(currentViewData);
 
-        routeText.text = BuildRouteTitle(route);
+        routeText.text = currentRouteTitle;
         elapsedText.text = $"소요 시간  {FormatElapsed(currentElapsedSeconds)}";
         receiptText.text = string.Empty;
-        errorText.text = currentViewData.Success
-            ? string.Empty
-            : $"실패 사유  {currentViewData.ErrorCode}";
+        errorText.text = !string.IsNullOrEmpty(currentFailureMessage) ? currentFailureMessage
+            : (currentViewData.Success ? string.Empty : $"실패 사유  {currentViewData.ErrorCode}");
         paymentButton.gameObject.SetActive(false);
 
         gameObject.SetActive(true);
@@ -113,12 +147,13 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
             return;
         typing = false;
         receiptText.text = completeReceipt;
-        paymentButton.gameObject.SetActive(currentViewData != null && currentViewData.Success);
+        paymentButton.gameObject.SetActive(currentViewData != null && currentCanClaim);
+        paymentButton.interactable = currentCanClaim;
     }
 
     public void OpenPayment()
     {
-        if (typing || currentViewData == null || !currentViewData.Success)
+        if (typing || currentViewData == null || !currentCanClaim)
             return;
 
         if (paymentPanel == null)
@@ -131,7 +166,7 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
 
         WirePaymentCompletion();
 
-        paymentPanel.Show(currentViewData, currentRoute, currentElapsedSeconds);
+        paymentPanel.Show(currentViewData, currentRouteTitle, currentElapsedSeconds, currentCanClaim);
         onPaymentRequested.Invoke();
         gameObject.SetActive(false);
     }
@@ -310,6 +345,16 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
             return "출발지 → 목적지";
         string from = string.IsNullOrWhiteSpace(route.FromTownName) ? route.FromTownId : route.FromTownName;
         string to = string.IsNullOrWhiteSpace(route.ToTownName) ? route.ToTownId : route.ToTownName;
+        return $"{from} → {to}";
+    }
+
+    private static string ResolveFrameworkRouteTitle()
+    {
+        var root = FrameworkRoot.Instance; var save = root != null ? root.CurrentSaveData : null;
+        string routeId = save?.tradeProgress != null ? save.tradeProgress.activeRouteId : string.Empty;
+        if (root?.SharedGameData == null || !root.SharedGameData.TryGetRoute(routeId, out SharedRouteDefinition route)) return "출발지 → 목적지";
+        string from = root.SharedGameData.TryGetTown(route.FromTownId, out SharedTownDefinition a) ? a.DisplayName : route.FromTownId;
+        string to = root.SharedGameData.TryGetTown(route.ToTownId, out SharedTownDefinition b) ? b.DisplayName : route.ToTownId;
         return $"{from} → {to}";
     }
 

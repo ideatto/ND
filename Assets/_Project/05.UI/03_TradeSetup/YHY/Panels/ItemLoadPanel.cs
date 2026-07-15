@@ -45,12 +45,32 @@ public class ItemLoadPanel : MonoBehaviour
         foreach (ItemEntry it in items)
         {
             QuantityRow row = Instantiate(rowPrefab, rowContainer);
-            row.Setup(it.id, $"{it.name} (each {it.unitWeight:0.#})", 0, it.maxCount);   // 시작 수량 0
+            string reason = !it.canSelect && !string.IsNullOrWhiteSpace(it.disabledReason) ? $"\n{it.disabledReason}" : string.Empty;
+            row.Setup(it.id,
+                $"{it.name} · Buy {it.purchasePrice:N0} / Sell {it.sellPrice:N0} · {it.unitWeight:0.#}kg{reason}",
+                it.startCount, it.canSelect ? it.maxCount : 0);
             row.OnChanged = HandleRowChanged;
-            counts[it.id] = 0;
+            counts[it.id] = it.canSelect ? it.startCount : 0;
             spawned.Add(row);
             rowIds.Add(it.id);   // 행-아이템 매칭 기록(롤백 시 사용)
         }
+    }
+
+    public void Populate(TradePrepareViewData viewData)
+    {
+        List<ItemEntry> entries = new List<ItemEntry>();
+        if (viewData != null && viewData.tradeItems != null)
+        {
+            foreach (TradeItemViewData item in viewData.tradeItems)
+            {
+                if (item == null) continue;
+                int affordable = item.purchasePrice > 0
+                    ? (int)Math.Min(int.MaxValue, viewData.currentTradingCurrency / item.purchasePrice)
+                    : 0;
+                entries.Add(new ItemEntry(item, affordable));
+            }
+        }
+        Populate(entries, viewData != null ? viewData.maxInventorySlotCount : 0);
     }
 
     /// <summary>행 수량이 바뀔 때 — 슬롯(종류 수) 초과면 되돌리고, 아니면 갱신 후 통지.</summary>
@@ -116,6 +136,11 @@ public class ItemLoadPanel : MonoBehaviour
         public string name;
         public float unitWeight;   // 개당 무게(표시용) — 최종 과적 판정은 CaravanCalculator
         public int maxCount;       // 이 아이템의 최대 선택 수량(보유/재고 등)
+        public int startCount;
+        public long purchasePrice;
+        public long sellPrice;
+        public bool canSelect;
+        public string disabledReason;
 
         public ItemEntry(string id, string name, float unitWeight, int maxCount)
         {
@@ -123,6 +148,24 @@ public class ItemLoadPanel : MonoBehaviour
             this.name = name;
             this.unitWeight = unitWeight;
             this.maxCount = maxCount;
+            startCount = 0;
+            purchasePrice = 0;
+            sellPrice = 0;
+            canSelect = true;
+            disabledReason = "";
+        }
+
+        public ItemEntry(TradeItemViewData viewData, int affordableCount)
+        {
+            id = viewData.itemId;
+            name = viewData.displayName;
+            unitWeight = viewData.unitWeight;
+            maxCount = Mathf.Max(viewData.selectedBuyAmount, affordableCount);
+            startCount = viewData.selectedBuyAmount;
+            purchasePrice = viewData.purchasePrice;
+            sellPrice = viewData.sellPrice;
+            canSelect = viewData.canBuy;
+            disabledReason = viewData.buyDisabledReason;
         }
     }
 
