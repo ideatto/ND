@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d6ca5c35337d5bd4594d2809d4a7c844, type: 3}
   m_Name: Route_RiverToBase
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
-  routeId: RiverToMount2
+  routeId: RiverToBase
   fromTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   toTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
   displayName: "\uB451\uAE38"

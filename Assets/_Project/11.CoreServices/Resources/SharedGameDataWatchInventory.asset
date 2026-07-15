@@ -14,74 +14,124 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.SharedGameDataWatchInventory
   entries:
   - assetGuid: 0dde79d6f6eee1344bfd9045a5daae76
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Town_BaseCamp.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Towns/Town_BaseCamp.asset
     typeName: TownData
     dataId: BaseCamp
     watchRootKind: 0
+  - assetGuid: 1ac5dbe488434b448aed1fb3d43990e3
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Towns/Town_MountTown.asset
+    typeName: TownData
+    dataId: MountTown
+    watchRootKind: 0
   - assetGuid: 9c4c1521bbaa1d546b26a41f7d5a8255
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Town_RiverTown.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Towns/Town_RiverTown.asset
     typeName: TownData
     dataId: RiverTown
     watchRootKind: 0
+  - assetGuid: 259bc7da0af73de4a867e8137f1a94c9
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Towns/Town_WindyTown.asset
+    typeName: TownData
+    dataId: WindyTown
+    watchRootKind: 0
   - assetGuid: 2c96b46f441c50c41af162d300042fdf
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Market_BaseCamp.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Markets/Market_BaseCamp.asset
     typeName: MarketData
     dataId: BaseCampMarket
     watchRootKind: 0
+  - assetGuid: 3f9e7b158e821a448ac5b0531b807095
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Markets/Market_Mount.asset
+    typeName: MarketData
+    dataId: MountTownMarket
+    watchRootKind: 0
   - assetGuid: 24facdcdcd1273e4a901c56ee267a402
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Market_RiverTown.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Markets/Market_RiverTown.asset
     typeName: MarketData
     dataId: RiverTownMarket
     watchRootKind: 0
+  - assetGuid: 339c690cf763c7344b2b1e65b2277910
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Markets/Market_Windy.asset
+    typeName: MarketData
+    dataId: WindyTownMarket
+    watchRootKind: 0
   - assetGuid: 516cb545e2dec9f49ac10b83ac381bcd
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Apple.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Apple.asset
     typeName: TradeItemData
     dataId: Apple
     watchRootKind: 0
   - assetGuid: 94ed95203aade1d4f9f3fb54372c2fd2
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Bread.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Bread.asset
     typeName: TradeItemData
     dataId: Bread
     watchRootKind: 0
   - assetGuid: 6d583a4b588878f4590e2f778fadebcf
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Cloth.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Cloth.asset
     typeName: TradeItemData
     dataId: Cloth
     watchRootKind: 0
   - assetGuid: d3e0661c62971554698aecafac846371
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Fish.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Fish.asset
     typeName: TradeItemData
     dataId: Fish
     watchRootKind: 0
+  - assetGuid: d81e172ffdc16d948b37a48d1a89a98a
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Stover.asset
+    typeName: TradeItemData
+    dataId: Stover
+    watchRootKind: 0
   - assetGuid: f546f2032fa12be49bb841ec17ba64c8
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem_Wheat.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Wheat.asset
     typeName: TradeItemData
     dataId: Wheat
     watchRootKind: 0
   - assetGuid: d1f29cbc4f6fb5d489d1ac675ed655df
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagon_WagonM.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagons/Wagon_WagonM.asset
     typeName: WagonData
     dataId: Wagon_M
     watchRootKind: 0
   - assetGuid: 5a4e66a6b162bbd4fa04db74a5ff2a7d
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagon_WagonS.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagons/Wagon_WagonS.asset
     typeName: WagonData
     dataId: Wagon_S
     watchRootKind: 0
   - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimal_donkey.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
     typeName: DraftAnimalData
     dataId: Donkey
     watchRootKind: 0
   - assetGuid: 76f8d2c8354dee44ba423e15d4531cf5
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimal_Horse.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_Horse.asset
     typeName: DraftAnimalData
     dataId: Horse
     watchRootKind: 0
   - assetGuid: 65c62a9e92134ab4bb1aae8077ca2b8e
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Route_BaseToRiver.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToRiver.asset
     typeName: RouteData
-    dataId: BaseRoute
+    dataId: BaseToRiver
+    watchRootKind: 0
+  - assetGuid: f5d1adf3a0a21c84b805c7c69189b3a3
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToWindy.asset
+    typeName: RouteData
+    dataId: BaseToWindy
+    watchRootKind: 0
+  - assetGuid: ee7668ff6c08c5a4dbbe18824f8f3267
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_MountToBase.asset
+    typeName: RouteData
+    dataId: MountToBase
+    watchRootKind: 0
+  - assetGuid: 10113bd0c38b8394d9cc07cfc15a1443
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_RiverToBase.asset
+    typeName: RouteData
+    dataId: RiverToBase
+    watchRootKind: 0
+  - assetGuid: 4adf786d6f18b784b92b05774d23e2d4
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_RiverToMount(2).asset
+    typeName: RouteData
+    dataId: RiverToMount2
+    watchRootKind: 0
+  - assetGuid: 73bb5efdd4909b24ea1ec0bc440e0d93
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_RiverToMount.asset
+    typeName: RouteData
+    dataId: RiverToMount
     watchRootKind: 0
   - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset
@@ -128,9 +178,13 @@ MonoBehaviour:
   - 0dde79d6f6eee1344bfd9045a5daae76
   - 9c4c1521bbaa1d546b26a41f7d5a8255
   - 2b94a9733de040b4383c1bcfc427585f
+  - 1ac5dbe488434b448aed1fb3d43990e3
+  - 259bc7da0af73de4a867e8137f1a94c9
   - 2c96b46f441c50c41af162d300042fdf
   - 53ff6f350e87d224aac61db15be826f9
   - 24facdcdcd1273e4a901c56ee267a402
+  - 3f9e7b158e821a448ac5b0531b807095
+  - 339c690cf763c7344b2b1e65b2277910
   - 926d44c3a7bd40c799ad6397028e5076
   - 516cb545e2dec9f49ac10b83ac381bcd
   - 94ed95203aade1d4f9f3fb54372c2fd2
@@ -138,6 +192,7 @@ MonoBehaviour:
   - cbd60f3ba1e2e074da9c37e5540c03d3
   - d3e0661c62971554698aecafac846371
   - f546f2032fa12be49bb841ec17ba64c8
+  - d81e172ffdc16d948b37a48d1a89a98a
   - 7de4fcc3bc668084682ba80497b8f8d9
   - 1f1ec2f7f5822c84a9af199bcccf3565
   - d1f29cbc4f6fb5d489d1ac675ed655df
@@ -148,3 +203,8 @@ MonoBehaviour:
   - b7417bcdbc25463a819af2e3d0bc6496
   - 65c62a9e92134ab4bb1aae8077ca2b8e
   - a3fd1e2028afb94498ff4141e2c92419
+  - f5d1adf3a0a21c84b805c7c69189b3a3
+  - ee7668ff6c08c5a4dbbe18824f8f3267
+  - 10113bd0c38b8394d9cc07cfc15a1443
+  - 4adf786d6f18b784b92b05774d23e2d4
+  - 73bb5efdd4909b24ea1ec0bc440e0d93

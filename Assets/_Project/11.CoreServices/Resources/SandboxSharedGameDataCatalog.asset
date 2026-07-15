@@ -17,10 +17,14 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
   - {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   - {fileID: 11400000, guid: 2b94a9733de040b4383c1bcfc427585f, type: 2}
+  - {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
+  - {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
   markets:
   - {fileID: 11400000, guid: 2c96b46f441c50c41af162d300042fdf, type: 2}
   - {fileID: 11400000, guid: 53ff6f350e87d224aac61db15be826f9, type: 2}
   - {fileID: 11400000, guid: 24facdcdcd1273e4a901c56ee267a402, type: 2}
+  - {fileID: 11400000, guid: 3f9e7b158e821a448ac5b0531b807095, type: 2}
+  - {fileID: 11400000, guid: 339c690cf763c7344b2b1e65b2277910, type: 2}
   tradeItems:
   - {fileID: 11400000, guid: 926d44c3a7bd40c799ad6397028e5076, type: 2}
   - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
@@ -29,6 +33,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: cbd60f3ba1e2e074da9c37e5540c03d3, type: 2}
   - {fileID: 11400000, guid: d3e0661c62971554698aecafac846371, type: 2}
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   wagons:
   - {fileID: 11400000, guid: 7de4fcc3bc668084682ba80497b8f8d9, type: 2}
   - {fileID: 11400000, guid: 1f1ec2f7f5822c84a9af199bcccf3565, type: 2}
@@ -42,3 +47,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: b7417bcdbc25463a819af2e3d0bc6496, type: 2}
   - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
   - {fileID: 11400000, guid: a3fd1e2028afb94498ff4141e2c92419, type: 2}
+  - {fileID: 11400000, guid: f5d1adf3a0a21c84b805c7c69189b3a3, type: 2}
+  - {fileID: 11400000, guid: ee7668ff6c08c5a4dbbe18824f8f3267, type: 2}
+  - {fileID: 11400000, guid: 10113bd0c38b8394d9cc07cfc15a1443, type: 2}
+  - {fileID: 11400000, guid: 4adf786d6f18b784b92b05774d23e2d4, type: 2}
+  - {fileID: 11400000, guid: 73bb5efdd4909b24ea1ec0bc440e0d93, type: 2}

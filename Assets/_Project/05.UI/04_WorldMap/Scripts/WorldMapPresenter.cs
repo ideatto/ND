@@ -15,6 +15,7 @@
  * Important Notes
  * - 무역 출발·정산·Save 쓰기를 직접 수행하지 않는다.
  * - Sandbox 전역 SaveData와 구분하기 위해 Framework 타입 alias를 사용한다.
+ * - Shared가 미로드이거나 해당 ID가 없으면 마을/루트 모두 표시한다(WorldMapTest 등).
  * - Related Documentation: Docs/Guide/Framework_World_Map_API_Guide.md
  */
 using System;
@@ -294,17 +295,11 @@ namespace ND.UI.WorldMap
             foreach (var pair in routesById)
             {
                 var display = presentationResolver.GetDisplayState(pair.Key);
-                var unlockedByDefault = false;
-                SharedRouteDefinition def;
-                if (shared != null && shared.TryGetRoute(pair.Key, out def))
-                {
-                    unlockedByDefault = def.UnlockedByDefault;
-                }
-
-                var unlocked = display.IsUnlocked || unlockedByDefault;
                 var isActive = display.IsActive || string.Equals(activeRouteId, pair.Key);
+                // Shared 미로드 시에도 마을과 같이 표시한다. 잠금은 Shared 로드 후에만 적용한다.
+                var unlocked = IsRouteUnlocked(pair.Key, display, shared) || isActive;
                 pair.Value.SetActiveVisual(isActive);
-                pair.Value.gameObject.SetActive(unlocked || isActive || display.IsCompleted);
+                pair.Value.gameObject.SetActive(unlocked);
             }
         }
 
@@ -325,6 +320,39 @@ namespace ND.UI.WorldMap
             if (shared != null && shared.TryGetTown(townId, out town))
             {
                 return town.UnlockedByDefault;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 루트 해금 여부를 Save·Shared 기준으로 판정한다.
+        /// </summary>
+        /// <remarks>
+        /// Shared가 없거나 해당 routeId가 Shared에 없으면 true를 반환한다.
+        /// WorldMapTest처럼 Shared를 로드하지 않는 환경에서 루트가 전부 숨겨지는 것을 막기 위함이며,
+        /// 마을 <see cref="IsTownUnlocked"/> 폴백과 동일하다.
+        /// Shared가 로드된 뒤에는 UnlockedByDefault=false인 루트는 Save 해금·완료·활성 상태가 아니면 숨긴다.
+        /// </remarks>
+        /// <returns>
+        /// Save unlocked/completed이거나 Shared UnlockedByDefault이면 true.
+        /// Shared 미로드 또는 Shared에 route가 없으면 true.
+        /// Shared에 등록되고 UnlockedByDefault=false이며 Save에도 없으면 false.
+        /// </returns>
+        private static bool IsRouteUnlocked(
+            string routeId,
+            RouteMapDisplayState display,
+            ISharedGameDataProvider shared)
+        {
+            if (display.IsUnlocked || display.IsCompleted)
+            {
+                return true;
+            }
+
+            SharedRouteDefinition route;
+            if (shared != null && shared.TryGetRoute(routeId, out route))
+            {
+                return route.UnlockedByDefault;
             }
 
             return true;
