@@ -22,7 +22,7 @@ MonoBehaviour:
   baseFoodCost: 0
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 7
-  baseRequiredMercenaryPower: 0
+  baseRequiredMercenaryPower: 3
   baseRiskLevel: 0
   routeEvents: []
   maxEventCount: 0

@@ -22,6 +22,8 @@ public class TradePrepareViewData
     public int maxInventorySlotCount;
 
     public long totalPurchaseCost;
+    public long estimatedCurrencyAfterPurchase;
+    public bool canPurchaseCargo;
 
     public int loadedDraftAnimalFoodQuantity;
     public int requiredDraftAnimalFoodQuantity;
@@ -41,6 +43,8 @@ public class TradePrepareViewData
     public long draftAnimalFoodCost;
     public long mercenaryCost;
     public long totalPreparationCost;
+    public long estimatedCurrencyAfterHire;
+    public bool canHireSelectedMercenaries;
     public long estimatedSellRevenue;
     public long estimatedNetProfit;
 

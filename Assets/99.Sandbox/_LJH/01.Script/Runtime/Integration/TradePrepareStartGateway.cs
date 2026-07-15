@@ -8,7 +8,7 @@ public interface ITradePrepareStartGateway
         bool saveImmediately);
 }
 
-[System.Serializable]
+
 public sealed class TradePrepareGatewayResult
 {
     public DepartureValidationResult departureValidation;

@@ -48,7 +48,7 @@ public class TradePrepareFlowDemo : MonoBehaviour
         ui.OnCancelled += OnCancelled;
         ui.OnJourneyFinished += OnJourneyFinished;
 
-        ui.Begin();
+        //ui.Begin();
     }
 
     // ══ 어댑터: 진짜 SO → 패널 DTO ═══════════════════════════════

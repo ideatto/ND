@@ -85,6 +85,15 @@ public sealed class TradePrepareViewDataBuilder
         // Mercenary cost comes from the actually selected mercenaries, not the legacy route cost.
         long mercenaryCost = selectedMercenaryHireCost;
         long totalPreparationCost = AddClamped(totalPurchaseCost, mercenaryCost);
+        long currentTradingCurrency = ReadTradingCurrency(saveData);
+        CalculateCurrencyProjection(
+            currentTradingCurrency,
+            totalPurchaseCost,
+            mercenaryCost,
+            out long estimatedCurrencyAfterPurchase,
+            out long estimatedCurrencyAfterHire,
+            out bool canPurchaseCargo,
+            out bool canHireSelectedMercenaries);
         long estimatedNetProfit = sellRevenue - totalPreparationCost;
         bool routeUnlocked = IsRouteUnlocked(selectedRoute, saveData);
         DraftAnimalType[] selectedAnimalTypes = GetSelectedAnimalTypes(draft, availableAnimals);
@@ -109,7 +118,7 @@ public sealed class TradePrepareViewDataBuilder
             hasInvalidCargoSelection = HasInvalidCargoSelection(draft, availableItems),
             usedInventorySlotCount = usedSlots,
             maxInventorySlotCount = maxSlots,
-            currentTradingCurrency = ReadTradingCurrency(saveData),
+            currentTradingCurrency = currentTradingCurrency,
             totalPurchaseCost = totalPurchaseCost,
             totalPreparationCost = totalPreparationCost,
             currentLoad = currentLoad,
@@ -126,7 +135,7 @@ public sealed class TradePrepareViewDataBuilder
         {
             currentTownId = currentTownId,
             currentTownName = currentTown != null ? currentTown.DisplayName : string.Empty,
-            currentTradingCurrency = ReadTradingCurrency(saveData),
+            currentTradingCurrency = currentTradingCurrency,
             currentDevelopmentCurrency = ReadDevelopmentCurrency(saveData),
             towns = BuildTowns(context.towns, currentTownId, saveData),
             routes = BuildRoutes(availableRoutes, currentTownId, saveData),
@@ -138,6 +147,8 @@ public sealed class TradePrepareViewDataBuilder
             usedInventorySlotCount = usedSlots,
             maxInventorySlotCount = maxSlots,
             totalPurchaseCost = totalPurchaseCost,
+            estimatedCurrencyAfterPurchase = estimatedCurrencyAfterPurchase,
+            canPurchaseCargo = canPurchaseCargo,
             loadedDraftAnimalFoodQuantity = loadedDraftAnimalFood,
             requiredDraftAnimalFoodQuantity = requiredDraftAnimalFood,
             selectedMercenaryPower = selectedMercenaryPower,
@@ -151,6 +162,8 @@ public sealed class TradePrepareViewDataBuilder
             draftAnimalFoodCost = draftAnimalFoodCost,
             mercenaryCost = mercenaryCost,
             totalPreparationCost = totalPreparationCost,
+            estimatedCurrencyAfterHire = estimatedCurrencyAfterHire,
+            canHireSelectedMercenaries = canHireSelectedMercenaries,
             estimatedSellRevenue = sellRevenue,
             estimatedNetProfit = estimatedNetProfit,
             baseExpectedTravelTime = selectedRoute != null ? selectedRoute.DefaultElapsedTime : 0f,
@@ -1001,6 +1014,36 @@ public sealed class TradePrepareViewDataBuilder
     {
         if (value <= 0L || quantity <= 0) return 0L;
         return value > long.MaxValue / quantity ? long.MaxValue : value * quantity;
+    }
+
+    private static long SubtractFloorZero(long value, long cost)
+    {
+        if (value <= 0L || cost >= value)
+        {
+            return 0L;
+        }
+
+        return cost <= 0L ? value : value - cost;
+    }
+
+    internal static void CalculateCurrencyProjection(
+        long currentCurrency,
+        long purchaseCost,
+        long hireCost,
+        out long estimatedAfterPurchase,
+        out long estimatedAfterHire,
+        out bool canPurchase,
+        out bool canHire)
+    {
+        currentCurrency = Math.Max(0L, currentCurrency);
+        purchaseCost = Math.Max(0L, purchaseCost);
+        hireCost = Math.Max(0L, hireCost);
+        long totalCost = AddClamped(purchaseCost, hireCost);
+
+        canPurchase = purchaseCost <= currentCurrency;
+        estimatedAfterPurchase = SubtractFloorZero(currentCurrency, purchaseCost);
+        canHire = totalCost <= currentCurrency;
+        estimatedAfterHire = SubtractFloorZero(currentCurrency, totalCost);
     }
 
     private static int AddClampedInt(int left, int right)

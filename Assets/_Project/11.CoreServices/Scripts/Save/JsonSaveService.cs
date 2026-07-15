@@ -71,6 +71,9 @@ namespace ND.Framework
                 lastSavedUtcTicks = DateTime.UtcNow.Ticks
             };
 
+            // New games begin at the default town used by the initial trade routes.
+            data.player.currentTownId = "BaseCamp";
+
             FrameworkLog.Info("New game save data created.");
             return data;
         }
@@ -171,6 +174,12 @@ namespace ND.Framework
             if (data.player == null)
             {
                 data.player = new PlayerSaveData();
+            }
+
+            // Older saves can have no current town because the field previously defaulted to empty.
+            if (string.IsNullOrWhiteSpace(data.player.currentTownId))
+            {
+                data.player.currentTownId = "BaseCamp";
             }
 
             if (data.caravan == null)

@@ -27,7 +27,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>무역 준비 플로우의 화면 전환과 단계 간 데이터 전달을 총괄하는 매니저.</summary>
-public class TradePrepareUIManager : MonoBehaviour
+public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 {
     // ══ 외부 계약(주입 데이터 형식) ═══════════════════════════════
 
@@ -526,7 +526,7 @@ public class TradePrepareUIManager : MonoBehaviour
             d.mercenaryCost = mercenaryPanel.SelectedHireCost;
         }
         OnDepart?.Invoke(d);
-        GoProgress();   // ⑥ → ⑦ 무역 진행 중
+        // Do not open S7 optimistically. Framework opens it only after departure is recorded as Traveling.
     }
 
     // ══ ⑦ 무역 진행 중 / ⑦-1 취소 경고 ═══════════════════════════
@@ -542,6 +542,41 @@ public class TradePrepareUIManager : MonoBehaviour
             progressPanel.Begin(lastFromTownName, Resolve(selTownId), dur);
         }
         ShowOnly(5);
+    }
+
+    /// <summary>Framework Preparation 상태에 맞춰 준비 플로우를 S1부터 연다.</summary>
+    public void ShowPreparation()
+    {
+        // Begin is intentionally called here so screen routing, not the demo provider, owns initial navigation.
+        SetTradeRootActive(true);
+        Begin();
+    }
+
+    /// <summary>Framework Traveling 상태에 맞춰 S7에 실제 진행 데이터를 표시한다.</summary>
+    public void ShowTraveling(TradeProgressViewData viewData)
+    {
+        // A loaded traveling save can enter S7 without visiting the preparation screens first.
+        SetTradeRootActive(true);
+        WireOnce();
+        if (cancelWarning != null) cancelWarning.Close();
+        ShowOnly(5);
+        if (progressPanel != null) progressPanel.BindFrameworkProgress(viewData);
+    }
+
+    /// <summary>Framework Settlement 화면을 가리지 않도록 준비·이동 UI를 숨긴다.</summary>
+    public void HideTradeScreens()
+    {
+        // Settlement UI has a separate adapter, so this manager only hides its own panels.
+        if (progressPanel != null) progressPanel.StopTimer();
+        ShowOnly(-1);
+        SetTradeRootActive(false);
+    }
+
+    private void SetTradeRootActive(bool active)
+    {
+        // This manager is a child of TradePrepareUI, so visibility must be applied to its parent root.
+        GameObject tradeRoot = transform.parent != null ? transform.parent.gameObject : gameObject;
+        tradeRoot.SetActive(active);
     }
 
     // ⑦ 하단 "무역 취소" → ⑦-1 경고창 열기
