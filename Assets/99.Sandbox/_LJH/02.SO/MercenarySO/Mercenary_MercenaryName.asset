@@ -21,4 +21,11 @@ MonoBehaviour:
   combatCapability: 0
   unlockedByDefault: 0
   affectModify: 0
-  modifiers: []
+  modifiers:
+  - modifierType: 2
+    sourceId: 
+    displayName: 
+    modifierBundles:
+    - modifierTarget: 0
+      modifierOperation: 0
+      value: 0
