@@ -2096,7 +2096,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1141493659
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2320,6 +2320,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1270590683 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1140000000000000000, guid: b7e41a9f76ea4282a6acd8c31c7f5a90, type: 3}
+  m_PrefabInstance: {fileID: 746124464}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6d2f38d94fd4c92abf4e1d79a3a1071, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TradePrepareRuntimeContextProvider
 --- !u!1 &1304230609
 GameObject:
   m_ObjectHideFlags: 0
@@ -12001,7 +12012,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6543046872555187421}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 558c8e4db61d15144a6b177f56061530, type: 3}
   m_Name: 
@@ -24311,6 +24322,7 @@ GameObject:
   - component: {fileID: 1094537503460929932}
   - component: {fileID: 2766297412952066337}
   - component: {fileID: 4361662159378514726}
+  - component: {fileID: 6543046872555187422}
   m_Layer: 0
   m_Name: UIManager
   m_TagString: Untagged
@@ -24318,6 +24330,20 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &6543046872555187422
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6543046872555187421}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef26cdc3ad9b0c6428db34a4a9315562, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TradePrepareUiRuntimeBinding
+  runtimeContext: {fileID: 1270590683}
+  townRoutePanel: {fileID: 5368074963102869609}
 --- !u!222 &6547223940487709408
 CanvasRenderer:
   m_ObjectHideFlags: 0
