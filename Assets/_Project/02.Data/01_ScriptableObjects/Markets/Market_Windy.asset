@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7df7a3265402c9043839408fb7059f03, type: 3}
   m_Name: Market_Windy
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
-  marketId: 
+  marketId: WindyTownMarket
   itemMaxQuantity: 10
   itemRenewalCycle: 1
   tradeItems:
