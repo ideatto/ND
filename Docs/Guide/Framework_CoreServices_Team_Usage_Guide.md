@@ -27,7 +27,8 @@
 10. [Framework 이벤트](#10-framework-이벤트)
 11. [디버그 · Smoke](#11-디버그--smoke)
 12. [팀별 빠른 경로](#12-팀별-빠른-경로)
-13. [상세 문서 링크](#13-상세-문서-링크)
+13. [월드맵 (읽기 전용)](#13-월드맵-읽기-전용)
+14. [상세 문서 링크](#14-상세-문서-링크)
 
 ---
 
@@ -444,7 +445,32 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 
 ---
 
-## 13. 상세 문서 링크
+## 13. 월드맵 (읽기 전용)
+
+월드맵은 무역 상태를 **표시만** 한다. 출발/정산/Save 쓰기는 하지 않는다.
+
+논리 ID는 Shared catalog에 등록된 `TownData` / `RouteData`에서 온다.  
+1차 빌드 에셋은 `02.Data/01_ScriptableObjects`, 등록 목록은 `11.CoreServices/Resources/SandboxSharedGameDataCatalog`이다.  
+(`99.Sandbox`만 보는 구조가 아니다.)
+
+```csharp
+if (FrameworkRoot.Instance.TradeProgressCoordinator.TryGetMapProgress(out var snapshot))
+{
+    // snapshot.ProgressPercent, ActiveRouteId, TradeStartUtcTick, ExpectedTradeEndUtcTick
+}
+```
+
+- Feature 루트: `Assets/_Project/05.UI/04_WorldMap/`
+- 예시 씬: `05.UI/04_WorldMap/Scene/WorldMapTest.unity`
+- 표시: `WorldMapPanel.Show` / `Hide` (열기·닫기 버튼). Traveling 화면과 자동 연동하지 않는다.
+- InGame 배치: `05.UI/04_WorldMap/Prefabs/WorldMapUi.prefab`을 월드맵 패널 계층에 붙인 뒤 `WorldMapPanelControls`로 버튼 연결
+- **사용 가이드(추천):** [`Framework_World_Map_Usage_Guide.md`](./Framework_World_Map_Usage_Guide.md) — 마을·루트 추가, Spline, 출발 연결, 무역 시작 감지
+- API 상세: [`Framework_World_Map_API_Guide.md`](./Framework_World_Map_API_Guide.md)
+- Shared 데이터: [`Framework_Shared_Game_Data_Guide.md`](./Framework_Shared_Game_Data_Guide.md)
+
+---
+
+## 14. 상세 문서 링크
 
 ### Docs/Guide (팀 공용)
 
@@ -454,6 +480,8 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 | [`Framework_InGame_Time_Multiplier_API_Guide.md`](./Framework_InGame_Time_Multiplier_API_Guide.md) | 인게임 시간 배율 |
 | [`Settlement_UI_Data_Connection_Guide.md`](./Settlement_UI_Data_Connection_Guide.md) | 정산 UI |
 | [`Framework_World_Force_Debug_API_Guide.md`](./Framework_World_Force_Debug_API_Guide.md) | ForceSeason/Disaster/RouteEvent |
+| [`Framework_World_Map_Usage_Guide.md`](./Framework_World_Map_Usage_Guide.md) | 월드맵 사용법 · 마을/루트 추가 · 무역 감지 |
+| [`Framework_World_Map_API_Guide.md`](./Framework_World_Map_API_Guide.md) | 월드맵 API · TryGetMapProgress |
 | 이 문서 | 통합 사용 설명서 |
 
 ### 참고 (개인/상세 로직)
@@ -467,6 +495,7 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 | `Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
 | `Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
 | `Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
+| `Docs/Personal_Documents/CSU/0715_world_map_phase1_spline_implementation.md` | 월드맵 Phase1+Spline 구현 로직 |
 
 ### 테스트 씬 (선택)
 
@@ -475,6 +504,7 @@ Failed smoke는 `foodAmount = 0`(int)과 `starveGraceSeconds = 0f`로 `FoodDeple
 | `11.CoreServices/Scenes/SharedDataTest.unity` | SharedData |
 | `11.CoreServices/Scenes/InGameTimeMultiplierTest.unity` | 시간 배율 |
 | `11.CoreServices/Scenes/TradeTimingCompletionScene.unity` | 무역 타이밍 |
+| `05.UI/04_WorldMap/Scene/WorldMapTest.unity` | 월드맵 예시 |
 
 일반 통합은 **Boot → Title → InGame** 경로를 우선한다.
 
