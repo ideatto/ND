@@ -107,7 +107,7 @@ public class WagonData : ScriptableObject, IIdentifiableData
     {
         if (wagonType == WagonType.None)
         {
-            maxDurability = 1;
+            maxDurability = 100;
             maxPullAnimals = 0;
             minRequireAnimals = 0;
             eligibleAnimalTypes = new DraftAnimalType[0];

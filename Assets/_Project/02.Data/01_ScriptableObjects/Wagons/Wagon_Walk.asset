@@ -19,12 +19,12 @@ MonoBehaviour:
   description: "\uC774\uB3D9\uC218\uB2E8\uC774 \uC5C6\uC5B4\uB3C4, \uB4E0\uB4E0\uD55C
     \uB450 \uB2E4\uB9AC\uAC00 \uC788\uC8E0"
   wagonType: 0
-  maxDurability: 1
+  maxDurability: 100
   overLoad: 1
   maxLoad: 2
   baseMoveSpeed: 5
   eligibleAnimalTypes: 
-  inventorySlotCount: 1
+  inventorySlotCount: 2
   maxPullAnimals: 0
   minRequireAnimals: 0
   rarity: 0

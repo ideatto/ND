@@ -689,7 +689,10 @@ public sealed class TradePrepareViewDataBuilder
 
         foreach (KeyValuePair<string, int> pair in quantities)
         {
-            if (pair.Value > 0 && FindItem(items, pair.Key) != null)
+            TradeItemData item = FindItem(items, pair.Key);
+            if (pair.Value > 0
+                && item != null
+                && item.Category != TradeItemCategory.DraftAnimalsFood)
             {
                 return true;
             }

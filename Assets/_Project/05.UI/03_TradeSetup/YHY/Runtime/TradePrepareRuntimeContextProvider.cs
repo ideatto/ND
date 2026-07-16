@@ -58,6 +58,20 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     public void SelectMercenary(string mercenaryId) => flowController?.SelectMercenary(mercenaryId);
     public void DeselectMercenary(string mercenaryId) => flowController?.DeselectMercenary(mercenaryId);
 
+    public TradeItemData[] GetAvailableTradeItems()
+    {
+        string currentTownId = CurrentViewData != null
+            ? CurrentViewData.currentTownId
+            : string.Empty;
+        TownData currentTown = TradePrepareViewDataBuilder.FindTown(towns, currentTownId);
+        return TradePrepareViewDataBuilder.MergeUnique(
+            tradeItems ?? Array.Empty<TradeItemData>(),
+            currentTown != null && currentTown.Market != null
+                ? currentTown.Market.TradeItems
+                : null,
+            item => item != null ? item.ItemId : string.Empty);
+    }
+
     public TradePrepareStartResult TryStartTrade(string tradeId, bool saveImmediately = true)
     {
         if (flowController == null)
@@ -93,6 +107,8 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         };
 
         ITradePrepareCommitSink commitSink = commitSinkBehaviour as ITradePrepareCommitSink;
+        if (commitSink == null)
+            commitSink = root.TradePrepareCommitStore;
         startAdapter = new TradePrepareStartAdapter(root.TradeStart, new TradePrepareViewDataBuilder(), commitSink);
         flowController = new TradePrepareFlowController(context);
         flowController.ViewDataChanged += HandleViewDataChanged;

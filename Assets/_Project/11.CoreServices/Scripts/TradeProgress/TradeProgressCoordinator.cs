@@ -61,6 +61,7 @@ namespace ND.Framework
         private readonly TradeProgressRecorder tradeProgressRecorder;
         private readonly InGameScreenStateRouter inGameScreenRouter;
         private readonly Func<ISharedGameDataProvider> getSharedGameData;
+        private readonly global::ITradePrepareCommitCompletion tradePrepareCommitCompletion;
         private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
         private CaravanData activeCaravan;
@@ -85,7 +86,8 @@ namespace ND.Framework
             TradeProgressRecorder tradeProgressRecorder,
             InGameScreenStateRouter inGameScreenRouter = null,
             IInGameTimeProvider inGameTimeProvider = null,
-            Func<ISharedGameDataProvider> getSharedGameData = null)
+            Func<ISharedGameDataProvider> getSharedGameData = null,
+            global::ITradePrepareCommitCompletion tradePrepareCommitCompletion = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
@@ -94,6 +96,7 @@ namespace ND.Framework
             this.tradeProgressRecorder = tradeProgressRecorder;
             this.inGameScreenRouter = inGameScreenRouter;
             this.getSharedGameData = getSharedGameData;
+            this.tradePrepareCommitCompletion = tradePrepareCommitCompletion;
 
             FrameworkEvents.CompleteTradeRequested += ForceCompleteActiveTrade;
         }
@@ -381,6 +384,11 @@ namespace ND.Framework
 
             // 수령 확정 후 대기 정산 DTO를 비워 재실행 시 중복 보상을 막는다.
             PendingSettlementSaveDataMapper.Clear(saveData);
+            if (tradePrepareCommitCompletion != null &&
+                !tradePrepareCommitCompletion.TryComplete(activeTradeId, out _))
+            {
+                FrameworkLog.Warning($"Trade preparation commit was not found while completing trade '{activeTradeId}'.");
+            }
 
             // reset된 runtime caravan을 저장 데이터에 반영하고 UI를 preparation 화면으로 복귀시킨다.
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);

@@ -34,6 +34,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>④ 적재(Cargo) 화면에 넘길 값 묶음. 최대 적재량은 매니저가 상단 구성에서 계산한다.</summary>
     public struct CargoConfig
     {
+        public float maxLoad;
+        public TradeItemViewData[] selectedItems;
         public long gold;                 // 현재 소지 골드
         public int requiredFood;          // 반드시 적재해야 하는 먹이 수
         public TradeItemData[] shopItems; // 상점 판매 아이템(정헌님 Cargo 계약)
@@ -135,6 +137,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public Func<CargoConfig> CargoProvider;
     /// <summary>⑥ 요약 계산(출발도시·위험도·음식·시간) 공급자 — 데모는 Core 계산기 사용.</summary>
     public Func<SummaryQuery, SummaryStats> SummaryStatsProvider;
+    public Func<TradeSummaryPanel.SummaryData> SummaryProvider;
     /// <summary>id → 표시 이름 변환(요약용). 없으면 id 그대로 표시.</summary>
     public Func<string, string> NameResolver;
 
@@ -218,6 +221,24 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (animalBack != null) animalBack.onClick.AddListener(GoCaravanSlot);
         if (summaryBack != null) summaryBack.onClick.AddListener(BackFromSummary);
         if (summaryCancel != null) summaryCancel.onClick.AddListener(OnTradeCancelledByPanels);   // ⑥ 무역 취소
+
+        if (settlementPanel != null)
+        {
+            settlementPanel.enabled = true;
+            if (paymentPanel != null)
+                paymentPanel.enabled = true;
+
+            settlementPanel.ConfigurePaymentPanel(paymentPanel);
+            ND.Framework.SettlementUiDataAdapter settlementAdapter =
+                GetComponent<ND.Framework.SettlementUiDataAdapter>();
+            if (settlementAdapter != null)
+            {
+                settlementPanel.PaymentCompleted.RemoveListener(
+                    settlementAdapter.OnClickClaimSettlement);
+                settlementPanel.PaymentCompleted.AddListener(
+                    settlementAdapter.OnClickClaimSettlement);
+            }
+        }
 
         // ⑦ 진행 화면 / ⑦-1 경고창
         if (progressPanel != null) progressPanel.OnArrived += OnJourneyArrived;
@@ -433,7 +454,9 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (cargoPanel != null && CargoProvider != null)
         {
             CargoConfig cfg = CargoProvider();
-            cargoPanel.Configure(cfg.gold, ComputeMaxLoad(), cfg.requiredFood, cfg.shopItems, cfg.stocks);
+            float maxLoad = cfg.maxLoad > 0f ? cfg.maxLoad : ComputeMaxLoad();
+            cargoPanel.Configure(cfg.gold, maxLoad, cfg.requiredFood, cfg.shopItems, cfg.stocks);
+            cargoPanel.RestoreSelectedCargo(cfg.selectedItems);
         }
         ShowOnly(3);
     }
@@ -457,6 +480,13 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     {
         if (summaryView != null)
         {
+            if (SummaryProvider != null)
+            {
+                summaryView.Show(SummaryProvider());
+                ShowOnly(4);
+                return;
+            }
+
             TradeItemBundle[] bundles = cargoPanel != null ? cargoPanel.BuildTradeItemBundles() : new TradeItemBundle[0];
             int loadedFood = cargoPanel != null ? cargoPanel.LoadedFood : 0;
 

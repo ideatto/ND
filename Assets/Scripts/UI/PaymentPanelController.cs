@@ -96,9 +96,14 @@ public sealed class PaymentPanelController : MonoBehaviour
         yield return null;
 
         PlaySound(completeSound);
-        onPaymentCompleted.Invoke();
         currentViewData = null;
+        currentCanConfirm = false;
+        animationRoutine = null;
         gameObject.SetActive(false);
+
+        // Close and clear this view before notifying Framework. Claim processing can
+        // synchronously route to another screen, so listeners must observe S9 as closed.
+        onPaymentCompleted.Invoke();
     }
 
     private void PlaySound(AudioClip clip)

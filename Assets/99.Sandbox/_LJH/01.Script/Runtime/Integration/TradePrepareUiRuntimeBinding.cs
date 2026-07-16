@@ -29,6 +29,8 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             // Supplying Runtime ViewData here avoids changing the external UI navigation code.
             uiManager.AnimalProvider = BuildAnimalEntries;
             uiManager.OwnedWagonProvider = BuildOwnedWagonEntries;
+            uiManager.CargoProvider = BuildCargoConfig;
+            uiManager.SummaryProvider = BuildSummaryData;
 
             // The demo used to consume OnDepart, but disabling it left the production button
             // with no subscriber. Forward departure to RuntimeContext so Draft is validated
@@ -93,6 +95,10 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 uiManager.AnimalProvider = null;
             if (uiManager.OwnedWagonProvider == BuildOwnedWagonEntries)
                 uiManager.OwnedWagonProvider = null;
+            if (uiManager.CargoProvider == BuildCargoConfig)
+                uiManager.CargoProvider = null;
+            if (uiManager.SummaryProvider == BuildSummaryData)
+                uiManager.SummaryProvider = null;
         }
     }
 
@@ -189,6 +195,82 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         }
 
         return result;
+    }
+
+    private TradePrepareUIManager.CargoConfig BuildCargoConfig()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        TradeItemData[] availableItems = runtimeContext != null
+            ? runtimeContext.GetAvailableTradeItems()
+            : Array.Empty<TradeItemData>();
+
+        var items = new List<TradeItemData>();
+        var stocks = new List<int>();
+        if (viewData != null && viewData.tradeItems != null)
+        {
+            foreach (TradeItemViewData itemView in viewData.tradeItems)
+            {
+                if (itemView == null)
+                    continue;
+
+                TradeItemData item = Array.Find(
+                    availableItems,
+                    candidate => candidate != null &&
+                        string.Equals(candidate.ItemId, itemView.itemId, StringComparison.Ordinal));
+                if (item == null)
+                    continue;
+
+                items.Add(item);
+                stocks.Add(Mathf.Max(0, itemView.contentQuantityLimit));
+            }
+        }
+
+        return new TradePrepareUIManager.CargoConfig
+        {
+            gold = viewData != null ? viewData.currentTradingCurrency : 0L,
+            maxLoad = viewData != null ? viewData.maxLoad : 0f,
+            requiredFood = viewData != null ? viewData.requiredDraftAnimalFoodQuantity : 0,
+            shopItems = items.ToArray(),
+            stocks = stocks.ToArray(),
+            selectedItems = viewData != null ? viewData.tradeItems : Array.Empty<TradeItemViewData>()
+        };
+    }
+
+    private TradeSummaryPanel.SummaryData BuildSummaryData()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData == null)
+            return default;
+
+        RouteViewData selectedRoute = null;
+        if (viewData.routes != null)
+        {
+            selectedRoute = Array.Find(
+                viewData.routes,
+                route => route != null &&
+                    string.Equals(route.routeId, viewData.selectedRouteId, StringComparison.Ordinal));
+        }
+
+        string fromTown = !string.IsNullOrWhiteSpace(viewData.currentTownName)
+            ? viewData.currentTownName
+            : viewData.currentTownId;
+        string toTown = selectedRoute != null && !string.IsNullOrWhiteSpace(selectedRoute.toTownName)
+            ? selectedRoute.toTownName
+            : selectedRoute != null ? selectedRoute.toTownId : string.Empty;
+
+        return new TradeSummaryPanel.SummaryData
+        {
+            fromTown = string.IsNullOrWhiteSpace(fromTown) ? "-" : fromTown,
+            toTown = string.IsNullOrWhiteSpace(toTown) ? "-" : toTown,
+            viaText = "없음",
+            expectedRisk = selectedRoute != null ? Mathf.RoundToInt(selectedRoute.riskLevel) : 0,
+            mercenaryPower = Mathf.Max(0, viewData.selectedMercenaryPower),
+            expectedFood = Mathf.Max(0, viewData.requiredDraftAnimalFoodQuantity),
+            loadedFood = Mathf.Max(0, viewData.loadedDraftAnimalFoodQuantity),
+            prepareCost = Math.Max(0L, viewData.totalPreparationCost),
+            expectedProfit = viewData.estimatedNetProfit,
+            durationSeconds = Mathf.Max(0f, viewData.finalExpectedTravelTime)
+        };
     }
 
     private void HandleWagonSelected(TransportSelectPanel.TransportEntry wagon)

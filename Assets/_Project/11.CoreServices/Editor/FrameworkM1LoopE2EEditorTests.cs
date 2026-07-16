@@ -50,6 +50,7 @@ namespace ND.Framework.Editor
         [MenuItem("ND/Framework/Run M1 Loop + Economy E2E Checks")]
         public static void RunAll()
         {
+            RunTradePreparationCommitStoreE2E();
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
@@ -59,6 +60,70 @@ namespace ND.Framework.Editor
             RunPendingSettlementRestoreE2E(TestContext.Create());
             RunOfflineProgressE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
+        }
+
+        private static void RunTradePreparationCommitStoreE2E()
+        {
+            var saveData = new SaveData();
+            var store = new FrameworkTradePrepareCommitStore(() => saveData);
+            var commit = new global::TradePrepareCommitData
+            {
+                tradeId = "editor_prepare_commit",
+                currentTownId = "BaseTown",
+                selectedDestinationTownId = "DestinationTown",
+                routeId = RouteId,
+                selectedWagonId = "WagonA",
+                purchaseCost = 120L,
+                foodCost = 30L,
+                mercenaryCost = 10L,
+                estimatedSellRevenue = 300L,
+                selectedAnimals = new[]
+                {
+                    new global::DraftAnimalSelectionData { draftAnimalId = "Horse", quantity = 2 }
+                },
+                purchasedItems = new[]
+                {
+                    new global::TradeItemBundle
+                    {
+                        itemId = ItemId,
+                        quantity = 3,
+                        purchaseUnitPrice = 40L,
+                        sellUnitPrice = 100L
+                    }
+                },
+                selectedMercenaryIds = new[] { "Guard" }
+            };
+
+            if (!store.TryStage(commit))
+                throw new InvalidOperationException("Trade preparation commit stage failed.");
+
+            string json = JsonUtility.ToJson(saveData);
+            saveData = JsonUtility.FromJson<SaveData>(json);
+            FrameworkTradePrepareCommitStore.Normalize(saveData);
+            store = new FrameworkTradePrepareCommitStore(() => saveData);
+
+            if (!store.TryGet(commit.tradeId, out global::TradePrepareCommitData restored) ||
+                restored.TotalCost != 160L ||
+                restored.purchasedItems.Length != 1 ||
+                restored.purchasedItems[0].quantity != 3 ||
+                restored.selectedAnimals.Length != 1 ||
+                restored.selectedAnimals[0].quantity != 2 ||
+                restored.selectedMercenaryIds.Length != 1)
+            {
+                throw new InvalidOperationException("Trade preparation commit persistence restore failed.");
+            }
+
+            var conflicting = commit.CreateSnapshot();
+            conflicting.tradeId = "other_trade";
+            if (store.TryStage(conflicting))
+                throw new InvalidOperationException("Trade preparation commit accepted a conflicting trade ID.");
+
+            if (!store.TryComplete(commit.tradeId, out global::TradePrepareCommitData completed) ||
+                completed.tradeId != commit.tradeId ||
+                saveData.tradePreparationCommit.hasCommit)
+            {
+                throw new InvalidOperationException("Trade preparation commit completion failed.");
+            }
         }
 
         /// <summary>
