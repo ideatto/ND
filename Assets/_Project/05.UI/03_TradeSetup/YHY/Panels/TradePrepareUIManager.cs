@@ -97,6 +97,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     [SerializeField] private Button warningConfirm;                 // ⑦-1 무역 취소(확정)
     [SerializeField, Min(0f)] private float progressDemoSeconds = 20f; // 데모 관찰용 진행 시간(0=실제 계산값 사용)
 
+    [Header("Settlement screens (S8-S9)")]
+    // These references were added so the existing single-screen router can include settlement.
+    // They control visibility only; settlement values and claim mutations remain Framework-owned.
+    [SerializeField] private TradeSettlementPanelController settlementPanel;
+    [SerializeField] private PaymentPanelController paymentPanel;
+
     [Header("상단 슬롯")]
     [SerializeField] private int caravanSlotCount = 4;   // 슬롯 개수(새 게임=전부 빈칸)
 
@@ -563,6 +569,16 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (progressPanel != null) progressPanel.BindFrameworkProgress(viewData);
     }
 
+    /// <summary>Shows S8 while Framework-owned settlement data is bound by SettlementUiDataAdapter.</summary>
+    public void ShowSettlement()
+    {
+        // This manager controls visibility only. Settlement calculation and claim remain in
+        // Framework, preventing the UI flow from duplicating or mutating settlement results.
+        SetTradeRootActive(true);
+        WireOnce();
+        ShowOnly(6);
+    }
+
     /// <summary>Framework Settlement 화면을 가리지 않도록 준비·이동 UI를 숨긴다.</summary>
     public void HideTradeScreens()
     {
@@ -620,6 +636,10 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (cargoPanel != null) cargoPanel.gameObject.SetActive(idx == 3);
         if (summaryPanel != null) summaryPanel.SetActive(idx == 4);
         if (progressPanel != null) progressPanel.gameObject.SetActive(idx == 5);
+        // Added to the existing screen switch because S8/S9 otherwise remain outside manager state.
+        // S9 is opened by S8 only after review, so every normal route closes S9 and starts at S8.
+        if (settlementPanel != null) settlementPanel.gameObject.SetActive(idx == 6);
+        if (paymentPanel != null) paymentPanel.gameObject.SetActive(false);
         if (idx != 5 && cancelWarning != null) cancelWarning.Close();   // 진행 화면 벗어나면 경고창도 닫기
     }
 

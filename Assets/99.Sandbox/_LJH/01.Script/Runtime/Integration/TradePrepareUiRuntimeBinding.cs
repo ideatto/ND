@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Connects the production trade-prepare runtime context to the existing S1 town/route panel.
+/// Connects the production trade-prepare runtime context to the existing preparation panels.
 /// UI input is sent through the provider so the UI never edits the preparation draft directly.
 /// </summary>
 public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
@@ -13,8 +14,25 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     [Header("S1 view")]
     [SerializeField] private TownRoutePanel townRoutePanel;
 
+    [Header("S3 wagon and draft-animal view")]
+    [SerializeField] private TradePrepareUIManager uiManager;
+    [SerializeField] private AnimalInventoryPanel animalPanel;
+
     private void OnEnable()
     {
+        if (uiManager != null)
+        {
+            // The existing manager asks providers for S3 data whenever that screen is entered.
+            // Supplying Runtime ViewData here avoids changing the external UI navigation code.
+            uiManager.AnimalProvider = BuildAnimalEntries;
+            uiManager.OwnedWagonProvider = BuildOwnedWagonEntries;
+
+            // The demo used to consume OnDepart, but disabling it left the production button
+            // with no subscriber. Forward departure to RuntimeContext so Draft is validated
+            // and Framework can record Traveling before the presenter opens S7.
+            uiManager.OnDepart += HandleDepartRequested;
+        }
+
         if (runtimeContext != null)
         {
             runtimeContext.ViewDataChanged += HandleViewDataChanged;
@@ -26,6 +44,13 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
         if (townRoutePanel != null)
             townRoutePanel.OnRouteSelected += HandleRouteSelected;
+
+        if (animalPanel != null)
+        {
+            animalPanel.OnWagonSelected += HandleWagonSelected;
+            animalPanel.OnWagonRemoved += HandleWagonRemoved;
+            animalPanel.OnSelectionChanged += HandleAnimalSelectionChanged;
+        }
     }
 
     private void OnDisable()
@@ -35,6 +60,49 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
         if (townRoutePanel != null)
             townRoutePanel.OnRouteSelected -= HandleRouteSelected;
+
+        if (animalPanel != null)
+        {
+            animalPanel.OnWagonSelected -= HandleWagonSelected;
+            animalPanel.OnWagonRemoved -= HandleWagonRemoved;
+            animalPanel.OnSelectionChanged -= HandleAnimalSelectionChanged;
+        }
+
+        if (uiManager != null)
+        {
+            uiManager.OnDepart -= HandleDepartRequested;
+            if (uiManager.AnimalProvider == BuildAnimalEntries)
+                uiManager.AnimalProvider = null;
+            if (uiManager.OwnedWagonProvider == BuildOwnedWagonEntries)
+                uiManager.OwnedWagonProvider = null;
+        }
+    }
+
+    private void HandleDepartRequested(TradePrepareUIManager.DepartData departure)
+    {
+        if (runtimeContext == null)
+        {
+            Debug.LogError(
+                "[TradePrepare] Departure was requested without a RuntimeContext.",
+                this);
+            return;
+        }
+
+        // DepartData belongs to the legacy panel flow. RuntimeContext's Draft is authoritative
+        // because every production selection was already sent to it through provider commands.
+        // A new ID is created only at confirmation so retries cannot reuse a failed trade record.
+        string tradeId = Guid.NewGuid().ToString("N");
+        TradePrepareStartResult result = runtimeContext.TryStartTrade(tradeId);
+        if (result == null || !result.succeeded)
+        {
+            Debug.LogError(
+                $"[TradePrepare] Trade start failed: {result?.errorCode ?? "NULL_RESULT"} - " +
+                $"{result?.errorMessage ?? "RuntimeContext returned no result."}",
+                this);
+        }
+
+        // Do not activate S7 here. A successful start changes Framework SaveData to Traveling;
+        // FrameworkTradeScreenPresenter observes that state and becomes the sole screen router.
     }
 
     private void HandleViewDataChanged(TradePrepareViewData viewData)
@@ -64,6 +132,118 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 string.Equals(route.routeId, routeId, StringComparison.Ordinal) &&
                 route.isUnlocked &&
                 route.canSelect)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private List<AnimalInventoryPanel.AnimalEntry> BuildAnimalEntries()
+    {
+        var result = new List<AnimalInventoryPanel.AnimalEntry>();
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData == null || viewData.draftAnimals == null)
+            return result;
+
+        foreach (DraftAnimalViewData animal in viewData.draftAnimals)
+        {
+            if (animal != null)
+                result.Add(new AnimalInventoryPanel.AnimalEntry(animal));
+        }
+
+        return result;
+    }
+
+    private List<TransportSelectPanel.TransportEntry> BuildOwnedWagonEntries()
+    {
+        var result = new List<TransportSelectPanel.TransportEntry>();
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData == null || viewData.wagons == null)
+            return result;
+
+        foreach (WagonViewData wagon in viewData.wagons)
+        {
+            // S3 selects a travel method, so animal wagons, mounts, and walking are all valid entries.
+            if (wagon != null)
+                result.Add(new TransportSelectPanel.TransportEntry(wagon));
+        }
+
+        return result;
+    }
+
+    private void HandleWagonSelected(TransportSelectPanel.TransportEntry wagon)
+    {
+        if (runtimeContext == null || !CanSelectWagon(runtimeContext.CurrentViewData, wagon.id))
+            return;
+
+        // Selecting a different wagon clears dependent animal and cargo choices in DraftStore.
+        runtimeContext.SelectWagon(wagon.id);
+    }
+
+    private void HandleWagonRemoved()
+    {
+        if (runtimeContext != null)
+            runtimeContext.SelectWagon(string.Empty);
+    }
+
+    private void HandleAnimalSelectionChanged(
+        IReadOnlyList<AnimalInventoryPanel.AnimalPick> picks,
+        bool isValid)
+    {
+        if (runtimeContext == null || runtimeContext.FlowController == null)
+            return;
+
+        var desiredQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (picks != null)
+        {
+            foreach (AnimalInventoryPanel.AnimalPick pick in picks)
+            {
+                if (!string.IsNullOrWhiteSpace(pick.animalId))
+                    desiredQuantities[pick.animalId] = Mathf.Max(0, pick.count);
+            }
+        }
+
+        TradePrepareDraft draft = runtimeContext.FlowController.CurrentDraft;
+        TradePrepareViewData viewData = runtimeContext.CurrentViewData;
+        if (draft == null || viewData == null || viewData.draftAnimals == null)
+            return;
+
+        var currentQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (draft.selectedAnimals != null)
+        {
+            foreach (DraftAnimalSelectionData selected in draft.selectedAnimals)
+            {
+                if (selected != null && !string.IsNullOrWhiteSpace(selected.draftAnimalId))
+                    currentQuantities[selected.draftAnimalId] = Mathf.Max(0, selected.quantity);
+            }
+        }
+
+        // Send zero for removed picks as well; otherwise an animal removed in S3 would remain in Draft.
+        foreach (DraftAnimalViewData animal in viewData.draftAnimals)
+        {
+            if (animal == null || string.IsNullOrWhiteSpace(animal.draftAnimalId))
+                continue;
+
+            int desired = desiredQuantities.TryGetValue(animal.draftAnimalId, out int value) ? value : 0;
+            int current = currentQuantities.TryGetValue(animal.draftAnimalId, out int oldValue) ? oldValue : 0;
+            if (desired != current)
+                runtimeContext.SetAnimalQuantity(animal.draftAnimalId, desired);
+        }
+    }
+
+    private static bool CanSelectWagon(TradePrepareViewData viewData, string wagonId)
+    {
+        if (viewData == null || viewData.wagons == null || string.IsNullOrWhiteSpace(wagonId))
+            return false;
+
+        foreach (WagonViewData wagon in viewData.wagons)
+        {
+            if (wagon != null &&
+                string.Equals(wagon.wagonId, wagonId, StringComparison.Ordinal) &&
+                wagon.canSelect &&
+                (wagon.wagonType == WagonType.None || wagon.isOwned))
             {
                 return true;
             }

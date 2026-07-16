@@ -83,7 +83,9 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
                 RefreshTravelingView();
                 break;
             case InGameScreenState.Settlement:
-                view.HideTradeScreens();
+                // Keep the trade UI root alive and let its settlement adapter display S8.
+                // The presenter only routes state; Framework still owns settlement and claim.
+                view.ShowSettlement();
                 break;
             case InGameScreenState.Preparation:
             default:

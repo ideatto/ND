@@ -105,7 +105,11 @@ public sealed class TradePrepareViewDataBuilder
             isRouteUnlocked = routeUnlocked,
             isWagonRequired = true,
             isWagonSelected = selectedWagon != null,
-            isSelectedWagonOwned = IsSavedWagon(saveData, selectedWagon),
+            // Walking (WagonType.None) is a travel method, not an inventory-owned wagon.
+            // Treat it as satisfying ownership here just as BuildWagons allows selecting it;
+            // otherwise the final departure check contradicts S3 and blocks every walk attempt.
+            isSelectedWagonOwned = selectedWagon != null &&
+                (selectedWagon.WagonType == WagonType.None || IsSavedWagon(saveData, selectedWagon)),
             currentWagonDurability = GetCurrentDurability(saveData, selectedWagon),
             selectedWagonType = selectedWagon != null ? selectedWagon.WagonType : WagonType.None,
             selectedDraftAnimalCount = selectedAnimalTypes.Length,
@@ -366,6 +370,9 @@ public sealed class TradePrepareViewDataBuilder
                 ownedAmount = 0,
                 selectedBuyAmount = buyAmount,
                 selectedSellAmount = 0,
+                // TradeItemData.MaxCount is only a temporary ceiling until market stock is provided.
+                contentQuantityLimit = item.MaxCount,
+                hasAuthoritativeStock = false,
                 unitWeight = item.Weight,
                 selectedWeight = item.Weight * Mathf.Max(0, buyAmount),
                 canBuy = price.IsValid,
@@ -563,6 +570,8 @@ public sealed class TradePrepareViewDataBuilder
             }
 
             bool owned = IsSavedWagon(saveData, wagon);
+            // None represents walking, which is always available and does not require ownership.
+            bool canSelect = wagon.WagonType == WagonType.None || owned;
             result.Add(new WagonViewData
             {
                 wagonId = wagon.WagonId,
@@ -581,8 +590,8 @@ public sealed class TradePrepareViewDataBuilder
                 maxPullAnimals = wagon.MaxPullAnimals,
                 ownedAmount = owned ? 1 : 0,
                 isOwned = owned,
-                canSelect = owned,
-                disabledReason = owned ? string.Empty : "Wagon is not owned."
+                canSelect = canSelect,
+                disabledReason = canSelect ? string.Empty : "Wagon is not owned."
             });
         }
 
@@ -701,9 +710,12 @@ public sealed class TradePrepareViewDataBuilder
         for (int index = 0; index < draft.selectedBuyItems.Count; index++)
         {
             TradeItemBundle selection = draft.selectedBuyItems[index];
+            TradeItemData item = selection != null ? FindItem(items, selection.itemId) : null;
             if (selection == null || selection.quantity <= 0
                 || string.IsNullOrEmpty(selection.itemId)
-                || FindItem(items, selection.itemId) == null)
+                || item == null
+                // Market runtime stock will replace this SO ceiling when its service becomes available.
+                || selection.quantity > item.MaxCount)
             {
                 return true;
             }

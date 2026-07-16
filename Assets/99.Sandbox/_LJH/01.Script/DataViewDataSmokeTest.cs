@@ -113,6 +113,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             ownedAmount = 0,
             selectedBuyAmount = 0,
             selectedSellAmount = 0,
+            contentQuantityLimit = item.MaxCount,
+            hasAuthoritativeStock = false,
             unitWeight = item.Weight,
             selectedWeight = 0f,
             canBuy = true,
