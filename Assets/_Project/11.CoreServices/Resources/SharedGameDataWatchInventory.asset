@@ -93,6 +93,11 @@ MonoBehaviour:
     typeName: WagonData
     dataId: Wagon_S
     watchRootKind: 0
+  - assetGuid: 4dbc3e3c1b693af4b83bd4db6c5e2dd9
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagons/Wagon_Walk.asset
+    typeName: WagonData
+    dataId: Walk
+    watchRootKind: 0
   - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
     typeName: DraftAnimalData

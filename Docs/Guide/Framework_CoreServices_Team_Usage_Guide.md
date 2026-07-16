@@ -138,12 +138,16 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 | `caravan.cargo` | 적재 화물 (`CargoEntrySaveData`). 상점 적재 초안·확정도 여기 매핑 (별도 loadedLines 없음) |
 | `caravan.elapsedInGameSeconds` | 인게임 경과(식량) |
 | `player.tradingCurrency` | 무역 화폐 |
+| `player.homeInventory` | 거점(Base Camp) 창고 (`CargoEntrySaveData` 목록, `caravan.cargo`와 동일 형식) |
+| `player.villageBuildings` | 거점 마을 건물 진행 (`VillageBuildingSaveData`: `displayName` + `level`) |
 
 정규화 (`JsonSaveService.NormalizeData`):
 
 - `world.marketInventories`가 null이면 빈 리스트
 - 각 inventory의 `stocks`가 null이면 빈 리스트
 - `world.marketPurchasePreparation`이 null이면 기본 객체
+- `player.homeInventory`가 null이면 빈 리스트
+- `player.villageBuildings`가 null이면 빈 리스트 (항목 `displayName` null은 빈 문자열, 음수 `level`은 0)
 - **version은 5를 유지**한다. 구 version 5 세이브에 위 필드가 없어도 wipe하지 않고 Normalize로 채운다.
 
 디버그 출력:
@@ -156,6 +160,9 @@ SharedGameData 검증 실패 시 InGame 진입이 막힐 수 있다.
 
 상점 재고 UI 연동(`ND_MARKET_SAVE_SCHEMA_VNEXT`)과 Economy 구매·환불 API는 Save 스키마와 별도 단계다.  
 요약: `Docs/Personal_Documents/CSU/0714_framework_market_inventory_save_schema_work_summary.md`
+
+거점 창고·마을 건물 Save 스키마와 Core 연동 요약:  
+`Docs/Personal_Documents/CSU/0716_save_data_base_camp_schema.md`
 
 ---
 
