@@ -1,0 +1,224 @@
+# InGame UI, World Map, and SceneLoader Assembly Guide
+
+## 문서 목적
+
+이 문서는 `Assets/_Project/07.Scenes/04_InGame/InGame.unity`의 현재 조립 상태를 기준으로 작성되었다.
+새 InGame 계열 씬을 만들거나 프리팹을 다시 배치할 때 UI, 무역 준비 화면, 월드맵, Additive 마을 씬이 같은 방식으로 동작하도록 만드는 것이 목적이다.
+
+> Revision reason (2026-07-16): `TradePrepareUI`, `FrameworkTradeScreenPresenter`, and `TradePrepareRuntimeContext` were bundled into `TradeFeature.prefab` so scene-specific trade references are no longer required. SceneLoader placement and verification were added to prevent incomplete scene copies.
+
+## 사용해야 하는 프리팹
+
+| 역할 | 프리팹 경로 |
+|---|---|
+| 메인 UI와 무역 기능 | `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab` |
+| 월드맵 렌더링 | `Assets/_Project/08.Prefabs/UI/Maps/WorldMapRenderRoot.prefab` |
+| 마을 씬 Additive 로더 | `Assets/_Project/08.Prefabs/UI/Maps/SceneLoader.prefab` |
+
+`TradeFeature.prefab`, `TradePrepareUI.prefab`, `TradePrepareRuntimeContext.prefab`은 `MainUICanvas.prefab` 내부에 중첩되어 있다. 일반적인 씬 조립에서는 이 세 프리팹을 별도로 배치하지 않는다.
+
+## 최종 Hierarchy
+
+```text
+InGame Scene
+├─ Main Camera
+├─ Directional Light
+├─ EventSystem
+├─ InGameSceneController
+├─ MainUICanvas                         <- MainUICanvas.prefab
+│  ├─ InfoPanel
+│  │  └─ CurrencyBar
+│  │     └─ TradeBtn
+│  ├─ WorldMapPanel
+│  │  └─ RawImage
+│  │     └─ WorldUiCanvas
+│  │        ├─ ProgressPercentLabel
+│  │        └─ RiskLabel
+│  └─ TradeFeature                      <- nested TradeFeature.prefab
+│     ├─ TradePrepareUI                 <- 화면이 닫히면 비활성
+│     └─ Runtime                        <- 항상 활성
+│        ├─ FrameworkTradeScreenPresenter
+│        └─ TradePrepareRuntimeContext
+├─ WorldMapRenderRoot                   <- WorldMapRenderRoot.prefab
+│  ├─ WorldMapCamera
+│  └─ WorldMapRoot
+│     └─ WorldMapPresenter
+└─ SceneLoader                          <- SceneLoader.prefab
+```
+
+`WorldMapRenderRoot`는 Canvas 자식으로 넣지 않는다. `MainUICanvas`, `WorldMapRenderRoot`, `SceneLoader`는 모두 씬의 최상위 오브젝트로 배치한다.
+
+## 조립 순서
+
+### 1. MainUICanvas 배치
+
+1. `MainUICanvas.prefab`을 씬 최상위에 배치한다.
+2. RectTransform이 전체 화면 Stretch인지 확인한다.
+3. 씬에 EventSystem이 정확히 하나만 있는지 확인한다.
+4. `MainUICanvas` 내부에 `TradeFeature`가 하나 존재하는지 확인한다.
+
+다음 무역 연결은 프리팹 내부 연결이므로 Inspector에서 다시 지정하지 않는다.
+
+| 호출 위치 | 내부 대상 |
+|---|---|
+| `TradeBtn.onClick` | `FrameworkTradeScreenPresenter.OpenTradeScreen()` |
+| `Backdrop.onClick` | `FrameworkTradeScreenPresenter.CloseTradeScreen()` |
+| `FrameworkTradeScreenPresenter.viewBehaviour` | `TradePrepareUI/UIManager` |
+| `TradePrepareUiRuntimeBinding.runtimeContext` | `TradePrepareRuntimeContext` |
+
+`Runtime`은 `TradePrepareUI`의 형제이다. 준비 화면이 닫혀도 RuntimeContext와 Draft를 유지하기 위한 구조이므로 `Runtime`을 `TradePrepareUI` 아래로 이동하지 않는다.
+
+### 2. WorldMapRenderRoot 배치
+
+1. `WorldMapRenderRoot.prefab`을 씬 최상위에 배치한다.
+2. 씬에 `WorldMapRoot`, `WorldMapPresenter`, `WorldMapCamera`가 각각 하나만 존재하는지 확인한다.
+3. `WorldMapCamera`가 `MainUICanvas`의 자식이 아닌지 확인한다.
+
+### 3. 월드맵의 씬 전용 참조 연결
+
+`MainUICanvas.prefab`과 `WorldMapRenderRoot.prefab`은 서로 다른 프리팹이므로 두 개의 씬 인스턴스 참조는 자동 저장되지 않는다.
+
+| Component 위치 | Field | 할당할 씬 오브젝트 |
+|---|---|---|
+| `MainUICanvas/WorldMapPanel`의 `SlidePanel` | `Rend Cam` | `WorldMapRenderRoot/WorldMapCamera` |
+| `MainUICanvas/WorldMapPanel/RawImage/WorldUiCanvas`의 `WorldMapOverlayLabelBinding` | `Presenter` | `WorldMapRenderRoot/WorldMapRoot/WorldMapPresenter` |
+
+Progress 및 Risk Text 참조는 `MainUICanvas.prefab` 내부 연결이다. 별도로 다시 지정하지 않는다.
+
+### 4. RenderTexture 확인
+
+아래 두 필드는 동일한 `WorldMapRenderTexture` 에셋을 사용해야 한다.
+
+| Component | Field |
+|---|---|
+| `WorldMapCamera` | `Target Texture` |
+| `MainUICanvas/WorldMapPanel/RawImage` | `Texture` |
+
+두 에셋이 다르면 버튼과 UI는 작동해도 지도 영상은 비어 보인다.
+
+### 5. SceneLoader 배치
+
+1. `SceneLoader.prefab`을 씬 최상위에 하나만 배치한다.
+2. `AdditiveSceneLoader.sceneName`이 `Village_Home`인지 확인한다.
+3. Build Settings의 `Scenes In Build`에 다음 씬이 활성 상태로 들어 있는지 확인한다.
+
+```text
+Assets/_Project/07.Scenes/04_InGame/Village_Home.unity
+```
+
+현재 프로젝트에서 `Village_Home`은 Build Index 5로 등록되어 있다. Build Index 번호 자체보다 씬 이름과 활성 상태가 중요하다.
+
+Play Mode가 시작되면 `AdditiveSceneLoader.Start()`가 `Village_Home`을 Additive로 로드한다. 이미 같은 이름의 씬이 로드되어 있으면 다시 로드하지 않는다.
+
+SceneLoader는 다음 기능을 담당하지 않는다.
+
+- `Village_Home` 언로드
+- 다른 마을로 교체
+- MainUICanvas 또는 WorldMap 프리팹 생성
+- Framework SaveData 초기화
+
+따라서 씬 전환 시 마을 언로드나 교체가 필요하면 별도의 흐름에서 처리해야 한다.
+
+## Framework 전제 조건
+
+`FrameworkRoot`는 `RuntimeInitializeOnLoadMethod(BeforeSceneLoad)`에서 준비되는 전역 시스템이다. 씬에 별도의 FrameworkRoot 프리팹을 중복 배치하지 않는다.
+
+무역 UI의 RuntimeContext는 다음 데이터를 FrameworkRoot에서 사용한다.
+
+- 현재 SaveData
+- 현재 마을 ID
+- 무역 시작 서비스
+- 진행 및 정산 화면 상태
+
+`InGame.unity`만 직접 실행하여 테스트할 때도 FrameworkRoot와 SaveData가 초기화됐는지 Console에서 확인한다. RuntimeContext는 존재하지만 SaveData가 없다면 무역 ViewData가 생성되지 않을 수 있다.
+
+## 프리팹 편집 규칙
+
+씬 Hierarchy에서 프리팹 내부 자식을 다른 위치로 이동하거나 형제 순서를 바꾸면 `Cannot restructure Prefab instance` 안내가 표시된다.
+
+- 구조를 바꿀 때는 `Open Prefab`을 눌러 Prefab Mode에서 수정한다.
+- `Unpack Prefab`은 사용하지 않는다.
+- 씬별 위치와 크기만 바꿀 때는 프리팹 인스턴스의 최상위 RectTransform을 조정한다.
+- `TradeFeature`, `TradePrepareUI`, `Runtime`의 부모 관계를 씬에서 변경하지 않는다.
+
+Unpack하면 내부 연결이 씬 전용으로 바뀌어 다른 씬에 배치했을 때 동일한 구성을 보장할 수 없다.
+
+## 추가하면 안 되는 항목
+
+- 두 번째 EventSystem
+- 두 번째 WorldMapRoot 또는 WorldMapPresenter
+- UI 프리팹 내부의 WorldMapCamera
+- `ND.UI.WorldMap.WorldMapPanel` 컴포넌트
+- Progress/Risk 라벨용 중첩 Canvas, CanvasScaler 또는 GraphicRaycaster
+- 별도로 배치한 TradeFeature, TradePrepareUI, RuntimeContext 또는 FrameworkTradeScreenPresenter
+- 두 번째 SceneLoader
+
+`ND.UI.WorldMap.WorldMapPanel`을 다시 추가하면 Awake에서 두 번째 WorldMapRoot가 생성될 수 있다.
+
+## Play Mode 검증 순서
+
+### 시작 상태
+
+1. Console에 Missing Prefab, Missing Script, NullReference 오류가 없는지 확인한다.
+2. Loaded Scenes에 `InGame`과 `Village_Home`이 함께 표시되는지 확인한다.
+3. 월드맵이 닫힌 상태에서는 `WorldMapCamera`가 비활성인지 확인한다.
+4. `TradePrepareUI`는 비활성이지만 `TradeFeature/Runtime`은 활성인지 확인한다.
+
+### 월드맵
+
+1. WorldMapButton을 누른다.
+2. 패널이 움직이기 전에 WorldMapCamera가 활성화되는지 확인한다.
+3. 지도, Progress, Risk가 함께 움직이는지 확인한다.
+4. 지도를 닫고 슬라이드가 끝난 뒤 WorldMapCamera가 비활성화되는지 확인한다.
+
+### 무역 UI
+
+1. `MainUICanvas/InfoPanel/CurrencyBar/TradeBtn`을 누른다.
+2. `TradePrepareUI`가 활성화되고 S1 준비 화면이 표시되는지 확인한다.
+3. Backdrop을 눌러 준비 화면을 닫는다.
+4. `TradeFeature/Runtime/TradePrepareRuntimeContext`가 계속 활성인지 확인한다.
+5. 다시 열었을 때 기존 Draft 선택 내용이 유지되는지 확인한다.
+
+### 예상 오브젝트 수
+
+```text
+MainUICanvas:                       1
+TradeFeature:                      1
+TradePrepareUI:                    1
+FrameworkTradeScreenPresenter:     1
+TradePrepareRuntimeContext:        1
+WorldMapCamera:                    1
+WorldMapRoot:                      1
+WorldMapPresenter:                 1
+SceneLoader:                       1
+EventSystem:                       1
+```
+
+## 문제 해결표
+
+| 증상 | 가능한 원인 | 확인 및 해결 |
+|---|---|---|
+| TradeBtn을 눌러도 열리지 않음 | MainUICanvas 내부 TradeFeature 누락 또는 Prefab Override 손상 | MainUICanvas 원본을 열어 TradeFeature와 TradeBtn 내부 listener 확인 |
+| 준비 UI를 닫은 뒤 선택값이 초기화됨 | RuntimeContext가 TradePrepareUI 아래로 이동됨 | RuntimeContext를 `TradeFeature/Runtime` 아래에 유지 |
+| Missing Nested Prefab 오류 | TradePrepareUI 또는 TradePrepareRuntimeContext 프리팹 삭제 | 삭제한 `.prefab`과 `.meta`를 함께 복구하고 TradeFeature 재임포트 |
+| 지도가 비어 있음 | RenderTexture 불일치 또는 Camera 미연결 | RawImage Texture, Camera Target Texture, SlidePanel Rend Cam 확인 |
+| 지도는 보이지만 라벨이 갱신되지 않음 | Overlay Binding Presenter가 None | 씬의 WorldMapPresenter 할당 |
+| 지도를 닫아도 Camera가 계속 켜짐 | SlidePanel Rend Cam이 None | WorldMapCamera 할당 |
+| WorldMapRoot가 두 개 생성됨 | 생성형 WorldMapPanel 컴포넌트 또는 Render prefab 중복 | 중복 컴포넌트와 프리팹 제거 |
+| Village_Home이 로드되지 않음 | sceneName 오타 또는 Build Settings 누락 | 정확히 `Village_Home`인지와 Scenes In Build 활성 상태 확인 |
+| SceneLoader 실행 시 scene load 오류 | 대상 씬이 Build Settings에 없음 | `Village_Home.unity`를 Scenes In Build에 추가 |
+| 프리팹 자식을 이동할 수 없음 | 씬에서 Prefab instance 구조 변경 시도 | `Open Prefab`으로 원본 편집. Unpack하지 않음 |
+
+## 다른 씬으로 복사할 때의 최소 체크리스트
+
+- [ ] `MainUICanvas.prefab` 배치
+- [ ] `WorldMapRenderRoot.prefab` 배치
+- [ ] `SceneLoader.prefab` 배치
+- [ ] EventSystem 하나 유지
+- [ ] SlidePanel의 Rend Cam 연결
+- [ ] WorldMapOverlayLabelBinding의 Presenter 연결
+- [ ] Camera와 RawImage에 동일 RenderTexture 할당
+- [ ] SceneLoader의 sceneName을 `Village_Home`으로 설정
+- [ ] `Village_Home.unity`가 Build Settings에 활성 등록
+- [ ] MainUICanvas 내부 TradeFeature를 별도로 Unpack하거나 이동하지 않음
+- [ ] Play Mode에서 UI, 지도, Additive scene, Console을 순서대로 검증
