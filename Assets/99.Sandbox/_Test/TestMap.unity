@@ -1256,6 +1256,10 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 409077857443374846, guid: 1cbaed1ac374d21418fed04fddddac7d, type: 3}
+      propertyPath: m_Maskable
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 409077857443374846, guid: 1cbaed1ac374d21418fed04fddddac7d, type: 3}
       propertyPath: m_UVRect.x
       value: -0.22
       objectReference: {fileID: 0}
@@ -1286,6 +1290,10 @@ PrefabInstance:
     - target: {fileID: 988368017655794673, guid: 1cbaed1ac374d21418fed04fddddac7d, type: 3}
       propertyPath: m_SizeDelta.y
       value: 2048
+      objectReference: {fileID: 0}
+    - target: {fileID: 1346868789386716689, guid: 1cbaed1ac374d21418fed04fddddac7d, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: -100
       objectReference: {fileID: 0}
     - target: {fileID: 1848912213233463870, guid: 1cbaed1ac374d21418fed04fddddac7d, type: 3}
       propertyPath: m_Name
