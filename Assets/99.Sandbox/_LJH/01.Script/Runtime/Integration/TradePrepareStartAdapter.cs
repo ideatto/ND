@@ -141,12 +141,12 @@ public sealed class TradePrepareStartAdapter
             ? gatewayResult.departureValidation
             : null;
 
-        if (departure == null || !departure.canDepart)
+        if (departure != null && !departure.canDepart && HasDepartureBlockReasons(departure))
         {
             commitSink?.Rollback(tradeId.Trim());
             return CreateFailure(
                 ErrorCoreDepartureBlocked,
-                "Core departure validation blocked trade start.",
+                CreateCoreDepartureBlockedMessage(departure),
                 tradeId,
                 viewData.startCondition,
                 departure,
@@ -159,6 +159,18 @@ public sealed class TradePrepareStartAdapter
             return CreateFailure(
                 ErrorFrameworkRecordFailed,
                 "The start gateway failed to record the started trade.",
+                tradeId,
+                viewData.startCondition,
+                departure,
+                commitData);
+        }
+
+        if (departure == null || !departure.canDepart)
+        {
+            commitSink?.Rollback(tradeId.Trim());
+            return CreateFailure(
+                ErrorCoreDepartureBlocked,
+                CreateCoreDepartureBlockedMessage(departure),
                 tradeId,
                 viewData.startCondition,
                 departure,
@@ -203,6 +215,27 @@ public sealed class TradePrepareStartAdapter
             prepareCondition = prepareCondition,
             departureValidation = departureValidation
         };
+    }
+
+    private static string CreateCoreDepartureBlockedMessage(DepartureValidationResult departureValidation)
+    {
+        if (departureValidation == null
+            || departureValidation.reasons == null
+            || departureValidation.reasons.Count == 0)
+        {
+            return "Core departure validation blocked trade start without a detailed reason.";
+        }
+
+        return "Core departure validation blocked trade start: "
+            + string.Join(", ", departureValidation.reasons.ConvertAll(reason => reason.ToString()).ToArray())
+            + ".";
+    }
+
+    private static bool HasDepartureBlockReasons(DepartureValidationResult departureValidation)
+    {
+        return departureValidation != null
+            && departureValidation.reasons != null
+            && departureValidation.reasons.Count > 0;
     }
 
     private static TradePrepareCommitData CreateCommitData(

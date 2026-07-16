@@ -44,6 +44,18 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
 
     public bool IsTyping => typing;
     public EconomyM1SettlementViewData CurrentViewData => currentViewData;
+    public UnityEvent PaymentCompleted => onPaymentCompleted;
+
+    public void ConfigurePaymentPanel(PaymentPanelController value)
+    {
+        if (paymentPanel != null)
+            paymentPanel.PaymentCompleted.RemoveListener(onPaymentCompleted.Invoke);
+
+        paymentPanel = value;
+        paymentCompletionWired = false;
+        WireViewEvents();
+        WirePaymentCompletion();
+    }
 
     private void Awake()
     {
@@ -175,8 +187,19 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
     {
         if (paymentPanel == null || paymentCompletionWired)
             return;
+
+        // Configure can be called again after a UI-root activation. Remove a stale runtime
+        // listener first so one stamp can never forward PaymentCompleted more than once.
+        paymentPanel.PaymentCompleted.RemoveListener(onPaymentCompleted.Invoke);
         paymentPanel.PaymentCompleted.AddListener(onPaymentCompleted.Invoke);
         paymentCompletionWired = true;
+    }
+
+    private void OnDestroy()
+    {
+        if (paymentPanel != null)
+            paymentPanel.PaymentCompleted.RemoveListener(onPaymentCompleted.Invoke);
+        paymentCompletionWired = false;
     }
 
     public void OnPointerClick(PointerEventData eventData)

@@ -53,6 +53,14 @@ namespace ND.Framework
                 return;
             }
 
+            // A stale or duplicated completion callback can arrive after the first claim has
+            // already routed to Preparation. Ignore it instead of reopening S8 with
+            // "No settlement result."
+            if (!IsSettlementScreenActive())
+            {
+                return;
+            }
+
             var bridge = GetBridge();
             // bridge가 없으면 claim을 처리할 수 없으므로 사용자에게 결과 없음 상태를 표시한다.
             if (bridge == null)

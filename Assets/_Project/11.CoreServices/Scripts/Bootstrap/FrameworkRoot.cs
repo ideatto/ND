@@ -46,6 +46,9 @@ namespace ND.Framework
     public sealed class FrameworkRoot : MonoBehaviour
     {
         private const string RootObjectName = "FrameworkRoot";
+        private const float TradeProgressCheckIntervalSeconds = 0.2f;
+
+        private float nextTradeProgressCheckUnscaledTime;
 
         /// <summary>
         /// 현재 활성화된 FrameworkRoot 인스턴스이다.
@@ -91,6 +94,8 @@ namespace ND.Framework
         /// Core caravan 출발 검증과 저장 데이터 기록을 연결하는 서비스이다.
         /// </summary>
         public TradeStartService TradeStart { get; private set; }
+
+        public FrameworkTradePrepareCommitStore TradePrepareCommitStore { get; private set; }
 
         /// <summary>
         /// 무역 진행률 계산, 정산 생성, claim 후 초기화를 조율하는 서비스이다.
@@ -138,6 +143,22 @@ namespace ND.Framework
             Instance = this;
             DontDestroyOnLoad(gameObject);
             InitializeServices();
+        }
+
+        private void Update()
+        {
+            if (TradeProgressCoordinator == null ||
+                Time.unscaledTime < nextTradeProgressCheckUnscaledTime)
+            {
+                return;
+            }
+
+            nextTradeProgressCheckUnscaledTime =
+                Time.unscaledTime + TradeProgressCheckIntervalSeconds;
+
+            // Runtime progress is derived from the saved UTC range. Intermediate frames do
+            // not need a disk write; settlement creation saves the completed state itself.
+            TradeProgressCoordinator.CheckProgressAndCompletion(saveProgress: false);
         }
 
         /// <summary>
@@ -259,6 +280,7 @@ namespace ND.Framework
             DebugCommands = new FrameworkDebugCommands(GameTime);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime, GameTime);
             InGameScreenRouter = new InGameScreenStateRouter();
+            TradePrepareCommitStore = new FrameworkTradePrepareCommitStore(() => CurrentSaveData);
             TradeProgressCoordinator = new TradeProgressCoordinator(
                 () => CurrentSaveData,
                 SaveService,
@@ -266,7 +288,8 @@ namespace ND.Framework
                 TradeProgressRecorder,
                 InGameScreenRouter,
                 GameTime,
-                () => SharedGameData);
+                () => SharedGameData,
+                TradePrepareCommitStore);
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,
                 SaveService,

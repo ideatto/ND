@@ -234,6 +234,8 @@ namespace ND.Framework
                 data.pendingSettlement = PendingSettlementSaveDataMapper.CreateEmpty();
             }
 
+            FrameworkTradePrepareCommitStore.Normalize(data);
+
             if (data.world == null)
             {
                 data.world = new WorldSaveData();

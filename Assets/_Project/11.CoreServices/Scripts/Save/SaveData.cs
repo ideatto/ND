@@ -88,6 +88,9 @@ namespace ND.Framework
         /// </summary>
         public PendingSettlementSaveData pendingSettlement = new PendingSettlementSaveData();
 
+        /// <summary>Active trade departure-time preparation snapshot.</summary>
+        public TradePreparationCommitSaveData tradePreparationCommit = new TradePreparationCommitSaveData();
+
         /// <summary>
         /// 월드 계절, 재난, unlock 목록, 상점 재고·구매 준비를 저장하는 데이터이다.
         /// </summary>

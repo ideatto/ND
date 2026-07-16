@@ -220,6 +220,38 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         RefreshAll();
     }
 
+    /// <summary>
+    /// Restores cargo quantities already held by the authoritative preparation draft.
+    /// Configure clears presentation state first, so returning to S4 must rebuild it.
+    /// </summary>
+    public void RestoreSelectedCargo(IReadOnlyList<TradeItemViewData> selectedItems)
+    {
+        if (selectedItems == null || shopItems == null)
+            return;
+
+        foreach (TradeItemViewData selected in selectedItems)
+        {
+            if (selected == null || selected.selectedBuyAmount <= 0 || string.IsNullOrEmpty(selected.itemId))
+                continue;
+
+            int shopIndex = Array.FindIndex(
+                shopItems,
+                item => item != null && string.Equals(item.ItemId, selected.itemId, StringComparison.Ordinal));
+            if (shopIndex < 0 || shopIndex >= remainingStocks.Length)
+                continue;
+
+            int quantity = Mathf.Min(selected.selectedBuyAmount, remainingStocks[shopIndex]);
+            if (quantity <= 0 || !TryAddLoadedQuantity(shopItems[shopIndex], quantity, shopItems[shopIndex].BaseBuyPrice))
+                continue;
+
+            remainingStocks[shopIndex] -= quantity;
+            pendingPurchaseCost += shopItems[shopIndex].BaseBuyPrice * quantity;
+        }
+
+        RefreshAll();
+        NotifyLoadChanged();
+    }
+
     public void Configure(
         long availableGold,
         float maxLoad,
