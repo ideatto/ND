@@ -25,6 +25,7 @@
  * - 저장 파일 이름은 save_data.json으로 고정되어 있다.
  * - version이 CurrentVersion과 다르면 migration 없이 새 데이터로 복구한다(version 5: pendingSettlement 포함).
  * - version 5 세이브에 상점 재고·구매 준비 필드가 없어도 NormalizeData가 빈 컨테이너로 보정한다.
+ * - version 5 세이브에 거점 창고·마을 건물 필드가 없어도 NormalizeData가 빈 리스트로 보정한다.
  * - Save(...)는 null 입력이나 IO 예외를 로그로 남기고 외부로 예외를 던지지 않는다.
  */
 using System;
@@ -180,6 +181,35 @@ namespace ND.Framework
             if (string.IsNullOrWhiteSpace(data.player.currentTownId))
             {
                 data.player.currentTownId = "BaseCamp";
+            }
+
+            if (data.player.homeInventory == null)
+            {
+                data.player.homeInventory = new System.Collections.Generic.List<CargoEntrySaveData>();
+            }
+
+            if (data.player.villageBuildings == null)
+            {
+                data.player.villageBuildings = new System.Collections.Generic.List<VillageBuildingSaveData>();
+            }
+
+            for (var buildingIndex = 0; buildingIndex < data.player.villageBuildings.Count; buildingIndex++)
+            {
+                var building = data.player.villageBuildings[buildingIndex];
+                if (building == null)
+                {
+                    continue;
+                }
+
+                if (building.displayName == null)
+                {
+                    building.displayName = string.Empty;
+                }
+
+                if (building.level < 0)
+                {
+                    building.level = 0;
+                }
             }
 
             if (data.caravan == null)

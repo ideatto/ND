@@ -8,8 +8,9 @@
 //        거치게 바꿔서 진실을 한 곳으로 모은다.
 //
 // [현 단계]
-//   · 소지금·마차 화물(caravan.cargo)은 SaveData를 직접 참조 → 진실은 SaveData 하나.
-//   · 거점 인벤토리는 SaveData에 아직 없어 매니저가 직접 소유(진실). 저장은 추후 편입.
+//   · 소지금·마차 화물(caravan.cargo)·거점 인벤토리(player.homeInventory)는
+//     SaveData를 직접 참조 → 진실은 SaveData 하나.
+//   · 마을 건물은 VillageBuildingRegistry가 player.villageBuildings를 복원·기록한다.
 //   나중에 무역·정산 등 다른 코드가 이 매니저를 참조하도록 전환하면 매니저가 최종 진실.
 //   거점 창고·마차 화물 모두 같은 CargoEntrySaveData 타입이라 서로 이동이 자연스럽다.
 //
@@ -17,6 +18,7 @@
 //        정헌님(_LJH)의 전역 SaveData와 이름이 겹치기 때문(alias·using으로는 충돌).
 //
 // [폴백] FrameworkRoot(SaveData 소유자)가 없는 테스트 씬에서는 임시 SaveData로 동작.
+// [UI] InGame 진입·Start 시 소지금·거점·마차 변경 이벤트를 한 번 발행해 구독 UI를 맞춘다.
 // =============================================================================
 
 using System;
@@ -44,6 +46,17 @@ public class PlayerMainManager : MonoBehaviour
         }
     }
 
+    /// <summary>거점 인벤토리 리스트(SaveData 참조). null이면 빈 리스트로 보정한다.</summary>
+    private List<ND.Framework.CargoEntrySaveData> HomeInventoryList
+    {
+        get
+        {
+            if (Save.player.homeInventory == null)
+                Save.player.homeInventory = new List<ND.Framework.CargoEntrySaveData>();
+            return Save.player.homeInventory;
+        }
+    }
+
     /// <summary>소지금이 바뀌면 알림(재화 HUD 등이 구독).</summary>
     public event Action<long> OnGoldChanged;
 
@@ -56,12 +69,29 @@ public class PlayerMainManager : MonoBehaviour
         }
         Instance = this;
         DontDestroyOnLoad(gameObject);
-        SanitizeHomeInventory();   // 직렬화로 딸려온 무효 항목(빈 id·count 0) 제거
+        SanitizeHomeInventory();   // 로드·폴백 SaveData의 무효 항목(빈 id·count 0) 제거
+    }
+
+    private void OnEnable()
+    {
+        FrameworkEvents.SceneChanged += OnSceneChanged;
+    }
+
+    private void OnDisable()
+    {
+        FrameworkEvents.SceneChanged -= OnSceneChanged;
+    }
+
+    // FrameworkRoot가 준비된 뒤 구독 UI에 현재 SaveData 값을 맞춘다.
+    private void Start()
+    {
+        NotifyRuntimeStateToUi();
     }
 
     /// <summary>거점 인벤토리에서 유효하지 않은 항목(빈 id 또는 count 0 이하)을 제거한다.</summary>
     private void SanitizeHomeInventory()
     {
+        List<ND.Framework.CargoEntrySaveData> homeInventory = HomeInventoryList;
         for (int i = homeInventory.Count - 1; i >= 0; i--)
         {
             ND.Framework.CargoEntrySaveData e = homeInventory[i];
@@ -75,7 +105,22 @@ public class PlayerMainManager : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
-    // ── 소지금 (지금은 SaveData 참조) ────────────
+    private void OnSceneChanged(string sceneName)
+    {
+        // LoadCompleted는 InGame 전에 발생할 수 있으므로, InGame 로드 완료 시 UI를 다시 맞춘다.
+        if (sceneName == SceneNames.InGame)
+            NotifyRuntimeStateToUi();
+    }
+
+    /// <summary>현재 SaveData 기준으로 소지금·거점·마차 UI 이벤트를 한 번 발행한다.</summary>
+    private void NotifyRuntimeStateToUi()
+    {
+        OnGoldChanged?.Invoke(Gold);
+        OnHomeInventoryChanged?.Invoke();
+        OnCaravanCargoChanged?.Invoke();
+    }
+
+    // ── 소지금 (SaveData 참조) ────────────
     /// <summary>현재 소지금(무역 재화).</summary>
     public long Gold => Save.player.tradingCurrency;
 
@@ -97,16 +142,13 @@ public class PlayerMainManager : MonoBehaviour
         return true;
     }
 
-    // ── 거점 인벤토리 (매니저가 진실로 소유) ──────
+    // ── 거점 인벤토리 (SaveData.player.homeInventory 참조) ──────
     // 거점 창고 아이템과 마차 화물(caravan.cargo)은 "서로 오가는 같은 물건"이라
     // 표현을 통일한다: Framework 공용 DTO CargoEntrySaveData(item + quantity)를 그대로 사용.
-    // → 창고 ↔ 마차 이동, 무역·정산과 데이터 일관. 저장은 나중에 SaveData에 편입.
-    // (SaveData에 없는 신규 데이터라 지금은 매니저가 직접 들고 있는 게 진실.)
-    [SerializeField] private List<ND.Framework.CargoEntrySaveData> homeInventory
-        = new List<ND.Framework.CargoEntrySaveData>();
+    // → 창고 ↔ 마차 이동, 무역·정산과 데이터 일관. 진실은 SaveData.
 
-    /// <summary>거점 인벤토리 조회(읽기 전용, UI 바인딩용).</summary>
-    public IReadOnlyList<ND.Framework.CargoEntrySaveData> HomeInventory => homeInventory;
+    /// <summary>거점 인벤토리 조회(읽기 전용, UI 바인딩용, SaveData 참조).</summary>
+    public IReadOnlyList<ND.Framework.CargoEntrySaveData> HomeInventory => HomeInventoryList;
 
     /// <summary>거점 인벤토리가 바뀌면 알림(인벤토리 UI가 구독).</summary>
     public event Action OnHomeInventoryChanged;
@@ -119,6 +161,7 @@ public class PlayerMainManager : MonoBehaviour
     public void AddItem(ND.Framework.TradeItemSaveData item, int count)
     {
         if (item == null || string.IsNullOrEmpty(item.itemId) || count == 0) return;
+        List<ND.Framework.CargoEntrySaveData> homeInventory = HomeInventoryList;
         ND.Framework.CargoEntrySaveData entry = FindEntry(item.itemId);
         if (entry == null)
         {
@@ -137,7 +180,7 @@ public class PlayerMainManager : MonoBehaviour
         ND.Framework.CargoEntrySaveData entry = FindEntry(itemId);
         if (entry == null || entry.quantity < count) return false;
         entry.quantity -= count;
-        if (entry.quantity <= 0) homeInventory.Remove(entry);
+        if (entry.quantity <= 0) HomeInventoryList.Remove(entry);
         OnHomeInventoryChanged?.Invoke();
         return true;
     }
@@ -151,12 +194,12 @@ public class PlayerMainManager : MonoBehaviour
 
     private ND.Framework.CargoEntrySaveData FindEntry(string itemId)
     {
-        foreach (ND.Framework.CargoEntrySaveData e in homeInventory)
+        foreach (ND.Framework.CargoEntrySaveData e in HomeInventoryList)
             if (e != null && e.item != null && e.item.itemId == itemId) return e;
         return null;
     }
 
-    // ── 마차 인벤토리 (지금은 SaveData 참조) ──────
+    // ── 마차 인벤토리 (SaveData 참조) ──────
     // 소지금과 같은 방식: 진실은 SaveData.caravan.cargo, 매니저는 창구만 제공.
     // 거점 인벤토리와 같은 CargoEntrySaveData 타입이라 창고 ↔ 마차 이동이 자연스럽다.
     // [주의] 마차 화물은 평소 무역 준비/정산 시스템이 채운다. 매니저 조작은 전환기용 창구.

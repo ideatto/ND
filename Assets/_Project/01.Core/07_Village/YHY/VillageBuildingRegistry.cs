@@ -9,10 +9,15 @@
 //
 // [레벨] 지어진 건물 = Lv.1 이상, 아직 없는 종류 = Lv.0.
 //        AddOrUpgrade: 이미 있으면 레벨업, 없으면 새로 지음(Lv.1).
+//
+// [저장] FrameworkRoot.CurrentSaveData.player.villageBuildings에 displayName+level로 기록한다.
+//        FrameworkRoot가 없으면 씬 로컬만 동작(테스트 씬 폴백).
+//        키는 카탈로그 displayName이며, 건물 종류 한정·표시명 고정 전제이다.
 // =============================================================================
 
 using System.Collections.Generic;
 using UnityEngine;
+using ND.Framework;
 
 /// <summary>마을 건물(종류별 유일+레벨) 관리 + 하이라이트 + 카탈로그. UI가 싱글톤 접근.</summary>
 public class VillageBuildingRegistry : MonoBehaviour
@@ -72,6 +77,12 @@ public class VillageBuildingRegistry : MonoBehaviour
         }
     }
 
+    // FrameworkRoot·SaveData가 준비된 뒤 거점 건물 진행을 복원한다.
+    private void Start()
+    {
+        RestoreFromSaveData();
+    }
+
     private void OnDestroy()
     {
         if (Instance == this) Instance = null;
@@ -82,6 +93,81 @@ public class VillageBuildingRegistry : MonoBehaviour
         foreach (Building b in buildings)
             if (b.displayName == name) return b;
         return null;
+    }
+
+    private CatalogEntry FindCatalogByName(string displayName)
+    {
+        foreach (CatalogEntry entry in catalog)
+            if (entry != null && entry.displayName == displayName) return entry;
+        return null;
+    }
+
+    /// <summary>
+    /// SaveData.player.villageBuildings를 읽어 씬 건물 레벨을 맞춘다.
+    /// FrameworkRoot가 없으면 아무 것도 하지 않는다(테스트 씬 폴백).
+    /// </summary>
+    private void RestoreFromSaveData()
+    {
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root == null || root.CurrentSaveData == null || root.CurrentSaveData.player == null)
+            return;
+
+        List<VillageBuildingSaveData> savedBuildings = root.CurrentSaveData.player.villageBuildings;
+        if (savedBuildings == null) return;
+
+        foreach (VillageBuildingSaveData saved in savedBuildings)
+        {
+            if (saved == null || string.IsNullOrEmpty(saved.displayName) || saved.level < 1)
+                continue;
+
+            Building existing = FindByName(saved.displayName);
+            if (existing != null)
+            {
+                existing.level = saved.level;
+                continue;
+            }
+
+            CatalogEntry catalogEntry = FindCatalogByName(saved.displayName);
+            GameObject prefab = catalogEntry != null && catalogEntry.prefab != null
+                ? catalogEntry.prefab
+                : fallbackPrefab;
+            BuildNew(prefab, saved.displayName);
+
+            Building built = FindByName(saved.displayName);
+            if (built != null)
+                built.level = saved.level;
+        }
+    }
+
+    /// <summary>
+    /// 건물 진행을 SaveData에 upsert한다.
+    /// FrameworkRoot가 없으면 저장하지 않는다.
+    /// </summary>
+    private void WriteBuildingToSave(string displayName, int level)
+    {
+        if (string.IsNullOrEmpty(displayName) || level < 1) return;
+
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root == null || root.CurrentSaveData == null || root.CurrentSaveData.player == null)
+            return;
+
+        if (root.CurrentSaveData.player.villageBuildings == null)
+            root.CurrentSaveData.player.villageBuildings = new List<VillageBuildingSaveData>();
+
+        List<VillageBuildingSaveData> savedBuildings = root.CurrentSaveData.player.villageBuildings;
+        for (int i = 0; i < savedBuildings.Count; i++)
+        {
+            VillageBuildingSaveData entry = savedBuildings[i];
+            if (entry == null || entry.displayName != displayName) continue;
+            entry.level = level;
+            return;
+        }
+
+        savedBuildings.Add(new VillageBuildingSaveData
+        {
+            displayName = displayName,
+            level = level
+        });
     }
 
     /// <summary>index 건물만 강조색, 나머지는 원래 색.</summary>
@@ -112,10 +198,14 @@ public class VillageBuildingRegistry : MonoBehaviour
         if (existing != null)
         {
             existing.level++;   // 이미 있으면 레벨업만
+            WriteBuildingToSave(existing.displayName, existing.level);
             return;
         }
         // 없으면 새로 짓기(Lv.1)
         BuildNew(entry.prefab != null ? entry.prefab : fallbackPrefab, entry.displayName);
+        Building built = FindByName(entry.displayName);
+        if (built != null)
+            WriteBuildingToSave(built.displayName, built.level);
     }
 
     private void BuildNew(GameObject prefab, string displayName)

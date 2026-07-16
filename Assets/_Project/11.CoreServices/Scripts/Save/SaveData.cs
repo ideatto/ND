@@ -13,12 +13,15 @@
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
  * - SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
  * - 상점 재고(marketInventories)와 구매 준비(marketPurchasePreparation)를 WorldSaveData에 저장한다.
+ * - 거점 창고(homeInventory)와 마을 건물 진행(villageBuildings)을 PlayerSaveData에 저장한다.
  *
  * Usage for Team Members
  * - JsonSaveService가 SaveData를 생성, 로드, 저장한다.
  * - runtime caravan 객체와의 변환은 CaravanSaveDataMapper를 통해 수행한다.
  * - 대기 정산 결과 변환은 PendingSettlementSaveDataMapper를 통해 수행한다.
  * - 상점 적재 초안·확정 화물은 caravan.cargo(CargoEntrySaveData)에 매핑하며 loadedLines를 별도 저장하지 않는다.
+ * - 거점 창고는 caravan.cargo와 동일한 CargoEntrySaveData 목록으로 저장한다.
+ * - 마을 건물은 displayName + level로 저장한다(종류 한정·표시명 고정 전제).
  * - 새 저장 필드를 추가할 때는 CurrentVersion과 NormalizeData 정책을 함께 검토한다.
  *
  * Main Public APIs
@@ -31,8 +34,10 @@
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
  * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
  * - 상점 재고·구매 준비 필드는 version 5를 유지한 채 추가되며, 구 세이브의 null은 JsonSaveService.NormalizeData가 보정한다.
+ * - 거점 창고·마을 건물 필드도 version 5를 유지한 채 추가되며, 구 세이브의 null은 NormalizeData가 보정한다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  * - Related Documentation: Docs/Personal_Documents/JJH/0714_Progression MarketInventory_Change_Request.md
+ * - Related Documentation: Docs/Personal_Documents/CSU/0716_save_data_base_camp_schema.md
  */
 using System;
 using System.Collections.Generic;
@@ -95,7 +100,7 @@ namespace ND.Framework
     }
 
     /// <summary>
-    /// 플레이어의 현재 위치, 재화, growth level을 저장하는 DTO이다.
+    /// 플레이어의 현재 위치, 재화, growth level, 거점 창고·마을 건물을 저장하는 DTO이다.
     /// </summary>
     [Serializable]
     public sealed class PlayerSaveData
@@ -124,6 +129,38 @@ namespace ND.Framework
         /// caravan growth level이다. Economy M1 runtime stat 계산에 사용한다.
         /// </summary>
         public int caravanGrowthLevel;
+
+        /// <summary>
+        /// 거점(Base Camp) 창고 화물 목록이다. caravan.cargo와 동일한 CargoEntrySaveData 형식이다.
+        /// </summary>
+        public List<CargoEntrySaveData> homeInventory = new List<CargoEntrySaveData>();
+
+        /// <summary>
+        /// 거점 마을에 보유한 건물 진행 목록이다. 키는 displayName이며 level 1 이상이 보유 상태이다.
+        /// </summary>
+        public List<VillageBuildingSaveData> villageBuildings = new List<VillageBuildingSaveData>();
+    }
+
+    /// <summary>
+    /// 거점 마을 건물 한 종류의 저장 진행도이다.
+    /// </summary>
+    /// <remarks>
+    /// displayName은 VillageBuildingRegistry 카탈로그와 동일한 문자열을 키로 사용한다.
+    /// 건물 종류가 한정되고 표시명이 고정된다는 기획 전제 하에서만 안정적이다.
+    /// level 0 이하는 미건축으로 취급한다.
+    /// </remarks>
+    [Serializable]
+    public sealed class VillageBuildingSaveData
+    {
+        /// <summary>
+        /// 건물 종류 키이다. 카탈로그 displayName과 일치해야 한다.
+        /// </summary>
+        public string displayName = string.Empty;
+
+        /// <summary>
+        /// 건물 레벨이다. 0 이하는 미건축, 1 이상은 보유 레벨이다.
+        /// </summary>
+        public int level;
     }
 
     /// <summary>
