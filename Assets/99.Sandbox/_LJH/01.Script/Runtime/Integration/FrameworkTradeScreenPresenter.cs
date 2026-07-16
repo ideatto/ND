@@ -31,7 +31,8 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
 
     private void Update()
     {
-        if (view == null || currentScreenState != InGameScreenState.Traveling)
+        // Background progress polling must not reactivate S7 after the trade screen was closed.
+        if (view == null || !isTradeScreenOpen || currentScreenState != InGameScreenState.Traveling)
         {
             return;
         }
@@ -70,9 +71,26 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
 
     private void HandleScreenChanged(InGameScreenState state)
     {
+        InGameScreenState previousState = currentScreenState;
         currentScreenState = state;
-        if (view == null || !isTradeScreenOpen)
+        if (view == null)
         {
+            return;
+        }
+
+        if (!isTradeScreenOpen)
+        {
+            // Keep the visual root closed when Framework state changes through another entry point.
+            view.HideTradeScreens();
+            return;
+        }
+
+        // A successful settlement claim routes Framework from Settlement back to Preparation.
+        // Close the completed trade flow instead of immediately reopening its S1 screen.
+        if (previousState == InGameScreenState.Settlement &&
+            state == InGameScreenState.Preparation)
+        {
+            CloseTradeScreen();
             return;
         }
 

@@ -295,7 +295,10 @@ namespace ND.Framework
                 SaveService,
                 TradeProgressRecorder,
                 InGameScreenRouter,
-                ClearSettlementRuntimeCache);
+                ClearSettlementRuntimeCache,
+                // Register every newly departed caravan so the coordinator never reuses the
+                // claimed Prepare-state caravan left by the previous trade cycle.
+                TradeProgressCoordinator.SetActiveCaravan);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
 
             // Settlement bridge는 event 구독이 필요한 MonoBehaviour이므로 root GameObject에 component로 붙인다.

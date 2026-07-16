@@ -162,7 +162,14 @@ namespace ND.Framework.Editor
                     throw new InvalidOperationException($"Loop integrity smoke failed to start cycle {cycleIndex + 1}.");
                 }
 
-                context.Coordinator.SetActiveCaravan(caravan);
+                // TradeStartService must replace the claimed caravan from the previous cycle.
+                // This assertion prevents the second trade from remaining stuck in Traveling.
+                if (!ReferenceEquals(context.Coordinator.ActiveCaravan, caravan))
+                {
+                    throw new InvalidOperationException(
+                        $"Loop integrity smoke failed to register the active caravan in cycle {cycleIndex + 1}.");
+                }
+
                 context.Coordinator.ForceCompleteActiveTrade();
 
                 if (context.Coordinator.LastSettlementResult == null)
@@ -985,7 +992,9 @@ namespace ND.Framework.Editor
                     {
                         coordinator.ClearSettlementCache();
                         coordinator.ClearPendingSettlementSave(saveData);
-                    });
+                    },
+                    // Production wiring registers the same departure reference in FrameworkRoot.
+                    coordinator.SetActiveCaravan);
 
                 return new TestContext
                 {

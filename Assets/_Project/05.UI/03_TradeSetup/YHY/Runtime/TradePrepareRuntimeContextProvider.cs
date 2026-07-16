@@ -23,6 +23,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 
     private TradePrepareFlowController flowController;
     private TradePrepareStartAdapter startAdapter;
+    private InGameScreenState currentScreenState;
 
     public TradePrepareFlowController FlowController => flowController;
     public TradePrepareViewData CurrentViewData => flowController?.CurrentViewData;
@@ -30,19 +31,45 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 
     private void OnEnable()
     {
+        FrameworkSaveData currentSaveData = FrameworkRoot.Instance != null
+            ? FrameworkRoot.Instance.CurrentSaveData
+            : null;
+        currentScreenState = InGameScreenStateRouter.MapFromSaveData(currentSaveData);
         FrameworkEvents.LoadCompleted += HandleLoadCompleted;
-        TryInitialize(FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null);
+        FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
+        TryInitialize(currentSaveData);
     }
 
     private void OnDisable()
     {
         FrameworkEvents.LoadCompleted -= HandleLoadCompleted;
+        FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
         DisposeFlow();
     }
 
     private void HandleLoadCompleted(FrameworkSaveData saveData)
     {
+        // Synchronize the transition baseline as well as data because the provider may enable
+        // before FrameworkRoot has loaded a Traveling or SettlementPending save.
+        currentScreenState = InGameScreenStateRouter.MapFromSaveData(saveData);
         TryInitialize(saveData);
+    }
+
+    private void HandleScreenChanged(InGameScreenState state)
+    {
+        InGameScreenState previousState = currentScreenState;
+        currentScreenState = state;
+
+        // Settlement -> Preparation is emitted only after a successful claim/reset cycle.
+        // Rebuild here so ordinary UI close/reopen and failed claims keep their existing Draft.
+        if (previousState != InGameScreenState.Settlement ||
+            state != InGameScreenState.Preparation ||
+            flowController == null)
+        {
+            return;
+        }
+
+        TryInitialize(FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null);
     }
 
     public void RefreshFromFramework()

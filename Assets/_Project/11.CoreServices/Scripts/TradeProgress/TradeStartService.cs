@@ -37,6 +37,7 @@ namespace ND.Framework
         private readonly TradeProgressRecorder tradeProgressRecorder;
         private readonly InGameScreenStateRouter inGameScreenRouter;
         private readonly Action clearSettlementCache;
+        private readonly Action<CaravanData> setActiveCaravan;
 
         /// <summary>
         /// 마지막 TryStartTrade 호출에서 TradeProgressRecorder 기록이 성공했는지 나타낸다.
@@ -51,18 +52,21 @@ namespace ND.Framework
         /// <param name="tradeProgressRecorder">active trade 시간과 상태를 기록하는 recorder.</param>
         /// <param name="inGameScreenRouter">출발 성공 후 traveling 화면으로 전환할 router.</param>
         /// <param name="clearSettlementCache">새 출발 전 이전 정산 cache를 비우는 callback.</param>
+        /// <param name="setActiveCaravan">Registers the newly departed runtime caravan with the progress coordinator.</param>
         public TradeStartService(
             Func<SaveData> getCurrentSaveData,
             ISaveService saveService,
             TradeProgressRecorder tradeProgressRecorder,
             InGameScreenStateRouter inGameScreenRouter = null,
-            Action clearSettlementCache = null)
+            Action clearSettlementCache = null,
+            Action<CaravanData> setActiveCaravan = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
             this.tradeProgressRecorder = tradeProgressRecorder;
             this.inGameScreenRouter = inGameScreenRouter;
             this.clearSettlementCache = clearSettlementCache;
+            this.setActiveCaravan = setActiveCaravan;
         }
 
         /// <summary>
@@ -131,6 +135,10 @@ namespace ND.Framework
                 clearSettlementCache?.Invoke();
                 CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             }
+
+            // Register after cache cleanup so a future cleanup implementation cannot clear the
+            // newly departed caravan needed by repeated trade cycles.
+            setActiveCaravan?.Invoke(caravan);
 
             // UI가 즉시 traveling 화면으로 전환되도록 router에 상태 변경을 요청한다.
             inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
