@@ -61,6 +61,31 @@ public class TradeProgressPanel : MonoBehaviour
             remainingTimeText.text = $"무역 종료까지 남은 시간  {FormatHms(remaining)}";
     }
 
+    /// <summary>Framework가 계산한 실제 무역 진행 상태를 표시한다.</summary>
+    public void BindFrameworkProgress(TradeProgressViewData viewData)
+    {
+        // Framework owns elapsed time and arrival, so the demo timer must not run in this mode.
+        running = false;
+
+        if (viewData == null)
+        {
+            if (titleText != null)
+                titleText.text = "출발지 → 목적지";
+            if (remainingTimeText != null)
+                remainingTimeText.text = "무역 종료까지 남은 시간  -- : -- : --";
+            if (progressFill != null)
+                progressFill.fillAmount = 0f;
+            return;
+        }
+
+        if (titleText != null)
+            titleText.text = $"{viewData.fromTownName} → {viewData.toTownName}";
+        if (remainingTimeText != null)
+            remainingTimeText.text = $"무역 종료까지 남은 시간  {FormatHms(viewData.remainingTravelTime)}";
+        if (progressFill != null)
+            progressFill.fillAmount = Mathf.Clamp01(viewData.normalizedProgress);
+    }
+
     private void Update()
     {
         if (!running) return;

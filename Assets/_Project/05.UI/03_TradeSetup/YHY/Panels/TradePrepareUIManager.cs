@@ -27,7 +27,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>무역 준비 플로우의 화면 전환과 단계 간 데이터 전달을 총괄하는 매니저.</summary>
-public class TradePrepareUIManager : MonoBehaviour
+public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 {
     // ══ 외부 계약(주입 데이터 형식) ═══════════════════════════════
 
@@ -96,6 +96,12 @@ public class TradePrepareUIManager : MonoBehaviour
     [SerializeField] private Button warningReturn;                  // ⑦-1 돌아가기
     [SerializeField] private Button warningConfirm;                 // ⑦-1 무역 취소(확정)
     [SerializeField, Min(0f)] private float progressDemoSeconds = 20f; // 데모 관찰용 진행 시간(0=실제 계산값 사용)
+
+    [Header("Settlement screens (S8-S9)")]
+    // These references were added so the existing single-screen router can include settlement.
+    // They control visibility only; settlement values and claim mutations remain Framework-owned.
+    [SerializeField] private TradeSettlementPanelController settlementPanel;
+    [SerializeField] private PaymentPanelController paymentPanel;
 
     [Header("상단 슬롯")]
     [SerializeField] private int caravanSlotCount = 4;   // 슬롯 개수(새 게임=전부 빈칸)
@@ -526,7 +532,7 @@ public class TradePrepareUIManager : MonoBehaviour
             d.mercenaryCost = mercenaryPanel.SelectedHireCost;
         }
         OnDepart?.Invoke(d);
-        GoProgress();   // ⑥ → ⑦ 무역 진행 중
+        // Do not open S7 optimistically. Framework opens it only after departure is recorded as Traveling.
     }
 
     // ══ ⑦ 무역 진행 중 / ⑦-1 취소 경고 ═══════════════════════════
@@ -542,6 +548,51 @@ public class TradePrepareUIManager : MonoBehaviour
             progressPanel.Begin(lastFromTownName, Resolve(selTownId), dur);
         }
         ShowOnly(5);
+    }
+
+    /// <summary>Framework Preparation 상태에 맞춰 준비 플로우를 S1부터 연다.</summary>
+    public void ShowPreparation()
+    {
+        // Begin is intentionally called here so screen routing, not the demo provider, owns initial navigation.
+        SetTradeRootActive(true);
+        Begin();
+    }
+
+    /// <summary>Framework Traveling 상태에 맞춰 S7에 실제 진행 데이터를 표시한다.</summary>
+    public void ShowTraveling(TradeProgressViewData viewData)
+    {
+        // A loaded traveling save can enter S7 without visiting the preparation screens first.
+        SetTradeRootActive(true);
+        WireOnce();
+        if (cancelWarning != null) cancelWarning.Close();
+        ShowOnly(5);
+        if (progressPanel != null) progressPanel.BindFrameworkProgress(viewData);
+    }
+
+    /// <summary>Shows S8 while Framework-owned settlement data is bound by SettlementUiDataAdapter.</summary>
+    public void ShowSettlement()
+    {
+        // This manager controls visibility only. Settlement calculation and claim remain in
+        // Framework, preventing the UI flow from duplicating or mutating settlement results.
+        SetTradeRootActive(true);
+        WireOnce();
+        ShowOnly(6);
+    }
+
+    /// <summary>Framework Settlement 화면을 가리지 않도록 준비·이동 UI를 숨긴다.</summary>
+    public void HideTradeScreens()
+    {
+        // Settlement UI has a separate adapter, so this manager only hides its own panels.
+        if (progressPanel != null) progressPanel.StopTimer();
+        ShowOnly(-1);
+        SetTradeRootActive(false);
+    }
+
+    private void SetTradeRootActive(bool active)
+    {
+        // This manager is a child of TradePrepareUI, so visibility must be applied to its parent root.
+        GameObject tradeRoot = transform.parent != null ? transform.parent.gameObject : gameObject;
+        tradeRoot.SetActive(active);
     }
 
     // ⑦ 하단 "무역 취소" → ⑦-1 경고창 열기
@@ -585,6 +636,10 @@ public class TradePrepareUIManager : MonoBehaviour
         if (cargoPanel != null) cargoPanel.gameObject.SetActive(idx == 3);
         if (summaryPanel != null) summaryPanel.SetActive(idx == 4);
         if (progressPanel != null) progressPanel.gameObject.SetActive(idx == 5);
+        // Added to the existing screen switch because S8/S9 otherwise remain outside manager state.
+        // S9 is opened by S8 only after review, so every normal route closes S9 and starts at S8.
+        if (settlementPanel != null) settlementPanel.gameObject.SetActive(idx == 6);
+        if (paymentPanel != null) paymentPanel.gameObject.SetActive(false);
         if (idx != 5 && cancelWarning != null) cancelWarning.Close();   // 진행 화면 벗어나면 경고창도 닫기
     }
 

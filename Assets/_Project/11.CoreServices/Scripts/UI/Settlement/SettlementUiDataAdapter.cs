@@ -85,7 +85,9 @@ namespace ND.Framework
             SubscribeBridge();
 
             // scene 진입 직후 이미 pending settlement가 있을 수 있으므로 설정에 따라 즉시 refresh한다.
-            if (refreshOnEnable)
+            // This adapter can live under the shared trade UI root. Only refresh while the
+            // Framework is actually in Settlement, otherwise enabling S1 would show an empty S8.
+            if (refreshOnEnable && IsSettlementScreenActive())
             {
                 RefreshSettlementView();
             }
@@ -271,6 +273,15 @@ namespace ND.Framework
         private static SettlementUiBridge GetBridge()
         {
             return FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SettlementUiBridge : null;
+        }
+
+        private static bool IsSettlementScreenActive()
+        {
+            // Use the same SaveData router as the screen presenter so adapter visibility cannot
+            // disagree with the Framework state after loading a pending settlement.
+            var root = FrameworkRoot.Instance;
+            return InGameScreenStateRouter.MapFromSaveData(root != null ? root.CurrentSaveData : null)
+                == InGameScreenState.Settlement;
         }
 
         private void ClearClaimProcessing()

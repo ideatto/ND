@@ -18,6 +18,11 @@ public class TradeItemViewData
     public int selectedBuyAmount;
     public int selectedSellAmount;
 
+    // Content-authored quantity ceiling from TradeItemData, not live per-town market stock.
+    // This value is a UI/validation limit only and must not be persisted as committed inventory.
+    public int contentQuantityLimit;
+    public bool hasAuthoritativeStock;
+
     public float unitWeight;
     public float selectedWeight;
 

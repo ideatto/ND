@@ -238,7 +238,9 @@ public sealed class TradePrepareTemporaryUI : MonoBehaviour
             GUI.enabled = !flowController.IsCommitted && item.selectedBuyAmount > 0;
             if (GUILayout.Button("-", GUILayout.Width(36f)))
                 flowController.SetBuyItemQuantity(item.itemId, item.selectedBuyAmount - 1);
-            GUI.enabled = !flowController.IsCommitted && item.canBuy;
+            GUI.enabled = !flowController.IsCommitted
+                && item.canBuy
+                && item.selectedBuyAmount < item.contentQuantityLimit;
             if (GUILayout.Button("+", GUILayout.Width(36f)))
                 flowController.SetBuyItemQuantity(item.itemId, item.selectedBuyAmount + 1);
             GUI.enabled = oldEnabled;

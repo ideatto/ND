@@ -77,6 +77,11 @@ public class DataViewDataSmokeTest : MonoBehaviour
         var storeCancelClearedDraft = string.IsNullOrEmpty(draftStore.Current.currentTownId)
             && draftStore.Current.SelectedMercenaryIds.Count == 0;
 
+        AssertCurrencyProjection(2000L, 600L, 300L, 1400L, 1100L, true, true);
+        AssertCurrencyProjection(2000L, 2100L, 0L, 0L, 0L, false, false);
+        AssertCurrencyProjection(2000L, 1700L, 500L, 300L, 0L, true, false);
+        AssertCurrencyProjection(2000L, 2000L, 0L, 0L, 0L, true, true);
+
         if (town.UnlockedByDefault)
             saveData.world.unlockedTownIds.Add(town.TownId);
 
@@ -108,6 +113,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             ownedAmount = 0,
             selectedBuyAmount = 0,
             selectedSellAmount = 0,
+            contentQuantityLimit = item.MaxCount,
+            hasAuthoritativeStock = false,
             unitWeight = item.Weight,
             selectedWeight = 0f,
             canBuy = true,
@@ -662,5 +669,37 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(result.failureReason == FailureReason.FoodShortage, "Smoke Test failed: failureReason mismatch.");
 
         Debug.Log("ViewData Smoke Test PASSED.");
+    }
+
+    private static void AssertCurrencyProjection(
+        long currentCurrency,
+        long purchaseCost,
+        long hireCost,
+        long expectedAfterPurchase,
+        long expectedAfterHire,
+        bool expectedCanPurchase,
+        bool expectedCanHire)
+    {
+        TradePrepareViewDataBuilder.CalculateCurrencyProjection(
+            currentCurrency,
+            purchaseCost,
+            hireCost,
+            out long estimatedAfterPurchase,
+            out long estimatedAfterHire,
+            out bool canPurchase,
+            out bool canHire);
+
+        Debug.Assert(
+            estimatedAfterPurchase == expectedAfterPurchase,
+            $"Currency Projection Smoke Test failed: after purchase {estimatedAfterPurchase}, expected {expectedAfterPurchase}.");
+        Debug.Assert(
+            estimatedAfterHire == expectedAfterHire,
+            $"Currency Projection Smoke Test failed: after hire {estimatedAfterHire}, expected {expectedAfterHire}.");
+        Debug.Assert(
+            canPurchase == expectedCanPurchase,
+            $"Currency Projection Smoke Test failed: canPurchase {canPurchase}, expected {expectedCanPurchase}.");
+        Debug.Assert(
+            canHire == expectedCanHire,
+            $"Currency Projection Smoke Test failed: canHire {canHire}, expected {expectedCanHire}.");
     }
 }

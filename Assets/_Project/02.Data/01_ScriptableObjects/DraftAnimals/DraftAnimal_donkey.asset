@@ -27,7 +27,7 @@ MonoBehaviour:
   rarity: 1
   baseBuyPrice: 10
   canStack: 0
-  maxCount: 1
+  maxCount: 99
   affectModify: 0
   modifiers: []
   localSpecialty: 0

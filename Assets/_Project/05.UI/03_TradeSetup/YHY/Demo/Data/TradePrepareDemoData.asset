@@ -19,7 +19,7 @@ MonoBehaviour:
   transports:
   - {fileID: 11400000, guid: d1f29cbc4f6fb5d489d1ac675ed655df, type: 2}
   - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
-  transportOwned: 0100000001000000
+  transportOwned: 0200000002000000
   animals:
   - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
   - {fileID: 11400000, guid: 76f8d2c8354dee44ba423e15d4531cf5, type: 2}

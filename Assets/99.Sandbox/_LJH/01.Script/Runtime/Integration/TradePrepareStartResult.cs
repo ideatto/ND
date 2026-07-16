@@ -1,4 +1,4 @@
-[System.Serializable]
+
 public sealed class TradePrepareStartResult
 {
     public bool succeeded;
