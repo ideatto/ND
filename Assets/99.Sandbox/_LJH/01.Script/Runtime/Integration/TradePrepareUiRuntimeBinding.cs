@@ -21,6 +21,9 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     [Header("S4 cargo view")]
     [SerializeField] private CargoLoadingPanelController cargoPanel;
 
+    [Header("Departure warning")]
+    [SerializeField] private NoticeUI departureWarning;
+
     private void OnEnable()
     {
         if (uiManager != null)
@@ -119,14 +122,72 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         TradePrepareStartResult result = runtimeContext.TryStartTrade(tradeId);
         if (result == null || !result.succeeded)
         {
+            // Runtime validation remains authoritative; the binding only converts its result
+            // into a user-facing message and forwards it to the temporary notice view.
+            if (departureWarning != null)
+                departureWarning.Show(BuildDepartureWarning(result));
+
             Debug.LogError(
                 $"[TradePrepare] Trade start failed: {result?.errorCode ?? "NULL_RESULT"} - " +
                 $"{result?.errorMessage ?? "RuntimeContext returned no result."}",
                 this);
+
+            // A failed request must remain on S6 and must not continue into any success path.
+            return;
         }
 
         // Do not activate S7 here. A successful start changes Framework SaveData to Traveling;
         // FrameworkTradeScreenPresenter observes that state and becomes the sole screen router.
+    }
+
+    private static string BuildDepartureWarning(TradePrepareStartResult result)
+    {
+        if (result == null)
+            return "출발 결과를 확인할 수 없습니다.";
+
+        DepartureValidationResult validation = result.departureValidation;
+        if (validation != null && validation.reasons != null && validation.reasons.Count > 0)
+        {
+            var messages = new List<string>();
+            for (int index = 0; index < validation.reasons.Count; index++)
+                messages.Add(GetDepartureReasonMessage(validation.reasons[index]));
+
+            return string.Join("\n", messages);
+        }
+
+        // Prepare validation and Framework recording failures do not always contain Core enums,
+        // so preserve the detailed message already produced by TradePrepareStartAdapter.
+        return string.IsNullOrWhiteSpace(result.errorMessage)
+            ? "출발 조건을 만족하지 못했습니다."
+            : result.errorMessage;
+    }
+
+    private static string GetDepartureReasonMessage(DepartureBlockReason reason)
+    {
+        // Core reasons stay language-neutral; this UI boundary owns their Korean presentation.
+        switch (reason)
+        {
+            case DepartureBlockReason.NoWagon:
+                return "이동 수단을 선택해 주세요.";
+            case DepartureBlockReason.NotEnoughAnimals:
+                return "견인 동물이 부족합니다.";
+            case DepartureBlockReason.TooManyAnimals:
+                return "견인 동물이 너무 많습니다.";
+            case DepartureBlockReason.Overloaded:
+                return "최대 적재 중량을 초과했습니다.";
+            case DepartureBlockReason.NoCargo:
+                return "적재된 무역품이 없습니다.";
+            case DepartureBlockReason.BrokenWagon:
+                return "이동 수단의 내구도가 부족합니다.";
+            case DepartureBlockReason.SlotExceeded:
+                return "사용 가능한 적재 슬롯을 초과했습니다.";
+            case DepartureBlockReason.MixedAnimalType:
+                return "서로 다른 종류의 견인 동물을 함께 사용할 수 없습니다.";
+            case DepartureBlockReason.NotInPrepare:
+                return "현재는 새로운 무역을 출발할 수 없는 상태입니다.";
+            default:
+                return "출발 조건을 만족하지 못했습니다.";
+        }
     }
 
     private void HandleViewDataChanged(TradePrepareViewData viewData)

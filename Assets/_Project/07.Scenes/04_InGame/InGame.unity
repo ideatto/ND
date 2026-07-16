@@ -4019,6 +4019,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: MainUICanvas
       objectReference: {fileID: 0}
+    - target: {fileID: 6583520037871929206, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: departureWarning
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 8611105903291487663, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
       propertyPath: m_RaycastTarget
       value: 0

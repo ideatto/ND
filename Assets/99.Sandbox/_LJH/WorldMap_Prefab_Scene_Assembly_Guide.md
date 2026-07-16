@@ -6,6 +6,8 @@
 새 InGame 계열 씬을 만들거나 프리팹을 다시 배치할 때 UI, 무역 준비 화면, 월드맵, Additive 마을 씬이 같은 방식으로 동작하도록 만드는 것이 목적이다.
 
 > Revision reason (2026-07-16): `TradePrepareUI`, `FrameworkTradeScreenPresenter`, and `TradePrepareRuntimeContext` were bundled into `TradeFeature.prefab` so scene-specific trade references are no longer required. SceneLoader placement and verification were added to prevent incomplete scene copies.
+>
+> Revision reason (2026-07-16): the current InGame scene now has a scene-added `NoticeUI` for departure failures. Its CanvasGroup, TMP text, and `TradePrepareUiRuntimeBinding.departureWarning` reference are documented because this object is not yet part of `MainUICanvas.prefab`.
 
 ## 사용해야 하는 프리팹
 
@@ -34,11 +36,16 @@ InGame Scene
 │  │     └─ WorldUiCanvas
 │  │        ├─ ProgressPercentLabel
 │  │        └─ RiskLabel
-│  └─ TradeFeature                      <- nested TradeFeature.prefab
-│     ├─ TradePrepareUI                 <- 화면이 닫히면 비활성
-│     └─ Runtime                        <- 항상 활성
-│        ├─ FrameworkTradeScreenPresenter
-│        └─ TradePrepareRuntimeContext
+│  ├─ TradeFeature                      <- nested TradeFeature.prefab
+│  │  ├─ TradePrepareUI                 <- 화면이 닫히면 비활성
+│  │  │  └─ UIManager
+│  │  │     └─ TradePrepareUiRuntimeBinding
+│  │  └─ Runtime                        <- 항상 활성
+│  │     ├─ FrameworkTradeScreenPresenter
+│  │     └─ TradePrepareRuntimeContext
+│  └─ NoticeUI                          <- InGame 씬에서 추가한 Override, 최초 비활성
+│     ├─ Panel                          <- 경고 배경 Image
+│     └─ Text (TMP)                     <- 출발 실패 메시지
 ├─ WorldMapRenderRoot                   <- WorldMapRenderRoot.prefab
 │  ├─ WorldMapCamera
 │  └─ WorldMapRoot
@@ -67,6 +74,36 @@ InGame Scene
 | `TradePrepareUiRuntimeBinding.runtimeContext` | `TradePrepareRuntimeContext` |
 
 `Runtime`은 `TradePrepareUI`의 형제이다. 준비 화면이 닫혀도 RuntimeContext와 Draft를 유지하기 위한 구조이므로 `Runtime`을 `TradePrepareUI` 아래로 이동하지 않는다.
+
+### 1-1. 출발 실패 NoticeUI 조립
+
+현재 `InGame.unity`의 `NoticeUI`는 `MainUICanvas.prefab` 원본에 포함된 자식이 아니라 씬에서 추가된 Prefab Override이다. 따라서 다른 씬에 `MainUICanvas.prefab`을 새로 배치하면 아래 구성과 참조를 수동으로 추가해야 한다.
+
+```text
+MainUICanvas
+└─ NoticeUI                           <- 최초 비활성, UI Layer
+   ├─ RectTransform                  <- 화면 상단 배치
+   ├─ CanvasGroup
+   ├─ NoticeUI (Script)
+   ├─ Panel                          <- Image, 경고 배경
+   └─ Text (TMP)                     <- 메시지 출력
+```
+
+| Component | Field | 값 |
+|---|---|---|
+| `NoticeUI`의 `CanvasGroup` | `Alpha` | `1` |
+| `NoticeUI`의 `CanvasGroup` | `Interactable` | `false` |
+| `NoticeUI`의 `CanvasGroup` | `Blocks Raycasts` | `false` |
+| `NoticeUI` 스크립트 | `Canvas Group` | 같은 오브젝트의 CanvasGroup |
+| `NoticeUI` 스크립트 | `Message Text` | 자식 `Text (TMP)` |
+| `NoticeUI` 스크립트 | `Fade Duration` | `3` |
+| `TradePrepareUI/UIManager`의 `TradePrepareUiRuntimeBinding` | `Departure Warning` | `MainUICanvas/NoticeUI`의 NoticeUI 컴포넌트 |
+
+`NoticeUI.Show(message)`가 호출되면 오브젝트가 활성화되고 `SetAsLastSibling()`으로 MainUICanvas의 가장 앞쪽 렌더 순서로 이동한다. 이후 CanvasGroup 알파가 3초 동안 1에서 0으로 감소하고 자동으로 비활성화된다. 같은 시간 안에 다시 호출하면 기존 코루틴을 중단하고 알파 1부터 다시 시작한다.
+
+`NoticeUI`를 `TradePrepareUI` 아래로 이동하지 않는다. 현재 구조에서는 알림이 화면 패널과 분리된 MainUICanvas 직속 자식이며, `Blocks Raycasts = false`로 뒤쪽 UI 입력을 차단하지 않는다.
+
+장기적으로 모든 InGame 계열 씬에서 동일한 알림을 사용하게 되면 `NoticeUI`를 별도 프리팹으로 만들거나 `MainUICanvas.prefab` 원본에 포함하는 편이 안전하다. 그 작업 전까지는 이 절의 수동 연결이 필수이다.
 
 ### 2. WorldMapRenderRoot 배치
 
@@ -178,6 +215,9 @@ Unpack하면 내부 연결이 씬 전용으로 바뀌어 다른 씬에 배치했
 3. Backdrop을 눌러 준비 화면을 닫는다.
 4. `TradeFeature/Runtime/TradePrepareRuntimeContext`가 계속 활성인지 확인한다.
 5. 다시 열었을 때 기존 Draft 선택 내용이 유지되는지 확인한다.
+6. 출발 불가 상태에서 `Depart` 버튼을 눌러 `NoticeUI`가 활성화되는지 확인한다.
+7. Core 출발 실패 사유가 메시지로 표시되고 약 3초 뒤 `NoticeUI`가 비활성화되는지 확인한다.
+8. 경고가 사라지기 전에 다시 누르면 알파가 1부터 다시 감소하는지 확인한다.
 
 ### 예상 오브젝트 수
 
@@ -187,6 +227,7 @@ TradeFeature:                      1
 TradePrepareUI:                    1
 FrameworkTradeScreenPresenter:     1
 TradePrepareRuntimeContext:        1
+NoticeUI:                          1
 WorldMapCamera:                    1
 WorldMapRoot:                      1
 WorldMapPresenter:                 1
@@ -200,6 +241,10 @@ EventSystem:                       1
 |---|---|---|
 | TradeBtn을 눌러도 열리지 않음 | MainUICanvas 내부 TradeFeature 누락 또는 Prefab Override 손상 | MainUICanvas 원본을 열어 TradeFeature와 TradeBtn 내부 listener 확인 |
 | 준비 UI를 닫은 뒤 선택값이 초기화됨 | RuntimeContext가 TradePrepareUI 아래로 이동됨 | RuntimeContext를 `TradeFeature/Runtime` 아래에 유지 |
+| 출발 실패 로그는 있지만 경고가 보이지 않음 | `TradePrepareUiRuntimeBinding.departureWarning`이 None이거나 NoticeUI 내부 참조 누락 | Binding의 Departure Warning, NoticeUI의 Canvas Group과 Message Text를 확인 |
+| 경고가 다른 UI 뒤에 가려짐 | NoticeUI가 MainUICanvas 직속 자식이 아니거나 별도 Canvas Sort Order가 더 높음 | MainUICanvas 직속 자식으로 유지하고 `Show()`의 `SetAsLastSibling()` 호출 확인 |
+| 경고가 뒤쪽 버튼 클릭을 막음 | CanvasGroup의 Blocks Raycasts가 활성화됨 | `Blocks Raycasts = false`로 설정 |
+| 경고가 자동으로 사라지지 않음 | NoticeUI가 비활성 부모 아래에 있거나 Fade Duration/참조 누락 | MainUICanvas 직속 배치, Fade Duration 3, CanvasGroup 참조 확인 |
 | Missing Nested Prefab 오류 | TradePrepareUI 또는 TradePrepareRuntimeContext 프리팹 삭제 | 삭제한 `.prefab`과 `.meta`를 함께 복구하고 TradeFeature 재임포트 |
 | 지도가 비어 있음 | RenderTexture 불일치 또는 Camera 미연결 | RawImage Texture, Camera Target Texture, SlidePanel Rend Cam 확인 |
 | 지도는 보이지만 라벨이 갱신되지 않음 | Overlay Binding Presenter가 None | 씬의 WorldMapPresenter 할당 |
@@ -221,4 +266,8 @@ EventSystem:                       1
 - [ ] SceneLoader의 sceneName을 `Village_Home`으로 설정
 - [ ] `Village_Home.unity`가 Build Settings에 활성 등록
 - [ ] MainUICanvas 내부 TradeFeature를 별도로 Unpack하거나 이동하지 않음
+- [ ] `MainUICanvas/NoticeUI`가 하나만 존재하고 최초 비활성 상태인지 확인
+- [ ] NoticeUI의 CanvasGroup, Message Text, Fade Duration 3 연결
+- [ ] `TradePrepareUiRuntimeBinding.departureWarning`에 NoticeUI 연결
+- [ ] 출발 실패 메시지 표시, 재호출 타이머 초기화, 3초 후 비활성화 확인
 - [ ] Play Mode에서 UI, 지도, Additive scene, Console을 순서대로 검증
