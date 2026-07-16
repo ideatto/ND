@@ -18,6 +18,9 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     [SerializeField] private TradePrepareUIManager uiManager;
     [SerializeField] private AnimalInventoryPanel animalPanel;
 
+    [Header("S4 cargo view")]
+    [SerializeField] private CargoLoadingPanelController cargoPanel;
+
     private void OnEnable()
     {
         if (uiManager != null)
@@ -51,6 +54,13 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             animalPanel.OnWagonRemoved += HandleWagonRemoved;
             animalPanel.OnSelectionChanged += HandleAnimalSelectionChanged;
         }
+
+        if (cargoPanel != null)
+        {
+            // S4 owns presentation state, but every confirmed quantity must be forwarded
+            // through RuntimeContext so departure builds cargo from the authoritative Draft.
+            cargoPanel.LoadChanged += HandleCargoChanged;
+        }
     }
 
     private void OnDisable()
@@ -66,6 +76,14 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             animalPanel.OnWagonSelected -= HandleWagonSelected;
             animalPanel.OnWagonRemoved -= HandleWagonRemoved;
             animalPanel.OnSelectionChanged -= HandleAnimalSelectionChanged;
+        }
+
+
+        if (cargoPanel != null)
+        {
+            // Remove the listener when the preparation root closes to prevent duplicate
+            // Draft updates after the same UI is opened again.
+            cargoPanel.LoadChanged -= HandleCargoChanged;
         }
 
         if (uiManager != null)
@@ -230,6 +248,56 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             int current = currentQuantities.TryGetValue(animal.draftAnimalId, out int oldValue) ? oldValue : 0;
             if (desired != current)
                 runtimeContext.SetAnimalQuantity(animal.draftAnimalId, desired);
+        }
+    }
+
+    private void HandleCargoChanged(
+        IReadOnlyList<CargoLoadingPanelController.CargoSelection> selections)
+    {
+        if (runtimeContext == null || runtimeContext.FlowController == null)
+            return;
+
+        var desiredQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (selections != null)
+        {
+            foreach (CargoLoadingPanelController.CargoSelection selection in selections)
+            {
+                if (!string.IsNullOrWhiteSpace(selection.itemId))
+                    desiredQuantities[selection.itemId] = Mathf.Max(0, selection.quantity);
+            }
+        }
+
+        TradePrepareDraft draft = runtimeContext.FlowController.CurrentDraft;
+        if (draft == null)
+            return;
+
+        var currentQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (draft.selectedBuyItems != null)
+        {
+            foreach (TradeItemBundle selected in draft.selectedBuyItems)
+            {
+                if (selected != null && !string.IsNullOrWhiteSpace(selected.itemId))
+                    currentQuantities[selected.itemId] = Mathf.Max(0, selected.quantity);
+            }
+        }
+
+        // Items absent from the complete S4 snapshot were removed in the UI and must be
+        // explicitly assigned zero; otherwise an old quantity would remain in Runtime Draft.
+        foreach (KeyValuePair<string, int> current in currentQuantities)
+        {
+            if (!desiredQuantities.ContainsKey(current.Key))
+                runtimeContext.SetBuyItemQuantity(current.Key, 0);
+        }
+
+        // RuntimeContext owns Draft mutation and rebuilds ViewData after each changed quantity.
+        foreach (KeyValuePair<string, int> desired in desiredQuantities)
+        {
+            int currentQuantity;
+            if (!currentQuantities.TryGetValue(desired.Key, out currentQuantity) ||
+                currentQuantity != desired.Value)
+            {
+                runtimeContext.SetBuyItemQuantity(desired.Key, desired.Value);
+            }
         }
     }
 
