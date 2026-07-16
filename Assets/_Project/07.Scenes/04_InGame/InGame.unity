@@ -24605,6 +24605,7 @@ MonoBehaviour:
   townRoutePanel: {fileID: 5368074963102869609}
   uiManager: {fileID: 4361662159378514726}
   animalPanel: {fileID: 1710401476027469510}
+  cargoPanel: {fileID: 6287451777947666793}
 --- !u!114 &6543046872555187423
 MonoBehaviour:
   m_ObjectHideFlags: 0

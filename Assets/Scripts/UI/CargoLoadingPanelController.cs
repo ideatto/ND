@@ -14,6 +14,23 @@ using ND.Framework;
 
 public sealed class CargoLoadingPanelController : MonoBehaviour
 {
+    /// <summary>
+    /// Carries one item's final S4 quantity to the Runtime Binding.
+    /// Only ID and quantity are exposed so Runtime Draft does not depend on UI slot internals.
+    /// </summary>
+    [Serializable]
+    public struct CargoSelection
+    {
+        public string itemId;
+        public int quantity;
+    }
+
+    /// <summary>
+    /// Raised after S4 cargo changes. A complete snapshot is sent so items removed from
+    /// the UI can also be cleared from Runtime Draft by assigning quantity zero.
+    /// </summary>
+    public event Action<IReadOnlyList<CargoSelection>> LoadChanged;
+
     [Header("상점 데이터")]
     [SerializeField] private TradeItemData[] shopItems = Array.Empty<TradeItemData>();
     [SerializeField] private int[] initialStocks = Array.Empty<int>();
@@ -398,6 +415,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         PersistCurrentDraft();
 #endif
         RefreshAll();
+        // Publish the complete snapshot because one unit may remove the final visible stack.
+        NotifyLoadChanged();
     }
 
     public void ClearLoadedSlot(int slotIndex)
@@ -416,6 +435,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         PersistCurrentDraft();
 #endif
         RefreshAll();
+        // A removed slot must also remove its item from Runtime Draft.
+        NotifyLoadChanged();
     }
 
     private void CacheHierarchy()
@@ -1215,6 +1236,45 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         ClosePurchasePopup();
         RefreshAll();
+        // Confirmed UI cargo is still a preparation choice; this reports it without charging currency.
+        NotifyLoadChanged();
+    }
+
+    /// <summary>
+    /// Combines quantities split across UI slots and publishes one final quantity per item ID.
+    /// This method reports UI selection only and does not mutate currency or store inventory.
+    /// </summary>
+    private void NotifyLoadChanged()
+    {
+        var quantityByItemId = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (LoadedLine line in loadedLines)
+        {
+            if (line == null || line.Item == null || line.Quantity <= 0)
+                continue;
+
+            string itemId = line.Item.ItemId;
+            if (string.IsNullOrWhiteSpace(itemId))
+                continue;
+
+            int currentQuantity;
+            if (quantityByItemId.TryGetValue(itemId, out currentQuantity))
+                quantityByItemId[itemId] = currentQuantity + line.Quantity;
+            else
+                quantityByItemId.Add(itemId, line.Quantity);
+        }
+
+        var snapshot = new List<CargoSelection>(quantityByItemId.Count);
+        foreach (KeyValuePair<string, int> pair in quantityByItemId)
+        {
+            snapshot.Add(new CargoSelection
+            {
+                itemId = pair.Key,
+                quantity = pair.Value
+            });
+        }
+
+        LoadChanged?.Invoke(snapshot);
     }
 
     private bool TryAddLoadedQuantity(TradeItemData item, int quantity, long unitPrice)
@@ -1287,6 +1347,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         InitializeState();
         ClosePurchasePopupImmediate();
         RefreshAll();
+        // An empty snapshot clears every cargo item from Runtime Draft after an explicit reset.
+        NotifyLoadChanged();
     }
 
 #if ND_MARKET_SAVE_SCHEMA_VNEXT
