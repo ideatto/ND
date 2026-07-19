@@ -275,7 +275,11 @@ public static class MarketInventoryIntegrationProbe
         public bool HasSaveData() => data != null;
         public FrameworkSaveData CreateNewGameData() => data = NewSave(1000L);
         public FrameworkSaveData Load() => data;
-        public void Save(FrameworkSaveData value) => data = value;
+        public SaveResult Save(FrameworkSaveData value)
+        {
+            data = value;
+            return SaveResult.Success();
+        }
         public void ResetSaveData() => data = null;
     }
 }

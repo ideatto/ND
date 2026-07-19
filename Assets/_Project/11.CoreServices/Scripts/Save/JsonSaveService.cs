@@ -124,15 +124,19 @@ namespace ND.Framework
         /// </summary>
         /// <param name="data">저장할 SaveData. null이면 저장을 건너뛴다.</param>
         /// <remarks>
-        /// 성공 시 version과 lastSavedUtcTicks가 현재 값으로 갱신된다.
+        /// 성공 시에만 파일 쓰기 완료 결과를 반환한다. 실패는 단계별 결과와 로그로 보고하며 예외를 전파하지 않는다.
+        /// version과 lastSavedUtcTicks는 직렬화 전에 현재 값으로 갱신된다.
         /// </remarks>
-        public void Save(SaveData data)
+        public SaveResult Save(SaveData data)
         {
             // null 저장은 기존 저장 파일을 덮어쓰면 복구가 어려우므로 무시한다.
             if (data == null)
             {
                 FrameworkLog.Warning("Save was skipped because data is null.");
-                return;
+                return SaveResult.Failure(
+                    SaveFailureReason.InvalidData,
+                    "Save data is null.",
+                    nameof(SaveData));
             }
 
             try
@@ -141,16 +145,46 @@ namespace ND.Framework
                 NormalizeData(data);
                 data.version = SaveData.CurrentVersion;
                 data.lastSavedUtcTicks = DateTime.UtcNow.Ticks;
-
-                var json = JsonUtility.ToJson(data, true);
-                File.WriteAllText(savePath, json);
-                FrameworkLog.Info($"Save data written: {savePath}");
             }
             catch (Exception exception)
             {
-                // 저장 실패는 호출자 흐름을 끊지 않고 로그로 남긴다. 재시도 정책은 상위 flow가 결정한다.
+                // 정규화 또는 저장 메타데이터 갱신 중 발생한 예상 밖 실패를 호출자에게 분류해 반환한다.
                 FrameworkLog.Error($"Failed to save data: {exception.Message}");
+                return SaveResult.Failure(
+                    SaveFailureReason.Unknown,
+                    exception.Message,
+                    nameof(SaveData));
             }
+
+            string json;
+            try
+            {
+                json = JsonUtility.ToJson(data, true);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Failed to serialize save data: {exception.Message}");
+                return SaveResult.Failure(
+                    SaveFailureReason.SerializationFailed,
+                    exception.Message,
+                    nameof(SaveData));
+            }
+
+            try
+            {
+                File.WriteAllText(savePath, json);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Failed to write save data: {exception.Message}");
+                return SaveResult.Failure(
+                    SaveFailureReason.WriteFailed,
+                    exception.Message,
+                    nameof(SaveData));
+            }
+
+            FrameworkLog.Info($"Save data written: {savePath}");
+            return SaveResult.Success();
         }
 
         /// <summary>
