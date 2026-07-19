@@ -1,4 +1,27 @@
 #if ND_MARKET_SAVE_SCHEMA_VNEXT
+/*
+ * Technical Ownership
+ * - Responsible Area: UI / Market Inventory Integration
+ *
+ * Script Purpose
+ * - Editor 시작 시 MarketInventorySession과 JsonSaveService 연동을 자동 검증한다.
+ * - 결정적 재고 생성, draft/commit JSON round-trip, 환전·재고·취소 흐름을 Temp JSON 결과로 기록한다.
+ *
+ * Main Features
+ * - VerifyDeterministicRefresh: 동일 seed/주기 재고 일치와 refreshIndex 갱신 검증
+ * - VerifyJsonCurrencyCargoRoundTrip: draft/commit/reopen/cancel JSON 영속화 검증
+ * - MemorySaveService: 디스크 없이 ISaveService 계약을 흉내 내는 in-memory 테스트 대역
+ *
+ * Usage for Team Members
+ * - ND_MARKET_SAVE_SCHEMA_VNEXT define이 켜진 Editor에서 자동 실행된다.
+ * - 실패 시 Temp/market-integration-test-result.json과 Console을 확인한다.
+ * - 실행 후 persistentDataPath의 save_data.json은 원본으로 복원한다.
+ *
+ * Important Notes
+ * - SessionState로 Editor 세션당 1회만 실행한다.
+ * - MemorySaveService.Save는 메모리 참조만 갱신하고 항상 SaveResult.Success()를 반환한다.
+ * - JsonSaveService 경로는 실제 save_data.json을 사용하므로 finally에서 원본을 복원한다.
+ */
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -263,6 +286,13 @@ public static class MarketInventoryIntegrationProbe
         public DateTime CurrentUtc { get; }
     }
 
+    /// <summary>
+    /// 디스크 없이 SaveData 참조만 유지하는 ISaveService 테스트 대역이다.
+    /// </summary>
+    /// <remarks>
+    /// Save(...)는 메모리 참조를 교체하고 항상 SaveResult.Success()를 반환한다.
+    /// JsonSaveService의 실패 분기는 이 대역에서 검증하지 않는다.
+    /// </remarks>
     private sealed class MemorySaveService : ISaveService
     {
         private FrameworkSaveData data;
@@ -275,11 +305,14 @@ public static class MarketInventoryIntegrationProbe
         public bool HasSaveData() => data != null;
         public FrameworkSaveData CreateNewGameData() => data = NewSave(1000L);
         public FrameworkSaveData Load() => data;
+
+        /// <returns>메모리 참조 갱신 후 항상 성공 결과.</returns>
         public SaveResult Save(FrameworkSaveData value)
         {
             data = value;
             return SaveResult.Success();
         }
+
         public void ResetSaveData() => data = null;
     }
 }
