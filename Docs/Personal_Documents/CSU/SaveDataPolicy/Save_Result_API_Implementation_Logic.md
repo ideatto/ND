@@ -1,8 +1,10 @@
 # Save Result API 구현 로직 정리
 
+> 정책 상태: 목표 API는 `SaveResult Save(SaveData data)` 단일 계약으로 확정됐다. 아래 내용은 선행 구현의 실제 범위 기록이며, snapshot·rollback·retry·queue 및 호출부 결과 처리가 이미 구현됐다는 뜻은 아니다.
+
 브랜치: `feature/framework/save-result-api`  
 작성 기준: 로컬 diff (`ISaveService`, `JsonSaveService`, `MemorySaveService`)  
-팀 최종 승인: 대기
+팀 최종 정책: `SaveResult Save(SaveData data)` 단일 계약
 
 ---
 

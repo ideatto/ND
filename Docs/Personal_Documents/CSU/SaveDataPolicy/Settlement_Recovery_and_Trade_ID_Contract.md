@@ -12,13 +12,15 @@ The current single pending DTO and runtime cache may be compatibility fallbacks 
 
 ## Claim contract
 
-`ClaimSettlement(caravanId, tradeId)`:
+`ClaimSettlement(caravanId, tradeId, repayLoan)`:
 
 1. Rejects missing, malformed, mismatched, already claimed, or duplicate keys without mutation.
 2. Stages the exact reward application, completed trade state, and matching pending removal.
 3. Saves the staged aggregate immediately.
 4. On save failure reports failure and leaves the externally visible durable state uncommitted.
 5. On success publishes one completion event and clears prepared goods/food while preserving fixed setup.
+
+When `repayLoan` is true, repayment uses only this settlement's newly paid trading-currency amount and equals `min(payout, remainingPrincipal)`. A non-positive payout offers no repayment. When false, principal is unchanged. Partial amount entry and a separate repayment command are not supported. Reward application, optional repayment, trade state, pending removal, preparation cleanup, aggregate save, completion event, and UI refresh are one staged transaction. Any final save failure rolls all of them back to the PreCommandSnapshot.
 
 No player-facing settlement history is retained. A consumed-key/tombstone or equivalent idempotency marker may be kept only as needed to prevent duplicate payment and must have a bounded lifecycle policy.
 

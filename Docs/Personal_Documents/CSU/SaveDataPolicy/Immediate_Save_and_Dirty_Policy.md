@@ -1,16 +1,16 @@
 # Immediate Save and Dirty Policy
 
-## Proposed API direction
+## Approved target API direction
 
-The current `ISaveService.Save(SaveData)` returns `void`, so callers cannot distinguish durable success. The smallest safe future contract is additive:
+The target save contract is:
 
 ```csharp
-SaveResult TrySave(SaveData data, SaveReason reason);
+SaveResult Save(SaveData data);
 void MarkDirty(SaveDirtyReason reason, string entityId = null);
 bool IsDirty { get; }
 ```
 
-`SaveResult` contains `Succeeded`, a stable `SaveFailureReason`, and diagnostic text safe for logs. Existing `Save` remains only as a temporary compatibility wrapper until consumers migrate. A successful save clears only the dirty revision included in that attempt; changes made during an in-flight save remain Dirty.
+`SaveResult` contains `Succeeded`, a stable `SaveFailureReason`, and diagnostic text safe for logs. `SaveResult Save(...)` is the single approved target; a separate `TrySave()` or `void Save()` wrapper is not part of it. Existing production callers may require staged migration. A successful save clears only the dirty revision included in that attempt; changes made during an in-flight save remain Dirty.
 
 This branch does not implement a timer, queue, merging, retry, or transaction engine.
 
@@ -18,17 +18,25 @@ This branch does not implement a timer, queue, merging, retry, or transaction en
 
 Retry classification is part of the future result-based save contract. Temporary file locks, temporary I/O failures, and replace failures caused by transient filesystem conditions may be retryable. Invalid `SaveData`, validation failures, unsupported-data serialization failures, invalid IDs, and snapshot validation failures are non-retryable.
 
-Retryable failures retry up to an approved configurable limit and roll back if all attempts fail. Non-retryable failures do not repeat the same invalid operation and roll back immediately. The retry interval and retry limit value remain unresolved; this document does not invent defaults or add runtime behavior.
+Retryable failures make at most three attempts including the initial attempt: retry after 0.2 seconds following the first failure and after 0.5 seconds following the second. `WriteFailed`, temporary file locks, transient replace failures, and explicitly classified transient filesystem failures are retryable. `InvalidData`, `ValidationFailed`, `DomainRejected`, `SerializationFailed`, and `SnapshotFailed` are non-retryable. Every final failure rolls back to the PreCommandSnapshot; `RollbackFailed` is its own final failure.
 
 ## Sequential queue and merge policy
 
-The future queue processes requests sequentially. Redundant Dirty autosaves may merge, but important requests remain queued and are never discarded merely because a Dirty request exists. An important request containing the complete latest state may make an earlier Dirty request obsolete. Requests are not merged when distinct callers require separate success/failure results.
+Important commands execute sequentially and block other important-command input. Important requests are not merged and each returns its own result. Redundant Dirty autosaves may merge and run after the important save. An important request containing the complete latest state may obsolete an earlier Dirty request. The next important command cannot run until rollback finishes.
 
 ## Immediate-save operations
 
-Trade departure, settlement confirmation/finalization, settlement claim, growth purchase, wagon repair, building purchase/upgrade, donation, investment conversion/completion, loan issue, and loan repayment require durable save success before the operation reports success.
+Trade departure, settlement confirmation/finalization, settlement claim including optional rescue-loan repayment, growth purchase, wagon repair, building purchase/upgrade, one-time investment-quest completion, rescue-loan issue, wagon destruction, and Caravan-to-home cargo transfer require durable save success before the operation reports success.
 
 Because the current flow can mutate runtime state before calling a void save, changing only the return type is insufficient. Each command must adopt validation plus snapshot/rollback, or transaction-style staging and commit. No rollback or atomicity guarantee exists until implemented and tested.
+
+## Snapshot and rollback contract
+
+- `PreCommandSnapshot` is created immediately before each important command and restores that command after final save failure.
+- `LastDurableSnapshot` updates only after durable save success and supports whole-session recovery.
+- Disk backup is written before replacing the main save file and is used for corrupt-main-file or load-failure recovery.
+
+SaveData snapshots use the same deep-copy path as persistence, followed by normalization, validation, and runtime lookup rebuild. ViewData and other derived lookup/cache objects are rebuilt rather than serialized into a snapshot. After rollback succeeds, UI rebuilds from restored state. If rollback fails, the affected input remains blocked and UI directs the player to Title recovery or restart.
 
 ## Dirty operations
 
