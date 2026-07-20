@@ -24,19 +24,23 @@ Status in this contract branch: documentation-only; no production schema is acti
 | Settlement | Claim save failure | Command fails and no committed payment is exposed |
 | Settlement | Claim one Caravan | Other Caravan unchanged |
 | Settlement | Invalid ID pair | Rejected without mutation |
-| Donation | Separate towns | Balances remain independent |
-| Donation | Process decay | Stored last-processed UTC is the only time baseline |
-| Donation | Event consumes too much | Balance never becomes negative |
-| Investment | Convert donation | Available donation and progress change together |
-| Investment | Complete twice | Unlock applies once |
-| Donation/Investment | Restart | Balances, progress, completion, unlocks restore |
-| Loan | Responsible system says ineligible | Issue rejected |
-| Loan | Eligible issue | Currency reaches supplied minimum guarantee |
-| Loan | Repayment | Principal only; no interest |
-| Loan | Second active issue | Rejected |
-| Loan | Partial repayment/restart | Remaining balance restores |
-| Loan | Full repayment | Balance zero and inactive |
-| Loan | Save failure on issue/repay | Command fails with no committed mutation |
+| Investment quest | Pay full currency cost once | Currency, completion, and unlock commit together |
+| Investment quest | Submit goods from one or several Caravans | Only explicit usable Caravan stacks are deducted |
+| Investment quest | Submit home inventory or Traveling goods | Rejected without mutation |
+| Investment quest | Complete twice | No duplicate deduction or unlock |
+| Loan | Existing assets satisfy fixed configuration | Issue is rejected as unnecessary |
+| Loan | Only some fixed elements are missing | Only their fixed-price costs form principal |
+| Loan | Issue succeeds and restarts | Restriction and permanent used state restore |
+| Loan | Title or restart during restriction | Restriction remains active |
+| Loan | First rescue departure save fails | Restriction remains and departure rolls back |
+| Loan | First rescue departure save succeeds | Restriction clears; positive principal stays active |
+| Loan | Settlement payout is non-positive | Repayment choice is hidden |
+| Loan | Payout below principal and repayment selected | Full payout amount repays principal |
+| Loan | Payout exceeds principal and repayment selected | Principal only is repaid |
+| Loan | Repayment declined | Principal remains unchanged |
+| Loan | Claim save failure | Reward, principal, pending, and preparation roll back |
+| Loan | Second issue after prior use | Rejected by permanent used state |
+| Loan | Traveling or claimable pending remains | Game over is deferred |
 | Version | Missing optional child | Safe default object created |
 | Version | Null collection | Empty list created |
 | Version | Duplicate Caravan ID | Visible validation failure |
@@ -55,12 +59,24 @@ Status in this contract branch: documentation-only; no production schema is acti
 | Selection | Selected Caravan is missing, locked, deleted, or invalid | First valid owned Caravan is selected |
 | Save queue | Redundant Dirty and important requests coexist | Dirty requests merge; important requests remain queued |
 | Save retry | Non-retryable validation failure | Immediate rollback; invalid operation is not repeated |
-| Save retry | Retryable I/O failure | Configured retry path is followed, then success or rollback is reported |
+| Save retry | Retryable I/O fails twice then succeeds | Attempts occur at initial, +0.2s, and +0.5s |
+| Save retry | Retryable I/O fails three times | PreCommandSnapshot rollback is reported |
 | Event consumption | Repeatable event succeeds and restarts | Count increments and persists |
 | Event consumption | One-time event count is already one | Second consumption is rejected |
-| Loan restriction | Donation or investment is requested | Action is blocked |
+| Loan restriction | Investment quest or unrelated economy is requested | Action is blocked |
 | Loan restriction | Trade-preparation action is requested | Action is permitted when otherwise valid |
-| Loan guarantee | Player selects configuration within fixed guaranteed amount | Selection is allowed; Framework does not choose a preset |
+| Loan guarantee | Missing fixed rescue elements are evaluated | Only their shared-data fixed prices form principal |
+| Wagon loss | Durability falls below zero | It clamps to zero and destruction runs once |
+| Wagon loss | Destroyed in Preparation | Ownership and preparation references are removed |
+| Wagon loss | Destroyed while Traveling | Trade fails and cargo/food losses enter settlement snapshot |
+| Wagon loss | Destruction save fails | Ownership, references, cargo, food, and trade state roll back |
+| Wagon repair | Positive repair is valid | Cost is floored once and durability increases |
+| Wagon repair | Positive repair calculates to zero | Minimum cost is one |
+| Wagon repair | Exceeds maximum or wagon is destroyed | Rejected without mutation |
+| Building | Transfer selected Caravan cargo home | Both inventories save together |
+| Building | Upgrade using home materials | Materials deduct and stable-ID level increments together |
+| Building | Attempt direct Caravan material use | Rejected without mutation |
+| Building | DisplayName-era save loads | Approved adapter or migration resolves stable ID |
 
 ## Test levels
 

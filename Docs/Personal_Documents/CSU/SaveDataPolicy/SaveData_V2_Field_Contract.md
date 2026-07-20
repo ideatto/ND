@@ -19,7 +19,7 @@ SaveData
 |  `- currentTradeId (optional reference)
 |- tradeProgressEntries[](caravanId, tradeId, routeId, state, start/end UTC ticks)
 |- pendingSettlements[](caravanId, tradeId, confirmed result snapshot)
-|- buildings[], world, townDonations[], investments[], rescueLoan
+|- buildings[], world, investmentQuests[], rescueLoan
 |- unlocks and tutorial
 `- compatibility (temporary V1/current-schema fields only during an approved migration)
 ```
@@ -34,12 +34,18 @@ No maximum Caravan count belongs in SaveData.
 |---|---|---|
 | Player | currencies, growth levels, building levels | formatted currency, button state |
 | Caravan | `caravanId`, definition IDs, counts, durability, cargo quantities, food | load, load thresholds, speed, consumption, final modified stats |
+| Wagon | stable `wagonId`, current durability while owned | repair costs, rarity multiplier, derived stats; destroyed wagons are removed |
+| Building | stable `buildingId`, current level | display name, upgrade costs, effects |
+| Investment quest | `investmentQuestId`, `townId`, completion state, completion UTC ticks | currency/item costs and unlock definitions |
+| Rescue loan | ID, original/remaining principal, active state, permanent used flag, phase, issue UTC ticks | fixed rescue configuration and prices |
 | Preparation | destination/route IDs, prepared cargo/food, fixed selections, preview DTO | popup/tab/selection presentation state |
 | Trade | full GUID `tradeId`, route ID, state, UTC start/end | display progress strings; progress may be derived from timestamps |
 | Settlement | confirmed result inputs/outputs needed to pay exactly once | recalculated settlement result |
 | World | season/disaster IDs and confirmed mutable state | definition values and modifier calculations |
 
 Every departed trade keeps the same full GUID through Traveling, SettlementPending, and Claim. Product flow must generate it at commit; shortened IDs are logging only.
+
+The target schema has no donation balance, donation decay, cumulative investment progress, investment definition-cost snapshot, or separate loan-repayment request. `VillageBuildingSaveData` uses stable `buildingId + level`; `DisplayName` is presentation data resolved from shared definitions. Existing DisplayName-based data requires an approved compatibility adapter or migration, but this documentation change does not change `SaveData.CurrentVersion`.
 
 ## Preparation and preview
 

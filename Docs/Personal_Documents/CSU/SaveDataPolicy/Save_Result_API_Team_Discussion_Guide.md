@@ -1,18 +1,16 @@
 # SaveData 반환 타입 팀 회의 논의 가이드
 
 브랜치: `feature/framework/save-result-api`  
-용도: 팀 회의에서 `Save()` / `SaveData` 반환 타입 방향을 정할 때 사용  
+용도: 확정된 `SaveResult Save(...)` 계약의 후속 구현 순서를 정할 때 사용
 작성자 개인 메모: 천성욱 (CSU)
 
 ---
 
-## 1. 회의에서 정해야 할 한 줄 질문
+## 1. 확정 사항과 회의 질문
 
-> **저장 API는 앞으로 `SaveResult Save(...)` 하나로 갈지,  
-> `void Save(...)` + `TrySave(...)` 두 개로 갈지,  
-> 아니면 다른 형태로 갈지?**
+> **저장 API는 `SaveResult Save(...)` 하나로 확정됐다. 호출부 이전, snapshot·rollback, retry·queue, UI와 event timing을 어떤 순서로 구현할 것인가?**
 
-이번 브랜치는 답을 확정하지 않고, **논의용 선행 구현**만 넣었다.
+이 문서는 선행 구현 당시의 배경을 보존하지만 `void Save(...) + TrySave(...)`는 채택되지 않은 과거 대안이다.
 
 ---
 
@@ -63,7 +61,7 @@ SaveResult Save(SaveData data);
 
 ### 왜 `TrySave()`를 따로 만들지 않았나
 
-기존 정책 문서(`Immediate_Save_and_Dirty_Policy.md`)는 장기적으로 아래를 제안했다.
+기존 정책 문서(`Immediate_Save_and_Dirty_Policy.md`)는 당시 아래를 제안했다. 현재는 채택하지 않은 과거안이다.
 
 ```csharp
 void Save(SaveData data);              // 임시 호환 wrapper
@@ -93,13 +91,13 @@ C# 특성상 기존 호출부는 반환값을 무시해도 컴파일되므로,
 
 회의에서 아래 4가지를 나눠서 결정하면 된다.
 
-### A. Save() 반환 타입
+### A. Save() 반환 타입 — 결정 완료
 
 | 옵션 | 설명 |
 |---|---|
-| **A-1. `SaveResult Save(...)` 유지** | 이번 브랜치 방향. 단일 계약 |
-| **A-2. `void Save(...)` + `TrySave(...)`** | 기존 정책 문서 방향. 점진 이전 |
-| **A-3. 다른 이름/형태** | 예: `bool TrySave`, Result struct, async 등 |
+| **확정: `SaveResult Save(...)`** | 단일 목표 계약 |
+| `void Save(...)` + `TrySave(...)` | 채택하지 않은 과거 대안 |
+| 다른 이름/형태 | 이번 정책 범위에서 제외 |
 
 ### B. Load()도 결과 타입이 필요한가
 
@@ -340,7 +338,7 @@ RaiseSuccessEvent();
 
 1. **5분** — 현재 문제 공유 (`void Save` 한계)
 2. **10분** — 이번 브랜치 선행 구현 설명 (`SaveResult Save`)
-3. **10분** — 최종 API 선택 (`SaveResult Save` vs `TrySave` vs wrapper)
+3. **10분** — 단일 API 기준 호출부와 테스트 대역 영향 확인
 4. **10분** — 2단계 우선순위 (어떤 호출부부터 검사할지)
 5. **5분** — Load 결과 타입, retry/rollback은 후속 PR로 미룰지 결정
 
@@ -348,11 +346,11 @@ RaiseSuccessEvent();
 
 ## 10. 결정 후 follow-up 작업
 
-팀이 방향을 정하면 아래를 같은 스프린트/다음 PR로 나누면 된다.
+확정 계약을 기준으로 아래를 같은 스프린트/후속 PR로 나눈다.
 
 | 순서 | 작업 |
 |---|---|
-| 1 | `ISaveService` 최종 계약 확정 및 문서 정렬 |
+| 1 | `ISaveService` 단일 계약과 구현체 정렬 |
 | 2 | 모든 Mock/Fake/다른 브랜치 구현체 merge |
 | 3 | 중요 저장 호출부 `SaveResult` 검사 |
 | 4 | 실패 UI / 로그 정책 |
@@ -373,8 +371,8 @@ RaiseSuccessEvent();
 
 ## 12. 회의 메모란 (현장 작성용)
 
-- 최종 API 결정:
+- 최종 API 결정: `SaveResult Save(SaveData data)`
 - Load 결과 타입 논의 결과:
 - 2단계 우선 호출부:
-- wrapper / TrySave 필요 여부:
+- wrapper / TrySave 필요 여부: 목표 계약에는 불필요
 - 담당자 / 목표 PR:

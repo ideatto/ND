@@ -28,5 +28,13 @@ Preparation --depart+save--> Traveling --finalize+save--> SettlementPending
 
 The current runtime has one `CaravanSaveData`, one `TradeProgressSaveData`, one `PendingSettlementSaveData`, one coordinator active-Caravan reference, and settlement events keyed only by `tradeId`. These may remain temporarily, but must not be treated as the target model. Full migration belongs in follow-up branches after contract approval.
 
-Exclusive assignment of wagons, animals, or mercenaries is not defined here. When Core supplies that policy, command validation must reject cross-Caravan conflicts; persistence must still preserve the attempted independent configurations for diagnostics or return a validation failure without mutation.
+Commands validate that a player-owned asset is usable and not locked by another Traveling or SettlementPending flow. Investment-quest submissions require an explicit `caravanId` for each item stack and reject unavailable Caravan goods; home temporary inventory is excluded.
+
+Wagon durability loss clamps at zero. At zero, the wagon is destroyed: remove the owned-wagon record and Caravan `wagonId`, clear preparation and reusable-configuration references, lose all cargo and food loaded on that wagon, and mark an in-flight trade `Failed`. Reference cleanup, losses, trade failure, and settlement snapshot are one staged operation. The snapshot records destruction, wagon ID, lost goods and food, failure reason, `caravanId`, and full `tradeId`.
+
+At the village, selected Caravan cargo may be transferred to home temporary inventory through one validated command. Building upgrades consume only material items already transferred to home temporary inventory; Caravan cargo cannot be consumed directly. Upgrade definitions and per-level costs live in shared data or a ScriptableObject, while SaveData stores stable `buildingId` and level only.
+
+Health consumables are real item IDs. They are purchased in a Caravan village, travel as Caravan cargo, and may be transferred to home temporary inventory only after return. Building upgrades consume eligible items only from home temporary inventory.
+
+Wagon repair uses trading currency. For positive repaired durability, `rawCost = repairedDurability * repairCostPerDurability * wagonRarityMultiplier` and `finalCost = floor(rawCost)` once after all multipliers. A positive repair whose calculated cost is zero costs at least one. Repair cannot exceed maximum durability and cannot target a destroyed wagon. Cost tables and rarity multipliers come from shared data or the owning feature's data definitions.
 

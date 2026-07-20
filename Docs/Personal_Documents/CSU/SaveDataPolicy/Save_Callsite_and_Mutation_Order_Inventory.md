@@ -14,7 +14,7 @@
 | 문서 | 역할 |
 | --- | --- |
 | `Framework_API_Event_Inventory.md` | 메서드·이벤트·소유권·마이그레이션 대상 목록(템플릿 포함) |
-| `Immediate_Save_and_Dirty_Policy.md` | 장기 목표(TrySave, Dirty, 즉시 저장 대상) |
+| `Immediate_Save_and_Dirty_Policy.md` | 현재 목표(`SaveResult Save`, Dirty, 즉시 저장 대상) |
 | `Framework_Command_Event_Contract.md` | Command/Event 계약과 단계적 마이그레이션 |
 | **본 문서** | 실제 상태 변경·Save·Event·UI/Scene 순서와 실패 위험 분석 |
 
@@ -95,7 +95,7 @@ Docs/Personal_Documents/CSU/SaveDataPolicy/
 
 ### 정책 문서와의 차이
 
-* `Immediate_Save_and_Dirty_Policy.md`는 장기적으로 `TrySave` / Dirty를 제안한다.
+* 조사 당시 `Immediate_Save_and_Dirty_Policy.md`는 `TrySave` / Dirty를 제안했다. 이후 목표 계약은 `SaveResult Save(...)` 단일 API로 갱신됐다.
 * 현재 production 코드는 `void Save`만 사용한다. 본 문서는 **현재 코드**를 기준으로 한다.
 
 ---
@@ -626,7 +626,7 @@ Production / Debug / Test: Debug
 6. **오프라인 진행 (S06)**
 7. **Debug/Test (S09–S11, S17)**
 
-API 형태(`Save`→`SaveResult` vs `void Save`+`TrySave`)는 팀 회의 전 미확정.
+조사 당시 API 형태는 미확정이었으나, 이후 목표 계약은 `SaveResult Save(SaveData data)` 단일 API로 확정됐다. 이 문서의 production 호출부 조사는 당시 상태 기록으로 유지한다.
 
 ---
 
@@ -671,7 +671,7 @@ API 형태(`Save`→`SaveResult` vs `void Save`+`TrySave`)는 팀 회의 전 미
 
 ## 13. 팀 회의 필요 항목
 
-1. 최종 Save API: `SaveResult Save` vs `void Save` + `TrySave`
+1. 확정된 `SaveResult Save` 단일 API의 호출부 이전 순서와 담당 범위
 2. 중요 행동의 durable success 정의(출발/정산/claim/구매)
 3. 상태 변경과 Save 순서(선 Save vs 선 mutation + rollback)
 4. Rollback 책임(Framework vs 각 feature)

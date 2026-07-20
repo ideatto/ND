@@ -31,17 +31,17 @@ This is a documentation-only Stage 1 template. Record evidence before behavior c
 - [ ] Framework: Save API, sequential queue/merge, retry classification, snapshot/rollback, publication timing
 - [ ] Core: departure, claim, settlement confirmation, Caravan asset mutations
 - [ ] UI: Button references, input blocking, result handling, rollback refresh, duplicate subscription prevention
-- [ ] Progression: growth, repair, donation decay, investment, loan and restricted-mode policy
+- [ ] Progression: growth, wagon repair/destruction, building upgrade, one-time investment quest, rescue loan and restricted-mode policy
 - [ ] Content/Tools: debug harnesses, save-failure presets, repeatable-event count data
 - [ ] Each entry has a confirmed owner and branch
 - [ ] Serialized callbacks are checked in Unity Editor before legacy removal
 - [ ] External subscribers and owner branches are merged before legacy removal
 
-## Remaining unresolved policies
+## Remaining implementation decisions
 
-- Donation decay interval, amount, maximum offline duration, and protected minimum balance
-- Save retry interval and approved retry limit
-- Loan-flow cancellation, no-valid-configuration handling, Title access, settings/quit access, and restart persistence
+- Concrete rescue-configuration IDs, quantities, and fixed shared-data prices
+- Exact game-over evaluation hook after settlement/claim, relevant asset loss, and load recovery
+- Loan-flow UI presentation and command naming consistent with approved restricted-mode behavior
 - Product Version 2 label versus the repository's monotonic numeric save version
 - Exclusive cross-Caravan asset assignment policy
 

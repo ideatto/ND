@@ -17,9 +17,9 @@ These are target responsibilities. Existing direct mutations, `void` methods, re
 
 - Preparation: `UpdatePreparation(caravanId, patch)`, `UpdatePurchasePreview(caravanId, preview)`, `CancelPreparation(caravanId)`; successful changes mark Dirty.
 - Trade: `Depart(caravanId, request)`, generating the trade GUID inside the commit boundary; immediate save.
-- Settlement: `FinalizeSettlement(caravanId, tradeId, snapshot)` and `ClaimSettlement(caravanId, tradeId)`; immediate save.
-- Progression: growth, repair, building, donation, investment, loan issue, and manual repayment commands; immediate save.
-- Save: `TrySave(data, reason)`, `MarkDirty(reason, entityId)`, and dirty-state query.
+- Settlement: `FinalizeSettlement(caravanId, tradeId, snapshot)` and `ClaimSettlement(caravanId, tradeId, repayLoan)`; immediate save, with optional rescue-loan repayment inside claim.
+- Progression: growth, repair, building, one-time investment-quest completion, rescue-loan issue, wagon destruction, and Caravan-to-home cargo transfer; immediate save. Donation, cumulative investment, and separate manual repayment are not target commands.
+- Save: `Save(data)`, `MarkDirty(reason, entityId)`, and dirty-state query. `SaveResult Save(...)` is the single target API.
 
 Results distinguish validation failure, not found, conflict/duplicate, unsupported version, serialization, file I/O, and unknown failures. A false/failed result states whether runtime state changed; until transaction staging exists, callers must not assume rollback.
 
@@ -29,11 +29,11 @@ Results distinguish validation failure, not found, conflict/duplicate, unsupport
 - `GetPreparation(caravanId)` and `GetReusableConfiguration(caravanId)`
 - `GetTrade(caravanId, tradeId)`
 - `GetPendingSettlements()` and `GetPendingSettlement(caravanId, tradeId)`
-- town donation, investment, rescue-loan, and unlock snapshot queries
+- investment-quest completion, rescue-loan, and unlock snapshot queries
 
 ## Proposed committed events
 
-Payloads include stable IDs and commit/save revision where available: preparation changed/cancelled, trade departed/state changed, settlement ready/claimed, donation changed/consumed, investment progressed/completed, content unlocked, loan issued/repaid/closed, save succeeded/failed, and Dirty state changed.
+Payloads include stable IDs and commit/save revision where available: preparation changed/cancelled, trade departed/state changed, settlement ready/claimed, investment quest completed, content unlocked, loan issued/repaid/closed, wagon destroyed/repaired, building upgraded, save succeeded/failed, and Dirty state changed.
 
 Events may repeat across subscription/recovery boundaries. Consumers deduplicate by IDs/revision and never apply rewards based only on receiving an event. Save failure events contain reason metadata but no mutable SaveData.
 
@@ -56,7 +56,7 @@ Where safe, legacy APIs delegate to one new internal source of truth, preserve e
 - Framework: Save API, queue, snapshot/rollback, and event publication timing.
 - Core: departure, claim, settlement confirmation, and Caravan asset mutations.
 - UI: Button calls, input blocking, result handling, and rollback refresh.
-- Progression: growth, repair, donation, investment, and loan.
+- Progression: growth, wagon repair/destruction, building, one-time investment quest, and rescue loan.
 - Content/Tools: debug harnesses, failure presets, and event-count test data.
 
 Each owner inventories and migrates their own scripts; ownership is confirmed rather than inferred from folders or Git history.

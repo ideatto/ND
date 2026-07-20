@@ -19,7 +19,7 @@ After the 2026-08-04 structure freeze, public SaveData structure or version chan
 3. Create missing optional child objects and replace null collections with empty lists.
 4. Normalize safe scalar defaults only when zero/null is explicitly invalid by contract.
 5. Validate required IDs and full GUID trade IDs.
-6. Detect duplicate Caravan IDs, trade IDs, pending composite keys, town donations, investments, and unlock IDs.
+6. Detect duplicate Caravan IDs, trade IDs, pending composite keys, investment-quest completion IDs, building IDs, and unlock IDs.
 7. Report unknown shared-definition IDs without crashing; preserve data for recovery unless policy explicitly rejects the load.
 8. Build non-serialized lookup views only after validation.
 
