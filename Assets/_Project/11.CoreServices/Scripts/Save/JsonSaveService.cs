@@ -9,16 +9,18 @@
  * Main Features
  * - 저장 파일 존재 확인, 새 저장 데이터 생성, JSON 로드/저장, 저장 파일 삭제를 제공한다.
  * - 로드/저장 전 하위 DTO의 null 값을 정규화한다.
+ * - Save(...)는 정규화, 직렬화, 파일 쓰기 단계별 SaveResult를 반환한다.
  *
  * Usage for Team Members
  * - FrameworkRoot.SaveService를 통해 사용한다.
  * - 저장 데이터 변경 후 영속화가 필요하면 Save(...)를 호출한다.
+ * - 중요 저장 흐름은 SaveResult.Succeeded를 검사해 scene 전환·성공 UI·이벤트 발행을 제어한다.
  *
  * Main Public APIs
  * - HasSaveData(): save_data.json 존재 여부를 확인한다.
  * - CreateNewGameData(): 현재 version의 기본 SaveData를 생성한다.
  * - Load(): 저장 파일을 읽고 유효하지 않으면 새 SaveData를 반환한다.
- * - Save(...): SaveData를 JSON으로 기록한다.
+ * - Save(...): SaveData를 JSON으로 기록하고 SaveResult를 반환한다.
  * - ResetSaveData(): 저장 파일을 삭제한다.
  *
  * Important Notes
@@ -26,7 +28,11 @@
  * - version이 CurrentVersion과 다르면 migration 없이 새 데이터로 복구한다(version 5: pendingSettlement 포함).
  * - version 5 세이브에 상점 재고·구매 준비 필드가 없어도 NormalizeData가 빈 컨테이너로 보정한다.
  * - version 5 세이브에 거점 창고·마을 건물 필드가 없어도 NormalizeData가 빈 리스트로 보정한다.
- * - Save(...)는 null 입력이나 IO 예외를 로그로 남기고 외부로 예외를 던지지 않는다.
+ * - Save(...)는 null 입력·직렬화·쓰기 실패를 SaveResult로 반환하고 예외를 전파하지 않는다.
+ * - lastSavedUtcTicks는 UTC 기준 DateTime.UtcNow.Ticks 값이다.
+ *
+ * Related Documentation
+ * - Docs/Personal_Documents/CSU/SaveDataPolicy/Save_Result_API_Implementation_Logic.md
  */
 using System;
 using System.IO;
@@ -122,17 +128,26 @@ namespace ND.Framework
         /// <summary>
         /// 전달된 SaveData를 JSON 파일로 저장한다.
         /// </summary>
-        /// <param name="data">저장할 SaveData. null이면 저장을 건너뛴다.</param>
+        /// <param name="data">저장할 SaveData. null이면 InvalidData 실패 결과를 반환한다.</param>
+        /// <returns>
+        /// 파일 쓰기까지 완료되면 Success.
+        /// null 입력은 InvalidData, 직렬화 실패는 SerializationFailed, 쓰기 실패는 WriteFailed,
+        /// 정규화·메타데이터 갱신 실패는 Unknown.
+        /// </returns>
         /// <remarks>
-        /// 성공 시 version과 lastSavedUtcTicks가 현재 값으로 갱신된다.
+        /// version과 lastSavedUtcTicks는 직렬화 전에 현재 값으로 갱신된다.
+        /// 실패 시 예외를 전파하지 않고 로그와 SaveResult로 보고한다.
         /// </remarks>
-        public void Save(SaveData data)
+        public SaveResult Save(SaveData data)
         {
             // null 저장은 기존 저장 파일을 덮어쓰면 복구가 어려우므로 무시한다.
             if (data == null)
             {
                 FrameworkLog.Warning("Save was skipped because data is null.");
-                return;
+                return SaveResult.Failure(
+                    SaveFailureReason.InvalidData,
+                    "Save data is null.",
+                    nameof(SaveData));
             }
 
             try
@@ -141,16 +156,46 @@ namespace ND.Framework
                 NormalizeData(data);
                 data.version = SaveData.CurrentVersion;
                 data.lastSavedUtcTicks = DateTime.UtcNow.Ticks;
-
-                var json = JsonUtility.ToJson(data, true);
-                File.WriteAllText(savePath, json);
-                FrameworkLog.Info($"Save data written: {savePath}");
             }
             catch (Exception exception)
             {
-                // 저장 실패는 호출자 흐름을 끊지 않고 로그로 남긴다. 재시도 정책은 상위 flow가 결정한다.
+                // 정규화 또는 저장 메타데이터 갱신 중 발생한 예상 밖 실패를 호출자에게 분류해 반환한다.
                 FrameworkLog.Error($"Failed to save data: {exception.Message}");
+                return SaveResult.Failure(
+                    SaveFailureReason.Unknown,
+                    exception.Message,
+                    nameof(SaveData));
             }
+
+            string json;
+            try
+            {
+                json = JsonUtility.ToJson(data, true);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Failed to serialize save data: {exception.Message}");
+                return SaveResult.Failure(
+                    SaveFailureReason.SerializationFailed,
+                    exception.Message,
+                    nameof(SaveData));
+            }
+
+            try
+            {
+                File.WriteAllText(savePath, json);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Failed to write save data: {exception.Message}");
+                return SaveResult.Failure(
+                    SaveFailureReason.WriteFailed,
+                    exception.Message,
+                    nameof(SaveData));
+            }
+
+            FrameworkLog.Info($"Save data written: {savePath}");
+            return SaveResult.Success();
         }
 
         /// <summary>
