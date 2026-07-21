@@ -28,6 +28,7 @@
  * - version이 CurrentVersion과 다르면 migration 없이 새 데이터로 복구한다(version 5: pendingSettlement 포함).
  * - version 5 세이브에 상점 재고·구매 준비 필드가 없어도 NormalizeData가 빈 컨테이너로 보정한다.
  * - version 5 세이브에 거점 창고·마을 건물 필드가 없어도 NormalizeData가 빈 리스트로 보정한다.
+ * - version 5 세이브에 구조 대출 필드가 없어도 NormalizeData가 안전한 비활성 상태로 보정한다.
  * - Save(...)는 null 입력·직렬화·쓰기 실패를 SaveResult로 반환하고 예외를 전파하지 않는다.
  * - lastSavedUtcTicks는 UTC 기준 DateTime.UtcNow.Ticks 값이다.
  *
@@ -279,6 +280,8 @@ namespace ND.Framework
                 data.pendingSettlement = PendingSettlementSaveDataMapper.CreateEmpty();
             }
 
+            NormalizeRescueLoan(data);
+
             FrameworkTradePrepareCommitStore.Normalize(data);
 
             if (data.world == null)
@@ -333,6 +336,60 @@ namespace ND.Framework
             if (data.tutorial == null)
             {
                 data.tutorial = new TutorialSaveData();
+            }
+        }
+
+        internal static void NormalizeRescueLoan(SaveData data)
+        {
+            if (data.rescueLoan == null)
+            {
+                data.rescueLoan = new RescueLoanSaveData();
+                return;
+            }
+
+            var loan = data.rescueLoan;
+            if (loan.loanId == null)
+            {
+                loan.loanId = string.Empty;
+            }
+
+            if (loan.originalPrincipal < 0L)
+            {
+                loan.originalPrincipal = 0L;
+            }
+
+            if (loan.remainingPrincipal < 0L)
+            {
+                loan.remainingPrincipal = 0L;
+            }
+
+            if (loan.remainingPrincipal > loan.originalPrincipal)
+            {
+                FrameworkLog.Warning("Rescue loan remaining principal exceeded original principal and was clamped.");
+                loan.remainingPrincipal = loan.originalPrincipal;
+            }
+
+            if (loan.issuedUtcTicks < 0L)
+            {
+                FrameworkLog.Warning("Rescue loan issued UTC ticks was negative and was reset to zero.");
+                loan.issuedUtcTicks = 0L;
+            }
+
+            if (loan.remainingPrincipal == 0L)
+            {
+                loan.isActive = false;
+            }
+
+            if (loan.isActive && (string.IsNullOrWhiteSpace(loan.loanId)
+                || loan.originalPrincipal <= 0L || loan.remainingPrincipal <= 0L))
+            {
+                FrameworkLog.Warning("Corrupted active rescue loan was normalized to a safe inactive state.");
+                loan.isActive = false;
+            }
+
+            if (!loan.isActive)
+            {
+                loan.isRestrictedPreparation = false;
             }
         }
     }
