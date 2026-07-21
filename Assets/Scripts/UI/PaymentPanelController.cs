@@ -13,7 +13,6 @@ public sealed class PaymentPanelController : MonoBehaviour
     [SerializeField] private Sprite receiptBackgroundSprite;
     [SerializeField] private Sprite stampSprite;
     [SerializeField] private TMP_FontAsset uiFont;
-    [SerializeField, Min(0.05f)] private float stampDuration = 0.48f;
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip openSound;
     [SerializeField] private AudioClip stampSound;

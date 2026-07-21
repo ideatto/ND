@@ -548,8 +548,8 @@ namespace ND.Framework.Editor
                         $"Loop integrity smoke failed because settlement was recreated in cycle {cycleIndex + 1}.");
                 }
 
-                var firstClaim = context.Coordinator.ClaimSettlementAndReset();
-                var duplicateClaim = context.Coordinator.ClaimSettlementAndReset();
+                var firstClaim = ClaimCurrentSettlement(context);
+                var duplicateClaim = ClaimCurrentSettlement(context);
                 if (!firstClaim || duplicateClaim)
                 {
                     throw new InvalidOperationException(
@@ -607,7 +607,7 @@ namespace ND.Framework.Editor
                     throw new InvalidOperationException($"Economy E2E cycle {cycleIndex + 1}: settlement result is missing.");
                 }
 
-                if (!context.Coordinator.ClaimSettlementAndReset())
+                if (!ClaimCurrentSettlement(context))
                 {
                     throw new InvalidOperationException($"Economy E2E cycle {cycleIndex + 1}: claim failed.");
                 }
@@ -824,8 +824,8 @@ namespace ND.Framework.Editor
                     "Failed settlement screen E2E failed because SettlementViewData.IsFailed was false.");
             }
 
-            var firstClaim = context.Coordinator.ClaimSettlementAndReset();
-            var duplicateClaim = context.Coordinator.ClaimSettlementAndReset();
+            var firstClaim = ClaimCurrentSettlement(context);
+            var duplicateClaim = ClaimCurrentSettlement(context);
             if (!firstClaim || duplicateClaim)
             {
                 throw new InvalidOperationException(
@@ -908,8 +908,8 @@ namespace ND.Framework.Editor
                     $"Pending restore E2E failed: screen was {context.ScreenRouter.CurrentScreenState}, expected Settlement.");
             }
 
-            var firstClaim = context.Coordinator.ClaimSettlementAndReset();
-            var duplicateClaim = context.Coordinator.ClaimSettlementAndReset();
+            var firstClaim = ClaimCurrentSettlement(context);
+            var duplicateClaim = ClaimCurrentSettlement(context);
             if (!firstClaim || duplicateClaim)
             {
                 throw new InvalidOperationException(
@@ -969,7 +969,7 @@ namespace ND.Framework.Editor
                 throw new InvalidOperationException("Pending restore failed-path E2E failed because Failed grade was not preserved.");
             }
 
-            if (!context.Coordinator.ClaimSettlementAndReset())
+            if (!ClaimCurrentSettlement(context))
             {
                 throw new InvalidOperationException("Pending restore failed-path E2E failed to claim restored Failed settlement.");
             }
@@ -1048,7 +1048,7 @@ namespace ND.Framework.Editor
                 throw new InvalidOperationException($"Pending corrupt E2E ({caseName}) unexpectedly restored.");
             }
 
-            if (context.Coordinator.ClaimSettlementAndReset())
+            if (ClaimCurrentSettlement(context))
             {
                 throw new InvalidOperationException($"Pending corrupt E2E ({caseName}) unexpectedly allowed claim.");
             }
@@ -1488,7 +1488,7 @@ namespace ND.Framework.Editor
                 $"[Framework M1 E2E] Atomic claim: normal claim succeeded. currentTownId={context.SaveData.player.currentTownId}, Town event raised.");
 
             // 중복 Claim 확인
-            if (context.Coordinator.ClaimSettlementAndReset())
+            if (ClaimCurrentSettlement(context))
             {
                 throw new InvalidOperationException("Atomic claim E2E duplicate claim unexpectedly succeeded.");
             }
@@ -1530,7 +1530,7 @@ namespace ND.Framework.Editor
             mismatchContext.Coordinator.ForceCompleteActiveTrade();
             var mismatchCurrency = mismatchContext.SaveData.player.tradingCurrency;
             mismatchContext.SaveData.tradePreparationCommit.destinationTownId = "OtherTown";
-            if (mismatchContext.Coordinator.ClaimSettlementAndReset()
+            if (ClaimCurrentSettlement(mismatchContext)
                 || mismatchContext.SaveData.player.tradingCurrency != mismatchCurrency
                 || mismatchContext.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
                 || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
@@ -1539,6 +1539,13 @@ namespace ND.Framework.Editor
             }
 
             Debug.Log("[Framework M1 E2E] Atomic claim rollback, normal claim, Town event, duplicate reject, relaunch, and destination validation passed.");
+        }
+
+        private static bool ClaimCurrentSettlement(TestContext context)
+        {
+            return context.Coordinator.ClaimSettlement(
+                context.SaveData.selectedCaravanId,
+                context.SaveData.tradeProgress.activeTradeId).Succeeded;
         }
     }
 }
