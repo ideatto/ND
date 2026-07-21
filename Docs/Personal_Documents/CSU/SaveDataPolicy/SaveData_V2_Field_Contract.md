@@ -37,7 +37,7 @@ No maximum Caravan count belongs in SaveData.
 | Wagon | stable `wagonId`, current durability while owned | repair costs, rarity multiplier, derived stats; destroyed wagons are removed |
 | Building | stable `buildingId`, current level | display name, upgrade costs, effects |
 | Investment quest | `investmentQuestId`, `townId`, completion state, completion UTC ticks | currency/item costs and unlock definitions |
-| Rescue loan | ID, original/remaining principal, active state, permanent used flag, phase, issue UTC ticks | fixed rescue configuration and prices |
+| Rescue loan | `loanId`, original/remaining principal, active state, issue UTC ticks, restricted-preparation state | `MinimumTradeCost`, eligibility/rebankruptcy calculation, UI text |
 | Preparation | destination/route IDs, prepared cargo/food, fixed selections, preview DTO | popup/tab/selection presentation state |
 | Trade | full GUID `tradeId`, route ID, state, UTC start/end | display progress strings; progress may be derived from timestamps |
 | Settlement | confirmed result inputs/outputs needed to pay exactly once | recalculated settlement result |
@@ -45,7 +45,11 @@ No maximum Caravan count belongs in SaveData.
 
 Every departed trade keeps the same full GUID through Traveling, SettlementPending, and Claim. Product flow must generate it at commit; shortened IDs are logging only.
 
-The target schema has no donation balance, donation decay, cumulative investment progress, investment definition-cost snapshot, or separate loan-repayment request. `VillageBuildingSaveData` uses stable `buildingId + level`; `DisplayName` is presentation data resolved from shared definitions. Existing DisplayName-based data requires an approved compatibility adapter or migration, but this documentation change does not change `SaveData.CurrentVersion`.
+`RescueLoanSaveData` contains only `loanId`, `originalPrincipal`, `remainingPrincipal`, `isActive`, `issuedUtcTicks`, and `isRestrictedPreparation`. Missing loan data normalizes to an inactive default object. Negative principal/ticks clamp to zero; remaining principal clamps to original principal; zero remaining principal clears active state; inactive state clears restriction. A malformed active loan with missing ID or zero principal is normalized to a safe inactive state with a warning and never creates a replacement loan automatically.
+
+The loan issue amount and eligibility are definition/calculator data, not SaveData. The issued principal is the full `RescueLoanDefinition.MinimumTradeCost`. SaveData does not store `hasUsedRescueLoan`, a loan phase, missing-configuration elements, settlement repayment choice, or a rebankruptcy flag. Rebankruptcy is recalculated deterministically after load unless a separate final game-over contract is approved.
+
+The target schema has no donation balance, donation decay, cumulative investment progress, or investment definition-cost snapshot. Rescue-loan repayment is a separate command, but no transient repayment request or entered amount is persisted in SaveData. `VillageBuildingSaveData` uses stable `buildingId + level`; `DisplayName` is presentation data resolved from shared definitions. Existing DisplayName-based data requires an approved compatibility adapter or migration, but this documentation change does not change `SaveData.CurrentVersion`.
 
 ## Preparation and preview
 

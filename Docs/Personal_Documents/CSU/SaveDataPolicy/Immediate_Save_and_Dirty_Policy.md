@@ -26,9 +26,11 @@ Important commands execute sequentially and block other important-command input.
 
 ## Immediate-save operations
 
-Trade departure, settlement confirmation/finalization, settlement claim including optional rescue-loan repayment, growth purchase, wagon repair, building purchase/upgrade, one-time investment-quest completion, rescue-loan issue, wagon destruction, and Caravan-to-home cargo transfer require durable save success before the operation reports success.
+Trade departure, settlement confirmation/finalization, settlement claim, growth purchase, wagon repair, building purchase/upgrade, one-time investment-quest completion, rescue-loan issue, rescue-loan repayment, wagon destruction, and Caravan-to-home cargo transfer require durable save success before the operation reports success.
 
 Because the current flow can mutate runtime state before calling a void save, changing only the return type is insufficient. Each command must adopt validation plus snapshot/rollback, or transaction-style staging and commit. No rollback or atomicity guarantee exists until implemented and tested.
+
+Rescue-loan issue and `RepayRescueLoan(amount)` each stage player trading currency and the complete loan state in one immediate-save boundary. Rescue-trade departure stages the departure state and restricted-mode release in the same save. Settlement claim does not modify loan principal and does not include repayment selection.
 
 ## Snapshot and rollback contract
 
