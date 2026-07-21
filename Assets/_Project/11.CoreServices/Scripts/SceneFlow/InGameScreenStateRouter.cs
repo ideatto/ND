@@ -4,7 +4,7 @@
  *
  * Script Purpose
  * - 저장 데이터의 무역 진행 상태를 인게임 UI 화면 상태로 변환하고 변경 이벤트를 발행한다.
- * - preparation, traveling, settlement 화면 전환의 단일 진입점을 제공한다.
+ * - preparation, traveling, settlement, town 화면 전환의 단일 진입점을 제공한다.
  *
  * Main Features
  * - SaveData 또는 TradeProgressState에서 InGameScreenState를 계산한다.
@@ -23,8 +23,10 @@
  *
  * Important Notes
  * - forceNotify가 false이면 같은 상태에 대한 중복 이벤트는 발행하지 않는다.
- * - 저장 데이터가 없거나 무역 상태가 완료/실패이면 preparation 화면으로 매핑된다.
+ * - 완료/실패 상태는 목적지 위치 반영과 pending/commit 정리가 확인된 경우에만 town으로 매핑된다.
  */
+using System;
+
 namespace ND.Framework
 {
     /// <summary>
@@ -81,7 +83,19 @@ namespace ND.Framework
                 return InGameScreenState.Preparation;
             }
 
-            return MapFromTradeProgressState(saveData.tradeProgress.state);
+            var progressState = saveData.tradeProgress.state;
+            if (progressState == TradeProgressState.Completed || progressState == TradeProgressState.Failed)
+            {
+                var pendingCleared = saveData.pendingSettlement == null || !saveData.pendingSettlement.hasResult;
+                var commitCleared = saveData.tradePreparationCommit == null || !saveData.tradePreparationCommit.hasCommit;
+                var hasCurrentTown = saveData.player != null
+                    && !string.IsNullOrWhiteSpace(saveData.player.currentTownId);
+                return pendingCleared && commitCleared && hasCurrentTown
+                    ? InGameScreenState.Town
+                    : InGameScreenState.Preparation;
+            }
+
+            return MapFromTradeProgressState(progressState);
         }
 
         /// <summary>

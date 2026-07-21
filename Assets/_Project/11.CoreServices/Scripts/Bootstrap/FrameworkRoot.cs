@@ -293,6 +293,7 @@ namespace ND.Framework
                 InGameScreenRouter,
                 GameTime,
                 () => SharedGameData,
+                TradePrepareCommitStore,
                 TradePrepareCommitStore);
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,

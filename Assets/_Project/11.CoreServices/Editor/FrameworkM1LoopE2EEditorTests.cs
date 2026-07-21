@@ -8,9 +8,10 @@
  *
  * Main Features
  * - 구조 대출 발급 → 제한 모드 → 무역 출발 → 제한 해제 → 수동 상환 통합 검증.
+ * - 원자 claim: 저장 실패 원복, 정상 claim, currentTownId/Town 이벤트, 중복 claim 거부, 재실행 Town 복원 검증.
  * - SharedGameData 로드, 3회 loop integrity, settle 후 currency 불변·claim 후 currency 변화 검증.
  * - 인게임 식량 소모 elapsed 동기화 및 배율 효과 검증.
- * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 복귀 검증.
+ * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 후 Town 복귀 검증.
  * - PendingSettlementSaveData 저장·캐시 소실 후 복구·claim·손상 케이스 검증.
  * - Traveling 오프라인 미완료·완료·역행 복구 검증.
  * - Unity batchmode -executeMethod 진입점 제공.
@@ -39,7 +40,8 @@ namespace ND.Framework.Editor
     public static class FrameworkM1LoopE2EEditorTests
     {
         private const int CycleCount = 3;
-        private const string RouteId = "BaseRoute";
+        // SharedGameData catalog에 존재하는 실제 route ID이다. 원자 claim은 route.ToTownId와 commit destination 일치가 필요하다.
+        private const string RouteId = "BaseToRiver";
         private const string ItemId = "Apple";
         private const float DistanceKm = 100f;
         private const float StarveGraceSeconds = 5f;
@@ -55,6 +57,7 @@ namespace ND.Framework.Editor
         {
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
+            RunAtomicSettlementClaimE2E();
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
@@ -785,14 +788,14 @@ namespace ND.Framework.Editor
                     "Failed settlement screen E2E failed to return caravan to Prepare.");
             }
 
-            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Preparation)
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Town)
             {
                 throw new InvalidOperationException(
-                    $"Failed settlement screen E2E failed: post-claim screen was {context.ScreenRouter.CurrentScreenState}, expected Preparation.");
+                    $"Failed settlement screen E2E failed: post-claim screen was {context.ScreenRouter.CurrentScreenState}, expected Town.");
             }
 
             Debug.Log(
-                "[Framework M1 E2E] Failed settlement screen passed. Failed grade -> Settlement -> claim -> Preparation/Failed state.");
+                "[Framework M1 E2E] Failed settlement screen passed. Failed grade -> Settlement -> claim -> Town/Failed state.");
         }
 
         private static void RunPendingSettlementRestoreE2E(TestContext context)
@@ -1243,7 +1246,7 @@ namespace ND.Framework.Editor
 
             public GameTimeService GameTime { get; private set; }
 
-            public JsonSaveService SaveService { get; private set; }
+            public ISaveService SaveService { get; private set; }
 
             public ISharedGameDataProvider SharedGameData { get; private set; }
 
@@ -1253,7 +1256,7 @@ namespace ND.Framework.Editor
 
             public InGameScreenStateRouter ScreenRouter { get; private set; }
 
-            public static TestContext Create()
+            public static TestContext Create(ISaveService saveServiceOverride = null)
             {
                 var policyConfig = Resources.Load<InGameTimePolicyConfig>(InGameTimePolicyConfig.ResourceName);
                 if (policyConfig == null)
@@ -1262,7 +1265,7 @@ namespace ND.Framework.Editor
                 }
 
                 var gameTime = new GameTimeService(policyConfig);
-                var saveService = new JsonSaveService();
+                var saveService = saveServiceOverride ?? new JsonSaveService();
                 var sharedGameDataService = new SharedGameDataService();
                 if (!sharedGameDataService.LoadInitialData())
                 {
@@ -1279,6 +1282,7 @@ namespace ND.Framework.Editor
                 var saveData = saveService.CreateNewGameData();
                 var recorder = new TradeProgressRecorder(gameTime, gameTime);
                 var router = new InGameScreenStateRouter();
+                var commitStore = new FrameworkTradePrepareCommitStore(() => saveData);
                 var coordinator = new TradeProgressCoordinator(
                     () => saveData,
                     saveService,
@@ -1286,7 +1290,9 @@ namespace ND.Framework.Editor
                     recorder,
                     router,
                     gameTime,
-                    () => sharedGameData);
+                    () => sharedGameData,
+                    commitStore,
+                    commitStore);
                 var tradeStart = new TradeStartService(
                     () => saveData,
                     saveService,
@@ -1298,7 +1304,11 @@ namespace ND.Framework.Editor
                         coordinator.ClearPendingSettlementSave(saveData);
                     },
                     // Production wiring registers the same departure reference in FrameworkRoot.
-                    coordinator.SetActiveCaravan);
+                    caravan =>
+                    {
+                        StageTestCommit(saveData, sharedGameData, commitStore);
+                        coordinator.SetActiveCaravan(caravan);
+                    });
 
                 return new TestContext
                 {
@@ -1311,6 +1321,157 @@ namespace ND.Framework.Editor
                     ScreenRouter = router
                 };
             }
+
+            private static void StageTestCommit(
+                SaveData saveData,
+                ISharedGameDataProvider sharedGameData,
+                FrameworkTradePrepareCommitStore commitStore)
+            {
+                var progress = saveData.tradeProgress;
+                if (progress == null || !sharedGameData.TryGetRoute(progress.activeRouteId, out var route) || route == null)
+                {
+                    throw new InvalidOperationException("Test commit could not resolve the active route.");
+                }
+
+                if (!commitStore.TryStage(new global::TradePrepareCommitData
+                {
+                    tradeId = progress.activeTradeId,
+                    currentTownId = saveData.player.currentTownId,
+                    selectedDestinationTownId = route.ToTownId,
+                    routeId = progress.activeRouteId
+                }))
+                {
+                    throw new InvalidOperationException("Test trade preparation commit could not be staged.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 원자 claim: 정상 claim → currentTownId/Town 이벤트 → 저장 실패 원복 → 중복 claim → 재실행 화면을 검증한다.
+        /// </summary>
+        private static void RunAtomicSettlementClaimE2E()
+        {
+            var saveService = new ConfigurableSaveService();
+            var context = TestContext.Create(saveService);
+            var caravan = CreateSampleCaravan(context.GameTime);
+            if (!context.TradeStart.TryStartTrade(
+                    caravan, DistanceKm, "editor_atomic_claim", RouteId).canDepart)
+            {
+                throw new InvalidOperationException("Atomic claim E2E failed to start trade.");
+            }
+
+            context.Coordinator.ForceCompleteActiveTrade();
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                throw new InvalidOperationException(
+                    $"Atomic claim E2E expected Settlement before claim, got {context.ScreenRouter.CurrentScreenState}.");
+            }
+
+            var currencyBefore = context.SaveData.player.tradingCurrency;
+            var townBefore = context.SaveData.player.currentTownId;
+            var caravanBefore = JsonUtility.ToJson(context.SaveData.caravan);
+            var expectedDestination = context.SaveData.tradePreparationCommit.destinationTownId;
+
+            // 저장 실패 강제 → 상태 원복 확인
+            saveService.ShouldSucceed = false;
+            if (context.Coordinator.ClaimSettlementAndReset()
+                || context.SaveData.player.tradingCurrency != currencyBefore
+                || context.SaveData.player.currentTownId != townBefore
+                || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                || context.SaveData.pendingSettlement == null || !context.SaveData.pendingSettlement.hasResult
+                || context.SaveData.tradePreparationCommit == null || !context.SaveData.tradePreparationCommit.hasCommit
+                || JsonUtility.ToJson(context.SaveData.caravan) != caravanBefore
+                || context.ScreenRouter.CurrentScreenState == InGameScreenState.Town)
+            {
+                throw new InvalidOperationException("Atomic claim E2E save-failure rollback did not restore all staged values.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim: save-failure rollback restored staged values.");
+
+            // 정상 Claim → currentTownId → Town 이벤트
+            saveService.ShouldSucceed = true;
+            InGameScreenState? townEventState = null;
+            Action<InGameScreenState> onScreenChanged = state => townEventState = state;
+            FrameworkEvents.InGameScreenChanged += onScreenChanged;
+            try
+            {
+                if (!context.Coordinator.ClaimSettlementAndReset())
+                {
+                    throw new InvalidOperationException("Atomic claim E2E normal claim failed.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.InGameScreenChanged -= onScreenChanged;
+            }
+
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Town
+                || context.SaveData.player.currentTownId != expectedDestination
+                || string.IsNullOrWhiteSpace(context.SaveData.player.currentTownId)
+                || context.SaveData.player.currentTownId == townBefore
+                || context.SaveData.pendingSettlement.hasResult
+                || context.SaveData.tradePreparationCommit.hasCommit
+                || townEventState != InGameScreenState.Town)
+            {
+                throw new InvalidOperationException(
+                    $"Atomic claim E2E normal claim town routing failed. TownId: {context.SaveData.player.currentTownId}, Expected: {expectedDestination}, Screen: {context.ScreenRouter.CurrentScreenState}, Event: {townEventState}");
+            }
+
+            Debug.Log(
+                $"[Framework M1 E2E] Atomic claim: normal claim succeeded. currentTownId={context.SaveData.player.currentTownId}, Town event raised.");
+
+            // 중복 Claim 확인
+            if (context.Coordinator.ClaimSettlementAndReset())
+            {
+                throw new InvalidOperationException("Atomic claim E2E duplicate claim unexpectedly succeeded.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim: duplicate claim correctly rejected.");
+
+            // 종료 후 재실행 화면 확인 (새 router가 저장 데이터를 Town으로 복원)
+            var relaunchRouter = new InGameScreenStateRouter();
+            InGameScreenState? relaunchEventState = null;
+            Action<InGameScreenState> onRelaunchScreenChanged = state => relaunchEventState = state;
+            FrameworkEvents.InGameScreenChanged += onRelaunchScreenChanged;
+            try
+            {
+                relaunchRouter.RefreshFromSaveData(context.SaveData, forceNotify: true);
+            }
+            finally
+            {
+                FrameworkEvents.InGameScreenChanged -= onRelaunchScreenChanged;
+            }
+
+            if (InGameScreenStateRouter.MapFromSaveData(context.SaveData) != InGameScreenState.Town
+                || relaunchRouter.CurrentScreenState != InGameScreenState.Town
+                || relaunchEventState != InGameScreenState.Town)
+            {
+                throw new InvalidOperationException(
+                    $"Atomic claim E2E relaunch screen restore failed. Map: {InGameScreenStateRouter.MapFromSaveData(context.SaveData)}, Router: {relaunchRouter.CurrentScreenState}, Event: {relaunchEventState}");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim: relaunch restored Town screen from save data.");
+
+            var mismatchContext = TestContext.Create(new ConfigurableSaveService());
+            var mismatchCaravan = CreateSampleCaravan(mismatchContext.GameTime);
+            if (!mismatchContext.TradeStart.TryStartTrade(
+                    mismatchCaravan, DistanceKm, "editor_destination_mismatch", RouteId).canDepart)
+            {
+                throw new InvalidOperationException("Destination mismatch E2E failed to start trade.");
+            }
+
+            mismatchContext.Coordinator.ForceCompleteActiveTrade();
+            var mismatchCurrency = mismatchContext.SaveData.player.tradingCurrency;
+            mismatchContext.SaveData.tradePreparationCommit.destinationTownId = "OtherTown";
+            if (mismatchContext.Coordinator.ClaimSettlementAndReset()
+                || mismatchContext.SaveData.player.tradingCurrency != mismatchCurrency
+                || mismatchContext.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                throw new InvalidOperationException("Destination mismatch E2E mutated claim state.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim rollback, normal claim, Town event, duplicate reject, relaunch, and destination validation passed.");
         }
     }
 }
