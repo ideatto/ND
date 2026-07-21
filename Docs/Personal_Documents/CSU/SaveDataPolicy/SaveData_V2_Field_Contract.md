@@ -1,69 +1,71 @@
 # SaveData V2 Field Contract
 
-## Status and scope
+## Status and version
 
-`V2` is the product/document label for the second-build target contract. It is not the serialized numeric schema version. The repository currently uses `SaveData.CurrentVersion = 6`; changing that value to 2 would invalidate version compatibility.
+`V2`는 second-build 제품 문서 라벨이며 serialized numeric version이 아니다. 현재 production은 version 6이고 승인된 다음 numeric version은 7이다. 이 문서 작업은 production `CurrentVersion`을 변경하지 않는다.
 
-Version 6 has completed the collection-shaped persistence cutover. The serialized source of truth is `caravans[]`, `tradeProgressEntries[]`, and `pendingSettlements[]`, plus the persisted UI selection key `selectedCaravanId`. Multi-active command processing, coordination, and UI are separate follow-up implementation work and are not implied by the storage cutover.
+Version 7 목표는 Unity-serializable List를 persisted source로 사용하고 Dictionary는 저장하지 않는다. runtime index/cache는 validation 뒤 재구성한다. Shared definition과 Scene 표시값을 복제하지 않고 stable ID로 참조한다.
 
-The target uses Unity-serializable lists, never dictionaries. Runtime indexes are rebuilt after load. Shared definitions are referenced by stable IDs; ScriptableObject values and calculated ViewData are not copied into saves.
-
-## Proposed hierarchy
+## Target hierarchy
 
 ```text
 SaveData
 |- version, metadata(lastSavedUtcTicks)
-|- player(currencies, growth levels, home inventory)
-|- selectedCaravanId (last UI/application selection)
+|- player(currencies, growth levels, home inventory, villageBuildings[])
+|- selectedCaravanId
 |- caravans[]
-|  |- caravanId
-|  |- fixedSetup(wagonId, currentDurability, animals[], mercenaries[])
-|  |- preparation(destinationTownId, routeId, cargo[], food, purchasePreview)
-|  `- currentTradeId (optional reference)
-|- tradeProgressEntries[](caravanId, tradeId, routeId, state, start/end UTC ticks)
-|- pendingSettlements[](caravanId, tradeId, confirmed result snapshot)
-|- buildings[], world, investmentQuests[], rescueLoan
-|- unlocks and tutorial
-`- compatibility (temporary V1/current-schema fields only during an approved migration)
+|- tradeProgressEntries[]
+|- pendingSettlements[]
+|- world(unlockedTownIds[], unlockedRouteIds[], investmentQuestCompletions[])
+|- rescueLoan
+`- tutorial/world mutable state
 ```
 
-No maximum Caravan count belongs in SaveData.
+`selectedCaravanId`는 UI 선택과 마지막 선택 복원만 저장한다. mutation 대상, runtime context, 진행/완료/정산 대상을 추론하지 않는다.
 
-`selectedCaravanId` persists the last selected Caravan at the SaveData root. On load, normalization keeps it only when the ID resolves to a stored Caravan; otherwise it selects the first valid stored Caravan. Selection is presentation/application focus, not the implicit target of a new state-changing command.
+## Canonical field rules
 
-## Field rules
-
-| Area | Persist confirmed original state | Recalculate / do not persist |
+| 영역 | 저장하는 원본/결과 상태 | 저장하지 않는 파생·정의 값 |
 |---|---|---|
-| Player | currencies, growth levels, building levels | formatted currency, button state |
-| Caravan | `caravanId`, definition IDs, counts, durability, cargo quantities, food | load, load thresholds, speed, consumption, final modified stats |
-| Wagon | stable `wagonId`, current durability while owned | repair costs, rarity multiplier, derived stats; destroyed wagons are removed |
-| Building | stable `buildingId`, current level | display name, upgrade costs, effects |
-| Investment quest | `investmentQuestId`, `townId`, completion state, completion UTC ticks | currency/item costs and unlock definitions |
-| Rescue loan | `loanId`, original/remaining principal, active state, issue UTC ticks, restricted-preparation state | `MinimumTradeCost`, eligibility/rebankruptcy calculation, UI text |
-| Preparation | destination/route IDs, prepared cargo/food, fixed selections, preview DTO | popup/tab/selection presentation state |
-| Trade | full GUID `tradeId`, route ID, state, UTC start/end | display progress strings; progress may be derived from timestamps |
-| Settlement | confirmed result inputs/outputs needed to pay exactly once | recalculated settlement result |
-| World | season/disaster IDs and confirmed mutable state | definition values and modifier calculations |
+| Caravan | `caravanId`, definition IDs, counts, durability, cargo, food | load/speed/consumption/final stats |
+| Trade | full GUID `tradeId`, route, state, UTC timestamps | 표시 progress 문자열 |
+| Settlement | `(caravanId, tradeId)`와 confirmed result snapshot | 재계산 settlement result |
+| Building | `buildingId`, `level` | `displayName`, localization, icon, costs, effects |
+| InvestmentQuest | `investmentQuestId`, `townId`, `completedUtcTicks` | state/isCompleted/isRewardClaimed, progress/contribution, costs, unlock definition |
+| World | unlocked town/route ID lists | definition values와 표시 데이터 |
+| Rescue loan | 승인된 loan DTO 원본 상태 | eligibility, UI text, 계산값 |
 
-Every departed trade keeps the same full GUID through Traveling, SettlementPending, and Claim. Product flow must generate it at commit; shortened IDs are logging only.
+## Building DTO
 
-`RescueLoanSaveData` contains only `loanId`, `originalPrincipal`, `remainingPrincipal`, `isActive`, `issuedUtcTicks`, and `isRestrictedPreparation`. Missing loan data normalizes to an inactive default object. Negative principal/ticks clamp to zero; remaining principal clamps to original principal; zero remaining principal clears active state; inactive state clears restriction. A malformed active loan with missing ID or zero principal is normalized to a safe inactive state with a warning and never creates a replacement loan automatically.
+기존 root `SaveData.player.villageBuildings`를 불필요하게 이동하지 않는다.
 
-The loan issue amount and eligibility are definition/calculator data, not SaveData. The issued principal is the full `RescueLoanDefinition.MinimumTradeCost`. SaveData does not store `hasUsedRescueLoan`, a loan phase, missing-configuration elements, settlement repayment choice, or a rebankruptcy flag. Rebankruptcy is recalculated deterministically after load unless a separate final game-over contract is approved.
+```csharp
+[Serializable]
+public sealed class VillageBuildingSaveData
+{
+    public string buildingId;
+    public int level;
+}
+```
 
-The target schema has no donation balance, donation decay, cumulative investment progress, or investment definition-cost snapshot. Rescue-loan repayment is a separate command, but no transient repayment request or entered amount is persisted in SaveData. `VillageBuildingSaveData` uses stable `buildingId + level`; `DisplayName` is presentation data resolved from shared definitions. Existing DisplayName-based data requires an approved compatibility adapter or migration, but this documentation change does not change `SaveData.CurrentVersion`.
+version 7은 `displayName`을 저장하지 않고 dual write도 하지 않는다. UI는 `buildingId → Shared Building Definition → displayName/localization/icon/effect`로 조회한다.
 
-## Preparation and preview
+## InvestmentQuest completion DTO
 
-Each Caravan owns one preparation object. Editing it marks SaveData Dirty. Explicit cancel replaces only that Caravan's preparation with defaults. Successful claim clears prepared food and trade goods but retains wagon, animals, mercenaries, and other fixed setup for per-Caravan reuse.
+```csharp
+[Serializable]
+public sealed class InvestmentQuestCompletionSaveData
+{
+    public string investmentQuestId;
+    public string townId;
+    public long completedUtcTicks;
+}
+```
 
-`PurchasePreviewSaveData` is an explicit persisted exception for `townId`, `marketId`, preview cargo item IDs/quantities, and preview food. Preview commands never mutate currency, inventory, or confirmed cargo.
+권장 root는 `SaveData.world.investmentQuestCompletions`이며 primary key는 `investmentQuestId`다. entry 존재가 one-time completion 상태다. contribution은 Command input이고 제출 이력이나 파생 progress는 저장하지 않는다.
 
-## Version 6 compatibility boundary
+## Compatibility boundary
 
-The non-serialized `caravan`, `tradeProgress`, and `pendingSettlement` properties are compatibility accessors for existing single-Caravan runtime callers. They resolve only the Caravan selected by `selectedCaravanId`; they do not represent or enumerate the complete multi-Caravan state and are not an alternate persistence source.
+version 6의 selected compatibility properties는 collection의 UI/legacy view일 뿐 source of truth가 아니다. v6은 v7로 자동 변환하지 않고 원본/backup을 보존한 명시적 reset 경로를 사용한다. `displayName → buildingId` 변환, duplicate/orphan 수정, 보상/unlock 재적용은 normalization에 포함하지 않는다.
 
-New commands and recovery code must query the canonical collections by explicit ID. They must not infer a mutation target from `selectedCaravanId` or use the compatibility accessors to choose which Caravan departs, finalizes, or claims a settlement. Existing callers may continue through the accessors during staged migration, but collection data remains authoritative and must not be overwritten from a selected-only view.
-
-Implemented storage scope: numeric version 6, the three canonical collections, `selectedCaravanId`, ID fields on Caravan/trade progress/pending settlement DTOs, and selected-Caravan compatibility accessors. Not yet implemented by this cutover: explicit-ID Depart/Finalize/Claim commands, a Caravan-aware settlement-ready event, simultaneous Traveling coordination, duplicate/orphan recovery policy, per-Caravan reusable preparation, or stable `buildingId` migration.
+세부 정책은 `Save_Version_and_Normalization_Policy.md`, `Investment_Quest_SaveData_Contract.md`, `Village_Building_ID_Migration_Plan.md`를 따른다.
