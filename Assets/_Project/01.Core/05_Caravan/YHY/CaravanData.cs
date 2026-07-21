@@ -54,6 +54,11 @@ public class CaravanData
     public JourneyFailureReason runFatalReason = JourneyFailureReason.None; // 치명 상태(실패 확정) 사유
 
     // ── 마차 내구도 & 전투 (M2) ───────────────────────────────
+    // [2차] 내구도가 0이 되면 "파손"이 아니라 "파괴"다 — 마차를 잃고 적재 화물·식량도 전손된다.
+    //   파괴 후 소유 기록·wagonId 정리는 소유·저장 시스템(Framework) 몫이고,
+    //   Core는 손실 확정과 실패 표시, 그리고 이 플래그로 파괴 사실을 알린다.
+    public bool runWagonDestroyed;    // 이번 무역에서 마차가 파괴됐나 (내구도 0 도달)
+
     public int currentDurability;     // 현재 마차 내구도 (무역 거듭하며 감소, 무역 간 유지)
     public int runDurabilityLost;     // 이번 무역 약탈 내구도 손실 누적 (손실상한 캡 기준)
     public int runBattlesFought;      // 이번 무역 전투 횟수 (용병 방어 판정용)

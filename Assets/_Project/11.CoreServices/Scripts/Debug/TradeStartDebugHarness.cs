@@ -227,7 +227,7 @@ namespace ND.Framework
                 return;
             }
 
-            var claimed = coordinator.ClaimSettlementAndReset();
+            var claimed = ClaimCurrentSettlement(coordinator);
             var activeCaravan = coordinator.ActiveCaravan;
             // reset 이후 상태를 Inspector에서 확인할 수 있도록 local caravan 참조를 최신화한다.
             if (activeCaravan != null)
@@ -299,8 +299,8 @@ namespace ND.Framework
                     return;
                 }
 
-                var firstClaim = coordinator.ClaimSettlementAndReset();
-                var duplicateClaim = coordinator.ClaimSettlementAndReset();
+                var firstClaim = ClaimCurrentSettlement(coordinator);
+                var duplicateClaim = ClaimCurrentSettlement(coordinator);
                 // 첫 claim만 성공하고 같은 settlement의 두 번째 claim은 실패해야 한다.
                 if (!firstClaim || duplicateClaim)
                 {
@@ -392,7 +392,7 @@ namespace ND.Framework
                     return;
                 }
 
-                if (!coordinator.ClaimSettlementAndReset())
+                if (!ClaimCurrentSettlement(coordinator))
                 {
                     FrameworkLog.Warning($"Economy E2E smoke failed because claim failed in cycle {cycleIndex + 1}.");
                     return;
@@ -673,8 +673,8 @@ namespace ND.Framework
                 return;
             }
 
-            var firstClaim = coordinator.ClaimSettlementAndReset();
-            var duplicateClaim = coordinator.ClaimSettlementAndReset();
+            var firstClaim = ClaimCurrentSettlement(coordinator);
+            var duplicateClaim = ClaimCurrentSettlement(coordinator);
             if (!firstClaim || duplicateClaim)
             {
                 FrameworkLog.Warning(
@@ -781,7 +781,8 @@ namespace ND.Framework
 
             if (bridge != null)
             {
-                if (!bridge.TryGetPendingSettlement(out var bridgeTradeId, out var bridgeResult)
+                if (!bridge.TryGetPendingSettlement(out var bridgeCaravanId, out var bridgeTradeId, out var bridgeResult)
+                    || bridgeCaravanId != saveData.selectedCaravanId
                     || bridgeTradeId != smokeTradeId
                     || bridgeResult == null
                     || bridgeResult.grade != savedGrade)
@@ -791,8 +792,8 @@ namespace ND.Framework
                 }
             }
 
-            var firstClaim = coordinator.ClaimSettlementAndReset();
-            var duplicateClaim = coordinator.ClaimSettlementAndReset();
+            var firstClaim = ClaimCurrentSettlement(coordinator);
+            var duplicateClaim = ClaimCurrentSettlement(coordinator);
             if (!firstClaim || duplicateClaim)
             {
                 FrameworkLog.Warning(
@@ -914,7 +915,7 @@ namespace ND.Framework
                 }
 
                 // Case D: claim으로 pending 정리 후 새 Traveling → 역행 스킵
-                if (!coordinator.ClaimSettlementAndReset())
+                if (!ClaimCurrentSettlement(coordinator))
                 {
                     FrameworkLog.Warning("Offline progress smoke failed to claim settlement before rollback case.");
                     return;
@@ -1121,6 +1122,19 @@ namespace ND.Framework
             }
 
             return FrameworkRoot.Instance.TradeProgressCoordinator;
+        }
+
+        private static bool ClaimCurrentSettlement(TradeProgressCoordinator coordinator)
+        {
+            var saveData = FrameworkRoot.Instance?.CurrentSaveData;
+            if (coordinator == null || saveData == null || saveData.tradeProgress == null)
+            {
+                return false;
+            }
+
+            return coordinator.ClaimSettlement(
+                saveData.selectedCaravanId,
+                saveData.tradeProgress.activeTradeId).Succeeded;
         }
 
         private static bool TryGetDebugCommands(out FrameworkDebugCommands commands)

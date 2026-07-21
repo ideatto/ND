@@ -391,6 +391,7 @@ namespace ND.Framework
         private Func<SaveData> getCurrentSaveData;
         private TradeProgressCoordinator tradeProgressCoordinator;
         private InGameScreenStateRouter inGameScreenRouter;
+        private string pendingCaravanId = string.Empty;
         private string pendingTradeId = string.Empty;
         private JourneyResultData pendingResult;
         private bool isClaimProcessing;
@@ -446,8 +447,9 @@ namespace ND.Framework
         /// <param name="tradeId">캐시된 trade ID. 결과가 없으면 빈 문자열일 수 있다.</param>
         /// <param name="result">캐시된 정산 결과. 결과가 없으면 null.</param>
         /// <returns>표시할 정산 결과가 있으면 true, 없으면 false.</returns>
-        public bool TryGetPendingSettlement(out string tradeId, out JourneyResultData result)
+        public bool TryGetPendingSettlement(out string caravanId, out string tradeId, out JourneyResultData result)
         {
+            caravanId = pendingCaravanId;
             tradeId = pendingTradeId;
             result = pendingResult;
             return result != null;
@@ -479,8 +481,10 @@ namespace ND.Framework
             try
             {
                 // 실제 저장 데이터 상태 전환과 caravan reset은 coordinator에 위임한다.
-                var claimed = tradeProgressCoordinator != null
-                    && tradeProgressCoordinator.ClaimSettlementAndReset();
+                var claimResult = tradeProgressCoordinator != null
+                    ? tradeProgressCoordinator.ClaimSettlement(pendingCaravanId, pendingTradeId)
+                    : null;
+                var claimed = claimResult != null && claimResult.Succeeded;
                 if (claimed)
                 {
                     ClearPendingSettlement();
@@ -499,6 +503,7 @@ namespace ND.Framework
         /// </summary>
         public void ClearPendingSettlement()
         {
+            pendingCaravanId = string.Empty;
             pendingTradeId = string.Empty;
             pendingResult = null;
         }
@@ -538,15 +543,16 @@ namespace ND.Framework
             frameworkEventsSubscribed = false;
         }
 
-        private void HandleSettlementReady(string tradeId, JourneyResultData result)
+        private void HandleSettlementReady(string caravanId, string tradeId, JourneyResultData result)
         {
             // 현재 저장 데이터의 active trade와 일치하지 않는 정산 이벤트는 화면에 반영하지 않는다.
-            if (!IsSettlementEntryValid(tradeId, result))
+            if (!IsSettlementEntryValid(caravanId, tradeId, result))
             {
                 return;
             }
 
             // 검증된 정산 결과를 cache한 뒤 settlement 화면과 UI adapter에 동시에 알린다.
+            pendingCaravanId = caravanId ?? string.Empty;
             pendingTradeId = tradeId ?? string.Empty;
             pendingResult = result;
 
@@ -570,7 +576,7 @@ namespace ND.Framework
             SettlementReady?.Invoke(pendingTradeId, pendingResult);
         }
 
-        private bool IsSettlementEntryValid(string tradeId, JourneyResultData result)
+        private bool IsSettlementEntryValid(string caravanId, string tradeId, JourneyResultData result)
         {
             // result 없이 settlement 화면으로 전환되면 UI가 claim할 대상이 없어지므로 차단한다.
             if (result == null)
@@ -581,20 +587,21 @@ namespace ND.Framework
 
             // 저장 데이터가 settlement pending 상태일 때만 이벤트를 화면 상태로 승격한다.
             var saveData = GetSaveData();
-            if (saveData == null || saveData.tradeProgress == null)
+            TradeProgressSaveData progress;
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress))
             {
                 FrameworkLog.Warning("Settlement screen entry blocked because trade progress save data is missing.");
                 return false;
             }
 
-            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            if (progress.state != TradeProgressState.SettlementPending)
             {
-                FrameworkLog.Warning($"Settlement screen entry blocked because trade state is {saveData.tradeProgress.state}.");
+                FrameworkLog.Warning($"Settlement screen entry blocked because trade state is {progress.state}.");
                 return false;
             }
 
             // 다른 무역의 늦은 이벤트가 현재 active trade의 settlement를 덮어쓰지 못하도록 ID를 비교한다.
-            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            var activeTradeId = progress.activeTradeId ?? string.Empty;
             if (string.IsNullOrEmpty(tradeId) || tradeId != activeTradeId)
             {
                 FrameworkLog.Warning(
@@ -616,20 +623,21 @@ namespace ND.Framework
 
             // 저장 데이터가 아직 settlement pending 상태인지 재검증해 stale UI 클릭을 막는다.
             var saveData = GetSaveData();
-            if (saveData == null || saveData.tradeProgress == null)
+            TradeProgressSaveData progress;
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, pendingCaravanId, out progress))
             {
                 FrameworkLog.Warning("Settlement claim blocked because trade progress save data is missing.");
                 return false;
             }
 
-            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            if (progress.state != TradeProgressState.SettlementPending)
             {
-                FrameworkLog.Warning($"Settlement claim blocked because trade state is {saveData.tradeProgress.state}.");
+                FrameworkLog.Warning($"Settlement claim blocked because trade state is {progress.state}.");
                 return false;
             }
 
             // cache된 trade ID와 저장 데이터의 active trade ID가 다르면 중복 또는 지연 이벤트로 보고 거부한다.
-            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            var activeTradeId = progress.activeTradeId ?? string.Empty;
             if (pendingTradeId != activeTradeId)
             {
                 FrameworkLog.Warning(

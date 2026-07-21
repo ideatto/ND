@@ -8,8 +8,8 @@
  *
  * Main Features
  * - 전체 SaveData JSON 출력 ContextMenu를 제공한다.
- * - TradeProgressSaveData의 ID, 상태, UTC tick, ISO UTC 시각을 출력한다.
- * - PendingSettlementSaveData의 hasResult·tradeId·grade·claimed를 출력한다.
+ * - 선택 caravan ID와 caravan/progress/pending 컬렉션의 연결 ID를 출력한다.
+ * - 선택 caravan의 TradeProgressSaveData와 PendingSettlementSaveData 상세를 출력한다.
  *
  * Usage for Team Members
  * - 디버그용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
@@ -50,6 +50,33 @@ namespace ND.Framework
             {
                 FrameworkLog.Warning("No current save data is available.");
                 return;
+            }
+
+            FrameworkLog.Info(
+                $"Multi-caravan save summary: SelectedCaravanId={saveData.selectedCaravanId}, "
+                + $"Caravans={saveData.caravans?.Count ?? 0}, "
+                + $"TradeProgressEntries={saveData.tradeProgressEntries?.Count ?? 0}, "
+                + $"PendingSettlements={saveData.pendingSettlements?.Count ?? 0}");
+            if (saveData.caravans != null)
+            {
+                for (var i = 0; i < saveData.caravans.Count; i++)
+                    FrameworkLog.Info($"Caravan[{i}] Id={saveData.caravans[i]?.caravanId}");
+            }
+            if (saveData.tradeProgressEntries != null)
+            {
+                for (var i = 0; i < saveData.tradeProgressEntries.Count; i++)
+                {
+                    var progress = saveData.tradeProgressEntries[i];
+                    FrameworkLog.Info($"Progress[{i}] CaravanId={progress?.caravanId}, TradeId={progress?.activeTradeId}, State={progress?.state}");
+                }
+            }
+            if (saveData.pendingSettlements != null)
+            {
+                for (var i = 0; i < saveData.pendingSettlements.Count; i++)
+                {
+                    var pending = saveData.pendingSettlements[i];
+                    FrameworkLog.Info($"Pending[{i}] CaravanId={pending?.caravanId}, TradeId={pending?.tradeId}");
+                }
             }
 
             var json = JsonUtility.ToJson(saveData, true);
