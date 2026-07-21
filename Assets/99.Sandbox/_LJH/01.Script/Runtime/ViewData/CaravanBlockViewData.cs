@@ -1,11 +1,19 @@
 using System;
 
 [System.Serializable]
-public sealed class CaravanOverviewViewData
+public enum CaravanSlotState
 {
-    // Contains every slot supplied by the Caravan feature, including occupied, empty, and locked slots.
-    // UI code displays this array without owning or recalculating the gameplay slot limit.
-    public CaravanBlockViewData[] caravans = Array.Empty<CaravanBlockViewData>();
+    // Indicates that the Provider did not initialize this slot correctly.
+    Unknown = 0,
+
+    // Indicates that the player cannot currently use this slot.
+    Locked = 1,
+
+    // Indicates an unlocked slot where a new Caravan can be created.
+    Empty = 2,
+
+    // Indicates a slot containing an existing Caravan.
+    Occupied = 3
 }
 
 [System.Serializable]
@@ -15,39 +23,44 @@ public sealed class CaravanBlockViewData
     // The slot index remains valid even when no Caravan is assigned.
     public int slotIndex;
 
-    // Indicates whether this slot currently contains an existing Caravan.
-    // When false, caravan-specific fields such as caravanId and cargo must remain empty.
-    public bool hasCaravan;
-
-    // Indicates whether the player can use this slot.
-    // An unlocked empty slot can open Caravan creation, while a locked slot cannot be selected.
-    public bool isUnlocked;
+    // Determines whether this slot is locked, empty, or occupied.
+    // Unknown exposes a missing Provider initialization instead of silently creating a valid-looking slot.
+    public CaravanSlotState slotState = CaravanSlotState.Unknown;
 
     // Provides the user-facing reason shown when this slot is locked.
-    // This value should remain empty while isUnlocked is true.
+    // This value must remain empty unless slotState is Locked.
     public string lockedReason = string.Empty;
 
     // Identifies the Caravan assigned to this slot.
-    // This value must remain empty when hasCaravan is false.
+    // This value must remain empty unless slotState is Occupied.
     public string caravanId = string.Empty;
 
     // Provides the user-facing name shown at the top of the block.
     public string displayName = string.Empty;
 
     // Determines the state text and state icon shown by the UI.
-    // This value must be ignored when hasCaravan is false.
+    // This value must be ignored unless slotState is Occupied.
     public JourneyState state = JourneyState.Prepare;
 
     // Resolves the wagon icon through the UI content catalog.
     // An empty value means that no wagon is currently assigned.
     public string wagonContentId = string.Empty;
 
-    // Contains grouped animal types and their assigned quantities.
-    public AnimalIconViewData[] animals = Array.Empty<AnimalIconViewData>();
+    // Contains display-only animal icon summaries for the overview block.
+    // The Caravan setting panel receives its editable data from CaravanSettingViewData.
+    public AnimalIconViewData[] animalIcons = Array.Empty<AnimalIconViewData>();
 
-    // Contains the cargo currently committed to this Caravan.
-    // Preparation Draft items must not be included.
-    public CargoIconViewData[] cargo = Array.Empty<CargoIconViewData>();
+    // Contains display-only cargo icon summaries for the overview block.
+    // The load setting panel receives its editable data from CaravanLoadSettingViewData.
+    public CargoIconViewData[] cargoIcons = Array.Empty<CargoIconViewData>();
+
+    // Indicates whether the selected Caravan may enter the route and departure flow.
+    // The Provider supplies this permission so UI code does not reproduce gameplay validation.
+    public bool canBeginTradePreparation;
+
+    // Explains why trade preparation cannot begin for this Caravan.
+    // This value must remain empty while canBeginTradePreparation is true.
+    public string tradePreparationBlockedReason = string.Empty;
 }
 
 [System.Serializable]
@@ -66,6 +79,7 @@ public sealed class CargoIconViewData
     // Resolves the trade-item icon through the UI content catalog.
     public string itemId = string.Empty;
 
-    // Shows the quantity currently committed to the Caravan.
+    // Shows the Provider-selected summary quantity for the current Caravan state.
+    // This display value does not purchase, reserve, or commit inventory.
     public int quantity;
 }

@@ -4,6 +4,10 @@ using UnityEngine;
 [System.Serializable]
 public class TradePrepareDraft
 {
+    // Identifies the Caravan selected before destination, route, and mercenary choices are made.
+    // UI code forwards this stable ID and does not copy the full Caravan configuration into commands.
+    public string selectedCaravanId;
+
     public string currentTownId;
 
     public string selectedDestinationTownId;
@@ -49,6 +53,7 @@ public class TradePrepareDraft
     {
         var snapshot = new TradePrepareDraft
         {
+            selectedCaravanId = selectedCaravanId,
             currentTownId = currentTownId,
             selectedDestinationTownId = selectedDestinationTownId,
             selectedRouteId = selectedRouteId,

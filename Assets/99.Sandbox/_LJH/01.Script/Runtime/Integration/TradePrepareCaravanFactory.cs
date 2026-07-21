@@ -29,7 +29,7 @@ public static class TradePrepareCaravanFactory
 
         WagonData selectedWagon = TradePrepareViewDataBuilder.FindWagon(wagons, draft.selectedWagonId);
         Dictionary<string, int> cargo = CreateFinalCargoQuantities(draft);
-        return TradePrepareViewDataBuilder.CreatePreviewCaravan(
+        CaravanData caravan = TradePrepareViewDataBuilder.CreatePreviewCaravan(
             cargo,
             items,
             saveData,
@@ -37,6 +37,11 @@ public static class TradePrepareCaravanFactory
             animals,
             context.mercenaries,
             draft);
+
+        // Preserves the Framework-assigned identity selected in Caravan Overview.
+        // Legacy callers may leave this empty until the multi-Caravan Provider is connected.
+        caravan.caravanId = draft.selectedCaravanId ?? string.Empty;
+        return caravan;
     }
 
     public static RouteData ResolveSelectedRoute(TradePrepareDraft draft, TradePrepareBuildContext context)

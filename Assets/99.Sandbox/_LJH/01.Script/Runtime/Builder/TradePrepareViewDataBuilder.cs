@@ -137,6 +137,9 @@ public sealed class TradePrepareViewDataBuilder
 
         return new TradePrepareViewData
         {
+            // The selected Caravan identity must survive ViewData projection so every later UI request
+            // remains scoped to the same Caravan chosen in the overview flow.
+            selectedCaravanId = draft.selectedCaravanId ?? string.Empty,
             currentTownId = currentTownId,
             currentTownName = currentTown != null ? currentTown.DisplayName : string.Empty,
             currentTradingCurrency = currentTradingCurrency,

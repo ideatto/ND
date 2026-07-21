@@ -4,6 +4,19 @@
 
 This document defines the M1 trade preparation UI flow.
 
+## 2026-07-21 Multi-Caravan Revision
+
+The original step-based flow below remains as a first-build reference, but it is no longer the target screen ownership model.
+
+- Wagon and draft-animal configuration moves from the linear S3 step to the Caravan Overview setting panel.
+- Cargo configuration moves from the linear S4 step to the Caravan Overview load setting panel.
+- The Trade button selects one existing Caravan and forwards its stable `caravanId` into destination, route, mercenary, summary, and departure screens.
+- Equipment and cargo panels remain inspectable in non-Preparation states, but modification controls become read-only.
+- Inventory and currency are not committed when a load setting is edited. The departure command performs the authoritative validation and commit.
+- Current S3/S4 fields remain temporarily for scene compatibility until the new Provider and Framework Command path is connected.
+
+See `0721_Caravan_Overview_UI_Contract.md` for the current screen flow and UI contract table.
+
 The trade preparation UI should work as a step-based draft flow.
 All selections before departure are temporary draft selections.
 The draft can be changed until the player confirms `Start Trade`.

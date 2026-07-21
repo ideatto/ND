@@ -9,6 +9,7 @@ public sealed class TemporaryTradeCycleSmokeTest : MonoBehaviour
         var settlement = new TemporaryTradeSettlementService(sink);
         var commit = new TradePrepareCommitData
         {
+            caravanId = "temporary-smoke-caravan",
             tradeId = "temporary-smoke-trade",
             currentTownId = "temporary-origin-town",
             selectedDestinationTownId = "temporary-destination-town",
@@ -34,6 +35,7 @@ public sealed class TemporaryTradeCycleSmokeTest : MonoBehaviour
         Debug.Assert(staged, "Temporary trade smoke test failed: commit should be staged.");
         commit.selectedAnimals[0].quantity = 99;
         Debug.Assert(sink.TryGet(commit.tradeId, out TradePrepareCommitData stagedSnapshot)
+            && stagedSnapshot.caravanId == "temporary-smoke-caravan"
             && stagedSnapshot.currentTownId == "temporary-origin-town"
             && stagedSnapshot.selectedDestinationTownId == "temporary-destination-town"
             && stagedSnapshot.selectedWagonId == "temporary-wagon"

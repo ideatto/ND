@@ -252,6 +252,8 @@ public sealed class TradePrepareStartAdapter
 
         return new TradePrepareCommitData
         {
+            // Keeps the departure snapshot scoped to the Caravan selected before the route flow.
+            caravanId = draft.selectedCaravanId,
             tradeId = tradeId,
             currentTownId = draft.currentTownId,
             selectedDestinationTownId = draft.selectedDestinationTownId,

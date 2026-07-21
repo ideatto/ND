@@ -1,6 +1,10 @@
 [System.Serializable]
 public sealed class TradePrepareCommitData
 {
+    // Identifies the Caravan that owns this departure snapshot.
+    // Framework assigns this ID; UI only forwards it from the selected overview slot.
+    public string caravanId;
+
     public string tradeId;
     public string currentTownId;
     public string selectedDestinationTownId;
@@ -22,6 +26,7 @@ public sealed class TradePrepareCommitData
     {
         return new TradePrepareCommitData
         {
+            caravanId = caravanId ?? string.Empty,
             tradeId = tradeId ?? string.Empty,
             currentTownId = currentTownId ?? string.Empty,
             selectedDestinationTownId = selectedDestinationTownId ?? string.Empty,
