@@ -28,6 +28,11 @@ public class imsiTradeItemData
 [Serializable]
 public class imsiWagonData
 {
+    // [2차/멀티 상단] 보유 개체 식별자. "어떤 종류"가 아니라 "내가 가진 이 한 대"를 가리킨다.
+    //   같은 종류 마차를 2대 보유할 수 있으므로 종류 ID로는 자산 잠금을 못 한다.
+    //   값은 소유·저장 시스템(Framework)이 부여하며 Core는 받아서 비교만 한다.
+    public string instanceId = string.Empty;
+
     public string wagonName;     // 마차 이름
 
     // ── 적재 기준 2개 ─────────────────────────────────────────
@@ -53,6 +58,9 @@ public class imsiWagonData
 [Serializable]
 public class imsiAnimalData
 {
+    // [2차/멀티 상단] 보유 개체 식별자 (imsiWagonData.instanceId와 같은 규칙).
+    public string instanceId = string.Empty;
+
     public string animalName;  // 동물 이름
     public float speed = 1f;   // 이동 속도 배수 (말=1 기준 / 당나귀=0.5 / 타조=1.5)
     // [인게임시간] 이 값은 '인게임 1초당' 식량 소모율(raw). 단위(분/시간/하루) 정규화는 Framework(ToConsumptionPerInGameSecond).
@@ -69,6 +77,9 @@ public class imsiAnimalData
 [Serializable]
 public class imsiMercenaryData
 {
+    // [2차/멀티 상단] 보유 개체 식별자 (imsiWagonData.instanceId와 같은 규칙).
+    public string instanceId = string.Empty;
+
     public string mercName;     // 용병 이름
     public int combatPower;     // 전투력 → 약탈 판정에 사용 예정
     public int contractCount;   // 남은 계약 횟수

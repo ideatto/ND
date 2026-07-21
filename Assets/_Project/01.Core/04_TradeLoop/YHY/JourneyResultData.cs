@@ -51,6 +51,13 @@ public class JourneyResultData
     public int cargoLost;                                       // 잃은 무역품 수량 (부분성공/실패)
     public float durabilityLost;                                // 마차 내구도 손실           [M2]
 
+    // ── 마차 파괴 (2차) ──────────────────────────────
+    // 내구도 0 → 마차 파괴. 이때 적재 화물과 식량을 전부 잃는다(손실 상한 미적용 = 전손).
+    // 저장 계약이 snapshot에 "파괴 여부·마차 ID·소실된 물품과 식량"을 기록하도록 요구한다.
+    public bool wagonDestroyed;              // 이번 무역에서 마차가 파괴됐나
+    public string destroyedWagonInstanceId = string.Empty;  // 파괴된 마차의 보유 개체 ID
+    public float foodLost;                   // 소실된 식량(도난·파괴 전손). 정상 소모(foodConsumed)와 별개
+
     // ── Core가 채우는 계산값 (M2 완료기준: 정산 데이터에 포함) ──
     public float travelSeconds;        // 실제 이동한 시간(초)
     public float foodConsumed;         // 총 식량 소모

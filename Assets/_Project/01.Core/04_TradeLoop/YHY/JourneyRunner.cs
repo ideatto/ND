@@ -55,6 +55,7 @@ public static class JourneyRunner
         caravan.runFoodLost = 0f;
         caravan.runDurabilityLost = 0;
         caravan.runBattlesFought = 0;
+        caravan.runWagonDestroyed = false;                        // [2차] 지난 무역의 파괴 플래그 초기화
         caravan.runStartDurability = caravan.currentDurability;   // 출발 시 내구도 (정산 손실 계산 기준) [M2 거리마모]
         caravan.runWearRemainder = 0f;
         caravan.elapsedInGameSeconds = 0f;                        // [인게임시간] 누적 인게임 경과 초기화
@@ -211,11 +212,47 @@ public static class JourneyRunner
             MarkFatal(caravan, JourneyFailureReason.FoodDepleted);
     }
 
-    /// <summary>마차 내구도가 0 이하면 실패 확정(마차 파손). 이동 중 즉시 판정 — 식량 고갈과 달리 유예 없음. [M2]</summary>
+    /// <summary>
+    /// 마차 내구도가 0 이하면 <b>파괴</b> 확정. 이동 중 즉시 판정 — 식량 고갈과 달리 유예 없음. [M2]
+    /// [2차] 파괴는 단순 실패가 아니라 전손이다 — 적재 화물·식량을 전부 잃는다.
+    /// </summary>
     private static void CheckWagonBroken(CaravanData caravan)
     {
         if (caravan.runFatalReason != JourneyFailureReason.None) return;   // 이미 실패면 스킵
         if (caravan.currentDurability > 0) return;                          // 아직 멀쩡
+        DestroyWagon(caravan);
+    }
+
+    /// <summary>
+    /// 마차 파괴 처리: 적재 화물·식량 전손 + 무역 실패 확정.
+    ///
+    /// [계약] Multi_Caravan_Save_Architecture — "내구도가 0이면 마차가 파괴된다:
+    ///        …그 마차에 실린 화물과 식량을 전부 잃고, 진행 중인 무역을 Failed로 표시한다."
+    ///
+    /// [주의] 전손이므로 <b>손실 상한(lossLimitRate)을 적용하지 않는다.</b>
+    ///        상한은 약탈 같은 부분 손실에만 쓰인다.
+    ///        소유 기록·wagonId 정리와 정산 snapshot 기록은 Framework가 이어서 수행한다.
+    /// </summary>
+    private static void DestroyWagon(CaravanData caravan)
+    {
+        // 화물 전량 소실 (수량을 0으로 만들고 잃은 개수를 누적)
+        if (caravan.cargo != null)
+        {
+            int lost = 0;
+            foreach (CargoEntry entry in caravan.cargo)
+            {
+                if (entry == null || entry.quantity <= 0) continue;
+                lost += entry.quantity;
+                entry.quantity = 0;
+            }
+            caravan.runCargoLost += lost;
+        }
+
+        // 남은 식량 전량 소실 (소모가 아니라 "잃은" 것이므로 runFoodLost에 누적)
+        float remainingFood = CaravanCalculator.GetRemainingFood(caravan);
+        if (remainingFood > 0f) caravan.runFoodLost += remainingFood;
+
+        caravan.runWagonDestroyed = true;
         MarkFatal(caravan, JourneyFailureReason.WagonBroken);
     }
 
@@ -258,6 +295,12 @@ public static class JourneyRunner
         // 이번 무역 총 내구도 손실 = 출발 내구도 - 현재(도착) 내구도  (약탈 + 거리마모 합) [M2]
         int durLost = caravan.runStartDurability - caravan.currentDurability;
         result.durabilityLost = (durLost > 0) ? durLost : 0;
+
+        // [2차] 마차 파괴 정보 — 저장 snapshot이 파괴 여부·마차 ID·소실 식량을 요구한다.
+        result.wagonDestroyed = caravan.runWagonDestroyed;
+        result.destroyedWagonInstanceId =
+            (caravan.runWagonDestroyed && caravan.wagon != null) ? caravan.wagon.instanceId : string.Empty;
+        result.foodLost = caravan.runFoodLost;
 
         // [M2] 정산 데이터에 계산값 포함 (완료기준: 실제이동시간·총식량소모·출발적재량·최종적정적재량·과적비율)
         result.travelSeconds      = caravan.progress01 * caravan.totalSeconds;         // 실제 이동한 시간(초)
