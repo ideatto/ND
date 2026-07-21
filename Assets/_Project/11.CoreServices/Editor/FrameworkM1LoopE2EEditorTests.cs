@@ -400,7 +400,8 @@ namespace ND.Framework.Editor
             var caravan = CreateSampleCaravan(time);
             var result = start.TryStartTrade(caravan, DistanceKm, "loan_departure", RouteId);
             if (result.canDepart || !data.rescueLoan.isRestrictedPreparation
-                || data.tradeProgress.state == TradeProgressState.Traveling
+                || (data.tradeProgress != null
+                    && data.tradeProgress.state == TradeProgressState.Traveling)
                 || caravan.state == JourneyState.Traveling)
             {
                 throw new InvalidOperationException("Restricted departure save-failure rollback failed.");
@@ -1430,7 +1431,12 @@ namespace ND.Framework.Editor
 
             // 저장 실패 강제 → 상태 원복 확인
             saveService.ShouldSucceed = false;
-            if (context.Coordinator.ClaimSettlementAndReset()
+            var failedSaveClaim = context.Coordinator.ClaimSettlement(
+                context.SaveData.selectedCaravanId,
+                context.SaveData.tradeProgress.activeTradeId);
+            if (failedSaveClaim.Succeeded
+                || failedSaveClaim.FailureReason != ClaimSettlementFailureReason.SaveFailed
+                || failedSaveClaim.SaveResult == null
                 || context.SaveData.player.tradingCurrency != currencyBefore
                 || context.SaveData.player.currentTownId != townBefore
                 || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
@@ -1451,7 +1457,11 @@ namespace ND.Framework.Editor
             FrameworkEvents.InGameScreenChanged += onScreenChanged;
             try
             {
-                if (!context.Coordinator.ClaimSettlementAndReset())
+                var successfulClaim = context.Coordinator.ClaimSettlement(
+                    context.SaveData.selectedCaravanId,
+                    context.SaveData.tradeProgress.activeTradeId);
+                if (!successfulClaim.Succeeded || successfulClaim.SaveResult == null
+                    || !successfulClaim.SaveResult.Succeeded)
                 {
                     throw new InvalidOperationException("Atomic claim E2E normal claim failed.");
                 }
@@ -1465,7 +1475,8 @@ namespace ND.Framework.Editor
                 || context.SaveData.player.currentTownId != expectedDestination
                 || string.IsNullOrWhiteSpace(context.SaveData.player.currentTownId)
                 || context.SaveData.player.currentTownId == townBefore
-                || context.SaveData.pendingSettlement.hasResult
+                || (context.SaveData.pendingSettlement != null
+                    && context.SaveData.pendingSettlement.hasResult)
                 || context.SaveData.tradePreparationCommit.hasCommit
                 || townEventState != InGameScreenState.Town)
             {

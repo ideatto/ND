@@ -50,6 +50,46 @@ using UnityEngine;
 
 namespace ND.Framework
 {
+    public enum ClaimSettlementFailureReason
+    {
+        None = 0,
+        InvalidCaravanId,
+        InvalidTradeId,
+        CaravanNotFound,
+        TradeProgressNotFound,
+        PendingSettlementNotFound,
+        AmbiguousPendingSettlement,
+        TradeIdMismatch,
+        InvalidTradeState,
+        AlreadyClaimed,
+        SettlementDataInvalid,
+        EconomyApplyFailed,
+        TownApplyFailed,
+        CoreClaimRejected,
+        SaveFailed,
+        RollbackFailed
+    }
+
+    public sealed class ClaimSettlementResult
+    {
+        private ClaimSettlementResult(bool succeeded, ClaimSettlementFailureReason failureReason, SaveResult saveResult)
+        {
+            Succeeded = succeeded;
+            FailureReason = failureReason;
+            SaveResult = saveResult;
+        }
+
+        public bool Succeeded { get; }
+        public ClaimSettlementFailureReason FailureReason { get; }
+        public SaveResult SaveResult { get; }
+
+        public static ClaimSettlementResult Success(SaveResult saveResult)
+            => new ClaimSettlementResult(true, ClaimSettlementFailureReason.None, saveResult);
+
+        public static ClaimSettlementResult Failure(ClaimSettlementFailureReason reason, SaveResult saveResult = null)
+            => new ClaimSettlementResult(false, reason, saveResult);
+    }
+
     /// <summary>
     /// 무역 진행률, 정산 생성, 정산 claim을 저장 데이터와 Core caravan 상태에 반영하는 coordinator이다.
     /// </summary>
@@ -335,7 +375,7 @@ namespace ND.Framework
         /// 성공 시 목적지 마을 위치가 저장되고 settlement cache와 pending/commit이 삭제된 뒤 Town으로 전환된다.
         /// 저장 실패 시 SaveData와 runtime caravan을 claim 직전 snapshot으로 복구한다.
         /// </remarks>
-        public bool ClaimSettlementAndReset()
+        private bool ClaimSettlementAndResetLegacy()
         {
             var saveData = GetSaveData();
             var caravan = EnsureActiveCaravan();
@@ -423,6 +463,144 @@ namespace ND.Framework
 
             ClearSettlementCache();
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
+
+            return true;
+        }
+
+        [Obsolete("Use ClaimSettlement(caravanId, tradeId).")]
+        public bool ClaimSettlementAndReset()
+        {
+            var saveData = GetSaveData();
+            if (saveData == null || string.IsNullOrWhiteSpace(saveData.selectedCaravanId)) return false;
+
+            PendingSettlementSaveData pending;
+            if (!SaveDataLookup.TryGetPendingSettlement(saveData, saveData.selectedCaravanId, null, out pending)
+                || pending == null || string.IsNullOrWhiteSpace(pending.tradeId)) return false;
+
+            return ClaimSettlement(saveData.selectedCaravanId, pending.tradeId).Succeeded;
+        }
+
+        /// <summary>Claims exactly one pending settlement identified by caravan and trade IDs.</summary>
+        /// <returns>The concrete outcome, including save failure details when persistence was attempted.</returns>
+        public ClaimSettlementResult ClaimSettlement(string caravanId, string tradeId)
+        {
+            if (string.IsNullOrWhiteSpace(caravanId))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.InvalidCaravanId);
+            if (string.IsNullOrWhiteSpace(tradeId))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.InvalidTradeId);
+
+            var saveData = GetSaveData();
+            CaravanSaveData caravanSave;
+            if (!SaveDataLookup.TryGetCaravan(saveData, caravanId, out caravanSave))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CaravanNotFound);
+
+            TradeProgressSaveData progress;
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TradeProgressNotFound);
+
+            PendingSettlementSaveData pending = null;
+            var matches = 0;
+            if (saveData.pendingSettlements != null)
+            {
+                for (var i = 0; i < saveData.pendingSettlements.Count; i++)
+                {
+                    var candidate = saveData.pendingSettlements[i];
+                    if (candidate == null || candidate.caravanId != caravanId || candidate.tradeId != tradeId) continue;
+                    pending = candidate;
+                    matches++;
+                }
+            }
+            if (matches == 0)
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.PendingSettlementNotFound);
+            if (matches > 1)
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.AmbiguousPendingSettlement);
+            if (!string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TradeIdMismatch);
+            if (progress.state != TradeProgressState.SettlementPending)
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.InvalidTradeState);
+            if (pending.claimed)
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.AlreadyClaimed);
+            if (!PendingSettlementSaveDataMapper.TryToRuntime(pending, out var settlementResult))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
+
+            var caravan = caravanId == saveData.selectedCaravanId
+                ? EnsureActiveCaravan()
+                : CaravanSaveDataMapper.ToRuntime(caravanSave);
+            if (caravan == null)
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
+            if (!TryResolveClaimDestination(saveData, progress, out var destinationTownId))
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
+
+            var saveDataSnapshot = JsonUtility.ToJson(saveData);
+            var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
+            var selectedCaravanIdBeforeClaim = saveData.selectedCaravanId;
+            saveData.selectedCaravanId = caravanId;
+            if (!JourneyRunner.ClaimSettlement(caravan))
+            {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CoreClaimRejected);
+            }
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded
+                || !economySettlementBridge.TryCalculateAndFill(saveData, caravan, settlementResult, sharedGameData)
+                || !economySettlementBridge.TryApplyPendingEconomy(saveData, caravan, tradeId))
+            {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.EconomyApplyFailed);
+            }
+
+            progress.state = settlementResult.grade == JourneyResultGrade.Failed
+                ? TradeProgressState.Failed
+                : TradeProgressState.Completed;
+            if (!JourneyRunner.ResetToPrepare(caravan))
+            {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CoreClaimRejected);
+            }
+
+            saveData.player.currentTownId = destinationTownId;
+            if (tradePrepareCommitCompletion == null || !tradePrepareCommitCompletion.TryComplete(tradeId, out _))
+            {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
+            }
+
+            saveData.pendingSettlements.Remove(pending);
+            CaravanSaveDataMapper.CopyToSave(caravan, caravanSave);
+            saveData.selectedCaravanId = selectedCaravanIdBeforeClaim;
+            var saveResult = saveService != null ? saveService.Save(saveData) : null;
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SaveFailed, saveResult);
+            }
+
+            if (LastSettlementTradeId == tradeId) ClearSettlementCache();
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
+            return ClaimSettlementResult.Success(saveResult);
+        }
+
+        private bool TryResolveClaimDestination(
+            SaveData saveData,
+            TradeProgressSaveData progress,
+            out string destinationTownId)
+        {
+            destinationTownId = string.Empty;
+            if (saveData.player == null) return false;
+
+            var activeTradeId = progress.activeTradeId ?? string.Empty;
+            if (tradePrepareCommitSource == null
+                || !tradePrepareCommitSource.TryGet(activeTradeId, out var commit) || commit == null) return false;
+
+            destinationTownId = commit.selectedDestinationTownId ?? string.Empty;
+            var activeRouteId = progress.activeRouteId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(destinationTownId) || string.IsNullOrWhiteSpace(activeRouteId)) return false;
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded
+                || !sharedGameData.TryGetRoute(activeRouteId, out var route) || route == null
+                || !string.Equals(destinationTownId, route.ToTownId, StringComparison.Ordinal)) return false;
 
             return true;
         }
@@ -592,7 +770,7 @@ namespace ND.Framework
                 restoredResult.netProfit = pending.netProfit;
             }
 
-            FrameworkEvents.RaiseTradeSettlementReady(LastSettlementTradeId, LastSettlementResult);
+            FrameworkEvents.RaiseTradeSettlementReady(pending.caravanId, LastSettlementTradeId, LastSettlementResult);
             FrameworkLog.Info($"Pending settlement restored. TradeId: {LastSettlementTradeId}, Grade: {LastSettlementResult.grade}");
             return true;
         }
@@ -717,7 +895,7 @@ namespace ND.Framework
 
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
-            FrameworkEvents.RaiseTradeSettlementReady(settlementTradeId, result);
+            FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.caravanId, settlementTradeId, result);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
 
             return true;

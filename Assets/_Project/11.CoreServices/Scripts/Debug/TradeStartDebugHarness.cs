@@ -781,7 +781,8 @@ namespace ND.Framework
 
             if (bridge != null)
             {
-                if (!bridge.TryGetPendingSettlement(out var bridgeTradeId, out var bridgeResult)
+                if (!bridge.TryGetPendingSettlement(out var bridgeCaravanId, out var bridgeTradeId, out var bridgeResult)
+                    || bridgeCaravanId != saveData.selectedCaravanId
                     || bridgeTradeId != smokeTradeId
                     || bridgeResult == null
                     || bridgeResult.grade != savedGrade)

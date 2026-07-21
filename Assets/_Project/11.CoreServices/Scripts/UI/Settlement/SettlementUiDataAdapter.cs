@@ -142,10 +142,11 @@ namespace ND.Framework
                 return;
             }
 
+            string caravanId;
             string tradeId;
             JourneyResultData result;
             // pending settlement가 없으면 claim 버튼이 남아 있지 않도록 결과 없음 상태로 갱신한다.
-            if (!bridge.TryGetPendingSettlement(out tradeId, out result))
+            if (!bridge.TryGetPendingSettlement(out caravanId, out tradeId, out result))
             {
                 ShowNoSettlement("No settlement result.");
                 return;
