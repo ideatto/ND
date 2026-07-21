@@ -21,7 +21,7 @@
  *
  * Important Notes
  * - tradeId가 기록되지 않으면 출발을 framework blocked 결과로 거부한다.
- * - 즉시 저장 출발은 tradeProgress, caravan, 구조 대출 제한 상태를 한 저장 경계에서 확정한다.
+ * - 즉시 저장 출발은 선택 caravan의 trade progress와 snapshot, 구조 대출 제한 상태를 한 저장 경계에서 확정한다.
  */
 using System;
 using ND.Economy;
@@ -81,7 +81,7 @@ namespace ND.Framework
         /// <param name="saveImmediately">출발 성공 후 즉시 저장할지 여부.</param>
         /// <returns>Core 출발 검증 결과. framework 기록 실패 시 canDepart가 false인 결과를 반환한다.</returns>
         /// <remarks>
-        /// 성공 시 saveData.tradeProgress와 saveData.caravan이 변경되고 InGameScreenState.Traveling으로 전환된다.
+        /// 성공 시 선택 caravan의 progress와 snapshot이 변경되고 InGameScreenState.Traveling으로 전환된다.
         /// </remarks>
         public DepartureValidationResult TryStartTrade(
             CaravanData caravan,
@@ -107,13 +107,16 @@ namespace ND.Framework
             }
 
             var saveData = getCurrentSaveData != null ? getCurrentSaveData() : null;
-            if (saveData == null || saveData.tradeProgress == null || saveData.caravan == null)
+            if (saveData == null || saveData.caravan == null)
             {
                 FrameworkLog.Warning("Trade start was blocked because required save data is missing.");
                 return CreateFrameworkBlockedResult();
             }
 
-            var tradeProgressSnapshot = JsonUtility.ToJson(saveData.tradeProgress);
+            var tradeProgressBefore = saveData.tradeProgress;
+            var tradeProgressSnapshot = tradeProgressBefore != null
+                ? JsonUtility.ToJson(tradeProgressBefore)
+                : null;
             var caravanSaveSnapshot = JsonUtility.ToJson(saveData.caravan);
             var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
             var restrictedPreparationBefore = saveData.rescueLoan != null
@@ -215,7 +218,14 @@ namespace ND.Framework
             string runtimeCaravanSnapshot,
             bool restrictedPreparationBefore)
         {
-            JsonUtility.FromJsonOverwrite(tradeProgressSnapshot, saveData.tradeProgress);
+            if (tradeProgressSnapshot == null)
+            {
+                saveData.tradeProgress = null;
+            }
+            else
+            {
+                JsonUtility.FromJsonOverwrite(tradeProgressSnapshot, saveData.tradeProgress);
+            }
             JsonUtility.FromJsonOverwrite(caravanSaveSnapshot, saveData.caravan);
             JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, runtimeCaravan);
             if (saveData.rescueLoan != null)

@@ -25,7 +25,7 @@
  *
  * Important Notes
  * - 저장 파일 이름은 save_data.json으로 고정되어 있다.
- * - version이 CurrentVersion과 다르면 migration 없이 새 데이터로 복구한다(version 5: pendingSettlement 포함).
+ * - version 5 단일 caravan 저장은 version 6 ID 기반 컬렉션 구조로 마이그레이션한다.
  * - version 5 세이브에 상점 재고·구매 준비 필드가 없어도 NormalizeData가 빈 컨테이너로 보정한다.
  * - version 5 세이브에 거점 창고·마을 건물 필드가 없어도 NormalizeData가 빈 리스트로 보정한다.
  * - version 5 세이브에 구조 대출 필드가 없어도 NormalizeData가 안전한 비활성 상태로 보정한다.
@@ -36,6 +36,7 @@
  * - Docs/Personal_Documents/CSU/SaveDataPolicy/Save_Result_API_Implementation_Logic.md
  */
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -82,6 +83,8 @@ namespace ND.Framework
             // New games begin at the default town used by the initial trade routes.
             data.player.currentTownId = "BaseCamp";
 
+            NormalizeData(data);
+
             FrameworkLog.Info("New game save data created.");
             return data;
         }
@@ -91,7 +94,7 @@ namespace ND.Framework
         /// </summary>
         /// <returns>유효한 저장 데이터 또는 복구용 새 게임 데이터.</returns>
         /// <remarks>
-        /// 파일 없음, 역직렬화 실패, version 불일치는 새 게임 데이터 반환으로 복구한다.
+        /// 파일 없음과 역직렬화 실패는 새 게임 데이터로 복구하고 version 5는 version 6으로 마이그레이션한다.
         /// </remarks>
         public SaveData Load()
         {
@@ -107,6 +110,19 @@ namespace ND.Framework
                 // JsonUtility 역직렬화 결과는 하위 DTO가 null일 수 있으므로 version 확인 후 정규화한다.
                 var json = File.ReadAllText(savePath);
                 var data = JsonUtility.FromJson<SaveData>(json);
+
+                if (data != null && data.version == 5)
+                {
+                    data = MigrateVersion5(json);
+                    if (data != null)
+                    {
+                        var migrationResult = Save(data);
+                        if (!migrationResult.Succeeded)
+                        {
+                            FrameworkLog.Error($"Version 5 save was migrated in memory but could not be written: {migrationResult.Message}");
+                        }
+                    }
+                }
 
                 if (data == null || data.version != SaveData.CurrentVersion)
                 {
@@ -215,7 +231,7 @@ namespace ND.Framework
             }
         }
 
-        private static void NormalizeData(SaveData data)
+        public static void NormalizeData(SaveData data)
         {
             // 저장 파일이 구버전이거나 일부 하위 객체가 누락된 경우 runtime 서비스가 null을 직접 다루지 않게 보정한다.
             if (data.player == null)
@@ -258,27 +274,52 @@ namespace ND.Framework
                 }
             }
 
-            if (data.caravan == null)
+            if (data.caravans == null)
             {
-                data.caravan = new CaravanSaveData();
+                data.caravans = new List<CaravanSaveData>();
             }
 
-            CaravanSaveDataMapper.Normalize(data.caravan);
-
-            if (data.tradeProgress == null)
+            if (data.tradeProgressEntries == null)
             {
-                data.tradeProgress = new TradeProgressSaveData();
+                data.tradeProgressEntries = new List<TradeProgressSaveData>();
             }
 
-            if (data.tradeProgress.inGameTimeMultiplierAtStart <= 0f)
+            if (data.pendingSettlements == null)
             {
-                data.tradeProgress.inGameTimeMultiplierAtStart = 1f;
+                data.pendingSettlements = new List<PendingSettlementSaveData>();
             }
 
-            if (data.pendingSettlement == null)
+            if (data.caravans.Count == 0)
             {
-                data.pendingSettlement = PendingSettlementSaveDataMapper.CreateEmpty();
+                data.caravans.Add(new CaravanSaveData());
             }
+
+            var caravanIds = new HashSet<string>();
+            for (var caravanIndex = 0; caravanIndex < data.caravans.Count; caravanIndex++)
+            {
+                var caravan = data.caravans[caravanIndex];
+                if (caravan == null)
+                {
+                    caravan = new CaravanSaveData();
+                    data.caravans[caravanIndex] = caravan;
+                }
+                CaravanSaveDataMapper.Normalize(caravan);
+                if (string.IsNullOrEmpty(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
+                {
+                    if (!string.IsNullOrEmpty(caravan.caravanId))
+                    {
+                        FrameworkLog.Warning($"Duplicate caravan ID was replaced without relinking ambiguous child data: {caravan.caravanId}");
+                    }
+                    caravan.caravanId = SaveDataLookup.NewCaravanId();
+                    caravanIds.Add(caravan.caravanId);
+                }
+            }
+
+            CaravanSaveData selected;
+            if (!SaveDataLookup.TryGetCaravan(data, data.selectedCaravanId, out selected))
+                data.selectedCaravanId = data.caravans[0].caravanId;
+
+            ValidateChildData(data, caravanIds);
 
             NormalizeRescueLoan(data);
 
@@ -337,6 +378,92 @@ namespace ND.Framework
             {
                 data.tutorial = new TutorialSaveData();
             }
+        }
+
+        private static void ValidateChildData(SaveData data, HashSet<string> caravanIds)
+        {
+            var progressOwners = new HashSet<string>();
+            for (var i = 0; i < data.tradeProgressEntries.Count; i++)
+            {
+                var progress = data.tradeProgressEntries[i];
+                if (progress == null) continue;
+                if (progress.inGameTimeMultiplierAtStart <= 0f) progress.inGameTimeMultiplierAtStart = 1f;
+                if (!caravanIds.Contains(progress.caravanId))
+                    FrameworkLog.Error($"Orphan trade progress was preserved. CaravanId: {progress.caravanId}");
+                else if (!progressOwners.Add(progress.caravanId))
+                    FrameworkLog.Error($"Duplicate trade progress was preserved. CaravanId: {progress.caravanId}");
+            }
+
+            var pendingKeys = new HashSet<string>();
+            for (var i = 0; i < data.pendingSettlements.Count; i++)
+            {
+                var pending = data.pendingSettlements[i];
+                if (pending == null) continue;
+                if (!caravanIds.Contains(pending.caravanId))
+                    FrameworkLog.Error($"Orphan pending settlement was preserved. CaravanId: {pending.caravanId}");
+                var key = pending.caravanId + "\n" + pending.tradeId;
+                if (!pendingKeys.Add(key))
+                    FrameworkLog.Error($"Duplicate pending settlement was preserved. CaravanId: {pending.caravanId}, TradeId: {pending.tradeId}");
+            }
+        }
+
+        private static SaveData MigrateVersion5(string json)
+        {
+            try
+            {
+                var legacy = JsonUtility.FromJson<Version5SaveData>(json);
+                if (legacy == null || legacy.caravan == null) return null;
+                var data = new SaveData
+                {
+                    version = SaveData.CurrentVersion,
+                    lastSavedUtcTicks = legacy.lastSavedUtcTicks,
+                    player = legacy.player,
+                    rescueLoan = legacy.rescueLoan,
+                    tradePreparationCommit = legacy.tradePreparationCommit,
+                    world = legacy.world,
+                    tutorial = legacy.tutorial
+                };
+                data.caravans.Clear();
+                data.tradeProgressEntries.Clear();
+                data.pendingSettlements.Clear();
+                legacy.caravan.caravanId = SaveDataLookup.NewCaravanId();
+                data.caravans.Add(legacy.caravan);
+                data.selectedCaravanId = legacy.caravan.caravanId;
+                if (legacy.tradeProgress != null && (legacy.tradeProgress.state != TradeProgressState.None
+                    || !string.IsNullOrEmpty(legacy.tradeProgress.activeTradeId)))
+                {
+                    legacy.tradeProgress.caravanId = data.selectedCaravanId;
+                    data.tradeProgressEntries.Add(legacy.tradeProgress);
+                }
+                if (legacy.pendingSettlement != null && legacy.pendingSettlement.hasResult)
+                {
+                    legacy.pendingSettlement.caravanId = data.selectedCaravanId;
+                    data.pendingSettlements.Add(legacy.pendingSettlement);
+                }
+                NormalizeData(data);
+                FrameworkLog.Info("Save data migrated from version 5 to version 6.");
+                return data;
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Failed to migrate version 5 save data: {exception.Message}");
+                return null;
+            }
+        }
+
+        [Serializable]
+        private sealed class Version5SaveData
+        {
+            public int version;
+            public long lastSavedUtcTicks;
+            public PlayerSaveData player;
+            public CaravanSaveData caravan;
+            public TradeProgressSaveData tradeProgress;
+            public PendingSettlementSaveData pendingSettlement;
+            public RescueLoanSaveData rescueLoan;
+            public TradePreparationCommitSaveData tradePreparationCommit;
+            public WorldSaveData world;
+            public TutorialSaveData tutorial;
         }
 
         internal static void NormalizeRescueLoan(SaveData data)

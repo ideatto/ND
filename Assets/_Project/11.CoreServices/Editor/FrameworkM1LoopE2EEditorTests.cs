@@ -55,6 +55,7 @@ namespace ND.Framework.Editor
         [MenuItem("ND/Framework/Run M1 Loop + Economy E2E Checks")]
         public static void RunAll()
         {
+            RunMultiCaravanSaveDataChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
@@ -67,6 +68,61 @@ namespace ND.Framework.Editor
             RunPendingSettlementRestoreE2E(TestContext.Create());
             RunOfflineProgressE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
+        }
+
+        private static void RunMultiCaravanSaveDataChecks()
+        {
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            if (data.caravans.Count != 1 || string.IsNullOrEmpty(data.caravans[0].caravanId)
+                || data.selectedCaravanId != data.caravans[0].caravanId
+                || data.tradeProgressEntries.Count != 0 || data.pendingSettlements.Count != 0)
+            {
+                throw new InvalidOperationException("Multi-caravan new game defaults are invalid.");
+            }
+
+            var firstId = data.selectedCaravanId;
+            var second = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N"), foodAmount = 17 };
+            data.caravans.Add(second);
+            data.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = firstId,
+                activeTradeId = "trade-a",
+                state = TradeProgressState.Traveling
+            });
+            data.pendingSettlements.Add(new PendingSettlementSaveData
+            {
+                caravanId = firstId,
+                tradeId = "trade-a",
+                hasResult = true
+            });
+
+            TradeProgressSaveData otherProgress;
+            PendingSettlementSaveData otherPending;
+            if (SaveDataLookup.TryGetTradeProgress(data, second.caravanId, out otherProgress)
+                || SaveDataLookup.TryGetPendingSettlement(data, second.caravanId, "trade-a", out otherPending))
+            {
+                throw new InvalidOperationException("Multi-caravan child lookup leaked data across caravan IDs.");
+            }
+
+            data.selectedCaravanId = second.caravanId;
+            var json = JsonUtility.ToJson(data);
+            var restored = JsonUtility.FromJson<SaveData>(json);
+            JsonSaveService.NormalizeData(restored);
+            if (restored.caravans.Count != 2 || restored.selectedCaravanId != second.caravanId
+                || restored.caravan == null || restored.caravan.foodAmount != 17)
+            {
+                throw new InvalidOperationException("Multi-caravan JSON round-trip did not preserve IDs or selected data.");
+            }
+
+            restored.caravans[0].caravanId = string.Empty;
+            restored.selectedCaravanId = "missing";
+            JsonSaveService.NormalizeData(restored);
+            if (string.IsNullOrEmpty(restored.caravans[0].caravanId)
+                || restored.selectedCaravanId != restored.caravans[0].caravanId)
+            {
+                throw new InvalidOperationException("Multi-caravan ID normalization failed.");
+            }
         }
 
         private static void RunRescueLoanIntegrationChecks()
