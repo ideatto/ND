@@ -47,7 +47,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
     {
         var prepareDraft = new TradePrepareDraft
         {
-            selectedCaravanId = "smoke-caravan-prepare",
+            departureCaravanId = "smoke-caravan-prepare",
             currentTownId = town.TownId,
             selectedDestinationTownId = route.ToTownId,
             selectedRouteId = route.RouteId
@@ -65,9 +65,11 @@ public class DataViewDataSmokeTest : MonoBehaviour
         var draftChangeCount = 0;
         var draftStore = new TradePrepareDraftStore();
         draftStore.DraftChanged += _ => draftChangeCount++;
-        draftStore.ResetForCaravan("smoke-caravan-prepare", town.TownId);
+        draftStore.Reset(town.TownId);
         var storeResetTownMatched = draftStore.Current.currentTownId == town.TownId;
-        var storeResetCaravanMatched = draftStore.Current.selectedCaravanId == "smoke-caravan-prepare";
+        var storeResetHasNoCaravan = string.IsNullOrEmpty(draftStore.Current.departureCaravanId);
+        draftStore.SelectDepartureCaravan("smoke-caravan-prepare");
+        var storeSelectedCaravanMatched = draftStore.Current.departureCaravanId == "smoke-caravan-prepare";
         var mutableDraftSnapshot = draftStore.Current;
         mutableDraftSnapshot.selectedBuyItems.Add(new TradeItemBundle { itemId = "snapshot-only", quantity = 1 });
         var storeSnapshotIsolated = draftStore.Current.selectedBuyItems.Count == 0;
@@ -98,14 +100,15 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         draftStore.Cancel();
         var storeCancelClearedDraft = string.IsNullOrEmpty(draftStore.Current.currentTownId)
-            && string.IsNullOrEmpty(draftStore.Current.selectedCaravanId)
+            && string.IsNullOrEmpty(draftStore.Current.departureCaravanId)
             && draftStore.Current.SelectedMercenaryIds.Count == 0;
 
         Debug.Assert(firstMercenarySelection, "Draft Smoke Test failed: first mercenary selection should succeed.");
         Debug.Assert(!duplicateMercenarySelection, "Draft Smoke Test failed: duplicate mercenary selection should fail.");
         Debug.Assert(prepareDraft.SelectedMercenaryIds.Count == 1, "Draft Smoke Test failed: duplicate mercenary ID should not be stored.");
         Debug.Assert(storeResetTownMatched, "Draft Store Smoke Test failed: Reset should set currentTownId.");
-        Debug.Assert(storeResetCaravanMatched, "Draft Store Smoke Test failed: ResetForCaravan should preserve selectedCaravanId.");
+        Debug.Assert(storeResetHasNoCaravan, "Draft Store Smoke Test failed: opening preparation must not inherit Overview focus.");
+        Debug.Assert(storeSelectedCaravanMatched, "Draft Store Smoke Test failed: SelectDepartureCaravan should set the departure Caravan inside the Draft.");
         Debug.Assert(storeSnapshotIsolated, "Draft Store Smoke Test failed: modifying a snapshot should not mutate the stored draft.");
         Debug.Assert(storeAnimalSelectionUpdated, "Draft Store Smoke Test failed: animal selection should update without duplicates.");
         Debug.Assert(storeItemSelectionUpdated, "Draft Store Smoke Test failed: item selection should update without duplicates.");
@@ -216,6 +219,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var successInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -235,6 +239,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var notEnoughMoneyInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -254,6 +259,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var routeNotSelectedInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = false,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -273,6 +279,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var routeLockedInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = false,
             hasCargo = true,
@@ -292,6 +299,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var notEnoughFoodInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -311,6 +319,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var loadExceededInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -330,6 +339,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var multipleWarningInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -349,6 +359,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var noCargoInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = false,
@@ -368,6 +379,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var mixedDraftAnimalInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             isWagonRequired = true,
@@ -397,6 +409,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var inventorySlotExceededInput = new TradePrepareConditionInput
         {
+            isDepartureCaravanSelected = true,
             isRouteSelected = true,
             isRouteUnlocked = true,
             hasCargo = true,
@@ -416,9 +429,18 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var inventorySlotExceededCondition = conditionEvaluator.Evaluate(inventorySlotExceededInput);
 
+        // Opening TradePrepareUI starts with no departure Caravan even when Overview has UI focus.
+        var caravanNotSelectedCondition = conditionEvaluator.Evaluate(new TradePrepareConditionInput
+        {
+            isDepartureCaravanSelectionRequired = true,
+            isDepartureCaravanSelected = false,
+            isRouteSelected = true,
+            isRouteUnlocked = true
+        });
+
         var prepareViewData = new TradePrepareViewData
         {
-            selectedCaravanId = "smoke-caravan-prepare",
+            departureCaravanId = "smoke-caravan-prepare",
             currentTownId = town.TownId,
             currentTownName = town.DisplayName,
 
@@ -597,10 +619,15 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(prepareViewData.tradeItems.Length > 0, "Prepare Smoke Test failed: tradeItems should not be empty.");
         Debug.Assert(prepareViewData.loadedItems.Length > 0, "Prepare Smoke Test failed: loadedItems should not be empty.");
         Debug.Assert(prepareViewData.loadedItems[0].quantity > 0, "Prepare Smoke Test failed: loaded item quantity should be positive.");
-        Debug.Assert(prepareViewData.selectedCaravanId == "smoke-caravan-prepare", "Prepare Smoke Test failed: selectedCaravanId mismatch.");
+        Debug.Assert(prepareViewData.departureCaravanId == "smoke-caravan-prepare", "Prepare Smoke Test failed: departureCaravanId mismatch.");
         Debug.Assert(prepareViewData.selectedRouteId == route.RouteId, "Prepare Smoke Test failed: selectedRouteId mismatch.");
         Debug.Assert(prepareViewData.startCondition != null, "Prepare Smoke Test failed: startCondition should not be null.");
         Debug.Assert(prepareViewData.startCondition.canStart == successCondition.canStart, "Prepare Smoke Test failed: success condition mismatch.");
+
+        // Caravan Not Selected
+        Debug.Assert(caravanNotSelectedCondition != null, "Prepare Smoke Test failed: Caravan selection condition should not be null.");
+        Debug.Assert(!caravanNotSelectedCondition.canStart, "Prepare Smoke Test failed: departure must be blocked until TradePrepareUI selects a Caravan.");
+        Debug.Assert(!string.IsNullOrEmpty(caravanNotSelectedCondition.disabledReason), "Prepare Smoke Test failed: missing Caravan selection needs a disabled reason.");
 
         // Not Enough Money
         Debug.Log($"Prepare Fail: {notEnoughMoneyPrepareViewData.startCondition.disabledReason}");
@@ -719,8 +746,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
                 && overview.caravans.Length == TestCaravanOverviewViewDataProvider.SlotCount,
             "Caravan Overview Provider Smoke Test failed: the Provider must return all four non-null slot entries.");
         Debug.Assert(
-            overview.selectedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId,
-            "Caravan Overview Provider Smoke Test failed: the default selected Caravan was not preserved.");
+            overview.focusedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId,
+            "Caravan Overview Provider Smoke Test failed: the default focused Caravan was not preserved.");
 
         CaravanBlockViewData prepareBlock = FindCaravanBlock(overview.caravans, 0);
         CaravanBlockViewData travelingBlock = FindCaravanBlock(overview.caravans, 1);
@@ -751,11 +778,12 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertAvailableEmptyCaravanBlock(availableEmptyBlock);
         AssertLockedEmptyCaravanBlock(lockedEmptyBlock);
         AssertUniqueCaravanSlotIndices(overview.caravans);
-        AssertSelectedCaravanExists(overview);
+        AssertFocusedCaravanExists(overview);
         AssertTravelingCaravanContents(travelingBlock);
         AssertCaravanSettingViewData(prepareCaravan, travelingCaravan);
-        AssertCaravanOverviewProviderSelection();
+        AssertCaravanOverviewProviderFocus();
         AssertCaravanOverviewProviderSnapshotIsolation(provider);
+        AssertTradePrepareCaravanSelectionContract();
     }
 
     // Finds a fixed slot without assuming that a production Provider must return the array in slot order.
@@ -778,22 +806,22 @@ public class DataViewDataSmokeTest : MonoBehaviour
         return null;
     }
 
-    // Verifies that the temporary fixture supports valid selection previews and rejects unknown IDs.
-    private static void AssertCaravanOverviewProviderSelection()
+    // Verifies that the temporary fixture supports valid Overview focus and rejects unknown IDs.
+    private static void AssertCaravanOverviewProviderFocus()
     {
         ICaravanOverviewViewDataProvider travelingProvider =
             new TestCaravanOverviewViewDataProvider(TestCaravanOverviewViewDataProvider.TravelingCaravanId);
         CaravanOverviewViewData travelingOverview = travelingProvider.GetOverview();
-        AssertSelectedCaravanExists(travelingOverview);
+        AssertFocusedCaravanExists(travelingOverview);
         Debug.Assert(
-            travelingOverview.selectedCaravanId == TestCaravanOverviewViewDataProvider.TravelingCaravanId,
-            "Caravan Overview Provider Smoke Test failed: a valid traveling selection was not preserved.");
+            travelingOverview.focusedCaravanId == TestCaravanOverviewViewDataProvider.TravelingCaravanId,
+            "Caravan Overview Provider Smoke Test failed: a valid traveling focus was not preserved.");
 
         ICaravanOverviewViewDataProvider invalidProvider =
             new TestCaravanOverviewViewDataProvider("unknown-caravan");
         Debug.Assert(
-            string.IsNullOrEmpty(invalidProvider.GetOverview().selectedCaravanId),
-            "Caravan Overview Provider Smoke Test failed: an unknown Caravan ID must not become selected.");
+            string.IsNullOrEmpty(invalidProvider.GetOverview().focusedCaravanId),
+            "Caravan Overview Provider Smoke Test failed: an unknown Caravan ID must not become focused.");
     }
 
     // Verifies that mutable ViewData returned to UI code cannot corrupt the next Provider snapshot.
@@ -804,7 +832,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         CaravanBlockViewData mutablePrepareBlock = FindCaravanBlock(mutableOverview.caravans, 0);
         CaravanBlockViewData mutableTravelingBlock = FindCaravanBlock(mutableOverview.caravans, 1);
 
-        mutableOverview.selectedCaravanId = string.Empty;
+        mutableOverview.focusedCaravanId = string.Empty;
         mutablePrepareBlock.displayName = "Mutated by UI";
         mutableTravelingBlock.animalIcons[0].quantity = 999;
 
@@ -813,7 +841,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         CaravanBlockViewData freshTravelingBlock = FindCaravanBlock(freshOverview.caravans, 1);
 
         Debug.Assert(
-            freshOverview.selectedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId
+            freshOverview.focusedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId
                 && freshPrepareBlock.displayName == "Preparation Caravan"
                 && freshTravelingBlock.animalIcons[0].quantity == 2,
             "Caravan Overview Provider Smoke Test failed: UI mutations leaked into a later Provider snapshot.");
@@ -824,6 +852,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
     {
         var overview = new CaravanOverviewViewData();
         var block = new CaravanBlockViewData();
+        var prepare = new TradePrepareViewData();
 
         Debug.Assert(
             overview.caravans != null && overview.caravans.Length == 0,
@@ -837,6 +866,9 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(
             block.slotState == CaravanSlotState.Unknown,
             "Caravan Overview Smoke Test failed: an uninitialized slot must remain Unknown.");
+        Debug.Assert(
+            prepare.caravanOptions != null && prepare.caravanOptions.Length == 0,
+            "Trade Prepare Smoke Test failed: the default Caravan option array should be empty, not null.");
     }
 
     // Verifies that an occupied slot preserves the Framework-assigned runtime identity and state.
@@ -861,18 +893,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
             string.IsNullOrEmpty(block.lockedReason),
             "Caravan Overview Smoke Test failed: an unlocked occupied slot must not have a locked reason.");
 
-        if (runtimeCaravan.state == JourneyState.Prepare)
-        {
-            Debug.Assert(
-                block.canBeginTradePreparation && string.IsNullOrEmpty(block.tradePreparationBlockedReason),
-                "Caravan Overview Smoke Test failed: a Preparation Caravan should allow the route flow.");
-        }
-        else
-        {
-            Debug.Assert(
-                !block.canBeginTradePreparation && !string.IsNullOrEmpty(block.tradePreparationBlockedReason),
-                "Caravan Overview Smoke Test failed: a non-Preparation Caravan should explain why trade preparation is blocked.");
-        }
     }
 
     // Verifies that an unlocked empty slot can represent a future Caravan creation target.
@@ -918,9 +938,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(
             block.cargoIcons != null && block.cargoIcons.Length == 0,
             "Caravan Overview Smoke Test failed: an empty slot must not contain cargo summaries.");
-        Debug.Assert(
-            !block.canBeginTradePreparation && !string.IsNullOrEmpty(block.tradePreparationBlockedReason),
-            "Caravan Overview Smoke Test failed: an empty or locked slot must explain why trade preparation is blocked.");
     }
 
     // Detects ambiguous UI routing caused by two blocks claiming the same fixed slot.
@@ -946,8 +963,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
         }
     }
 
-    // Verifies that overview selection resolves to exactly one occupied Caravan block.
-    private static void AssertSelectedCaravanExists(CaravanOverviewViewData overview)
+    // Verifies that Overview focus resolves to exactly one occupied Caravan block.
+    private static void AssertFocusedCaravanExists(CaravanOverviewViewData overview)
     {
         var matchCount = 0;
 
@@ -956,7 +973,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
             CaravanBlockViewData block = overview.caravans[index];
             if (block != null
                 && block.slotState == CaravanSlotState.Occupied
-                && block.caravanId == overview.selectedCaravanId)
+                && block.caravanId == overview.focusedCaravanId)
             {
                 matchCount++;
             }
@@ -964,7 +981,118 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         Debug.Assert(
             matchCount == 1,
-            "Caravan Overview Smoke Test failed: selectedCaravanId must resolve to one occupied block.");
+            "Caravan Overview Smoke Test failed: focusedCaravanId must resolve to one occupied block.");
+    }
+
+    // Verifies that departure eligibility belongs to TradePrepare options, not Overview blocks.
+    private static void AssertTradePrepareCaravanSelectionContract()
+    {
+        ITradePrepareCaravanOptionProvider provider =
+            new TestTradePrepareCaravanOptionProvider();
+        TradePrepareCaravanOptionViewData[] options = provider.GetOptions();
+
+        var context = new TradePrepareBuildContext
+        {
+            caravanOptions = options
+        };
+        var controller = new TradePrepareFlowController(context);
+        controller.Initialize("smoke-town");
+
+        bool blockedOptionRejected = !controller.SelectDepartureCaravan(
+            TestTradePrepareCaravanOptionProvider.TravelingCaravanId);
+        bool unknownOptionRejected = !controller.SelectDepartureCaravan("unknown-caravan");
+        bool selectableOptionAccepted = controller.SelectDepartureCaravan(
+            TestTradePrepareCaravanOptionProvider.PrepareCaravanId);
+        TradePrepareViewData prepare = controller.CurrentViewData;
+
+        Debug.Assert(
+            prepare.caravanOptions.Length == TestTradePrepareCaravanOptionProvider.MaxOptionCount
+                && prepare.caravanOptions[0].canSelect
+                && !prepare.caravanOptions[1].canSelect
+                && !string.IsNullOrEmpty(prepare.caravanOptions[1].disabledReason),
+            "Trade Prepare Smoke Test failed: all four departure options must provide Provider-owned availability data.");
+        Debug.Assert(
+            blockedOptionRejected
+                && unknownOptionRejected
+                && selectableOptionAccepted
+                && prepare.departureCaravanId == prepare.caravanOptions[0].caravanId,
+            "Trade Prepare Smoke Test failed: only a selectable TradePrepare option may enter the Draft.");
+
+        bool departureCreated = TradePrepareCaravanFactory.TryCreateDeparture(
+            controller.CurrentDraft,
+            context,
+            out CaravanData departureCaravan,
+            out string createErrorCode,
+            out string createErrorMessage);
+        bool missingDepartureRejected = !TradePrepareCaravanFactory.TryCreateDeparture(
+            new TradePrepareDraft(),
+            context,
+            out _,
+            out string missingErrorCode,
+            out _);
+        bool unavailableDepartureRejected = !TradePrepareCaravanFactory.TryCreateDeparture(
+            new TradePrepareDraft
+            {
+                departureCaravanId = TestTradePrepareCaravanOptionProvider.TravelingCaravanId
+            },
+            context,
+            out _,
+            out string unavailableErrorCode,
+            out _);
+        bool unknownDepartureRejected = !TradePrepareCaravanFactory.TryCreateDeparture(
+            new TradePrepareDraft
+            {
+                departureCaravanId = "unknown-caravan"
+            },
+            context,
+            out _,
+            out string unknownErrorCode,
+            out _);
+        var duplicateContext = new TradePrepareBuildContext
+        {
+            caravanOptions = new[]
+            {
+                options[0],
+                options[0]
+            }
+        };
+        bool duplicateDepartureRejected = !TradePrepareCaravanFactory.TryCreateDeparture(
+            new TradePrepareDraft
+            {
+                departureCaravanId = TestTradePrepareCaravanOptionProvider.PrepareCaravanId
+            },
+            duplicateContext,
+            out _,
+            out string duplicateErrorCode,
+            out _);
+
+        Debug.Assert(
+            departureCreated
+                && departureCaravan != null
+                && departureCaravan.caravanId == TestTradePrepareCaravanOptionProvider.PrepareCaravanId
+                && string.IsNullOrEmpty(createErrorCode)
+                && string.IsNullOrEmpty(createErrorMessage),
+            "Trade Prepare Smoke Test failed: Factory did not preserve the validated departure Caravan ID.");
+        Debug.Assert(
+            missingDepartureRejected
+                && missingErrorCode == TradePrepareCaravanFactory.ErrorDepartureCaravanRequired
+                && unavailableDepartureRejected
+                && unavailableErrorCode == TradePrepareCaravanFactory.ErrorDepartureCaravanUnavailable
+                && unknownDepartureRejected
+                && unknownErrorCode == TradePrepareCaravanFactory.ErrorDepartureCaravanNotFound
+                && duplicateDepartureRejected
+                && duplicateErrorCode == TradePrepareCaravanFactory.ErrorDepartureCaravanDuplicate,
+            "Trade Prepare Smoke Test failed: Factory did not reject an invalid departure Caravan before gateway use.");
+
+        // Provider snapshots and ViewData projections must not expose a mutable shared option instance.
+        options[0].displayName = "Mutated by UI";
+        TradePrepareCaravanOptionViewData[] freshOptions = provider.GetOptions();
+        Debug.Assert(
+            freshOptions[0].displayName == "Preparation Caravan"
+                && prepare.caravanOptions[0].displayName == "Preparation Caravan",
+            "Trade Prepare Smoke Test failed: UI mutations leaked into Provider or ViewData option snapshots.");
+
+        controller.Dispose();
     }
 
     // Verifies icon lookup IDs and quantities for a populated traveling Caravan block.

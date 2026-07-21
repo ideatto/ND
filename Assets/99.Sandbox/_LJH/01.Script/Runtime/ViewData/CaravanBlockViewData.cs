@@ -54,13 +54,6 @@ public sealed class CaravanBlockViewData
     // The load setting panel receives its editable data from CaravanLoadSettingViewData.
     public CargoIconViewData[] cargoIcons = Array.Empty<CargoIconViewData>();
 
-    // Indicates whether the selected Caravan may enter the route and departure flow.
-    // The Provider supplies this permission so UI code does not reproduce gameplay validation.
-    public bool canBeginTradePreparation;
-
-    // Explains why trade preparation cannot begin for this Caravan.
-    // This value must remain empty while canBeginTradePreparation is true.
-    public string tradePreparationBlockedReason = string.Empty;
 }
 
 [System.Serializable]

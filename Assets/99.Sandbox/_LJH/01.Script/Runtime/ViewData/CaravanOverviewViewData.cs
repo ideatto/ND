@@ -3,9 +3,9 @@ using System;
 [System.Serializable]
 public sealed class CaravanOverviewViewData
 {
-    // Identifies the occupied Caravan currently selected by the player.
-    // UI code forwards this ID to Framework commands and never creates or derives it.
-    public string selectedCaravanId = string.Empty;
+    // Identifies the Caravan currently focused for overview details, setting, or load editing.
+    // This UI focus does not automatically select the Caravan for a departure Draft.
+    public string focusedCaravanId = string.Empty;
 
     // Contains every slot supplied by the Caravan feature, including occupied, empty, and locked slots.
     // UI code displays this array without owning or recalculating the gameplay slot limit.

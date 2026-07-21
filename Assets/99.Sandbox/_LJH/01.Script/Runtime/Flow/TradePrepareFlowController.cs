@@ -31,15 +31,9 @@ public sealed class TradePrepareFlowController : IDisposable
 
     public void Initialize(string currentTownId)
     {
-        InitializeForCaravan(string.Empty, currentTownId);
-    }
-
-    // Begins destination, route, and mercenary preparation for the Caravan selected in the overview.
-    // Legacy callers may continue using Initialize until the scene routes an explicit Caravan ID.
-    public void InitializeForCaravan(string caravanId, string currentTownId)
-    {
         IsCommitted = false;
-        draftStore.ResetForCaravan(caravanId, currentTownId);
+        // Opening TradePrepareUI never inherits the Caravan focused by Caravan Overview.
+        draftStore.Reset(currentTownId);
     }
 
     // Call this only after settlement claim succeeds. It releases the committed
@@ -104,6 +98,29 @@ public sealed class TradePrepareFlowController : IDisposable
         return result;
     }
 
+    // Accepts only a Provider-approved option so UI selection cannot bypass the displayed disabled state.
+    // Framework departure validation still performs the final authoritative check before saving.
+    public bool SelectDepartureCaravan(string caravanId)
+    {
+        if (IsCommitted || string.IsNullOrWhiteSpace(caravanId)
+            || CurrentViewData == null || CurrentViewData.caravanOptions == null)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < CurrentViewData.caravanOptions.Length; index++)
+        {
+            TradePrepareCaravanOptionViewData option = CurrentViewData.caravanOptions[index];
+            if (option != null && option.canSelect
+                && string.Equals(option.caravanId, caravanId, StringComparison.Ordinal))
+            {
+                draftStore.SelectDepartureCaravan(option.caravanId);
+                return true;
+            }
+        }
+
+        return false;
+    }
     public void SelectDestination(string townId) { if (!IsCommitted) draftStore.SelectDestination(townId); }
     public void SelectRoute(string routeId) { if (!IsCommitted) draftStore.SelectRoute(routeId); }
     public void SelectWagon(string wagonId) { if (!IsCommitted) draftStore.SelectWagon(wagonId); }
