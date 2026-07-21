@@ -27,9 +27,9 @@ public sealed class CaravanBlockViewData
     // Unknown exposes a missing Provider initialization instead of silently creating a valid-looking slot.
     public CaravanSlotState slotState = CaravanSlotState.Unknown;
 
-    // Provides the user-facing reason shown when this slot is locked.
-    // This value must remain empty unless slotState is Locked.
-    public string lockedReason = string.Empty;
+    // Explains the action or requirement that unlocks this slot.
+    // UI displays this hint through NoticeUI when the locked overlay is selected.
+    public string unlockHintText = string.Empty;
 
     // Identifies the Caravan assigned to this slot.
     // This value must remain empty unless slotState is Occupied.

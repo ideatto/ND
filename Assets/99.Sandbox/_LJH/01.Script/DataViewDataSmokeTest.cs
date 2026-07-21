@@ -745,9 +745,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
                 && overview.caravans != null
                 && overview.caravans.Length == TestCaravanOverviewViewDataProvider.SlotCount,
             "Caravan Overview Provider Smoke Test failed: the Provider must return all four non-null slot entries.");
-        Debug.Assert(
-            overview.focusedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId,
-            "Caravan Overview Provider Smoke Test failed: the default focused Caravan was not preserved.");
 
         CaravanBlockViewData prepareBlock = FindCaravanBlock(overview.caravans, 0);
         CaravanBlockViewData travelingBlock = FindCaravanBlock(overview.caravans, 1);
@@ -778,10 +775,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertAvailableEmptyCaravanBlock(availableEmptyBlock);
         AssertLockedEmptyCaravanBlock(lockedEmptyBlock);
         AssertUniqueCaravanSlotIndices(overview.caravans);
-        AssertFocusedCaravanExists(overview);
         AssertTravelingCaravanContents(travelingBlock);
         AssertCaravanSettingViewData(prepareCaravan, travelingCaravan);
-        AssertCaravanOverviewProviderFocus();
         AssertCaravanOverviewProviderSnapshotIsolation(provider);
         AssertTradePrepareCaravanSelectionContract();
     }
@@ -806,24 +801,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
         return null;
     }
 
-    // Verifies that the temporary fixture supports valid Overview focus and rejects unknown IDs.
-    private static void AssertCaravanOverviewProviderFocus()
-    {
-        ICaravanOverviewViewDataProvider travelingProvider =
-            new TestCaravanOverviewViewDataProvider(TestCaravanOverviewViewDataProvider.TravelingCaravanId);
-        CaravanOverviewViewData travelingOverview = travelingProvider.GetOverview();
-        AssertFocusedCaravanExists(travelingOverview);
-        Debug.Assert(
-            travelingOverview.focusedCaravanId == TestCaravanOverviewViewDataProvider.TravelingCaravanId,
-            "Caravan Overview Provider Smoke Test failed: a valid traveling focus was not preserved.");
-
-        ICaravanOverviewViewDataProvider invalidProvider =
-            new TestCaravanOverviewViewDataProvider("unknown-caravan");
-        Debug.Assert(
-            string.IsNullOrEmpty(invalidProvider.GetOverview().focusedCaravanId),
-            "Caravan Overview Provider Smoke Test failed: an unknown Caravan ID must not become focused.");
-    }
-
     // Verifies that mutable ViewData returned to UI code cannot corrupt the next Provider snapshot.
     private static void AssertCaravanOverviewProviderSnapshotIsolation(
         ICaravanOverviewViewDataProvider provider)
@@ -832,7 +809,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
         CaravanBlockViewData mutablePrepareBlock = FindCaravanBlock(mutableOverview.caravans, 0);
         CaravanBlockViewData mutableTravelingBlock = FindCaravanBlock(mutableOverview.caravans, 1);
 
-        mutableOverview.focusedCaravanId = string.Empty;
         mutablePrepareBlock.displayName = "Mutated by UI";
         mutableTravelingBlock.animalIcons[0].quantity = 999;
 
@@ -841,8 +817,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         CaravanBlockViewData freshTravelingBlock = FindCaravanBlock(freshOverview.caravans, 1);
 
         Debug.Assert(
-            freshOverview.focusedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId
-                && freshPrepareBlock.displayName == "Preparation Caravan"
+            freshPrepareBlock.displayName == "Preparation Caravan"
                 && freshTravelingBlock.animalIcons[0].quantity == 2,
             "Caravan Overview Provider Smoke Test failed: UI mutations leaked into a later Provider snapshot.");
     }
@@ -890,8 +865,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             block.state == runtimeCaravan.state,
             "Caravan Overview Smoke Test failed: runtime JourneyState was not preserved in ViewData.");
         Debug.Assert(
-            string.IsNullOrEmpty(block.lockedReason),
-            "Caravan Overview Smoke Test failed: an unlocked occupied slot must not have a locked reason.");
+            string.IsNullOrEmpty(block.unlockHintText),
+            "Caravan Overview Smoke Test failed: an occupied slot must not expose an unlock hint.");
 
     }
 
@@ -903,8 +878,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             block.slotState == CaravanSlotState.Empty,
             "Caravan Overview Smoke Test failed: an available creation slot must use the Empty state.");
         Debug.Assert(
-            string.IsNullOrEmpty(block.lockedReason),
-            "Caravan Overview Smoke Test failed: an available empty slot must not have a locked reason.");
+            string.IsNullOrEmpty(block.unlockHintText),
+            "Caravan Overview Smoke Test failed: an available empty slot must not expose an unlock hint.");
     }
 
     // Verifies that a locked empty slot provides a user-facing explanation.
@@ -915,8 +890,8 @@ public class DataViewDataSmokeTest : MonoBehaviour
             block.slotState == CaravanSlotState.Locked,
             "Caravan Overview Smoke Test failed: an unavailable slot must use the Locked state.");
         Debug.Assert(
-            !string.IsNullOrEmpty(block.lockedReason),
-            "Caravan Overview Smoke Test failed: a locked empty slot must provide lockedReason.");
+            !string.IsNullOrEmpty(block.unlockHintText),
+            "Caravan Overview Smoke Test failed: a locked empty slot must explain how it can be unlocked.");
     }
 
     // Applies the shared rule that an empty slot carries no Caravan-specific configuration.
@@ -961,27 +936,6 @@ public class DataViewDataSmokeTest : MonoBehaviour
                     "Caravan Overview Smoke Test failed: slotIndex values must be unique.");
             }
         }
-    }
-
-    // Verifies that Overview focus resolves to exactly one occupied Caravan block.
-    private static void AssertFocusedCaravanExists(CaravanOverviewViewData overview)
-    {
-        var matchCount = 0;
-
-        for (var index = 0; index < overview.caravans.Length; index++)
-        {
-            CaravanBlockViewData block = overview.caravans[index];
-            if (block != null
-                && block.slotState == CaravanSlotState.Occupied
-                && block.caravanId == overview.focusedCaravanId)
-            {
-                matchCount++;
-            }
-        }
-
-        Debug.Assert(
-            matchCount == 1,
-            "Caravan Overview Smoke Test failed: focusedCaravanId must resolve to one occupied block.");
     }
 
     // Verifies that departure eligibility belongs to TradePrepare options, not Overview blocks.
