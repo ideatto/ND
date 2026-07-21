@@ -12,9 +12,11 @@ Per-occurrence random results cannot be reconstructed from only a count unless t
 
 ## One-time investment quest
 
-The previous donation conversion and cumulative investment-progress model is removed. An investment quest is one-time, has no accumulated progress and no split payment. Its full cost is paid once. SaveData stores only result state such as `investmentQuestId`, `townId`, `isCompleted`, and `completedUtcTicks`; it does not copy definition costs.
+Status: Superseded for InvestmentQuest details by `Investment_Quest_SaveData_Contract.md` (decision date 2026-07-21). The Rescue Loan sections below remain active.
 
-Definitions in shared data or a ScriptableObject supply trading-currency cost, item costs, and unlock IDs. Completion validates and deducts currency and submitted Caravan trade goods, records completion, applies unlocks immediately, saves, then publishes completion. Home temporary inventory, construction materials, health consumables, ineligible items, and goods locked by Traveling or SettlementPending are excluded. Duplicate submissions are summed. Currency, per-Caravan goods, completion, and unlock mutations roll back together on save failure; a completed quest cannot deduct or reward twice.
+The previous donation conversion and cumulative investment-progress model is removed. An investment quest is one-time, has no accumulated progress and no split payment. Its full cost is paid once. SaveData stores a completion entry containing `investmentQuestId`, `townId`, and `completedUtcTicks`; entry existence is completion and no `isCompleted` or `isRewardClaimed` field is stored.
+
+Definitions in SharedGameData supply trading-currency cost, item costs, and unlock IDs. Completion validates and deducts currency and submitted Caravan trade goods, records completion, applies unlocks immediately, saves, then publishes completion. 거점 도시 인벤토리의 무역품, construction materials, ineligible items, and goods locked by Traveling or SettlementPending are excluded. Every submitted stack explicitly carries `caravanId`, `itemId`, and `amount`. Currency, per-Caravan goods, completion, and unlock mutations roll back together on save failure; a completed quest cannot deduct or reward twice. There is no separate Reward Claim.
 
 ## Rescue loan
 
