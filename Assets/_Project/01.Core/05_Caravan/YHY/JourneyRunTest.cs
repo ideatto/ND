@@ -30,15 +30,9 @@ public class JourneyRunTest : MonoBehaviour
     private GameTimeService timeService = new GameTimeService();
     private DateTime tradeStartUtc;   // 출발한 실제 시각
 
-    // [임시 보유금] 무역 사이에 자금을 이어주는 테스트용 지갑. (인스펙터에서 확인·초기값 조절)
-    //   3회 연속 무역에서 자금이 변하는 걸 보이려는 임시. 진짜 저장·지갑은 M3(정헌·천성욱).
-    [Header("보유금 (임시)")]
-    [SerializeField] private CurrencyState wallet = new CurrencyState { TradeMoney = 1000 };
-
-    // [임시] 판매 마을 이익 배율. 판매가 = 기본가 × 이 값.
-    //   1.0 = 이익 없음(구매가와 동일) / 1.5 = +50%. 인스펙터에서 조절해 이익 변화 확인.
-    [Header("판매 마을 이익 배율 (임시)")]
-    [SerializeField] private float sellPriceMultiplier = 1.5f;
+    // [2차 빌드에서 제거됨] 임시 지갑·판매 배율은 "도착 시 자동 판매"용이었다.
+    //   자동 판매가 규칙상 금지되어(판매는 도착 후 시장 화면에서 명시적으로만) 함께 걷어냈다.
+    //   이 스크립트는 이제 이동·식량·내구도·약탈 계산 확인 전용이다.
 
     [Header("시간 정보 (Play 중 표시)")]
     [SerializeField] private string TradeStartTime = "-";
@@ -232,8 +226,10 @@ public class JourneyRunTest : MonoBehaviour
                 JourneyResultData result = JourneyRunner.Settle(caravan);
                 PrintResult(result);
 
-                if (result != null && result.grade != JourneyResultGrade.Failed)   // ← 추가
-                    LogEconomyResult(caravan);                                     // ← 추가: 성공이면 판매가 계산
+                // [2차 빌드] 도착 시 자동 판매 제거.
+                //   판매는 도착 후 "시장 화면에서 플레이어가 명시한 품목·수량"으로만 이뤄진다.
+                //   (Progression 요청: 도착만으로 적재 상품을 자동 판매하지 않는다.
+                //    이동 결과 Claim은 이동 비용·손실·보상만 확정하고 cargo는 유지한다)
 
                 JourneyRunner.ClaimSettlement(caravan);
                 JourneyRunner.ResetToPrepare(caravan);
@@ -243,49 +239,6 @@ public class JourneyRunTest : MonoBehaviour
             yield return null;
         }
     }
-    // [임시] 도착 성공 시 cargo 상품을 정헌 계산기에 넣어 판매가/순이익을 콘솔에 표시.
-    //        cargo 없는 값(계절·재화 등)은 임시. 나중에 SO/정헌 값으로 교체.
-    private void LogEconomyResult(CaravanData caravan)
-    {
-        // 손실로 수량 0이 된 항목은 건너뛰고, 실제로 팔 게 있는(수량>0) 첫 무역품을 찾는다.
-        //  (수량 0을 정헌 계산기에 넘기면 INVALID_QUANTITY로 실패함)
-        CargoEntry sell = null;
-        foreach (CargoEntry e in caravan.cargo)
-        {
-            if (e != null && e.item != null && e.quantity > 0) { sell = e; break; }
-        }
-        if (sell == null) { Debug.Log("[정산] 판매할 무역품 없음(전량 손실)"); return; }
-
-        var input = new EconomyM1LoopInput();
-        // cargo에서 (팔 수 있는 첫 상품)  ※ [임시] 여러 종류는 아직 첫 상품만 계산 — 진짜 정산은 정헌 연동 시
-        input.PriceInput.TradeItemId = sell.item.id;
-        input.PriceInput.Quantity = sell.quantity;
-        input.PriceInput.BaseBuyPrice = sell.item.basePrice;
-        input.PriceInput.BaseSellPrice = (long)Mathf.Round(sell.item.basePrice * sellPriceMultiplier);   // [임시] 판매 마을 이익 배율 적용 (돈=long)
-        // 나머지 [임시]
-        input.TradeId = "trade_test";
-        input.PriceInput.RouteId = "route_01";
-        input.PriceInput.SeasonId = "summer";
-        input.CurrencyState = wallet.Clone();   // 현재 보유금을 넣기 (복제해서 계산 중 원본 보호)
-        input.FoodCost = 20;
-        input.PriceInput.FromTownId = "town_A";   // [임시] 추가
-        input.PriceInput.ToTownId = "town_B";   // [임시] 추가
-
-        long before = wallet.TradeMoney;                       // 정산 전 보유금
-        var r = EconomyM1LoopCalculator.Execute(input);
-        if (r.Success)
-        {
-            if (r.FinalCurrencyState != null)                  // 정산 후 보유금으로 갱신 → 다음 무역에 이어짐
-            {
-                wallet.TradeMoney = r.FinalCurrencyState.TradeMoney;
-                wallet.DevelopmentCurrency = r.FinalCurrencyState.DevelopmentCurrency;
-            }
-            Debug.Log($"[정산] {sell.item.itemName} {sell.quantity}개 → 판매가 {r.PriceResult.TotalSellPrice} / 순이익 {r.Settlement.NetProfit} / 보유금 {before} → {wallet.TradeMoney}");
-        }
-        else
-            Debug.Log($"[정산] 계산 실패: {r.ErrorCode}");
-    }
-
     private void PrintResult(JourneyResultData r)
     {
         if (r == null) { Debug.Log("[정산] 결과 없음(상태 불일치)"); return; }
