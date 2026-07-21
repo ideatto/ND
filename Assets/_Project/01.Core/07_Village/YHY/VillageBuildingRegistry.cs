@@ -115,28 +115,49 @@ public class VillageBuildingRegistry : MonoBehaviour
         List<VillageBuildingSaveData> savedBuildings = root.CurrentSaveData.player.villageBuildings;
         if (savedBuildings == null) return;
 
+        // 저장된 항목마다 "씬 반영"만 수행 — 저장은 이미 확정된 상태이므로 다시 쓰지 않는다.
         foreach (VillageBuildingSaveData saved in savedBuildings)
         {
-            if (saved == null || string.IsNullOrEmpty(saved.displayName) || saved.level < 1)
-                continue;
-
-            Building existing = FindByName(saved.displayName);
-            if (existing != null)
-            {
-                existing.level = saved.level;
-                continue;
-            }
-
-            CatalogEntry catalogEntry = FindCatalogByName(saved.displayName);
-            GameObject prefab = catalogEntry != null && catalogEntry.prefab != null
-                ? catalogEntry.prefab
-                : fallbackPrefab;
-            BuildNew(prefab, saved.displayName);
-
-            Building built = FindByName(saved.displayName);
-            if (built != null)
-                built.level = saved.level;
+            if (saved == null) continue;
+            ApplySavedBuildingLevel(saved.displayName, saved.level);
         }
+    }
+
+    /// <summary>
+    /// 이미 저장이 확정된 건물 레벨을 <b>씬에만</b> 반영한다.
+    /// (건설 Command가 SaveResult.Succeeded를 반환한 뒤 UI가 호출)
+    ///
+    /// [계약] Progression 요청 문서(0720_Progression_Requested_All_Teams) 기준:
+    ///  - prefab 생성 또는 기존 씬 건물의 level 적용만 수행한다.
+    ///  - SaveData.player.villageBuildings를 다시 변경하지 않고 Save()도 호출하지 않는다.
+    ///  - 씬 반영에 실패해도 이미 성공한 저장 데이터를 역변경하지 않는다.
+    ///    (재진입 시 RestoreFromSaveData()가 복구한다)
+    ///
+    /// [주의] 레벨을 "증가(++)"시키지 않고 targetLevel로 "설정"한다.
+    ///        AddOrUpgrade를 Command 성공 후 호출하면 레벨이 중복 증가하므로 금지.
+    /// </summary>
+    /// <param name="displayName">건물 종류 키(카탈로그 displayName과 일치).</param>
+    /// <param name="targetLevel">저장에 확정된 목표 레벨(1 이상).</param>
+    public void ApplySavedBuildingLevel(string displayName, int targetLevel)
+    {
+        if (string.IsNullOrEmpty(displayName) || targetLevel < 1) return;
+
+        Building existing = FindByName(displayName);
+        if (existing != null)
+        {
+            existing.level = targetLevel;   // 증가가 아니라 설정
+            return;
+        }
+
+        // 아직 씬에 없으면 새로 세우고 저장된 레벨을 입힌다.
+        CatalogEntry catalogEntry = FindCatalogByName(displayName);
+        GameObject prefab = catalogEntry != null && catalogEntry.prefab != null
+            ? catalogEntry.prefab
+            : fallbackPrefab;
+        BuildNew(prefab, displayName);
+
+        Building built = FindByName(displayName);
+        if (built != null) built.level = targetLevel;
     }
 
     /// <summary>
@@ -188,7 +209,14 @@ public class VillageBuildingRegistry : MonoBehaviour
             if (b.renderer != null) b.renderer.material.color = b.originalColor;
     }
 
-    /// <summary>카탈로그 종류를 짓거나(없으면 Lv.1) 레벨을 올린다(이미 있으면).</summary>
+    /// <summary>
+    /// 카탈로그 종류를 짓거나(없으면 Lv.1) 레벨을 올린다(이미 있으면). 씬 + SaveData 둘 다 변경.
+    ///
+    /// ⚠ [레거시 경로] 비용 검증 없이 바로 올리는 그레이박스 시절 경로다.
+    ///    건설 Command(CaravanBuildingConstructionCommand) 도입 후에는
+    ///    <b>Command 성공 뒤에 이 메서드를 호출하면 안 된다</b> — 레벨이 중복 증가하고
+    ///    SaveData를 두 번 쓰게 된다. 그 경우엔 ApplySavedBuildingLevel()을 쓸 것.
+    /// </summary>
     public void AddOrUpgrade(int catalogIndex)
     {
         if (catalogIndex < 0 || catalogIndex >= catalog.Count) return;

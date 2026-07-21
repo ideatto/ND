@@ -12,6 +12,13 @@
 //  · Core가 채우는 값 : grade, failureReason, cargoLost, durabilityLost,
 //                     그리고 계산값(travelSeconds·foodConsumed·departureLoad·finalEfficientLoad·overloadRatio). [M2]
 //  · Progression이 채우는 값 : revenue, cost, netProfit (Core는 뼈대만 만들어 넘김).
+//
+// [2차 빌드 변경] 도착 시 자동 판매 폐지.
+//  · 이 결과는 "이동 한 번"의 정산이다 — 여행/고용 비용, 수리·내구도, 이벤트 손익,
+//    이동 중 상품 손실, 발전 재화 보상까지만 담는다.
+//  · 적재 상품 판매는 여기 포함되지 않는다. 도착 후 시장 화면에서 플레이어가
+//    명시한 품목·수량으로만 별도 거래 Command로 처리한다.
+//  · 따라서 같은 cargo로 도착해도 이 결과의 판매 수익은 0이며, cargo는 유지된다.
 // =============================================================================
 
 using System;
@@ -52,7 +59,8 @@ public class JourneyResultData
     public float overloadRatio;        // 과적 비율 (적정 이하면 0)
 
     // ── Progression이 채움 (M1~M2) ───────────────
-    public long revenue;    // 판매 수익 (돈=long, 팀 결정)
-    public long cost;       // 유지비 등 비용 (돈=long, 팀 결정)
-    public long netProfit;  // 순이익 (돈=long, 팀 결정)
+    // [2차] 상품 판매는 여기 들어오지 않는다(도착 시 자동 판매 폐지 → 시장 거래 Command 담당).
+    public long revenue;    // 이동 정산 수익: 이벤트 손익·발전 재화 보상 등. 상품 판매 수익 아님 (돈=long)
+    public long cost;       // 이동 정산 비용: 여행비·고용비·수리/내구도·이동 중 손실 등 (돈=long)
+    public long netProfit;  // 순이익 = revenue - cost (돈=long)
 }
