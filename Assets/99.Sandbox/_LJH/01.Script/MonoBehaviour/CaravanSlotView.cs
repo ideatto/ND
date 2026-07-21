@@ -17,7 +17,8 @@ public sealed class CaravanSlotView : MonoBehaviour
     [SerializeField] private TMP_Text displayNameText;
     [SerializeField] private Button settingButton;
     [SerializeField] private Button cargoButton;
-    [SerializeField] private Button journeyButton;
+    [Tooltip("Displays JourneyState without acting as a button. Travel progress interaction belongs to the World Map UI.")]
+    [SerializeField] private GameObject journeyStateDisplay;
     [SerializeField] private TMP_Text journeyStateText;
 
     [Header("Empty State")]
@@ -108,9 +109,8 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         SetText(displayNameText, unknownSlotLabel);
         SetText(journeyStateText, "-");
-        SetActionButtonsVisible(false);
+        SetOccupiedControlsVisible(false);
         SetButtonsInteractable(false, false);
-        SetJourneyButtonInteractable(false);
         SetCreateButtonVisible(false);
         SetLockOverlayVisible(true, false);
     }
@@ -129,9 +129,8 @@ public sealed class CaravanSlotView : MonoBehaviour
         // Setting and Cargo panels decide whether their inner controls are editable.
         // Overview buttons remain available so a traveling Caravan can still be inspected.
         bool hasValidIdentity = !string.IsNullOrWhiteSpace(currentCaravanId);
-        SetActionButtonsVisible(true);
+        SetOccupiedControlsVisible(true);
         SetButtonsInteractable(hasValidIdentity, hasValidIdentity);
-        SetJourneyButtonInteractable(hasValidIdentity);
         SetCreateButtonVisible(false);
         SetLockOverlayVisible(false, false);
     }
@@ -145,9 +144,8 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         // UI raises slotIndex only. Framework owns Caravan creation, ID generation, and persistence.
         // Hiding the occupied-only actions lets CaravanInfo and CreateButton fill the entire row.
-        SetActionButtonsVisible(false);
+        SetOccupiedControlsVisible(false);
         SetButtonsInteractable(false, false);
-        SetJourneyButtonInteractable(false);
         SetCreateButtonVisible(true);
         SetLockOverlayVisible(false, false);
     }
@@ -161,9 +159,8 @@ public sealed class CaravanSlotView : MonoBehaviour
             ? defaultUnlockHintText
             : unlockHintText;
         isCreatePending = false;
-        SetActionButtonsVisible(false);
+        SetOccupiedControlsVisible(false);
         SetButtonsInteractable(false, false);
-        SetJourneyButtonInteractable(false);
         SetCreateButtonVisible(true);
         if (createButton != null)
         {
@@ -187,10 +184,9 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         isCreatePending = pending;
 
-        // Empty and pending slots cannot open configuration or journey actions.
-        SetActionButtonsVisible(false);
+        // Empty and pending slots do not expose occupied-only actions or JourneyState presentation.
+        SetOccupiedControlsVisible(false);
         SetButtonsInteractable(false, false);
-        SetJourneyButtonInteractable(false);
         SetCreateButtonVisible(true);
 
         if (createButton != null)
@@ -238,9 +234,10 @@ public sealed class CaravanSlotView : MonoBehaviour
         }
     }
 
-    private void SetActionButtonsVisible(bool visible)
+    private void SetOccupiedControlsVisible(bool visible)
     {
-        // These controls describe an existing Caravan and must not consume layout width for Empty slots.
+        // Setting/Cargo remain actions, while JourneyState is display-only and never receives a click listener.
+        // All three describe an existing Caravan and must not consume layout width for Empty slots.
         if (settingButton != null)
         {
             settingButton.gameObject.SetActive(visible);
@@ -251,17 +248,9 @@ public sealed class CaravanSlotView : MonoBehaviour
             cargoButton.gameObject.SetActive(visible);
         }
 
-        if (journeyButton != null)
+        if (journeyStateDisplay != null)
         {
-            journeyButton.gameObject.SetActive(visible);
-        }
-    }
-
-    private void SetJourneyButtonInteractable(bool interactable)
-    {
-        if (journeyButton != null)
-        {
-            journeyButton.interactable = interactable;
+            journeyStateDisplay.SetActive(visible);
         }
     }
 
