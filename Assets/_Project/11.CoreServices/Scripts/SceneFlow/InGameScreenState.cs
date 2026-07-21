@@ -7,7 +7,7 @@
  * - 저장 데이터의 무역 진행 상태를 UI panel 전환 상태로 변환하는 기준을 제공한다.
  *
  * Main Features
- * - 준비, 이동, 정산 화면 상태를 enum으로 제공한다.
+ * - 준비, 이동, 정산, 마을 화면 상태를 enum으로 제공한다.
  *
  * Usage for Team Members
  * - InGameScreenStateRouter를 통해 상태를 변경하고 FrameworkEvents.InGameScreenChanged를 구독해 UI를 갱신한다.
@@ -38,6 +38,11 @@ namespace ND.Framework
         /// <summary>
         /// 무역 정산 결과 확인 화면이다.
         /// </summary>
-        Settlement
+        Settlement,
+
+        /// <summary>
+        /// 정산 claim과 목적지 위치 저장이 완료된 마을 화면이다.
+        /// </summary>
+        Town
     }
 }
