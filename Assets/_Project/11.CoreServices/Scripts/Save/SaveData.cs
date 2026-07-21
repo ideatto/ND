@@ -4,14 +4,14 @@
  *
  * Script Purpose
  * - CoreServices가 JSON으로 저장하는 runtime 저장 데이터 schema를 정의한다.
- * - 플레이어, caravan, 무역 진행, 월드, 튜토리얼 상태를 하나의 SaveData 객체 그래프로 묶는다.
+ * - 플레이어, ID 기반 다중 caravan, 무역 진행, 월드, 튜토리얼 상태를 하나의 SaveData 객체 그래프로 묶는다.
  *
  * Main Features
  * - 현재 저장 schema version을 제공한다.
  * - Core caravan runtime data(M2 포함)를 직렬화 가능한 DTO 형태로 보관한다.
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
- * - SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
+ * - caravan별 SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
  * - 구조 대출 원금, 잔액, 활성 여부와 출발 전 제한 상태를 저장한다.
  * - 상점 재고(marketInventories)와 구매 준비(marketPurchasePreparation)를 WorldSaveData에 저장한다.
  * - 거점 창고(homeInventory)와 마을 건물 진행(villageBuildings)을 PlayerSaveData에 저장한다.
@@ -33,7 +33,7 @@
  * - Unity JsonUtility 직렬화를 위해 DTO는 public field 중심으로 구성되어 있다.
  * - 시간 값은 UTC DateTime.Ticks 기준으로 저장된다.
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
- * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
+ * - version 6부터 caravans, tradeProgressEntries, pendingSettlements와 selectedCaravanId를 사용한다.
  * - 상점 재고·구매 준비 필드는 version 5를 유지한 채 추가되며, 구 세이브의 null은 JsonSaveService.NormalizeData가 보정한다.
  * - 거점 창고·마을 건물 필드도 version 5를 유지한 채 추가되며, 구 세이브의 null은 NormalizeData가 보정한다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
@@ -54,10 +54,17 @@ namespace ND.Framework
     [Serializable]
     public sealed class SaveData
     {
+        public SaveData()
+        {
+            var defaultCaravan = new CaravanSaveData { caravanId = SaveDataLookup.NewCaravanId() };
+            caravans.Add(defaultCaravan);
+            selectedCaravanId = defaultCaravan.caravanId;
+        }
+
         /// <summary>
         /// 현재 코드가 지원하는 저장 데이터 schema version이다.
         /// </summary>
-        public const int CurrentVersion = 5;
+        public const int CurrentVersion = 6;
 
         /// <summary>
         /// 저장 데이터 schema version이다.
@@ -77,17 +84,64 @@ namespace ND.Framework
         /// <summary>
         /// caravan 구성과 현재 여정 상태를 저장하는 데이터이다.
         /// </summary>
-        public CaravanSaveData caravan = new CaravanSaveData();
+        public List<CaravanSaveData> caravans = new List<CaravanSaveData>();
 
         /// <summary>
         /// active trade ID, route ID, 진행 상태, 시간 정보를 저장하는 데이터이다.
         /// </summary>
-        public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
+        public List<TradeProgressSaveData> tradeProgressEntries = new List<TradeProgressSaveData>();
 
         /// <summary>
         /// SettlementPending 대기 정산 결과이다. 수령 전 재실행 복구에 사용한다.
         /// </summary>
-        public PendingSettlementSaveData pendingSettlement = new PendingSettlementSaveData();
+        public List<PendingSettlementSaveData> pendingSettlements = new List<PendingSettlementSaveData>();
+
+        /// <summary>
+        /// 마지막으로 선택한 caravan ID이다. 기존 단일 runtime은 이 caravan을 active caravan으로 사용한다.
+        /// </summary>
+        public string selectedCaravanId = string.Empty;
+
+        /// <summary>기존 단일 runtime 호출부에 선택 caravan을 제공하는 비직렬화 호환 접근자이다.</summary>
+        public CaravanSaveData caravan
+        {
+            get
+            {
+                CaravanSaveData value;
+                return SaveDataLookup.TryGetSelectedCaravan(this, out value) ? value : null;
+            }
+            set
+            {
+                SaveDataLookup.SetSelectedCaravan(this, value);
+            }
+        }
+
+        /// <summary>기존 단일 runtime 호출부에 선택 caravan의 progress를 제공하는 비직렬화 호환 접근자이다.</summary>
+        public TradeProgressSaveData tradeProgress
+        {
+            get
+            {
+                TradeProgressSaveData value;
+                return SaveDataLookup.TryGetTradeProgress(this, selectedCaravanId, out value) ? value : null;
+            }
+            set
+            {
+                SaveDataLookup.SetTradeProgress(this, selectedCaravanId, value);
+            }
+        }
+
+        /// <summary>기존 단일 runtime 호출부에 선택 caravan의 pending settlement를 제공하는 비직렬화 호환 접근자이다.</summary>
+        public PendingSettlementSaveData pendingSettlement
+        {
+            get
+            {
+                PendingSettlementSaveData value;
+                return SaveDataLookup.TryGetPendingSettlement(this, selectedCaravanId, null, out value) ? value : null;
+            }
+            set
+            {
+                SaveDataLookup.SetPendingSettlement(this, selectedCaravanId, value);
+            }
+        }
 
         /// <summary>
         /// 구조 대출의 발급·상환 및 출발 전 제한 상태이다.
@@ -195,6 +249,9 @@ namespace ND.Framework
     [Serializable]
     public sealed class CaravanSaveData
     {
+        /// <summary>배열 위치와 무관하게 caravan을 식별하는 고유 ID이다.</summary>
+        public string caravanId = string.Empty;
+
         /// <summary>
         /// 선택된 wagon 정보이다.
         /// </summary>
@@ -401,6 +458,9 @@ namespace ND.Framework
     [Serializable]
     public sealed class TradeProgressSaveData
     {
+        /// <summary>이 progress를 소유한 caravan ID이다.</summary>
+        public string caravanId = string.Empty;
+
         /// <summary>
         /// 현재 진행 또는 정산 중인 무역 ID이다.
         /// </summary>
