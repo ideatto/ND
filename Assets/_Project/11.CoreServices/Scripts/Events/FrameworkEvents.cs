@@ -74,7 +74,7 @@ namespace ND.Framework
         /// <summary>
         /// 무역 정산 결과가 생성되어 settlement UI가 표시할 수 있을 때 발생한다.
         /// </summary>
-        public static event Action<string, JourneyResultData> TradeSettlementReady;
+        public static event Action<string, string, JourneyResultData> TradeSettlementReady;
 
         /// <summary>
         /// 인게임 화면 상태가 preparation, traveling, settlement 중 하나로 변경될 때 발생한다.
@@ -187,11 +187,11 @@ namespace ND.Framework
         /// <remarks>
         /// SettlementUiBridge가 이 이벤트를 받아 pending settlement를 캐시하고 settlement 화면으로 이동시킨다.
         /// </remarks>
-        public static void RaiseTradeSettlementReady(string tradeId, JourneyResultData result)
+        public static void RaiseTradeSettlementReady(string caravanId, string tradeId, JourneyResultData result)
         {
             // UI bridge가 active trade와 result를 검증할 수 있도록 두 값을 그대로 전달한다.
             FrameworkLog.Info($"TradeSettlementReady event raised. TradeId: {tradeId}");
-            TradeSettlementReady?.Invoke(tradeId, result);
+            TradeSettlementReady?.Invoke(caravanId, tradeId, result);
         }
 
         /// <summary>
