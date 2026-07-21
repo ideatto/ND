@@ -718,7 +718,14 @@ namespace ND.Framework
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             FrameworkEvents.RaiseTradeSettlementReady(settlementTradeId, result);
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+
+            // A runtime arrival policy may atomically claim during the ready event. Do not
+            // overwrite its Town route with a stale Settlement request after the callback.
+            if (saveData.tradeProgress != null
+                && saveData.tradeProgress.state == TradeProgressState.SettlementPending)
+            {
+                inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            }
 
             return true;
         }

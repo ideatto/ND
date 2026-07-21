@@ -7,10 +7,6 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-using ND.Framework.CargoLoading;
-using ND.Framework;
-#endif
 
 public sealed class CargoLoadingPanelController : MonoBehaviour
 {
@@ -52,19 +48,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     [SerializeField] private UnityEvent onBackRequested = new UnityEvent();
     [SerializeField] private UnityEvent onTradeCancelled = new UnityEvent();
     [SerializeField] private UnityEvent onMercenaryHireRequested = new UnityEvent();
-
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-    [Header("Temporary market persistence integration")]
-    [SerializeField] private bool enablePersistentMarketIntegration = true;
-    [SerializeField] private string persistentMarketId = "testjjh-market";
-    [SerializeField, Min(1)] private int generatedMarketItemCount = 4;
-    [SerializeField, Min(1)] private int generatedMaximumStock = 30;
-    [SerializeField, Min(1f)] private float marketRefreshIntervalSeconds = 3600f;
-    [SerializeField] private int marketWorldSeed = 20260714;
-
-    private MarketInventorySession persistentMarketSession;
-    private bool persistentPurchaseCommitted;
-#endif
 
     private sealed class LoadedLine
     {
@@ -109,6 +92,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private int selectedShopIndex = -1;
     private int selectedPurchaseCount = 1;
     private long pendingPurchaseCost;
+    private bool cargoEditingEnabled = true;
     private Coroutine panelAnimation;
     private Coroutine popupAnimation;
 
@@ -134,7 +118,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         .Where(line => line.Item != null && IsFood(line.Item))
         .Sum(line => line.Quantity);
     public bool CanProceed => pendingPurchaseCost <= currentGold
-        && CurrentLoad <= MaximumLoad + 0.0001f;
+        && CurrentLoad <= MaximumLoad + 0.0001f
+        && LoadedSlotCount <= InventorySlotLimit;
+    private int LoadedSlotCount => loadedLines.Count(line => line.Item != null && line.Quantity > 0);
     public long MercenaryBudget => Math.Max(0L, currentGold - pendingPurchaseCost);
 
     private float GetCoreMaximumLoad()
@@ -176,12 +162,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         ApplySection9LayoutAndPalette();
         EnsureMercenaryHirePanel();
         BuildPurchasePopup();
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (!TryInitializePersistentMarket())
-            InitializeState();
-#else
         InitializeState();
-#endif
         WireInteractions();
         RefreshAll();
         ClosePurchasePopupImmediate();
@@ -224,14 +205,17 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// Restores cargo quantities already held by the authoritative preparation draft.
     /// Configure clears presentation state first, so returning to S4 must rebuild it.
     /// </summary>
-    public void RestoreSelectedCargo(IReadOnlyList<TradeItemViewData> selectedItems)
+    public void RestoreSelectedCargo(
+        IReadOnlyList<TradeItemViewData> selectedItems,
+        bool useOwnedCargo = false)
     {
         if (selectedItems == null || shopItems == null)
             return;
 
         foreach (TradeItemViewData selected in selectedItems)
         {
-            if (selected == null || selected.selectedBuyAmount <= 0 || string.IsNullOrEmpty(selected.itemId))
+            int quantityToLoad = useOwnedCargo ? selected?.ownedAmount ?? 0 : selected?.selectedBuyAmount ?? 0;
+            if (selected == null || quantityToLoad <= 0 || string.IsNullOrEmpty(selected.itemId))
                 continue;
 
             int shopIndex = Array.FindIndex(
@@ -240,16 +224,32 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (shopIndex < 0 || shopIndex >= remainingStocks.Length)
                 continue;
 
-            int quantity = Mathf.Min(selected.selectedBuyAmount, remainingStocks[shopIndex]);
-            if (quantity <= 0 || !TryAddLoadedQuantity(shopItems[shopIndex], quantity, shopItems[shopIndex].BaseBuyPrice))
+            int quantity = useOwnedCargo
+                ? quantityToLoad
+                : Mathf.Min(quantityToLoad, remainingStocks[shopIndex]);
+            long unitPrice = useOwnedCargo ? 0L : shopItems[shopIndex].BaseBuyPrice;
+            if (quantity <= 0 || !TryAddLoadedQuantity(
+                    shopItems[shopIndex],
+                    quantity,
+                    unitPrice,
+                    ignoreSlotCapacity: useOwnedCargo))
                 continue;
 
-            remainingStocks[shopIndex] -= quantity;
-            pendingPurchaseCost += shopItems[shopIndex].BaseBuyPrice * quantity;
+            if (!useOwnedCargo)
+            {
+                remainingStocks[shopIndex] -= quantity;
+                pendingPurchaseCost += shopItems[shopIndex].BaseBuyPrice * quantity;
+            }
         }
 
         RefreshAll();
         NotifyLoadChanged();
+    }
+
+    public void SetCargoEditingEnabled(bool enabled)
+    {
+        cargoEditingEnabled = enabled;
+        ClosePurchasePopupImmediate();
     }
 
     public void Configure(
@@ -348,19 +348,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void CancelTradePreparation()
     {
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (persistentMarketSession != null)
-        {
-            CargoIntegrationResult result = persistentMarketSession.CancelPreparation(BuildPersistentRequests());
-            if (!result.Success)
-            {
-                Debug.LogError($"Cargo cancellation failed: {result.ErrorCode}", this);
-                return;
-            }
-
-            currentGold = result.TradingCurrencyAfter;
-        }
-#endif
         ResetCargo();
         HidePanel(() => onTradeCancelled.Invoke());
     }
@@ -372,23 +359,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         if (mercenaryHireController == null)
             EnsureMercenaryHirePanel();
-
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (persistentMarketSession != null)
-        {
-            CargoIntegrationResult result = persistentMarketSession.Commit(BuildPersistentRequests());
-            if (!result.Success)
-            {
-                Debug.LogError($"Cargo purchase commit failed: {result.ErrorCode}", this);
-                RefreshAll();
-                return;
-            }
-
-            currentGold = result.TradingCurrencyAfter;
-            pendingPurchaseCost = 0L;
-            persistentPurchaseCommitted = true;
-        }
-#endif
 
         ClosePurchasePopupImmediate();
         HidePanel(() =>
@@ -414,38 +384,20 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void CancelTradeFromMercenaryHire()
     {
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (persistentMarketSession != null)
-        {
-            CargoIntegrationResult result = persistentMarketSession.CancelPreparation(BuildPersistentRequests());
-            if (!result.Success)
-            {
-                Debug.LogError($"Cargo cancellation failed: {result.ErrorCode}", this);
-                return;
-            }
-
-            currentGold = result.TradingCurrencyAfter;
-        }
-#endif
         ResetCargo();
         onTradeCancelled.Invoke();
     }
 
     public void DecrementLoadedSlot(int slotIndex)
     {
+        if (!cargoEditingEnabled)
+            return;
+
         LoadedLine line = GetVisibleLoadedLine(slotIndex);
         if (line == null)
             return;
 
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (!EnsurePersistentDraftEditable())
-            return;
-#endif
-
         ReturnToShop(line, 1);
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        PersistCurrentDraft();
-#endif
         RefreshAll();
         // Publish the complete snapshot because one unit may remove the final visible stack.
         NotifyLoadChanged();
@@ -457,15 +409,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (line == null)
             return;
 
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (!EnsurePersistentDraftEditable())
-            return;
-#endif
-
         ReturnToShop(line, line.Quantity);
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        PersistCurrentDraft();
-#endif
         RefreshAll();
         // A removed slot must also remove its item from Runtime Draft.
         NotifyLoadChanged();
@@ -1089,6 +1033,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 foodWarningText.text = "최대 적재량을 초과했습니다.";
                 foodWarningText.color = new Color(1f, 0.34f, 0.3f);
             }
+            else if (LoadedSlotCount > InventorySlotLimit)
+            {
+                foodWarningText.text = "적재 가능한 슬롯 수를 초과했습니다.";
+                foodWarningText.color = new Color(1f, 0.34f, 0.3f);
+            }
             else
             {
                 foodWarningText.text = "용병 고용으로 진행할 수 있습니다.";
@@ -1102,10 +1051,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private void OpenPurchasePopup(int shopIndex)
     {
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (!EnsurePersistentDraftEditable())
+        if (!cargoEditingEnabled)
             return;
-#endif
+
         if (shopIndex < 0 || shopIndex >= shopItems.Length || shopItems[shopIndex] == null)
             return;
 
@@ -1247,6 +1195,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private void ConfirmPurchase()
     {
+        if (!cargoEditingEnabled)
+            return;
+
         if (selectedShopIndex < 0 || selectedPurchaseCount <= 0)
             return;
 
@@ -1261,10 +1212,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         remainingStocks[selectedShopIndex] -= purchaseCount;
         pendingPurchaseCost += item.BaseBuyPrice * purchaseCount;
-
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        PersistCurrentDraft();
-#endif
 
         ClosePurchasePopup();
         RefreshAll();
@@ -1309,9 +1256,14 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         LoadChanged?.Invoke(snapshot);
     }
 
-    private bool TryAddLoadedQuantity(TradeItemData item, int quantity, long unitPrice)
+    private bool TryAddLoadedQuantity(
+        TradeItemData item,
+        int quantity,
+        long unitPrice,
+        bool ignoreSlotCapacity = false)
     {
-        if (item == null || quantity <= 0 || GetAvailableSlotCapacity(item) < quantity)
+        if (item == null || quantity <= 0 ||
+            (!ignoreSlotCapacity && GetAvailableSlotCapacity(item) < quantity))
             return false;
 
         int remaining = quantity;
@@ -1372,135 +1324,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private void ResetCargo()
     {
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-        if (persistentMarketSession != null)
-            ApplyPersistentMarketStocks();
-#endif
         InitializeState();
         ClosePurchasePopupImmediate();
         RefreshAll();
         // An empty snapshot clears every cargo item from Runtime Draft after an explicit reset.
         NotifyLoadChanged();
     }
-
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
-    private bool TryInitializePersistentMarket()
-    {
-        if (!enablePersistentMarketIntegration)
-            return false;
-
-        FrameworkRoot root = FrameworkRoot.Instance;
-        if (root == null || root.CurrentSaveData == null || root.SaveService == null || root.GameTime == null)
-        {
-            Debug.LogWarning("Persistent market integration is waiting for FrameworkRoot; prototype data will be used.", this);
-            return false;
-        }
-
-        string marketId = string.IsNullOrWhiteSpace(persistentMarketId)
-            ? root.CurrentSaveData.player?.currentTownId
-            : persistentMarketId;
-        TradeItemData[] catalog = shopItems?.Where(item => item != null).ToArray()
-            ?? Array.Empty<TradeItemData>();
-
-        bool opened = MarketInventorySession.TryOpen(
-            root.CurrentSaveData,
-            root.SaveService,
-            root.GameTime,
-            marketId,
-            catalog,
-            Math.Min(Math.Max(1, generatedMarketItemCount), Math.Max(1, shopSlots.Length)),
-            generatedMaximumStock,
-            marketRefreshIntervalSeconds,
-            marketWorldSeed,
-            out persistentMarketSession,
-            out string error);
-
-        if (!opened)
-        {
-            Debug.LogError($"Persistent market initialization failed: {error}", this);
-            return false;
-        }
-
-        ApplyPersistentMarketStocks();
-        currentGold = persistentMarketSession.TradingCurrency;
-        InitializeState();
-        RestorePersistentCargo();
-        return true;
-    }
-
-    private void ApplyPersistentMarketStocks()
-    {
-        IReadOnlyList<MarketStockView> stocks = persistentMarketSession.Stocks;
-        shopItems = stocks.Select(stock => stock.Item).ToArray();
-        initialStocks = stocks.Select(stock => stock.Quantity).ToArray();
-    }
-
-    private void RestorePersistentCargo()
-    {
-        IReadOnlyList<CargoPurchaseRequest> savedCargo = persistentMarketSession.RestoreSavedCargo();
-        persistentPurchaseCommitted = persistentMarketSession.IsCommitted;
-        foreach (CargoPurchaseRequest saved in savedCargo)
-        {
-            int shopIndex = Array.IndexOf(shopItems, saved.Item);
-            if (shopIndex < 0)
-                continue;
-
-            if (!TryAddLoadedQuantity(saved.Item, saved.Quantity, saved.UnitPrice))
-            {
-                Debug.LogWarning($"Saved cargo exceeds the visible slot capacity: {saved.Item.ItemId}", this);
-                continue;
-            }
-
-            if (!persistentPurchaseCommitted)
-            {
-                remainingStocks[shopIndex] = Math.Max(0, remainingStocks[shopIndex] - saved.Quantity);
-                pendingPurchaseCost = checked(pendingPurchaseCost + saved.UnitPrice * saved.Quantity);
-            }
-        }
-    }
-
-    private List<CargoPurchaseRequest> BuildPersistentRequests()
-    {
-        return loadedLines
-            .Where(line => line.Item != null && line.Quantity > 0)
-            .GroupBy(line => line.Item)
-            .Select(group => new CargoPurchaseRequest
-            {
-                Item = group.Key,
-                Quantity = group.Sum(line => line.Quantity),
-                UnitPrice = group.First().UnitPrice
-            })
-            .ToList();
-    }
-
-    private bool EnsurePersistentDraftEditable()
-    {
-        if (persistentMarketSession == null || !persistentPurchaseCommitted)
-            return true;
-
-        CargoIntegrationResult result = persistentMarketSession.ReopenCommittedAsDraft(BuildPersistentRequests());
-        if (!result.Success)
-        {
-            Debug.LogError($"Committed cargo could not be reopened: {result.ErrorCode}", this);
-            return false;
-        }
-
-        currentGold = result.TradingCurrencyAfter;
-        pendingPurchaseCost = loadedLines.Sum(line => line.UnitPrice * line.Quantity);
-        persistentPurchaseCommitted = false;
-        return true;
-    }
-
-    private void PersistCurrentDraft()
-    {
-        if (persistentMarketSession == null)
-            return;
-
-        CargoIntegrationResult result = persistentMarketSession.PersistDraft(BuildPersistentRequests());
-        if (!result.Success)
-            Debug.LogError($"Cargo draft persistence failed: {result.ErrorCode}", this);
-    }
-#endif
 
     private void HidePanel(Action afterHidden)
     {

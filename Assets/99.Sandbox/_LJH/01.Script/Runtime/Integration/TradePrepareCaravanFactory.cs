@@ -28,7 +28,7 @@ public static class TradePrepareCaravanFactory
             animal => animal != null ? animal.DraftAnimalId : string.Empty);
 
         WagonData selectedWagon = TradePrepareViewDataBuilder.FindWagon(wagons, draft.selectedWagonId);
-        Dictionary<string, int> cargo = CreateFinalCargoQuantities(draft);
+        Dictionary<string, int> cargo = CreateFinalCargoQuantities(draft, saveData);
         CaravanData caravan = TradePrepareViewDataBuilder.CreatePreviewCaravan(
             cargo,
             items,
@@ -76,5 +76,14 @@ public static class TradePrepareCaravanFactory
     {
         return TradePrepareViewDataBuilder.CreateFinalCargoQuantities(
             draft ?? new TradePrepareDraft());
+    }
+
+    public static Dictionary<string, int> CreateFinalCargoQuantities(
+        TradePrepareDraft draft,
+        ND.Framework.SaveData saveData)
+    {
+        return TradePrepareViewDataBuilder.CreateFinalCargoQuantities(
+            draft ?? new TradePrepareDraft(),
+            saveData);
     }
 }

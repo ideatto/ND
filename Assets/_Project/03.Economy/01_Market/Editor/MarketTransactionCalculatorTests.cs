@@ -105,6 +105,54 @@ namespace ND.Economy.Editor
             Assert.That(result.FailureReason, Is.EqualTo(MarketTransactionFailureReason.Overflow));
         }
 
+        [Test]
+        public void CalculateMarketTransaction_RejectsCargoSlotOverflow()
+        {
+            MarketTransactionInput input = Input(new MarketTransactionItemInput
+            {
+                ItemId = "wood",
+                CargoQuantityBefore = 10,
+                MarketStockBefore = 10,
+                BuyQuantity = 1,
+                BuyUnitPrice = 10L,
+                UnitWeight = 0f,
+                MaxStackQuantity = 10
+            });
+            input.CurrentCargoSlots = 1;
+            input.MaximumCargoSlots = 1;
+
+            MarketTransactionResult result = MarketTransactionCalculator.CalculateMarketTransaction(input);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.FailureReason, Is.EqualTo(MarketTransactionFailureReason.CargoSlotExceeded));
+            Assert.That(result.CargoSlotsAfter, Is.EqualTo(result.CargoSlotsBefore));
+        }
+
+        [Test]
+        public void CalculateMarketTransaction_AllowsSaleThatReducesExistingOverload()
+        {
+            MarketTransactionInput input = Input(new MarketTransactionItemInput
+            {
+                ItemId = "wood",
+                CargoQuantityBefore = 10,
+                MarketStockBefore = 0,
+                SellQuantity = 1,
+                SellUnitPrice = 10L,
+                UnitWeight = 1f,
+                MaxStackQuantity = 10
+            });
+            input.CurrentCargoWeight = 10f;
+            input.MaximumCargoWeight = 5f;
+            input.CurrentCargoSlots = 1;
+            input.MaximumCargoSlots = 0;
+
+            MarketTransactionResult result = MarketTransactionCalculator.CalculateMarketTransaction(input);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CargoWeightAfter, Is.EqualTo(9f));
+            Assert.That(result.CargoSlotsAfter, Is.EqualTo(1));
+        }
+
         private static MarketTransactionInput Input(MarketTransactionItemInput item)
         {
             var input = new MarketTransactionInput

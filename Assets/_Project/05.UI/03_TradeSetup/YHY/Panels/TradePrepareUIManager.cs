@@ -36,6 +36,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     {
         public float maxLoad;
         public TradeItemViewData[] selectedItems;
+        public bool automaticCargoLoading;
         public long gold;                 // 현재 소지 골드
         public int requiredFood;          // 반드시 적재해야 하는 먹이 수
         public TradeItemData[] shopItems; // 상점 판매 아이템(정헌님 Cargo 계약)
@@ -456,7 +457,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             CargoConfig cfg = CargoProvider();
             float maxLoad = cfg.maxLoad > 0f ? cfg.maxLoad : ComputeMaxLoad();
             cargoPanel.Configure(cfg.gold, maxLoad, cfg.requiredFood, cfg.shopItems, cfg.stocks);
-            cargoPanel.RestoreSelectedCargo(cfg.selectedItems);
+            cargoPanel.SetCargoEditingEnabled(!cfg.automaticCargoLoading);
+            cargoPanel.RestoreSelectedCargo(cfg.selectedItems, cfg.automaticCargoLoading);
         }
         ShowOnly(3);
     }

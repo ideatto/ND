@@ -85,10 +85,10 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
             return;
         }
 
-        // A successful settlement claim routes Framework from Settlement back to Preparation.
-        // Close the completed trade flow instead of immediately reopening its S1 screen.
+        // A successful settlement claim routes Framework to Town. Older saves can still map
+        // back to Preparation, so both transitions close the completed trade flow.
         if (previousState == InGameScreenState.Settlement &&
-            state == InGameScreenState.Preparation)
+            (state == InGameScreenState.Preparation || state == InGameScreenState.Town))
         {
             CloseTradeScreen();
             return;
@@ -104,6 +104,12 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
                 // Keep the trade UI root alive and let its settlement adapter display S8.
                 // The presenter only routes state; Framework still owns settlement and claim.
                 view.ShowSettlement();
+                break;
+            case InGameScreenState.Town:
+            case InGameScreenState.Market:
+                // Town owns its own market entry point. Never fall through to Preparation,
+                // otherwise arrival would immediately reopen the cargo/departure flow.
+                CloseTradeScreen();
                 break;
             case InGameScreenState.Preparation:
             default:

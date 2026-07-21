@@ -12,6 +12,7 @@ namespace ND.Economy
         InsufficientCargo,
         InsufficientStock,
         CargoWeightExceeded,
+        CargoSlotExceeded,
         Overflow
     }
 
@@ -26,6 +27,7 @@ namespace ND.Economy
         public long BuyUnitPrice;
         public long SellUnitPrice;
         public float UnitWeight;
+        public int MaxStackQuantity = 1;
     }
 
     [Serializable]
@@ -34,6 +36,8 @@ namespace ND.Economy
         public long TradingCurrencyBefore;
         public float CurrentCargoWeight;
         public float MaximumCargoWeight;
+        public int CurrentCargoSlots;
+        public int MaximumCargoSlots = int.MaxValue;
         public List<MarketTransactionItemInput> Items = new List<MarketTransactionItemInput>();
     }
 
@@ -65,6 +69,8 @@ namespace ND.Economy
         public long NetTradeMoneyChange;
         public float CargoWeightBefore;
         public float CargoWeightAfter;
+        public int CargoSlotsBefore;
+        public int CargoSlotsAfter;
         public List<MarketTransactionItemResult> Items = new List<MarketTransactionItemResult>();
     }
 }

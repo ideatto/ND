@@ -1,4 +1,3 @@
-#if ND_MARKET_SAVE_SCHEMA_VNEXT
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,13 +13,6 @@ namespace ND.Framework.CargoLoading
         public long UnitPrice;
     }
 
-    public sealed class CargoPurchaseRequest
-    {
-        public TradeItemData Item;
-        public int Quantity;
-        public long UnitPrice;
-    }
-
     public sealed class CargoInventoryView
     {
         public string ItemId = string.Empty;
@@ -28,32 +20,7 @@ namespace ND.Framework.CargoLoading
         public int Quantity;
         public long UnitPrice;
         public float Weight;
-    }
-
-    public sealed class CargoIntegrationResult
-    {
-        public bool Success;
-        public string ErrorCode = string.Empty;
-        public long TradingCurrencyAfter;
-
-        public static CargoIntegrationResult Ok(long tradingCurrency)
-        {
-            return new CargoIntegrationResult
-            {
-                Success = true,
-                TradingCurrencyAfter = Math.Max(0L, tradingCurrency)
-            };
-        }
-
-        public static CargoIntegrationResult Fail(string errorCode, long tradingCurrency)
-        {
-            return new CargoIntegrationResult
-            {
-                Success = false,
-                ErrorCode = errorCode ?? string.Empty,
-                TradingCurrencyAfter = Math.Max(0L, tradingCurrency)
-            };
-        }
+        public int MaxStackQuantity = 1;
     }
 
     /// <summary>
@@ -70,7 +37,6 @@ namespace ND.Framework.CargoLoading
         }
 
         public string MarketId => source.MarketId;
-        public bool IsCommitted => source.IsCommitted;
         public long TradingCurrency => source.TradingCurrency;
         public IReadOnlyList<MarketStockView> Stocks => source.Stocks;
         public IReadOnlyList<CargoInventoryView> SavedCargo => source.ReadSavedCargo();
@@ -111,34 +77,36 @@ namespace ND.Framework.CargoLoading
         public static MarketTransactionResult Execute(
             MarketInventoryMutationSession session,
             IReadOnlyList<MarketTransactionLine> lines,
-            float maximumCargoWeight)
+            float maximumCargoWeight,
+            int maximumCargoSlots = int.MaxValue)
         {
             return session == null
                 ? MarketTransactionResult.Fail(MarketInventoryMutationSession.ErrorInvalidFramework, 0L)
-                : session.ExecuteTransaction(lines, maximumCargoWeight);
+                : session.ExecuteTransaction(lines, maximumCargoWeight, maximumCargoSlots);
         }
     }
 
     /// <summary>
-    /// Owns market refresh, draft persistence, purchase commit, refund, and cancellation.
+    /// Owns market refresh and atomic buy/sell transactions.
     /// Consumers must use View for reads so query and mutation responsibilities stay explicit.
     /// </summary>
     public sealed class MarketInventoryMutationSession
     {
         public const string ErrorInvalidFramework = "INVALID_FRAMEWORK";
         public const string ErrorInvalidCatalog = "INVALID_CATALOG";
-        public const string ErrorInvalidCargo = "INVALID_CARGO";
         public const string ErrorInsufficientStock = "INSUFFICIENT_STOCK";
         public const string ErrorCurrency = "CURRENCY_FAILURE";
         public const string ErrorInvalidTransaction = "INVALID_MARKET_TRANSACTION";
         public const string ErrorInsufficientCargo = "INSUFFICIENT_CARGO";
         public const string ErrorCargoWeight = "CARGO_WEIGHT_EXCEEDED";
+        public const string ErrorCargoSlots = "CARGO_SLOT_EXCEEDED";
         public const string ErrorSaveFailed = "SAVE_FAILED";
 
         private readonly SaveData saveData;
         private readonly ISaveService saveService;
         private readonly IGameTimeProvider timeProvider;
         private readonly Dictionary<string, TradeItemData> catalogById;
+        private readonly HashSet<string> stockItemIds;
         private readonly int slotCount;
         private readonly int maximumGeneratedStock;
         private readonly long refreshIntervalTicks;
@@ -151,7 +119,8 @@ namespace ND.Framework.CargoLoading
             ISaveService saveService,
             IGameTimeProvider timeProvider,
             string marketId,
-            IEnumerable<TradeItemData> catalog,
+            IEnumerable<TradeItemData> stockCatalog,
+            IEnumerable<TradeItemData> transactionCatalog,
             int slotCount,
             int maximumGeneratedStock,
             double refreshIntervalSeconds,
@@ -165,18 +134,20 @@ namespace ND.Framework.CargoLoading
             this.maximumGeneratedStock = Math.Max(1, maximumGeneratedStock);
             refreshIntervalTicks = TimeSpan.FromSeconds(Math.Max(1d, refreshIntervalSeconds)).Ticks;
             this.worldSeed = worldSeed;
-            catalogById = BuildCatalog(catalog);
+            TradeItemData[] stockItems = (stockCatalog ?? Enumerable.Empty<TradeItemData>())
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+                .ToArray();
+            catalogById = BuildCatalog(stockItems.Concat(
+                transactionCatalog ?? Enumerable.Empty<TradeItemData>()));
+            stockItemIds = new HashSet<string>(
+                stockItems.Select(item => item.ItemId),
+                StringComparer.Ordinal);
             View = new MarketInventorySession(this);
         }
 
         public MarketInventorySession View { get; }
 
         internal string MarketId { get; }
-
-        internal bool IsCommitted =>
-            saveData.world.marketPurchasePreparation != null
-            && saveData.world.marketPurchasePreparation.isCommitted
-            && saveData.world.marketPurchasePreparation.marketId == MarketId;
 
         internal long TradingCurrency =>
             saveData.player != null ? Math.Max(0L, saveData.player.tradingCurrency) : 0L;
@@ -223,6 +194,26 @@ namespace ND.Framework.CargoLoading
             out MarketInventoryMutationSession session,
             out string error)
         {
+            return TryOpen(
+                saveData, saveService, timeProvider, marketId,
+                catalog, catalog, slotCount, maximumGeneratedStock,
+                refreshIntervalSeconds, worldSeed, out session, out error);
+        }
+
+        public static bool TryOpen(
+            SaveData saveData,
+            ISaveService saveService,
+            IGameTimeProvider timeProvider,
+            string marketId,
+            IEnumerable<TradeItemData> stockCatalog,
+            IEnumerable<TradeItemData> transactionCatalog,
+            int slotCount,
+            int maximumGeneratedStock,
+            double refreshIntervalSeconds,
+            int worldSeed,
+            out MarketInventoryMutationSession session,
+            out string error)
+        {
             session = null;
             error = string.Empty;
 
@@ -237,46 +228,37 @@ namespace ND.Framework.CargoLoading
                 saveService,
                 timeProvider,
                 marketId,
-                catalog,
+                stockCatalog,
+                transactionCatalog,
                 slotCount,
                 maximumGeneratedStock,
                 refreshIntervalSeconds,
                 worldSeed);
 
-            if (created.catalogById.Count == 0)
+            if (created.stockItemIds.Count == 0 || created.catalogById.Count == 0)
             {
                 error = ErrorInvalidCatalog;
                 return false;
             }
 
             created.EnsureSaveContainers();
-            created.ResolveOrRefreshInventory();
+            if (!created.TryResolveOrRefreshInventory())
+            {
+                error = ErrorSaveFailed;
+                return false;
+            }
+
             session = created;
             return true;
         }
 
-        public CargoIntegrationResult PersistDraft(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            if (!TryValidateRequests(requests, false, out long totalCost, out string error))
-            {
-                return CargoIntegrationResult.Fail(error, TradingCurrency);
-            }
-
-            WriteCargo(requests);
-            MarketPurchasePreparationSaveData preparation = saveData.world.marketPurchasePreparation;
-            preparation.marketId = MarketId;
-            preparation.isCommitted = false;
-            preparation.totalCost = totalCost;
-            preparation.cargoHash = ComputeCargoHash(requests);
-            saveService.Save(saveData);
-            return CargoIntegrationResult.Ok(TradingCurrency);
-        }
-
         internal MarketTransactionResult ExecuteTransaction(
             IReadOnlyList<MarketTransactionLine> lines,
-            float maximumCargoWeight)
+            float maximumCargoWeight,
+            int maximumCargoSlots)
         {
-            if (lines == null || float.IsNaN(maximumCargoWeight) || maximumCargoWeight < 0f)
+            if (lines == null || float.IsNaN(maximumCargoWeight) || maximumCargoWeight < 0f ||
+                maximumCargoSlots < 0)
             {
                 return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
             }
@@ -304,198 +286,79 @@ namespace ND.Framework.CargoLoading
                 return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
             }
 
-            long purchaseCost = 0L;
-            long saleRevenue = 0L;
+            var calculationInput = new ND.Economy.MarketTransactionInput
+            {
+                TradingCurrencyBefore = TradingCurrency,
+                CurrentCargoWeight = CalculateCurrentCargoWeight(),
+                MaximumCargoWeight = maximumCargoWeight,
+                CurrentCargoSlots = CalculateCurrentCargoSlots(),
+                MaximumCargoSlots = maximumCargoSlots
+            };
+            foreach (MarketTransactionLine line in normalized.Values)
+            {
+                TradeItemData item = catalogById[line.ItemId];
+                MarketStockSaveData stock = FindStock(line.ItemId);
+                calculationInput.Items.Add(new ND.Economy.MarketTransactionItemInput
+                {
+                    ItemId = line.ItemId,
+                    CargoQuantityBefore = GetCargoQuantity(line.ItemId),
+                    MarketStockBefore = Math.Max(0, stock?.quantity ?? 0),
+                    BuyQuantity = line.BuyQuantity,
+                    SellQuantity = line.SellQuantity,
+                    BuyUnitPrice = Math.Max(0L, stock?.unitPrice ?? 0L),
+                    SellUnitPrice = Math.Max(0L, item.BaseSellPrice),
+                    UnitWeight = Math.Max(0f, item.Weight),
+                    MaxStackQuantity = Math.Max(1, item.MaxCount)
+                });
+            }
+
+            ND.Economy.MarketTransactionResult calculation =
+                ND.Economy.MarketTransactionCalculator.CalculateMarketTransaction(calculationInput);
+            if (!calculation.Success)
+            {
+                return MarketTransactionResult.Fail(
+                    MapCalculationFailure(calculation.FailureReason),
+                    TradingCurrency);
+            }
+
+            long currencyBefore = saveData.player.tradingCurrency;
+            List<CargoEntrySaveData> cargoBefore = CloneCargo(saveData.caravan.cargo);
+            var stockBefore = inventory.stocks
+                .Where(stock => stock != null)
+                .ToDictionary(stock => stock.itemId ?? string.Empty, stock => stock.quantity, StringComparer.Ordinal);
+
             try
             {
-                foreach (MarketTransactionLine line in normalized.Values)
+                foreach (ND.Economy.MarketTransactionItemResult itemResult in calculation.Items)
                 {
-                    TradeItemData item = catalogById[line.ItemId];
-                    MarketStockSaveData stock = FindStock(line.ItemId);
-                    int cargoQuantity = GetCargoQuantity(line.ItemId);
-                    if (line.BuyQuantity > 0 && (stock == null || stock.quantity < line.BuyQuantity))
-                    {
-                        return MarketTransactionResult.Fail(ErrorInsufficientStock, TradingCurrency);
-                    }
-
-                    if (line.SellQuantity > cargoQuantity)
-                    {
-                        return MarketTransactionResult.Fail(ErrorInsufficientCargo, TradingCurrency);
-                    }
-
-                    purchaseCost = checked(purchaseCost + checked((stock?.unitPrice ?? 0L) * line.BuyQuantity));
-                    saleRevenue = checked(saleRevenue + checked(Math.Max(0L, item.BaseSellPrice) * line.SellQuantity));
+                    ApplyCargoDelta(itemResult.ItemId, itemResult.BuyQuantity - itemResult.SellQuantity);
+                    MarketStockSaveData stock = itemResult.SellQuantity > 0
+                        ? GetOrCreateStock(itemResult.ItemId)
+                        : FindStock(itemResult.ItemId);
+                    stock.quantity = itemResult.MarketStockAfter;
                 }
 
-                long currencyAfter = checked(checked(TradingCurrency - purchaseCost) + saleRevenue);
-                if (currencyAfter < 0L)
-                {
-                    return MarketTransactionResult.Fail(ErrorCurrency, TradingCurrency);
-                }
-
-                float weightAfter = CalculateCargoWeightAfter(normalized);
-                if (!float.IsPositiveInfinity(maximumCargoWeight)
-                    && weightAfter > maximumCargoWeight + 0.0001f)
-                {
-                    return MarketTransactionResult.Fail(ErrorCargoWeight, TradingCurrency);
-                }
-
-                long currencyBefore = saveData.player.tradingCurrency;
-                List<CargoEntrySaveData> cargoBefore = CloneCargo(saveData.caravan.cargo);
-                var stockBefore = inventory.stocks
-                    .Where(stock => stock != null)
-                    .ToDictionary(stock => stock.itemId ?? string.Empty, stock => stock.quantity, StringComparer.Ordinal);
-
-                try
-                {
-                    foreach (MarketTransactionLine line in normalized.Values)
-                    {
-                        ApplyCargoDelta(line.ItemId, line.BuyQuantity - line.SellQuantity);
-                        MarketStockSaveData stock = line.SellQuantity > 0
-                            ? GetOrCreateStock(line.ItemId)
-                            : FindStock(line.ItemId);
-                        stock.quantity = checked(stock.quantity - line.BuyQuantity + line.SellQuantity);
-                    }
-
-                    saveData.player.tradingCurrency = currencyAfter;
-                    SaveResult saveResult = saveService.Save(saveData);
-                    if (saveResult == null || !saveResult.Succeeded)
-                    {
-                        RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
-                        return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
-                    }
-
-                    return new MarketTransactionResult
-                    {
-                        Success = true,
-                        TradingCurrencyAfter = currencyAfter,
-                        PurchaseCost = purchaseCost,
-                        SaleRevenue = saleRevenue
-                    };
-                }
-                catch
+                saveData.player.tradingCurrency = calculation.TradingCurrencyAfter;
+                SaveResult saveResult = saveService.Save(saveData);
+                if (saveResult == null || !saveResult.Succeeded)
                 {
                     RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
-                    return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
+                    return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
                 }
-            }
-            catch (OverflowException)
-            {
-                return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
-            }
-        }
 
-        public CargoIntegrationResult Commit(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            if (!TryValidateRequests(requests, true, out long totalCost, out string error))
-            {
-                return CargoIntegrationResult.Fail(error, TradingCurrency);
-            }
-
-            int cargoHash = ComputeCargoHash(requests);
-            MarketPurchasePreparationSaveData preparation = saveData.world.marketPurchasePreparation;
-            if (preparation.isCommitted
-                && preparation.marketId == MarketId
-                && preparation.cargoHash == cargoHash)
-            {
-                return CargoIntegrationResult.Ok(TradingCurrency);
-            }
-
-            var currency = new CurrencyState
-            {
-                TradeMoney = TradingCurrency,
-                DevelopmentCurrency = Math.Max(0L, saveData.player.developmentCurrency)
-            };
-
-            CurrencyApplyResult currencyResult = CurrencyWallet.ApplyTradePurchase(currency, totalCost);
-            if (currencyResult == null || !currencyResult.Success || currencyResult.After == null)
-            {
-                return CargoIntegrationResult.Fail(
-                    currencyResult != null ? currencyResult.ErrorCode : ErrorCurrency,
-                    TradingCurrency);
-            }
-
-            foreach (CargoPurchaseRequest request in requests)
-            {
-                MarketStockSaveData stock = FindStock(request.Item.ItemId);
-                stock.quantity -= request.Quantity;
-            }
-
-            saveData.player.tradingCurrency = currencyResult.After.TradeMoney;
-            saveData.player.developmentCurrency = currencyResult.After.DevelopmentCurrency;
-            WriteCargo(requests);
-            preparation.marketId = MarketId;
-            preparation.isCommitted = true;
-            preparation.totalCost = totalCost;
-            preparation.cargoHash = cargoHash;
-            saveService.Save(saveData);
-            return CargoIntegrationResult.Ok(saveData.player.tradingCurrency);
-        }
-
-        public CargoIntegrationResult ReopenCommittedAsDraft(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            MarketPurchasePreparationSaveData preparation = saveData.world.marketPurchasePreparation;
-            if (!preparation.isCommitted || preparation.marketId != MarketId)
-            {
-                return PersistDraft(requests);
-            }
-
-            var currency = new CurrencyState
-            {
-                TradeMoney = TradingCurrency,
-                DevelopmentCurrency = Math.Max(0L, saveData.player.developmentCurrency)
-            };
-
-            CurrencyApplyResult refundResult = CurrencyWallet.ApplyTradeRefund(currency, preparation.totalCost);
-            if (refundResult == null || !refundResult.Success || refundResult.After == null)
-            {
-                return CargoIntegrationResult.Fail(
-                    refundResult != null ? refundResult.ErrorCode : ErrorCurrency,
-                    TradingCurrency);
-            }
-
-            RestoreStocks(requests);
-            saveData.player.tradingCurrency = refundResult.After.TradeMoney;
-            saveData.player.developmentCurrency = refundResult.After.DevelopmentCurrency;
-            preparation.isCommitted = false;
-            preparation.totalCost = CalculateTotalCost(requests);
-            preparation.cargoHash = ComputeCargoHash(requests);
-            WriteCargo(requests);
-            saveService.Save(saveData);
-            return CargoIntegrationResult.Ok(saveData.player.tradingCurrency);
-        }
-
-        public CargoIntegrationResult CancelPreparation(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            MarketPurchasePreparationSaveData preparation = saveData.world.marketPurchasePreparation;
-            if (preparation.isCommitted && preparation.marketId == MarketId)
-            {
-                var currency = new CurrencyState
+                return new MarketTransactionResult
                 {
-                    TradeMoney = TradingCurrency,
-                    DevelopmentCurrency = Math.Max(0L, saveData.player.developmentCurrency)
+                    Success = true,
+                    TradingCurrencyAfter = calculation.TradingCurrencyAfter,
+                    PurchaseCost = calculation.TotalPurchaseCost,
+                    SaleRevenue = calculation.TotalSaleRevenue
                 };
-
-                CurrencyApplyResult refundResult = CurrencyWallet.ApplyTradeRefund(currency, preparation.totalCost);
-                if (refundResult == null || !refundResult.Success || refundResult.After == null)
-                {
-                    return CargoIntegrationResult.Fail(
-                        refundResult != null ? refundResult.ErrorCode : ErrorCurrency,
-                        TradingCurrency);
-                }
-
-                RestoreStocks(requests);
-                saveData.player.tradingCurrency = refundResult.After.TradeMoney;
-                saveData.player.developmentCurrency = refundResult.After.DevelopmentCurrency;
             }
-
-            saveData.caravan.cargo.Clear();
-            preparation.marketId = string.Empty;
-            preparation.isCommitted = false;
-            preparation.totalCost = 0L;
-            preparation.cargoHash = 0;
-            saveService.Save(saveData);
-            return CargoIntegrationResult.Ok(TradingCurrency);
+            catch
+            {
+                RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
+                return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
+            }
         }
 
         internal IReadOnlyList<CargoInventoryView> ReadSavedCargo()
@@ -522,48 +385,108 @@ namespace ND.Framework.CargoLoading
                     Item = item,
                     Quantity = entry.quantity,
                     UnitPrice = Math.Max(0L, entry.item.basePrice),
-                    Weight = Math.Max(0f, entry.item.weight)
+                    Weight = Math.Max(0f, entry.item.weight),
+                    MaxStackQuantity = Math.Max(1, entry.item.maxCount)
                 });
             }
 
             return result;
         }
 
-        private void ResolveOrRefreshInventory()
+        private bool TryResolveOrRefreshInventory()
         {
             DateTime now = timeProvider.CurrentUtc;
             long refreshIndex = Math.Max(0L, now.Ticks / refreshIntervalTicks);
             inventory = saveData.world.marketInventories.FirstOrDefault(
                 candidate => candidate != null && candidate.marketId == MarketId);
 
-            bool hasActivePreparation = saveData.world.marketPurchasePreparation != null
-                && saveData.world.marketPurchasePreparation.marketId == MarketId
-                && saveData.caravan?.cargo != null
-                && saveData.caravan.cargo.Count > 0;
-
             if (inventory != null
-                && (inventory.refreshIndex == refreshIndex || hasActivePreparation)
+                && inventory.refreshIndex == refreshIndex
                 && inventory.stocks != null
                 && inventory.stocks.Count > 0)
             {
-                return;
+                return true;
             }
 
+            MarketInventorySaveData previousInventory = inventory;
+            MarketInventorySaveData snapshot = CloneInventory(previousInventory);
             if (inventory == null)
             {
                 inventory = new MarketInventorySaveData { marketId = MarketId };
                 saveData.world.marketInventories.Add(inventory);
             }
 
-            GenerateInventory(refreshIndex);
-            saveService.Save(saveData);
+            try
+            {
+                GenerateInventory(refreshIndex);
+                SaveResult result = saveService.Save(saveData);
+                if (result != null && result.Succeeded)
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Restore below so an unsuccessful open cannot expose unsaved inventory.
+            }
+
+            if (previousInventory == null)
+            {
+                saveData.world.marketInventories.Remove(inventory);
+                inventory = null;
+            }
+            else
+            {
+                RestoreInventory(previousInventory, snapshot);
+                inventory = previousInventory;
+            }
+
+            return false;
+        }
+
+        private static MarketInventorySaveData CloneInventory(MarketInventorySaveData source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new MarketInventorySaveData
+            {
+                marketId = source.marketId,
+                refreshIndex = source.refreshIndex,
+                nextRefreshUtcTicks = source.nextRefreshUtcTicks,
+                seed = source.seed,
+                stocks = (source.stocks ?? new List<MarketStockSaveData>())
+                    .Where(stock => stock != null)
+                    .Select(stock => new MarketStockSaveData
+                    {
+                        itemId = stock.itemId,
+                        quantity = stock.quantity,
+                        unitPrice = stock.unitPrice
+                    })
+                    .ToList()
+            };
+        }
+
+        private static void RestoreInventory(
+            MarketInventorySaveData destination,
+            MarketInventorySaveData snapshot)
+        {
+            destination.marketId = snapshot.marketId;
+            destination.refreshIndex = snapshot.refreshIndex;
+            destination.nextRefreshUtcTicks = snapshot.nextRefreshUtcTicks;
+            destination.seed = snapshot.seed;
+            destination.stocks = snapshot.stocks;
         }
 
         private void GenerateInventory(long refreshIndex)
         {
             int seed = StableHash(worldSeed, MarketId, refreshIndex);
             var random = new Random(seed);
-            List<TradeItemData> candidates = catalogById.Values
+            List<TradeItemData> candidates = stockItemIds
+                .Where(catalogById.ContainsKey)
+                .Select(itemId => catalogById[itemId])
                 .OrderBy(item => item.ItemId, StringComparer.Ordinal)
                 .ToList();
 
@@ -598,69 +521,6 @@ namespace ND.Framework.CargoLoading
                 .ToList();
         }
 
-        private bool TryValidateRequests(
-            IReadOnlyList<CargoPurchaseRequest> requests,
-            bool validateStock,
-            out long totalCost,
-            out string error)
-        {
-            totalCost = 0L;
-            error = string.Empty;
-            if (requests == null)
-            {
-                error = ErrorInvalidCargo;
-                return false;
-            }
-
-            try
-            {
-                foreach (CargoPurchaseRequest request in requests)
-                {
-                    if (request == null || request.Item == null || request.Quantity <= 0)
-                    {
-                        error = ErrorInvalidCargo;
-                        return false;
-                    }
-
-                    MarketStockSaveData stock = FindStock(request.Item.ItemId);
-                    if (stock == null || (validateStock && stock.quantity < request.Quantity))
-                    {
-                        error = ErrorInsufficientStock;
-                        return false;
-                    }
-
-                    totalCost = checked(totalCost + checked(Math.Max(0L, request.UnitPrice) * request.Quantity));
-                }
-            }
-            catch (OverflowException)
-            {
-                error = ErrorInvalidCargo;
-                return false;
-            }
-
-            return true;
-        }
-
-        private void WriteCargo(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            saveData.caravan.cargo.Clear();
-            foreach (CargoPurchaseRequest request in requests)
-            {
-                saveData.caravan.cargo.Add(new CargoEntrySaveData
-                {
-                    quantity = request.Quantity,
-                    item = new TradeItemSaveData
-                    {
-                        itemId = request.Item.ItemId,
-                        itemName = request.Item.DisplayName,
-                        weight = request.Item.Weight,
-                        basePrice = Math.Max(0L, request.UnitPrice),
-                        maxCount = request.Item.MaxCount
-                    }
-                });
-            }
-        }
-
         private int GetCargoQuantity(string itemId)
         {
             return saveData.caravan.cargo
@@ -668,34 +528,52 @@ namespace ND.Framework.CargoLoading
                 .Sum(entry => Math.Max(0, entry.quantity));
         }
 
-        private float CalculateCargoWeightAfter(
-            IReadOnlyDictionary<string, MarketTransactionLine> normalized)
+        private float CalculateCurrentCargoWeight()
         {
             double result = 0d;
-            foreach (IGrouping<string, CargoEntrySaveData> group in saveData.caravan.cargo
-                         .Where(entry => entry?.item != null && entry.quantity > 0)
-                         .GroupBy(entry => entry.item.itemId ?? string.Empty, StringComparer.Ordinal))
+            foreach (CargoEntrySaveData entry in saveData.caravan.cargo)
             {
-                int quantity = group.Sum(entry => entry.quantity);
-                if (normalized.TryGetValue(group.Key, out MarketTransactionLine line))
+                if (entry?.item != null && entry.quantity > 0)
                 {
-                    quantity = checked(quantity + line.BuyQuantity - line.SellQuantity);
+                    result += Math.Max(0f, entry.item.weight) * entry.quantity;
                 }
-
-                result += Math.Max(0f, group.First().item.weight) * Math.Max(0, quantity);
-            }
-
-            foreach (MarketTransactionLine line in normalized.Values)
-            {
-                if (line.BuyQuantity <= 0 || GetCargoQuantity(line.ItemId) > 0)
-                {
-                    continue;
-                }
-
-                result += Math.Max(0f, catalogById[line.ItemId].Weight) * line.BuyQuantity;
             }
 
             return result >= float.MaxValue ? float.PositiveInfinity : (float)result;
+        }
+
+        private int CalculateCurrentCargoSlots()
+        {
+            int total = 0;
+            foreach (IGrouping<string, CargoEntrySaveData> group in saveData.caravan.cargo
+                .Where(entry => entry?.item != null && entry.quantity > 0)
+                .GroupBy(entry => entry.item.itemId ?? string.Empty, StringComparer.Ordinal))
+            {
+                int quantity = group.Sum(entry => Math.Max(0, entry.quantity));
+                int maxStack = Math.Max(1, group.First().item.maxCount);
+                total = checked(total + (quantity - 1) / maxStack + 1);
+            }
+            return total;
+        }
+
+        private static string MapCalculationFailure(
+            ND.Economy.MarketTransactionFailureReason failureReason)
+        {
+            switch (failureReason)
+            {
+                case ND.Economy.MarketTransactionFailureReason.InsufficientCurrency:
+                    return ErrorCurrency;
+                case ND.Economy.MarketTransactionFailureReason.InsufficientCargo:
+                    return ErrorInsufficientCargo;
+                case ND.Economy.MarketTransactionFailureReason.InsufficientStock:
+                    return ErrorInsufficientStock;
+                case ND.Economy.MarketTransactionFailureReason.CargoWeightExceeded:
+                    return ErrorCargoWeight;
+                case ND.Economy.MarketTransactionFailureReason.CargoSlotExceeded:
+                    return ErrorCargoSlots;
+                default:
+                    return ErrorInvalidTransaction;
+            }
         }
 
         private void ApplyCargoDelta(string itemId, int delta)
@@ -804,18 +682,6 @@ namespace ND.Framework.CargoLoading
             }
         }
 
-        private void RestoreStocks(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            foreach (CargoPurchaseRequest request in requests)
-            {
-                MarketStockSaveData stock = FindStock(request.Item.ItemId);
-                if (stock != null)
-                {
-                    stock.quantity = checked(stock.quantity + request.Quantity);
-                }
-            }
-        }
-
         private MarketStockSaveData FindStock(string itemId)
         {
             return inventory?.stocks?.FirstOrDefault(
@@ -851,48 +717,6 @@ namespace ND.Framework.CargoLoading
             }
 
             return result;
-        }
-
-        private static long CalculateTotalCost(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            long result = 0L;
-            if (requests == null)
-            {
-                return result;
-            }
-
-            foreach (CargoPurchaseRequest request in requests)
-            {
-                if (request != null && request.Quantity > 0)
-                {
-                    result = checked(result + checked(Math.Max(0L, request.UnitPrice) * request.Quantity));
-                }
-            }
-
-            return result;
-        }
-
-        private static int ComputeCargoHash(IReadOnlyList<CargoPurchaseRequest> requests)
-        {
-            unchecked
-            {
-                uint hash = 2166136261u;
-                if (requests == null)
-                {
-                    return (int)hash;
-                }
-
-                foreach (CargoPurchaseRequest request in requests
-                             .Where(value => value?.Item != null)
-                             .OrderBy(value => value.Item.ItemId, StringComparer.Ordinal))
-                {
-                    hash = HashString(hash, request.Item.ItemId);
-                    hash = HashInt64(hash, request.Quantity);
-                    hash = HashInt64(hash, request.UnitPrice);
-                }
-
-                return (int)hash;
-            }
         }
 
         private static int StableHash(int seed, string marketId, long refreshIndex)
@@ -943,4 +767,3 @@ namespace ND.Framework.CargoLoading
         }
     }
 }
-#endif

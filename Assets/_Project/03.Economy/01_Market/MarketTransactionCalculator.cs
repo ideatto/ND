@@ -17,7 +17,9 @@ namespace ND.Economy
                 TradingCurrencyBefore = input.TradingCurrencyBefore,
                 TradingCurrencyAfter = input.TradingCurrencyBefore,
                 CargoWeightBefore = input.CurrentCargoWeight,
-                CargoWeightAfter = input.CurrentCargoWeight
+                CargoWeightAfter = input.CurrentCargoWeight,
+                CargoSlotsBefore = input.CurrentCargoSlots,
+                CargoSlotsAfter = input.CurrentCargoSlots
             };
 
             if (input.TradingCurrencyBefore < 0L
@@ -26,6 +28,8 @@ namespace ND.Economy
                 || input.CurrentCargoWeight < 0f
                 || float.IsNaN(input.MaximumCargoWeight)
                 || input.MaximumCargoWeight < 0f
+                || input.CurrentCargoSlots < 0
+                || input.MaximumCargoSlots < 0
                 || input.Items == null
                 || input.Items.Count == 0)
             {
@@ -37,6 +41,7 @@ namespace ND.Economy
             try
             {
                 double weightAfter = input.CurrentCargoWeight;
+                int slotsAfter = input.CurrentCargoSlots;
                 foreach (MarketTransactionItemInput item in input.Items)
                 {
                     MarketTransactionFailureReason validation = ValidateItem(item, itemIds);
@@ -66,10 +71,13 @@ namespace ND.Economy
                     int cargoAfter = checked(item.CargoQuantityBefore + item.BuyQuantity - item.SellQuantity);
                     int stockAfter = checked(item.MarketStockBefore - item.BuyQuantity + item.SellQuantity);
                     float weightDelta = item.UnitWeight * (item.BuyQuantity - item.SellQuantity);
+                    int slotsBeforeForItem = GetRequiredSlots(item.CargoQuantityBefore, item.MaxStackQuantity);
+                    int slotsAfterForItem = GetRequiredSlots(cargoAfter, item.MaxStackQuantity);
 
                     result.TotalPurchaseCost = checked(result.TotalPurchaseCost + purchaseCost);
                     result.TotalSaleRevenue = checked(result.TotalSaleRevenue + saleRevenue);
                     weightAfter += weightDelta;
+                    slotsAfter = checked(slotsAfter - slotsBeforeForItem + slotsAfterForItem);
                     result.Items.Add(new MarketTransactionItemResult
                     {
                         ItemId = item.ItemId,
@@ -99,10 +107,20 @@ namespace ND.Economy
                     : Math.Max(0f, (float)weightAfter);
                 if (float.IsInfinity(result.CargoWeightAfter)
                     || (!float.IsPositiveInfinity(input.MaximumCargoWeight)
-                        && result.CargoWeightAfter > input.MaximumCargoWeight + 0.0001f))
+                        && result.CargoWeightAfter > input.MaximumCargoWeight + 0.0001f
+                        && result.CargoWeightAfter > result.CargoWeightBefore + 0.0001f))
                 {
                     result.CargoWeightAfter = result.CargoWeightBefore;
                     result.FailureReason = MarketTransactionFailureReason.CargoWeightExceeded;
+                    return result;
+                }
+
+                result.CargoSlotsAfter = slotsAfter;
+                if (result.CargoSlotsAfter > input.MaximumCargoSlots
+                    && result.CargoSlotsAfter > result.CargoSlotsBefore)
+                {
+                    result.CargoSlotsAfter = result.CargoSlotsBefore;
+                    result.FailureReason = MarketTransactionFailureReason.CargoSlotExceeded;
                     return result;
                 }
 
@@ -114,6 +132,7 @@ namespace ND.Economy
             {
                 result.TradingCurrencyAfter = result.TradingCurrencyBefore;
                 result.CargoWeightAfter = result.CargoWeightBefore;
+                result.CargoSlotsAfter = result.CargoSlotsBefore;
                 result.FailureReason = MarketTransactionFailureReason.Overflow;
                 return result;
             }
@@ -134,6 +153,7 @@ namespace ND.Economy
                 || float.IsNaN(item.UnitWeight)
                 || float.IsInfinity(item.UnitWeight)
                 || item.UnitWeight < 0f
+                || item.MaxStackQuantity <= 0
                 || (item.BuyQuantity == 0 && item.SellQuantity == 0)
                 || (item.BuyQuantity > 0 && item.SellQuantity > 0))
             {
@@ -143,6 +163,12 @@ namespace ND.Economy
             return itemIds.Add(item.ItemId)
                 ? MarketTransactionFailureReason.None
                 : MarketTransactionFailureReason.DuplicateItem;
+        }
+
+        private static int GetRequiredSlots(int quantity, int maxStackQuantity)
+        {
+            if (quantity <= 0) return 0;
+            return checked((quantity - 1) / maxStackQuantity + 1);
         }
 
         private static MarketTransactionResult Fail(

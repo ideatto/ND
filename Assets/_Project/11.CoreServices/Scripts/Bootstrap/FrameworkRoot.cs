@@ -180,6 +180,18 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// Leaves the post-settlement town state and starts a fresh trade-preparation cycle.
+        /// The save transition is committed before the Preparation screen is announced.
+        /// </summary>
+        public bool TryBeginTradePreparationFromTown()
+        {
+            return TradePreparationEntryCommand.TryExecute(
+                CurrentSaveData,
+                SaveService,
+                InGameScreenRouter);
+        }
+
+        /// <summary>
         /// 저장 데이터를 로드하고 loading scene으로 이동한다.
         /// </summary>
         /// <remarks>
@@ -314,7 +326,8 @@ namespace ND.Framework
             SettlementUiBridge.Initialize(
                 () => CurrentSaveData,
                 TradeProgressCoordinator,
-                InGameScreenRouter);
+                InGameScreenRouter,
+                autoClaimOnArrival: true);
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
@@ -381,6 +394,8 @@ namespace ND.Framework
         private string pendingTradeId = string.Empty;
         private JourneyResultData pendingResult;
         private bool isClaimProcessing;
+        private bool autoClaimOnArrival;
+        private bool frameworkEventsSubscribed;
 
         /// <summary>
         /// 표시 가능한 pending settlement가 준비되었을 때 발생한다.
@@ -415,11 +430,14 @@ namespace ND.Framework
         public void Initialize(
             Func<SaveData> getCurrentSaveData,
             TradeProgressCoordinator tradeProgressCoordinator,
-            InGameScreenStateRouter inGameScreenRouter)
+            InGameScreenStateRouter inGameScreenRouter,
+            bool autoClaimOnArrival = false)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.tradeProgressCoordinator = tradeProgressCoordinator;
             this.inGameScreenRouter = inGameScreenRouter;
+            this.autoClaimOnArrival = autoClaimOnArrival;
+            SubscribeFrameworkEvents();
         }
 
         /// <summary>
@@ -488,13 +506,36 @@ namespace ND.Framework
         private void OnEnable()
         {
             // 정산 결과 생성 이벤트를 받아 UI 표시 cache로 전환하기 위해 활성화 시 구독한다.
-            FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
+            SubscribeFrameworkEvents();
         }
 
         private void OnDisable()
         {
             // 비활성 bridge가 stale settlement 이벤트를 받지 않도록 구독을 해제한다.
+            UnsubscribeFrameworkEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFrameworkEvents();
+        }
+
+        private void SubscribeFrameworkEvents()
+        {
+            if (frameworkEventsSubscribed)
+                return;
+
+            FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
+            frameworkEventsSubscribed = true;
+        }
+
+        private void UnsubscribeFrameworkEvents()
+        {
+            if (!frameworkEventsSubscribed)
+                return;
+
             FrameworkEvents.TradeSettlementReady -= HandleSettlementReady;
+            frameworkEventsSubscribed = false;
         }
 
         private void HandleSettlementReady(string tradeId, JourneyResultData result)
@@ -508,6 +549,23 @@ namespace ND.Framework
             // 검증된 정산 결과를 cache한 뒤 settlement 화면과 UI adapter에 동시에 알린다.
             pendingTradeId = tradeId ?? string.Empty;
             pendingResult = result;
+
+            // Runtime arrival no longer requires the settlement receipt panel. Reuse the
+            // existing atomic claim path so destination, Economy values and pending cleanup
+            // are still saved as one operation. A failed claim keeps the cached result and
+            // falls back to the existing Settlement UI for recovery.
+            if (autoClaimOnArrival)
+            {
+                if (ClaimSettlementAndReset())
+                {
+                    FrameworkLog.Info($"Settlement auto-claimed on arrival. TradeId: {tradeId}");
+                    return;
+                }
+
+                FrameworkLog.Warning(
+                    $"Settlement auto-claim failed; keeping pending result for recovery UI. TradeId: {tradeId}");
+            }
+
             inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
             SettlementReady?.Invoke(pendingTradeId, pendingResult);
         }

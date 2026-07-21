@@ -60,9 +60,9 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         InGameScreenState previousState = currentScreenState;
         currentScreenState = state;
 
-        // Settlement -> Preparation is emitted only after a successful claim/reset cycle.
-        // Rebuild here so ordinary UI close/reopen and failed claims keep their existing Draft.
-        if (previousState != InGameScreenState.Settlement ||
+        // A deliberate transition into Preparation starts a fresh draft. Ordinary UI
+        // close/reopen does not emit a state change and therefore preserves the draft.
+        if (previousState == InGameScreenState.Preparation ||
             state != InGameScreenState.Preparation ||
             flowController == null)
         {

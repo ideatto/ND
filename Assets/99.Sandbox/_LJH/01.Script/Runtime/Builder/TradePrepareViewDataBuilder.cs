@@ -41,7 +41,8 @@ public sealed class TradePrepareViewDataBuilder
             currentTown != null && currentTown.Market != null ? currentTown.Market.DraftAnimalItems : null,
             animal => animal != null ? animal.DraftAnimalId : string.Empty);
 
-        Dictionary<string, int> finalCargoQuantities = TradePrepareCaravanFactory.CreateFinalCargoQuantities(draft);
+        Dictionary<string, int> finalCargoQuantities =
+            TradePrepareCaravanFactory.CreateFinalCargoQuantities(draft, saveData);
         CaravanData previewCaravan = TradePrepareCaravanFactory.Create(draft, context);
 
         float currentLoad = CaravanCalculator.GetCurrentLoad(previewCaravan);
@@ -119,7 +120,8 @@ public sealed class TradePrepareViewDataBuilder
             eligibleDraftAnimalTypes = selectedWagon != null ? selectedWagon.EligibleAnimalTypes : new DraftAnimalType[0],
             hasInvalidDraftAnimalSelection = HasInvalidDraftAnimalSelection(saveData, draft, availableAnimals),
             hasCargo = HasKnownPositiveCargo(finalCargoQuantities, availableItems),
-            hasInvalidCargoSelection = HasInvalidCargoSelection(draft, availableItems),
+            // Cargo is no longer purchased or edited during preparation. SaveData cargo is authoritative.
+            hasInvalidCargoSelection = false,
             usedInventorySlotCount = usedSlots,
             maxInventorySlotCount = maxSlots,
             currentTradingCurrency = currentTradingCurrency,
@@ -218,6 +220,23 @@ public sealed class TradePrepareViewDataBuilder
             TradeItemData item = FindItem(items, pair.Key);
             if (item == null)
             {
+                ND.Framework.TradeItemSaveData savedItem = FindSavedCargoItem(saveData, pair.Key);
+                if (savedItem != null)
+                {
+                    caravan.cargo.Add(new CargoEntry
+                    {
+                        item = new imsiTradeItemData
+                        {
+                            id = pair.Key,
+                            itemName = savedItem.itemName,
+                            weight = savedItem.weight,
+                            basePrice = savedItem.basePrice,
+                            maxCount = savedItem.maxCount
+                        },
+                        quantity = pair.Value
+                    });
+                }
+
                 continue;
             }
 
@@ -289,26 +308,24 @@ public sealed class TradePrepareViewDataBuilder
 
     internal static Dictionary<string, int> CreateFinalCargoQuantities(TradePrepareDraft draft)
     {
-        var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
-        ApplySelections(quantities, draft != null ? draft.selectedBuyItems : null);
-        return quantities;
+        return CreateFinalCargoQuantities(draft, null);
     }
 
-    private static void ApplySelections(Dictionary<string, int> quantities, List<TradeItemBundle> selections)
+    internal static Dictionary<string, int> CreateFinalCargoQuantities(
+        TradePrepareDraft draft,
+        ND.Framework.SaveData saveData)
     {
-        if (selections == null)
+        var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (saveData != null && saveData.caravan != null && saveData.caravan.cargo != null)
         {
-            return;
-        }
-
-        for (int index = 0; index < selections.Count; index++)
-        {
-            TradeItemBundle selection = selections[index];
-            if (selection != null)
+            foreach (ND.Framework.CargoEntrySaveData cargo in saveData.caravan.cargo)
             {
-                AddQuantity(quantities, selection.itemId, Mathf.Max(0, selection.quantity));
+                if (cargo != null && cargo.item != null && cargo.quantity > 0)
+                    AddQuantity(quantities, cargo.item.itemId, cargo.quantity);
             }
         }
+
+        return quantities;
     }
 
     private static void AddQuantity(Dictionary<string, int> quantities, string itemId, int amount)
@@ -346,7 +363,7 @@ public sealed class TradePrepareViewDataBuilder
                 continue;
             }
 
-            int buyAmount = GetSelectedQuantity(draft.selectedBuyItems, item.ItemId);
+            const int buyAmount = 0;
             ND.Economy.PriceCalculationResult price = CalculatePrice(item, route, saveData, 1);
             long purchasePrice = price.IsValid ? price.UnitBuyPrice : 0L;
             long sellPrice = price.IsValid ? price.UnitSellPrice : 0L;
@@ -358,7 +375,6 @@ public sealed class TradePrepareViewDataBuilder
             }
             int finalCargoQuantity;
             finalCargoQuantities.TryGetValue(item.ItemId, out finalCargoQuantity);
-            totalSellRevenue = AddClamped(totalSellRevenue, MultiplyClamped(sellPrice, Mathf.Max(0, finalCargoQuantity)));
 
             result.Add(new TradeItemViewData
             {
@@ -370,17 +386,17 @@ public sealed class TradePrepareViewDataBuilder
                 category = item.Category,
                 purchasePrice = purchasePrice,
                 sellPrice = sellPrice,
-                ownedAmount = 0,
-                selectedBuyAmount = buyAmount,
+                ownedAmount = Mathf.Max(0, finalCargoQuantity),
+                selectedBuyAmount = 0,
                 selectedSellAmount = 0,
                 // TradeItemData.MaxCount is only a temporary ceiling until market stock is provided.
                 contentQuantityLimit = item.MaxCount,
                 hasAuthoritativeStock = false,
                 unitWeight = item.Weight,
-                selectedWeight = item.Weight * Mathf.Max(0, buyAmount),
-                canBuy = price.IsValid,
+                selectedWeight = item.Weight * Mathf.Max(0, finalCargoQuantity),
+                canBuy = false,
                 canSell = false,
-                buyDisabledReason = price.IsValid ? string.Empty : price.ErrorCode,
+                buyDisabledReason = "Cargo purchases are handled by the town market.",
                 sellDisabledReason = string.Empty
             });
         }
@@ -704,32 +720,6 @@ public sealed class TradePrepareViewDataBuilder
         return false;
     }
 
-    private static bool HasInvalidCargoSelection(
-        TradePrepareDraft draft,
-        TradeItemData[] items)
-    {
-        if (draft == null || draft.selectedBuyItems == null)
-        {
-            return false;
-        }
-
-        for (int index = 0; index < draft.selectedBuyItems.Count; index++)
-        {
-            TradeItemBundle selection = draft.selectedBuyItems[index];
-            TradeItemData item = selection != null ? FindItem(items, selection.itemId) : null;
-            if (selection == null || selection.quantity <= 0
-                || string.IsNullOrEmpty(selection.itemId)
-                || item == null
-                // Market runtime stock will replace this SO ceiling when its service becomes available.
-                || selection.quantity > item.MaxCount)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static int GetCategoryQuantity(
         Dictionary<string, int> quantities,
         TradeItemData[] items,
@@ -994,6 +984,25 @@ public sealed class TradePrepareViewDataBuilder
                 if (items[index] != null && string.Equals(items[index].ItemId, id, StringComparison.Ordinal)) return items[index];
             }
         }
+        return null;
+    }
+
+    private static ND.Framework.TradeItemSaveData FindSavedCargoItem(
+        ND.Framework.SaveData saveData,
+        string itemId)
+    {
+        if (saveData == null || saveData.caravan == null || saveData.caravan.cargo == null)
+            return null;
+
+        foreach (ND.Framework.CargoEntrySaveData cargo in saveData.caravan.cargo)
+        {
+            if (cargo != null && cargo.item != null
+                && string.Equals(cargo.item.itemId, itemId, StringComparison.Ordinal))
+            {
+                return cargo.item;
+            }
+        }
+
         return null;
     }
 
