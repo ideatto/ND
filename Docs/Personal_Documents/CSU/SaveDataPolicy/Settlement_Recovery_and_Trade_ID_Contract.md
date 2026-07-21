@@ -8,7 +8,9 @@ Departure commit generates a new `Guid.NewGuid().ToString("D")` value. SaveData 
 
 Settlement calculation consumes the confirmed departure/runtime originals and shared definitions once. Before UI notification, Framework persists a complete confirmed result snapshot sufficient to render and claim without recalculation. Restart restores that exact snapshot. The ID-based collection supports multiple pending entries.
 
-The current single pending DTO and runtime cache may be compatibility fallbacks only. Once collection cutover occurs, they cannot overwrite collection entries and the collection is the source of truth.
+The version 6 `pendingSettlements[]` collection is the persisted source of truth. The selected-Caravan `pendingSettlement` property and runtime cache are compatibility views only and cannot overwrite unrelated collection entries.
+
+Normal data permits at most one unresolved pending settlement per Caravan. Exact duplicate `(caravanId, tradeId)` entries are invalid. Two different `tradeId` values for one `caravanId` are ambiguous recovery data: report a visible recovery error and block automatic Depart/Claim for that Caravan. Recovery must not silently select or delete either entry; automated repair remains a follow-up implementation decision.
 
 ## Claim contract
 
@@ -29,4 +31,3 @@ No player-facing settlement history is retained. A consumed-key/tombstone or equ
 ## Event direction
 
 Current `Action<string, JourneyResultData>` settlement events carry only `tradeId`. Target events carry a value payload with `caravanId`, full `tradeId`, and immutable/read-only result data. Subscribers must unsubscribe with their lifecycle and treat repeated delivery as possible notification replay, never as permission to pay again.
-

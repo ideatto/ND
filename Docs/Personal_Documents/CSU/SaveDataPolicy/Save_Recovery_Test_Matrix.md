@@ -1,6 +1,6 @@
 # Save Recovery Test Matrix
 
-Status in this contract branch: documentation-only; no production schema is activated, so all cases are pending automation/manual execution in implementation branches.
+Status in this contract branch: numeric schema version 6 and the collection persistence shape are active. Multi-active commands, coordination, and the remaining recovery behavior below are contract-only unless separately identified as implemented; all listed cases remain pending automation/manual execution in implementation branches.
 
 | Area | Scenario | Expected result |
 |---|---|---|
@@ -54,7 +54,7 @@ Status in this contract branch: documentation-only; no production schema is acti
 | Version | Duplicate Caravan ID | Visible validation failure |
 | Version | Duplicate trade ID/composite pending key | Visible validation failure |
 | Version | Unknown shared ID | Reported without crash or silent deletion |
-| Version | Version 1 input | Not silently accepted as target V2 |
+| Version | Product label V2 is interpreted | It remains distinct from numeric schema version 6 |
 | Version | Unsupported version | Documented behavior and visible log/result |
 | Compatibility | Legacy API during additive stage | Existing API still compiles |
 | Compatibility | Legacy adapter calls new API | Operation executes exactly once |

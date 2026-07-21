@@ -2,7 +2,9 @@
 
 ## Status and scope
 
-This document defines the second-build target contract. It does not activate that schema. The repository currently uses `SaveData.CurrentVersion = 5` and one `caravan`, `tradeProgress`, and `pendingSettlement`. Lowering that value to 2 would invalidate current saves; the team must resolve the product label versus the existing numeric sequence before implementation.
+`V2` is the product/document label for the second-build target contract. It is not the serialized numeric schema version. The repository currently uses `SaveData.CurrentVersion = 6`; changing that value to 2 would invalidate version compatibility.
+
+Version 6 has completed the collection-shaped persistence cutover. The serialized source of truth is `caravans[]`, `tradeProgressEntries[]`, and `pendingSettlements[]`, plus the persisted UI selection key `selectedCaravanId`. Multi-active command processing, coordination, and UI are separate follow-up implementation work and are not implied by the storage cutover.
 
 The target uses Unity-serializable lists, never dictionaries. Runtime indexes are rebuilt after load. Shared definitions are referenced by stable IDs; ScriptableObject values and calculated ViewData are not copied into saves.
 
@@ -11,7 +13,8 @@ The target uses Unity-serializable lists, never dictionaries. Runtime indexes ar
 ```text
 SaveData
 |- version, metadata(lastSavedUtcTicks)
-|- player(currencies, growth levels, home inventory, selectedCaravanId)
+|- player(currencies, growth levels, home inventory)
+|- selectedCaravanId (last UI/application selection)
 |- caravans[]
 |  |- caravanId
 |  |- fixedSetup(wagonId, currentDurability, animals[], mercenaries[])
@@ -26,7 +29,7 @@ SaveData
 
 No maximum Caravan count belongs in SaveData.
 
-`selectedCaravanId` persists the last selected Caravan under player/application state, not inside an individual Caravan. On load, select it only when the ID exists and is owned. If it is missing, locked, deleted, or invalid, select the first valid owned Caravan. Selection fallback must not activate Save Version 6 or imply a schema cutover in this documentation branch.
+`selectedCaravanId` persists the last selected Caravan at the SaveData root. On load, normalization keeps it only when the ID resolves to a stored Caravan; otherwise it selects the first valid stored Caravan. Selection is presentation/application focus, not the implicit target of a new state-changing command.
 
 ## Field rules
 
@@ -57,6 +60,10 @@ Each Caravan owns one preparation object. Editing it marks SaveData Dirty. Expli
 
 `PurchasePreviewSaveData` is an explicit persisted exception for `townId`, `marketId`, preview cargo item IDs/quantities, and preview food. Preview commands never mutate currency, inventory, or confirmed cargo.
 
-## Compatibility
+## Version 6 compatibility boundary
 
-The current single-value fields remain authoritative until an approved cutover. During migration they may be read into one generated/assigned Caravan entry, but dual writes must have one documented source of truth. Version 1 data must not be silently accepted as target V2. Reset or a one-time converter requires a separate approved decision.
+The non-serialized `caravan`, `tradeProgress`, and `pendingSettlement` properties are compatibility accessors for existing single-Caravan runtime callers. They resolve only the Caravan selected by `selectedCaravanId`; they do not represent or enumerate the complete multi-Caravan state and are not an alternate persistence source.
+
+New commands and recovery code must query the canonical collections by explicit ID. They must not infer a mutation target from `selectedCaravanId` or use the compatibility accessors to choose which Caravan departs, finalizes, or claims a settlement. Existing callers may continue through the accessors during staged migration, but collection data remains authoritative and must not be overwritten from a selected-only view.
+
+Implemented storage scope: numeric version 6, the three canonical collections, `selectedCaravanId`, ID fields on Caravan/trade progress/pending settlement DTOs, and selected-Caravan compatibility accessors. Not yet implemented by this cutover: explicit-ID Depart/Finalize/Claim commands, a Caravan-aware settlement-ready event, simultaneous Traveling coordination, duplicate/orphan recovery policy, per-Caravan reusable preparation, or stable `buildingId` migration.

@@ -16,12 +16,14 @@ These are target responsibilities. Existing direct mutations, `void` methods, re
 ## Proposed command surface
 
 - Preparation: `UpdatePreparation(caravanId, patch)`, `UpdatePurchasePreview(caravanId, preview)`, `CancelPreparation(caravanId)`; successful changes mark Dirty.
-- Trade: `Depart(caravanId, request)`, generating the trade GUID inside the commit boundary; immediate save.
-- Settlement: `FinalizeSettlement(caravanId, tradeId, snapshot)` and `ClaimSettlement(caravanId, tradeId)`; immediate save. Settlement claim does not repay rescue loans.
+- Trade: `Depart(caravanId, request)`, generating the trade GUID inside the commit boundary; immediate save. If the existing name is retained during migration, its equivalent signature is `TryStartTrade(caravanId, request)`.
+- Settlement: `FinalizeSettlement(caravanId, tradeId)` and `ClaimSettlement(caravanId, tradeId)`; immediate save. Settlement claim does not repay rescue loans.
 - Progression: growth, repair, building, one-time investment-quest completion, rescue-loan issue, `RepayRescueLoan(amount)`, restricted-mode exit as part of the departure save boundary, wagon destruction, and Caravan-to-home cargo transfer; immediate save. Donation and cumulative investment are not target commands.
 - Save: `Save(data)`, `MarkDirty(reason, entityId)`, and dirty-state query. `SaveResult Save(...)` is the single target API.
 
 Results distinguish validation failure, not found, conflict/duplicate, unsupported version, serialization, file I/O, and unknown failures. A false/failed result states whether runtime state changed; until transaction staging exists, callers must not assume rollback.
+
+Every state-changing multi-Caravan command takes its target IDs explicitly. `selectedCaravanId` may control which Caravan the UI displays, but commands must not read it to infer a mutation target. `ClaimSettlement` looks up the exact `(caravanId, tradeId)` pending entry, removes and resets only that Caravan on success, and returns a structured result containing at least `Succeeded`, a stable failure reason, and `SaveResult`. It does not issue or repay a rescue loan.
 
 For the first rescue-loan integration stage, `IssueRescueLoan()` and `RepayRescueLoan(long amount)` return `SaveResult` directly. UI obtains player-facing domain reasons from a read-only `RescueLoanCalculator` validation query; the command repeats validation and does not save on domain rejection. A later `ProgressionCommandResult<T>` requires separate approval.
 
@@ -38,6 +40,10 @@ For the first rescue-loan integration stage, `IssueRescueLoan()` and `RepayRescu
 Payloads include stable IDs and commit/save revision where available: preparation changed/cancelled, trade departed/state changed, settlement ready/claimed, investment quest completed, content unlocked, loan issued/repaid/closed, rescue restricted mode entered/exited, rebankruptcy detected, wagon destroyed/repaired, building upgraded, save succeeded/failed, and Dirty state changed.
 
 Events may repeat across subscription/recovery boundaries. Consumers deduplicate by IDs/revision and never apply rewards based only on receiving an event. Save failure events contain reason metadata but no mutable SaveData.
+
+The canonical settlement notification is `TradeSettlementReady(caravanId, tradeId, result)`. It reports an already-created state transition; receiving it is never authority to calculate, claim, or pay a settlement. UI compares the payload `caravanId` with its current selection only to decide visibility. Economy/Progression consumers use the full `tradeId` to prevent duplicate application and must not depend on `selectedCaravanId`.
+
+Production currently exposes `TradeSettlementReady(tradeId, result)` and has a direct `SettlementUiBridge` subscriber. Because an actual subscriber exists, migration is additive first: introduce the Caravan-aware canonical event, publish legacy and canonical notifications from one internal point without repeating mutation, migrate subscribers, then deprecate/remove the legacy event only after call-site and serialized-reference verification.
 
 ## Compatibility-first migration
 
