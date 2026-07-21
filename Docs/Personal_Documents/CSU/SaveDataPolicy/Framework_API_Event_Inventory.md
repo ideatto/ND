@@ -39,9 +39,9 @@ This is a documentation-only Stage 1 template. Record evidence before behavior c
 
 ## Remaining implementation decisions
 
-- Concrete rescue-configuration IDs, quantities, and fixed shared-data prices
+- Confirm the Progression-owned `RescueLoanDefinition.MinimumTradeCost` asset/ID and the integration lookup path
 - Exact game-over evaluation hook after settlement/claim, relevant asset loss, and load recovery
-- Loan-flow UI presentation and command naming consistent with approved restricted-mode behavior
+- Loan-flow UI presentation for issue, separate partial/full repayment, restriction, and rebankruptcy snapshots
 - Product Version 2 label versus the repository's monotonic numeric save version
 - Exclusive cross-Caravan asset assignment policy
 

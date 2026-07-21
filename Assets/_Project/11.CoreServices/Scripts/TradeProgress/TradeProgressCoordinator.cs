@@ -46,6 +46,7 @@
  * - Related Documentation: Docs/Guide/Framework_World_Map_API_Guide.md
  */
 using System;
+using UnityEngine;
 
 namespace ND.Framework
 {
@@ -62,6 +63,7 @@ namespace ND.Framework
         private readonly InGameScreenStateRouter inGameScreenRouter;
         private readonly Func<ISharedGameDataProvider> getSharedGameData;
         private readonly global::ITradePrepareCommitCompletion tradePrepareCommitCompletion;
+        private readonly global::ITradePrepareCommitSource tradePrepareCommitSource;
         private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
         private CaravanData activeCaravan;
@@ -87,7 +89,8 @@ namespace ND.Framework
             InGameScreenStateRouter inGameScreenRouter = null,
             IInGameTimeProvider inGameTimeProvider = null,
             Func<ISharedGameDataProvider> getSharedGameData = null,
-            global::ITradePrepareCommitCompletion tradePrepareCommitCompletion = null)
+            global::ITradePrepareCommitCompletion tradePrepareCommitCompletion = null,
+            global::ITradePrepareCommitSource tradePrepareCommitSource = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
@@ -97,6 +100,7 @@ namespace ND.Framework
             this.inGameScreenRouter = inGameScreenRouter;
             this.getSharedGameData = getSharedGameData;
             this.tradePrepareCommitCompletion = tradePrepareCommitCompletion;
+            this.tradePrepareCommitSource = tradePrepareCommitSource;
 
             FrameworkEvents.CompleteTradeRequested += ForceCompleteActiveTrade;
         }
@@ -326,9 +330,10 @@ namespace ND.Framework
         /// <summary>
         /// cache된 settlement를 claim하고 저장 데이터와 runtime caravan을 준비 상태로 되돌린다.
         /// </summary>
-        /// <returns>claim, 상태 기록, caravan reset, 저장이 모두 성공하면 true.</returns>
+        /// <returns>검증, claim staging, 저장, town 전환이 모두 성공하면 true.</returns>
         /// <remarks>
-        /// 성공 시 settlement cache와 pendingSettlement가 삭제되고 InGameScreenState.Preparation으로 전환된다.
+        /// 성공 시 목적지 마을 위치가 저장되고 settlement cache와 pending/commit이 삭제된 뒤 Town으로 전환된다.
+        /// 저장 실패 시 SaveData와 runtime caravan을 claim 직전 snapshot으로 복구한다.
         /// </remarks>
         public bool ClaimSettlementAndReset()
         {
@@ -346,12 +351,20 @@ namespace ND.Framework
                 return false;
             }
 
+            if (!TryResolveClaimDestination(saveData, out var destinationTownId))
+            {
+                return false;
+            }
+
             // recorder가 없으면 claim 이후 완료/실패 상태를 저장 데이터에 기록할 수 없다.
             if (tradeProgressRecorder == null)
             {
                 FrameworkLog.Warning("Settlement claim blocked because trade progress recorder is missing.");
                 return false;
             }
+
+            var saveDataSnapshot = JsonUtility.ToJson(saveData);
+            var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
 
             // Core가 settlement claim을 거부하면 framework 상태 전환도 진행하지 않는다.
             if (!JourneyRunner.ClaimSettlement(caravan))
@@ -363,7 +376,9 @@ namespace ND.Framework
             var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
             if (!economySettlementBridge.TryApplyPendingEconomy(saveData, caravan, activeTradeId))
             {
-                FrameworkLog.Warning("Settlement claim continued but Economy M1 currency apply did not complete.");
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                FrameworkLog.Warning("Settlement claim rolled back because Economy M1 currency apply did not complete.");
+                return false;
             }
 
             // settlement 결과 등급에 따라 최종 저장 상태를 Completed 또는 Failed로 기록한다.
@@ -372,31 +387,106 @@ namespace ND.Framework
                 : MarkCompleted(saveData);
             if (!finalStateRecorded)
             {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
                 return false;
             }
 
             // claim 이후 caravan을 preparation 상태로 되돌려 다음 무역 출발이 가능한 저장 상태를 만든다.
             if (!JourneyRunner.ResetToPrepare(caravan))
             {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
                 FrameworkLog.Warning("Settlement was claimed but Core did not return the caravan to preparation.");
                 return false;
             }
 
-            // 수령 확정 후 대기 정산 DTO를 비워 재실행 시 중복 보상을 막는다.
+            saveData.player.currentTownId = destinationTownId;
+
+            // 대기 정산과 준비 commit 정리를 같은 저장 단위에 stage한다.
             PendingSettlementSaveDataMapper.Clear(saveData);
-            if (tradePrepareCommitCompletion != null &&
+            if (tradePrepareCommitCompletion == null ||
                 !tradePrepareCommitCompletion.TryComplete(activeTradeId, out _))
             {
-                FrameworkLog.Warning($"Trade preparation commit was not found while completing trade '{activeTradeId}'.");
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                FrameworkLog.Warning($"Settlement claim rolled back because trade preparation commit '{activeTradeId}' could not be completed.");
+                return false;
             }
 
-            // reset된 runtime caravan을 저장 데이터에 반영하고 UI를 preparation 화면으로 복귀시킨다.
+            // reset된 runtime caravan을 저장 데이터에 반영한 뒤 원자 저장 결과를 확인한다.
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-            saveService?.Save(saveData);
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Preparation);
+            var saveResult = saveService != null ? saveService.Save(saveData) : null;
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
+                FrameworkLog.Warning("Settlement claim rolled back because save did not succeed.");
+                return false;
+            }
+
             ClearSettlementCache();
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
 
             return true;
+        }
+
+        private bool TryResolveClaimDestination(SaveData saveData, out string destinationTownId)
+        {
+            destinationTownId = string.Empty;
+            if (saveData.player == null)
+            {
+                FrameworkLog.Warning("Settlement claim blocked because player save data is missing.");
+                return false;
+            }
+
+            var progress = saveData.tradeProgress;
+            var activeTradeId = progress.activeTradeId ?? string.Empty;
+            if (tradePrepareCommitSource == null ||
+                !tradePrepareCommitSource.TryGet(activeTradeId, out var commit) || commit == null)
+            {
+                FrameworkLog.Warning("Settlement claim blocked because the trade preparation commit is missing.");
+                return false;
+            }
+
+            destinationTownId = commit.selectedDestinationTownId ?? string.Empty;
+            var activeRouteId = progress.activeRouteId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(destinationTownId) || string.IsNullOrWhiteSpace(activeRouteId))
+            {
+                FrameworkLog.Warning("Settlement claim blocked because destination town or active route ID is empty.");
+                return false;
+            }
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded ||
+                !sharedGameData.TryGetRoute(activeRouteId, out var route) || route == null ||
+                string.IsNullOrWhiteSpace(route.ToTownId))
+            {
+                FrameworkLog.Warning($"Settlement claim blocked because route '{activeRouteId}' was not found.");
+                return false;
+            }
+
+            if (!string.Equals(destinationTownId, route.ToTownId, StringComparison.Ordinal))
+            {
+                FrameworkLog.Warning(
+                    $"Settlement claim blocked because destination does not match route. Commit: {destinationTownId}, Route: {route.ToTownId}");
+                destinationTownId = string.Empty;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void RestoreClaimSnapshot(
+            SaveData saveData,
+            CaravanData caravan,
+            string saveDataSnapshot,
+            string runtimeCaravanSnapshot)
+        {
+            JsonUtility.FromJsonOverwrite(saveDataSnapshot, saveData);
+            JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, caravan);
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData != null && sharedGameData.IsLoaded && LastSettlementResult != null)
+            {
+                economySettlementBridge.TryCalculateAndFill(saveData, caravan, LastSettlementResult, sharedGameData);
+            }
         }
 
         /// <summary>
@@ -665,20 +755,23 @@ namespace ND.Framework
             }
 
             var pending = saveData.pendingSettlement;
-            if (pending != null && pending.hasResult)
+            if (pending == null || !pending.hasResult)
             {
-                if (pending.claimed)
-                {
-                    FrameworkLog.Warning("Settlement claim blocked because pending settlement is already claimed.");
-                    return false;
-                }
+                FrameworkLog.Warning("Settlement claim blocked because pending settlement is missing.");
+                return false;
+            }
 
-                if (!string.IsNullOrEmpty(pending.tradeId) && pending.tradeId != activeTradeId)
-                {
-                    FrameworkLog.Warning(
-                        $"Settlement claim blocked because pending settlement trade ID does not match active trade ID. Pending: {pending.tradeId}, Active: {activeTradeId}");
-                    return false;
-                }
+            if (pending.claimed)
+            {
+                FrameworkLog.Warning("Settlement claim blocked because pending settlement is already claimed.");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(pending.tradeId) || pending.tradeId != activeTradeId)
+            {
+                FrameworkLog.Warning(
+                    $"Settlement claim blocked because pending settlement trade ID does not match active trade ID. Pending: {pending.tradeId}, Active: {activeTradeId}");
+                return false;
             }
 
             return true;

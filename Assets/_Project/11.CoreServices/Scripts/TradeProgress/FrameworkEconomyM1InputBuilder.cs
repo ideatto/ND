@@ -111,6 +111,7 @@ namespace ND.Framework
                 FoodCost = routeDefinition.BaseFoodCost,
                 MercenaryCost = routeDefinition.BaseMercenaryCost,
                 CartRepairCost = cartRepairCost,
+                LoanRepayment = 0L,
                 DevelopmentCurrencyReward = 0L,
                 PurchaseGrowth = false,
                 PlayerGrowthLevel = saveData.player.playerGrowthLevel,

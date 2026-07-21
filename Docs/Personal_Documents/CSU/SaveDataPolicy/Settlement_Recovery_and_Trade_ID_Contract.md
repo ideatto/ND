@@ -12,17 +12,19 @@ The current single pending DTO and runtime cache may be compatibility fallbacks 
 
 ## Claim contract
 
-`ClaimSettlement(caravanId, tradeId, repayLoan)`:
+`ClaimSettlement(caravanId, tradeId)`:
 
 1. Rejects missing, malformed, mismatched, already claimed, or duplicate keys without mutation.
-2. Stages the exact reward application, completed trade state, and matching pending removal.
-3. Saves the staged aggregate immediately.
-4. On save failure reports failure and leaves the externally visible durable state uncommitted.
-5. On success publishes one completion event and clears prepared goods/food while preserving fixed setup.
+2. Stages the exact reward application, completed trade state, matching pending removal, and preparation cleanup.
+3. Sets any legacy settlement `LoanRepayment` input to zero and does not mutate rescue-loan principal.
+4. Saves the staged aggregate immediately.
+5. On save failure reports failure and leaves the externally visible durable state uncommitted.
+6. On success publishes one completion event and clears prepared goods/food while preserving fixed setup.
 
-When `repayLoan` is true, repayment uses only this settlement's newly paid trading-currency amount and equals `min(payout, remainingPrincipal)`. A non-positive payout offers no repayment. When false, principal is unchanged. Partial amount entry and a separate repayment command are not supported. Reward application, optional repayment, trade state, pending removal, preparation cleanup, aggregate save, completion event, and UI refresh are one staged transaction. Any final save failure rolls all of them back to the PreCommandSnapshot.
+Settlement finalization, pending snapshots, and Claim contain no rescue-loan repayment choice or amount. A non-positive or positive settlement payout never changes `remainingPrincipal`. Partial or full repayment is performed only through the separate `RepayRescueLoan(long amount)` command after restricted preparation has ended. Settlement reward application, trade state, pending removal, preparation cleanup, aggregate save, completion event, and UI refresh remain one staged transaction; rescue-loan repayment is a different transaction with its own currency/loan snapshot and rollback.
 
 No player-facing settlement history is retained. A consumed-key/tombstone or equivalent idempotency marker may be kept only as needed to prevent duplicate payment and must have a bounded lifecycle policy.
+
 
 ## Event direction
 

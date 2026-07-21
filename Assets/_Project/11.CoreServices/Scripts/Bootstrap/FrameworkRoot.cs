@@ -33,6 +33,7 @@
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
+using ND.Economy;
 using UnityEngine;
 
 namespace ND.Framework
@@ -94,6 +95,9 @@ namespace ND.Framework
         /// Core caravan 출발 검증과 저장 데이터 기록을 연결하는 서비스이다.
         /// </summary>
         public TradeStartService TradeStart { get; private set; }
+
+        /// <summary>구조 대출 발급·상환 및 상태 조회 command service이다.</summary>
+        public RescueLoanCommandService RescueLoan { get; private set; }
 
         public FrameworkTradePrepareCommitStore TradePrepareCommitStore { get; private set; }
 
@@ -289,6 +293,7 @@ namespace ND.Framework
                 InGameScreenRouter,
                 GameTime,
                 () => SharedGameData,
+                TradePrepareCommitStore,
                 TradePrepareCommitStore);
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,
@@ -301,6 +306,9 @@ namespace ND.Framework
                 TradeProgressCoordinator.SetActiveCaravan);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
 
+            // 실제 MinimumTradeCost는 Content/Progression 공급 전까지 0으로 두어 command가 안전하게 거부되게 한다.
+            ConfigureRescueLoanDefinition(new RescueLoanDefinition());
+
             // Settlement bridge는 event 구독이 필요한 MonoBehaviour이므로 root GameObject에 component로 붙인다.
             SettlementUiBridge = gameObject.AddComponent<SettlementUiBridge>();
             SettlementUiBridge.Initialize(
@@ -310,6 +318,19 @@ namespace ND.Framework
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
+        }
+
+        /// <summary>
+        /// Content/Progression이 제공한 구조 대출 정의를 command service에 주입한다.
+        /// </summary>
+        /// <param name="definition">안정적인 LoanId와 0보다 큰 최소 무역 비용을 가진 정의.</param>
+        public void ConfigureRescueLoanDefinition(RescueLoanDefinition definition)
+        {
+            RescueLoan = new RescueLoanCommandService(
+                SaveService,
+                () => CurrentSaveData,
+                definition,
+                () => DateTime.UtcNow.Ticks);
         }
 
         private bool EnsureSharedGameDataLoaded()

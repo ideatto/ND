@@ -7,9 +7,11 @@
  * - Play mode ContextMenu smoke와 동일한 coordinator 경로를 서비스 조립으로 재현한다.
  *
  * Main Features
+ * - 구조 대출 발급 → 제한 모드 → 무역 출발 → 제한 해제 → 수동 상환 통합 검증.
+ * - 원자 claim: 저장 실패 원복, 정상 claim, currentTownId/Town 이벤트, 중복 claim 거부, 재실행 Town 복원 검증.
  * - SharedGameData 로드, 3회 loop integrity, settle 후 currency 불변·claim 후 currency 변화 검증.
  * - 인게임 식량 소모 elapsed 동기화 및 배율 효과 검증.
- * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 복귀 검증.
+ * - Pause 중 식량 elapsed 정지, Failed 정산 화면 진입·claim 후 Town 복귀 검증.
  * - PendingSettlementSaveData 저장·캐시 소실 후 복구·claim·손상 케이스 검증.
  * - Traveling 오프라인 미완료·완료·역행 복구 검증.
  * - Unity batchmode -executeMethod 진입점 제공.
@@ -25,6 +27,8 @@
  */
 #if UNITY_EDITOR
 using System;
+using System.Reflection;
+using ND.Economy;
 using UnityEditor;
 using UnityEngine;
 
@@ -36,7 +40,8 @@ namespace ND.Framework.Editor
     public static class FrameworkM1LoopE2EEditorTests
     {
         private const int CycleCount = 3;
-        private const string RouteId = "BaseRoute";
+        // SharedGameData catalog에 존재하는 실제 route ID이다. 원자 claim은 route.ToTownId와 commit destination 일치가 필요하다.
+        private const string RouteId = "BaseToRiver";
         private const string ItemId = "Apple";
         private const float DistanceKm = 100f;
         private const float StarveGraceSeconds = 5f;
@@ -50,7 +55,9 @@ namespace ND.Framework.Editor
         [MenuItem("ND/Framework/Run M1 Loop + Economy E2E Checks")]
         public static void RunAll()
         {
+            RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
+            RunAtomicSettlementClaimE2E();
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
@@ -60,6 +67,306 @@ namespace ND.Framework.Editor
             RunPendingSettlementRestoreE2E(TestContext.Create());
             RunOfflineProgressE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
+        }
+
+        private static void RunRescueLoanIntegrationChecks()
+        {
+            RunRescueLoanNormalizationChecks();
+
+            var data = new SaveData();
+            data.player.tradingCurrency = 400L;
+            var save = new ConfigurableSaveService();
+            var definition = new RescueLoanDefinition { LoanId = "rescue", MinimumTradeCost = 1000L };
+            var service = new RescueLoanCommandService(save, () => data, definition, () => 1234L);
+            var issuedEvents = 0;
+            Action<IssueRescueLoanResult> onIssued = _ => issuedEvents++;
+            FrameworkEvents.RescueLoanIssued += onIssued;
+            try
+            {
+                var issue = service.IssueRescueLoan();
+                if (!issue.Succeeded || data.player.tradingCurrency != 1400L
+                    || data.rescueLoan.originalPrincipal != 1000L
+                    || data.rescueLoan.remainingPrincipal != 1000L
+                    || !data.rescueLoan.isActive || !data.rescueLoan.isRestrictedPreparation
+                    || issuedEvents != 1 || save.SaveCalls != 1)
+                {
+                    throw new InvalidOperationException("Rescue loan issue integration failed.");
+                }
+
+                if (service.IssueRescueLoan().Succeeded || save.SaveCalls != 1)
+                {
+                    throw new InvalidOperationException("Active rescue loan duplicate issue was not rejected before save.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.RescueLoanIssued -= onIssued;
+            }
+
+            data.rescueLoan.isRestrictedPreparation = false;
+            var partial = service.RepayRescueLoan(200L);
+            if (!partial.Succeeded || data.player.tradingCurrency != 1200L
+                || data.rescueLoan.remainingPrincipal != 800L || !data.rescueLoan.isActive)
+            {
+                throw new InvalidOperationException("Rescue loan partial repayment integration failed.");
+            }
+
+            data.player.tradingCurrency = 2000L;
+            var full = service.RepayRescueLoan(800L);
+            if (!full.Succeeded || data.rescueLoan.remainingPrincipal != 0L
+                || data.rescueLoan.isActive || data.rescueLoan.isRestrictedPreparation)
+            {
+                throw new InvalidOperationException("Rescue loan full repayment integration failed.");
+            }
+
+            var rollbackData = new SaveData();
+            rollbackData.player.tradingCurrency = 100L;
+            var failingSave = new ConfigurableSaveService { ShouldSucceed = false };
+            var rollbackService = new RescueLoanCommandService(
+                failingSave, () => rollbackData, definition, () => 5678L);
+            if (rollbackService.IssueRescueLoan().Succeeded
+                || rollbackData.player.tradingCurrency != 100L
+                || rollbackData.rescueLoan.isActive
+                || rollbackData.rescueLoan.remainingPrincipal != 0L)
+            {
+                throw new InvalidOperationException("Rescue loan issue save-failure rollback failed.");
+            }
+
+            rollbackData.player.tradingCurrency = 2000L;
+            rollbackData.rescueLoan = new RescueLoanSaveData
+            {
+                loanId = "rescue",
+                originalPrincipal = 1000L,
+                remainingPrincipal = 500L,
+                isActive = true
+            };
+            if (rollbackService.RepayRescueLoan(100L).Succeeded
+                || rollbackData.player.tradingCurrency != 2000L
+                || rollbackData.rescueLoan.remainingPrincipal != 500L
+                || !rollbackData.rescueLoan.isActive)
+            {
+                throw new InvalidOperationException("Rescue loan repayment save-failure rollback failed.");
+            }
+
+            var rebankrupt = rollbackService.EvaluateStatus();
+            rollbackData.player.tradingCurrency = 100L;
+            rebankrupt = rollbackService.EvaluateStatus();
+            if (!rebankrupt.IsValid || !rebankrupt.NeedsRecovery || !rebankrupt.IsRebankrupt
+                || rebankrupt.CanOfferLoan || rebankrupt.Shortfall != 900L)
+            {
+                throw new InvalidOperationException("Rescue loan rebankruptcy status integration failed.");
+            }
+
+            rollbackData.rescueLoan.isActive = false;
+            var offer = rollbackService.EvaluateStatus();
+            if (!offer.CanOfferLoan || offer.IsRebankrupt)
+            {
+                throw new InvalidOperationException("Rescue loan offer status integration failed.");
+            }
+
+            RunRestrictedDepartureHappyPathCheck();
+            RunRestrictedDepartureRollbackCheck(rollbackData, definition);
+            Debug.Log("[Framework Rescue Loan] All integration checks passed.");
+        }
+
+        /// <summary>
+        /// 대출 발급 → 제한 모드 → 무역 출발 → 제한 해제 → 수동 상환 순서를 검증한다.
+        /// </summary>
+        private static void RunRestrictedDepartureHappyPathCheck()
+        {
+            var data = new SaveData();
+            data.player.tradingCurrency = 400L;
+            var save = new ConfigurableSaveService();
+            var definition = new RescueLoanDefinition { LoanId = "rescue", MinimumTradeCost = 1000L };
+            var loanService = new RescueLoanCommandService(save, () => data, definition, () => 9012L);
+
+            var restrictedEntered = 0;
+            var restrictedExited = 0;
+            var repaidEvents = 0;
+            Action onRestrictedEntered = () => restrictedEntered++;
+            Action onRestrictedExited = () => restrictedExited++;
+            Action<RepayRescueLoanResult> onRepaid = _ => repaidEvents++;
+            FrameworkEvents.RescueRestrictedModeEntered += onRestrictedEntered;
+            FrameworkEvents.RescueRestrictedModeExited += onRestrictedExited;
+            FrameworkEvents.RescueLoanRepaid += onRepaid;
+            try
+            {
+                var issue = loanService.IssueRescueLoan();
+                if (!issue.Succeeded
+                    || data.player.tradingCurrency != 1400L
+                    || !data.rescueLoan.isActive
+                    || !data.rescueLoan.isRestrictedPreparation
+                    || !loanService.IsRestrictedPreparation
+                    || restrictedEntered != 1)
+                {
+                    throw new InvalidOperationException(
+                        "Rescue loan happy path failed at issue/restricted-mode entry.");
+                }
+
+                var policy = ScriptableObject.CreateInstance<InGameTimePolicyConfig>();
+                var time = new GameTimeService(policy);
+                var recorder = new TradeProgressRecorder(time, time);
+                var tradeStart = new TradeStartService(() => data, save, recorder);
+                var caravan = CreateSampleCaravan(time);
+                var saveCallsBeforeDepart = save.SaveCalls;
+
+                var depart = tradeStart.TryStartTrade(
+                    caravan,
+                    DistanceKm,
+                    "loan_happy_depart",
+                    RouteId);
+                if (!depart.canDepart
+                    || !tradeStart.LastRecordSucceeded
+                    || data.rescueLoan.isRestrictedPreparation
+                    || loanService.IsRestrictedPreparation
+                    || restrictedExited != 1
+                    || data.tradeProgress.state != TradeProgressState.Traveling
+                    || caravan.state != JourneyState.Traveling
+                    || save.SaveCalls != saveCallsBeforeDepart + 1)
+                {
+                    throw new InvalidOperationException(
+                        "Rescue loan happy path failed at restricted departure / mode exit.");
+                }
+
+                // 전액 상환은 재화가 MinimumTradeCost 아래로 떨어져 거절되므로,
+                // 제한 해제 이후 허용되는 수동 부분 상환으로 통합 경로를 검증한다.
+                var repayAmount = 400L;
+                var currencyBeforeRepay = data.player.tradingCurrency;
+                var remainingBeforeRepay = data.rescueLoan.remainingPrincipal;
+                var repay = loanService.RepayRescueLoan(repayAmount);
+                if (!repay.Succeeded
+                    || data.player.tradingCurrency != currencyBeforeRepay - repayAmount
+                    || data.rescueLoan.remainingPrincipal != remainingBeforeRepay - repayAmount
+                    || !data.rescueLoan.isActive
+                    || data.rescueLoan.isRestrictedPreparation
+                    || repaidEvents != 1)
+                {
+                    throw new InvalidOperationException(
+                        "Rescue loan happy path failed at manual repayment after restriction exit. "
+                        + $"Succeeded={repay.Succeeded}, Message={repay.Message}, "
+                        + $"Currency={data.player.tradingCurrency}, Remaining={data.rescueLoan.remainingPrincipal}, "
+                        + $"Active={data.rescueLoan.isActive}, Restricted={data.rescueLoan.isRestrictedPreparation}, "
+                        + $"RepaidEvents={repaidEvents}");
+                }
+
+                // 정산 등으로 재화가 충분해진 뒤의 잔액 전액 상환도 같은 경로에서 확인한다.
+                data.player.tradingCurrency = 2500L;
+                var close = loanService.RepayRescueLoan(data.rescueLoan.remainingPrincipal);
+                if (!close.Succeeded
+                    || data.rescueLoan.remainingPrincipal != 0L
+                    || data.rescueLoan.isActive
+                    || data.rescueLoan.isRestrictedPreparation
+                    || repaidEvents != 2)
+                {
+                    throw new InvalidOperationException(
+                        "Rescue loan happy path failed at final repayment after currency recovery. "
+                        + $"Succeeded={close.Succeeded}, Message={close.Message}, "
+                        + $"Remaining={data.rescueLoan.remainingPrincipal}, Active={data.rescueLoan.isActive}");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.RescueRestrictedModeEntered -= onRestrictedEntered;
+                FrameworkEvents.RescueRestrictedModeExited -= onRestrictedExited;
+                FrameworkEvents.RescueLoanRepaid -= onRepaid;
+            }
+
+            Debug.Log(
+                "[Framework Rescue Loan] Happy path passed: issue -> restricted -> depart -> exit -> repay.");
+        }
+
+        private static void RunRescueLoanNormalizationChecks()
+        {
+            var normalize = typeof(JsonSaveService).GetMethod(
+                "NormalizeRescueLoan",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (normalize == null)
+            {
+                throw new InvalidOperationException("Rescue loan normalizer was not found.");
+            }
+
+            var data = new SaveData { rescueLoan = null };
+            normalize.Invoke(null, new object[] { data });
+            if (data.rescueLoan == null)
+            {
+                throw new InvalidOperationException("Missing rescue loan save data was not normalized.");
+            }
+
+            data.rescueLoan = new RescueLoanSaveData
+            {
+                loanId = string.Empty,
+                originalPrincipal = -1L,
+                remainingPrincipal = 20L,
+                issuedUtcTicks = -3L,
+                isActive = true,
+                isRestrictedPreparation = true
+            };
+            normalize.Invoke(null, new object[] { data });
+            if (data.rescueLoan.originalPrincipal != 0L
+                || data.rescueLoan.remainingPrincipal != 0L
+                || data.rescueLoan.issuedUtcTicks != 0L
+                || data.rescueLoan.isActive || data.rescueLoan.isRestrictedPreparation)
+            {
+                throw new InvalidOperationException("Corrupted rescue loan save data was not normalized safely.");
+            }
+
+            data.rescueLoan = new RescueLoanSaveData
+            {
+                loanId = "rescue",
+                originalPrincipal = 100L,
+                remainingPrincipal = 200L,
+                isActive = true
+            };
+            normalize.Invoke(null, new object[] { data });
+            if (data.rescueLoan.remainingPrincipal != 100L || !data.rescueLoan.isActive)
+            {
+                throw new InvalidOperationException("Rescue loan remaining principal clamp failed.");
+            }
+        }
+
+        private static void RunRestrictedDepartureRollbackCheck(
+            SaveData data,
+            RescueLoanDefinition definition)
+        {
+            data.rescueLoan = new RescueLoanSaveData
+            {
+                loanId = definition.LoanId,
+                originalPrincipal = definition.MinimumTradeCost,
+                remainingPrincipal = definition.MinimumTradeCost,
+                isActive = true,
+                isRestrictedPreparation = true
+            };
+            var policy = ScriptableObject.CreateInstance<InGameTimePolicyConfig>();
+            var time = new GameTimeService(policy);
+            var recorder = new TradeProgressRecorder(time, time);
+            var failingSave = new ConfigurableSaveService { ShouldSucceed = false };
+            var start = new TradeStartService(() => data, failingSave, recorder);
+            var caravan = CreateSampleCaravan(time);
+            var result = start.TryStartTrade(caravan, DistanceKm, "loan_departure", RouteId);
+            if (result.canDepart || !data.rescueLoan.isRestrictedPreparation
+                || data.tradeProgress.state == TradeProgressState.Traveling
+                || caravan.state == JourneyState.Traveling)
+            {
+                throw new InvalidOperationException("Restricted departure save-failure rollback failed.");
+            }
+        }
+
+        private sealed class ConfigurableSaveService : ISaveService
+        {
+            public bool ShouldSucceed = true;
+            public int SaveCalls;
+
+            public bool HasSaveData() => false;
+            public SaveData CreateNewGameData() => new SaveData();
+            public SaveData Load() => new SaveData();
+            public SaveResult Save(SaveData data)
+            {
+                SaveCalls++;
+                return ShouldSucceed
+                    ? SaveResult.Success()
+                    : SaveResult.Failure(SaveFailureReason.WriteFailed, "test failure");
+            }
+            public void ResetSaveData() { }
         }
 
         private static void RunTradePreparationCommitStoreE2E()
@@ -481,14 +788,14 @@ namespace ND.Framework.Editor
                     "Failed settlement screen E2E failed to return caravan to Prepare.");
             }
 
-            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Preparation)
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Town)
             {
                 throw new InvalidOperationException(
-                    $"Failed settlement screen E2E failed: post-claim screen was {context.ScreenRouter.CurrentScreenState}, expected Preparation.");
+                    $"Failed settlement screen E2E failed: post-claim screen was {context.ScreenRouter.CurrentScreenState}, expected Town.");
             }
 
             Debug.Log(
-                "[Framework M1 E2E] Failed settlement screen passed. Failed grade -> Settlement -> claim -> Preparation/Failed state.");
+                "[Framework M1 E2E] Failed settlement screen passed. Failed grade -> Settlement -> claim -> Town/Failed state.");
         }
 
         private static void RunPendingSettlementRestoreE2E(TestContext context)
@@ -939,7 +1246,7 @@ namespace ND.Framework.Editor
 
             public GameTimeService GameTime { get; private set; }
 
-            public JsonSaveService SaveService { get; private set; }
+            public ISaveService SaveService { get; private set; }
 
             public ISharedGameDataProvider SharedGameData { get; private set; }
 
@@ -949,7 +1256,7 @@ namespace ND.Framework.Editor
 
             public InGameScreenStateRouter ScreenRouter { get; private set; }
 
-            public static TestContext Create()
+            public static TestContext Create(ISaveService saveServiceOverride = null)
             {
                 var policyConfig = Resources.Load<InGameTimePolicyConfig>(InGameTimePolicyConfig.ResourceName);
                 if (policyConfig == null)
@@ -958,7 +1265,7 @@ namespace ND.Framework.Editor
                 }
 
                 var gameTime = new GameTimeService(policyConfig);
-                var saveService = new JsonSaveService();
+                var saveService = saveServiceOverride ?? new JsonSaveService();
                 var sharedGameDataService = new SharedGameDataService();
                 if (!sharedGameDataService.LoadInitialData())
                 {
@@ -975,6 +1282,7 @@ namespace ND.Framework.Editor
                 var saveData = saveService.CreateNewGameData();
                 var recorder = new TradeProgressRecorder(gameTime, gameTime);
                 var router = new InGameScreenStateRouter();
+                var commitStore = new FrameworkTradePrepareCommitStore(() => saveData);
                 var coordinator = new TradeProgressCoordinator(
                     () => saveData,
                     saveService,
@@ -982,7 +1290,9 @@ namespace ND.Framework.Editor
                     recorder,
                     router,
                     gameTime,
-                    () => sharedGameData);
+                    () => sharedGameData,
+                    commitStore,
+                    commitStore);
                 var tradeStart = new TradeStartService(
                     () => saveData,
                     saveService,
@@ -994,7 +1304,11 @@ namespace ND.Framework.Editor
                         coordinator.ClearPendingSettlementSave(saveData);
                     },
                     // Production wiring registers the same departure reference in FrameworkRoot.
-                    coordinator.SetActiveCaravan);
+                    caravan =>
+                    {
+                        StageTestCommit(saveData, sharedGameData, commitStore);
+                        coordinator.SetActiveCaravan(caravan);
+                    });
 
                 return new TestContext
                 {
@@ -1007,6 +1321,157 @@ namespace ND.Framework.Editor
                     ScreenRouter = router
                 };
             }
+
+            private static void StageTestCommit(
+                SaveData saveData,
+                ISharedGameDataProvider sharedGameData,
+                FrameworkTradePrepareCommitStore commitStore)
+            {
+                var progress = saveData.tradeProgress;
+                if (progress == null || !sharedGameData.TryGetRoute(progress.activeRouteId, out var route) || route == null)
+                {
+                    throw new InvalidOperationException("Test commit could not resolve the active route.");
+                }
+
+                if (!commitStore.TryStage(new global::TradePrepareCommitData
+                {
+                    tradeId = progress.activeTradeId,
+                    currentTownId = saveData.player.currentTownId,
+                    selectedDestinationTownId = route.ToTownId,
+                    routeId = progress.activeRouteId
+                }))
+                {
+                    throw new InvalidOperationException("Test trade preparation commit could not be staged.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 원자 claim: 정상 claim → currentTownId/Town 이벤트 → 저장 실패 원복 → 중복 claim → 재실행 화면을 검증한다.
+        /// </summary>
+        private static void RunAtomicSettlementClaimE2E()
+        {
+            var saveService = new ConfigurableSaveService();
+            var context = TestContext.Create(saveService);
+            var caravan = CreateSampleCaravan(context.GameTime);
+            if (!context.TradeStart.TryStartTrade(
+                    caravan, DistanceKm, "editor_atomic_claim", RouteId).canDepart)
+            {
+                throw new InvalidOperationException("Atomic claim E2E failed to start trade.");
+            }
+
+            context.Coordinator.ForceCompleteActiveTrade();
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                throw new InvalidOperationException(
+                    $"Atomic claim E2E expected Settlement before claim, got {context.ScreenRouter.CurrentScreenState}.");
+            }
+
+            var currencyBefore = context.SaveData.player.tradingCurrency;
+            var townBefore = context.SaveData.player.currentTownId;
+            var caravanBefore = JsonUtility.ToJson(context.SaveData.caravan);
+            var expectedDestination = context.SaveData.tradePreparationCommit.destinationTownId;
+
+            // 저장 실패 강제 → 상태 원복 확인
+            saveService.ShouldSucceed = false;
+            if (context.Coordinator.ClaimSettlementAndReset()
+                || context.SaveData.player.tradingCurrency != currencyBefore
+                || context.SaveData.player.currentTownId != townBefore
+                || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                || context.SaveData.pendingSettlement == null || !context.SaveData.pendingSettlement.hasResult
+                || context.SaveData.tradePreparationCommit == null || !context.SaveData.tradePreparationCommit.hasCommit
+                || JsonUtility.ToJson(context.SaveData.caravan) != caravanBefore
+                || context.ScreenRouter.CurrentScreenState == InGameScreenState.Town)
+            {
+                throw new InvalidOperationException("Atomic claim E2E save-failure rollback did not restore all staged values.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim: save-failure rollback restored staged values.");
+
+            // 정상 Claim → currentTownId → Town 이벤트
+            saveService.ShouldSucceed = true;
+            InGameScreenState? townEventState = null;
+            Action<InGameScreenState> onScreenChanged = state => townEventState = state;
+            FrameworkEvents.InGameScreenChanged += onScreenChanged;
+            try
+            {
+                if (!context.Coordinator.ClaimSettlementAndReset())
+                {
+                    throw new InvalidOperationException("Atomic claim E2E normal claim failed.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.InGameScreenChanged -= onScreenChanged;
+            }
+
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Town
+                || context.SaveData.player.currentTownId != expectedDestination
+                || string.IsNullOrWhiteSpace(context.SaveData.player.currentTownId)
+                || context.SaveData.player.currentTownId == townBefore
+                || context.SaveData.pendingSettlement.hasResult
+                || context.SaveData.tradePreparationCommit.hasCommit
+                || townEventState != InGameScreenState.Town)
+            {
+                throw new InvalidOperationException(
+                    $"Atomic claim E2E normal claim town routing failed. TownId: {context.SaveData.player.currentTownId}, Expected: {expectedDestination}, Screen: {context.ScreenRouter.CurrentScreenState}, Event: {townEventState}");
+            }
+
+            Debug.Log(
+                $"[Framework M1 E2E] Atomic claim: normal claim succeeded. currentTownId={context.SaveData.player.currentTownId}, Town event raised.");
+
+            // 중복 Claim 확인
+            if (context.Coordinator.ClaimSettlementAndReset())
+            {
+                throw new InvalidOperationException("Atomic claim E2E duplicate claim unexpectedly succeeded.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim: duplicate claim correctly rejected.");
+
+            // 종료 후 재실행 화면 확인 (새 router가 저장 데이터를 Town으로 복원)
+            var relaunchRouter = new InGameScreenStateRouter();
+            InGameScreenState? relaunchEventState = null;
+            Action<InGameScreenState> onRelaunchScreenChanged = state => relaunchEventState = state;
+            FrameworkEvents.InGameScreenChanged += onRelaunchScreenChanged;
+            try
+            {
+                relaunchRouter.RefreshFromSaveData(context.SaveData, forceNotify: true);
+            }
+            finally
+            {
+                FrameworkEvents.InGameScreenChanged -= onRelaunchScreenChanged;
+            }
+
+            if (InGameScreenStateRouter.MapFromSaveData(context.SaveData) != InGameScreenState.Town
+                || relaunchRouter.CurrentScreenState != InGameScreenState.Town
+                || relaunchEventState != InGameScreenState.Town)
+            {
+                throw new InvalidOperationException(
+                    $"Atomic claim E2E relaunch screen restore failed. Map: {InGameScreenStateRouter.MapFromSaveData(context.SaveData)}, Router: {relaunchRouter.CurrentScreenState}, Event: {relaunchEventState}");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim: relaunch restored Town screen from save data.");
+
+            var mismatchContext = TestContext.Create(new ConfigurableSaveService());
+            var mismatchCaravan = CreateSampleCaravan(mismatchContext.GameTime);
+            if (!mismatchContext.TradeStart.TryStartTrade(
+                    mismatchCaravan, DistanceKm, "editor_destination_mismatch", RouteId).canDepart)
+            {
+                throw new InvalidOperationException("Destination mismatch E2E failed to start trade.");
+            }
+
+            mismatchContext.Coordinator.ForceCompleteActiveTrade();
+            var mismatchCurrency = mismatchContext.SaveData.player.tradingCurrency;
+            mismatchContext.SaveData.tradePreparationCommit.destinationTownId = "OtherTown";
+            if (mismatchContext.Coordinator.ClaimSettlementAndReset()
+                || mismatchContext.SaveData.player.tradingCurrency != mismatchCurrency
+                || mismatchContext.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            {
+                throw new InvalidOperationException("Destination mismatch E2E mutated claim state.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Atomic claim rollback, normal claim, Town event, duplicate reject, relaunch, and destination validation passed.");
         }
     }
 }

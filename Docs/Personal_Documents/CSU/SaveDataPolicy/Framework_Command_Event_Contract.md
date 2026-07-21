@@ -17,11 +17,13 @@ These are target responsibilities. Existing direct mutations, `void` methods, re
 
 - Preparation: `UpdatePreparation(caravanId, patch)`, `UpdatePurchasePreview(caravanId, preview)`, `CancelPreparation(caravanId)`; successful changes mark Dirty.
 - Trade: `Depart(caravanId, request)`, generating the trade GUID inside the commit boundary; immediate save.
-- Settlement: `FinalizeSettlement(caravanId, tradeId, snapshot)` and `ClaimSettlement(caravanId, tradeId, repayLoan)`; immediate save, with optional rescue-loan repayment inside claim.
-- Progression: growth, repair, building, one-time investment-quest completion, rescue-loan issue, wagon destruction, and Caravan-to-home cargo transfer; immediate save. Donation, cumulative investment, and separate manual repayment are not target commands.
+- Settlement: `FinalizeSettlement(caravanId, tradeId, snapshot)` and `ClaimSettlement(caravanId, tradeId)`; immediate save. Settlement claim does not repay rescue loans.
+- Progression: growth, repair, building, one-time investment-quest completion, rescue-loan issue, `RepayRescueLoan(amount)`, restricted-mode exit as part of the departure save boundary, wagon destruction, and Caravan-to-home cargo transfer; immediate save. Donation and cumulative investment are not target commands.
 - Save: `Save(data)`, `MarkDirty(reason, entityId)`, and dirty-state query. `SaveResult Save(...)` is the single target API.
 
 Results distinguish validation failure, not found, conflict/duplicate, unsupported version, serialization, file I/O, and unknown failures. A false/failed result states whether runtime state changed; until transaction staging exists, callers must not assume rollback.
+
+For the first rescue-loan integration stage, `IssueRescueLoan()` and `RepayRescueLoan(long amount)` return `SaveResult` directly. UI obtains player-facing domain reasons from a read-only `RescueLoanCalculator` validation query; the command repeats validation and does not save on domain rejection. A later `ProgressionCommandResult<T>` requires separate approval.
 
 ## Proposed queries
 
@@ -33,7 +35,7 @@ Results distinguish validation failure, not found, conflict/duplicate, unsupport
 
 ## Proposed committed events
 
-Payloads include stable IDs and commit/save revision where available: preparation changed/cancelled, trade departed/state changed, settlement ready/claimed, investment quest completed, content unlocked, loan issued/repaid/closed, wagon destroyed/repaired, building upgraded, save succeeded/failed, and Dirty state changed.
+Payloads include stable IDs and commit/save revision where available: preparation changed/cancelled, trade departed/state changed, settlement ready/claimed, investment quest completed, content unlocked, loan issued/repaid/closed, rescue restricted mode entered/exited, rebankruptcy detected, wagon destroyed/repaired, building upgraded, save succeeded/failed, and Dirty state changed.
 
 Events may repeat across subscription/recovery boundaries. Consumers deduplicate by IDs/revision and never apply rewards based only on receiving an event. Save failure events contain reason metadata but no mutable SaveData.
 

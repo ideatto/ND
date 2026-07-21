@@ -28,19 +28,27 @@ Status in this contract branch: documentation-only; no production schema is acti
 | Investment quest | Submit goods from one or several Caravans | Only explicit usable Caravan stacks are deducted |
 | Investment quest | Submit home inventory or Traveling goods | Rejected without mutation |
 | Investment quest | Complete twice | No duplicate deduction or unlock |
-| Loan | Existing assets satisfy fixed configuration | Issue is rejected as unnecessary |
-| Loan | Only some fixed elements are missing | Only their fixed-price costs form principal |
-| Loan | Issue succeeds and restarts | Restriction and permanent used state restore |
+| Loan | Currency is below `MinimumTradeCost` and no active loan exists | Calculator eligibility allows an offer |
+| Loan | Issue succeeds | Full `MinimumTradeCost` is added as original/remaining principal and restriction becomes active |
+| Loan | Issue succeeds and restarts | Principal, remaining balance, active state, issue ticks, and restriction restore |
+| Loan | Active loan exists and issue is requested again | Rejected without mutation or save |
+| Loan | Issue save fails | Trading currency and complete loan snapshot roll back; no committed event is emitted |
 | Loan | Title or restart during restriction | Restriction remains active |
-| Loan | First rescue departure save fails | Restriction remains and departure rolls back |
-| Loan | First rescue departure save succeeds | Restriction clears; positive principal stays active |
-| Loan | Settlement payout is non-positive | Repayment choice is hidden |
-| Loan | Payout below principal and repayment selected | Full payout amount repays principal |
-| Loan | Payout exceeds principal and repayment selected | Principal only is repaid |
-| Loan | Repayment declined | Principal remains unchanged |
-| Loan | Claim save failure | Reward, principal, pending, and preparation roll back |
-| Loan | Second issue after prior use | Rejected by permanent used state |
-| Loan | Traveling or claimable pending remains | Game over is deferred |
+| Loan | Repayment requested during restriction | Rejected without mutation |
+| Loan | Zero, negative, over-principal, or unaffordable repayment | Rejected without mutation |
+| Loan | Repayment would leave currency below `MinimumTradeCost` | Rejected without mutation |
+| Loan | Valid partial repayment succeeds | Currency and remaining principal decrease together and active state remains |
+| Loan | Full repayment succeeds | Remaining principal becomes zero; active and restriction states are false |
+| Loan | Partial or full repayment save fails | Currency and complete loan snapshot roll back |
+| Loan | First rescue departure save fails | Departure rolls back and restriction remains active |
+| Loan | First rescue departure save succeeds | Departure and restriction release commit together; positive principal remains active |
+| Loan | Settlement finalizes or claim succeeds | Legacy repayment input is zero and principal is unchanged |
+| Loan | Settlement/claim save fails | Settlement transaction rolls back without touching loan state |
+| Loan | No active loan and status is below minimum | `CanOfferLoan` is recalculated and exposed |
+| Loan | Active loan and status falls below minimum again | `IsRebankrupt` is recalculated; new issue is blocked |
+| Loan | Load after inactive full repayment and later eligibility | Eligibility is recalculated; no permanent prior-use ban is inferred |
+| Loan restriction | Investment quest, growth, building, unrelated economy, or repayment is requested | Action is blocked |
+| Loan restriction | Approved rescue-trade preparation action is requested | Action is permitted when otherwise valid |
 | Version | Missing optional child | Safe default object created |
 | Version | Null collection | Empty list created |
 | Version | Duplicate Caravan ID | Visible validation failure |
@@ -63,9 +71,6 @@ Status in this contract branch: documentation-only; no production schema is acti
 | Save retry | Retryable I/O fails three times | PreCommandSnapshot rollback is reported |
 | Event consumption | Repeatable event succeeds and restarts | Count increments and persists |
 | Event consumption | One-time event count is already one | Second consumption is rejected |
-| Loan restriction | Investment quest or unrelated economy is requested | Action is blocked |
-| Loan restriction | Trade-preparation action is requested | Action is permitted when otherwise valid |
-| Loan guarantee | Missing fixed rescue elements are evaluated | Only their shared-data fixed prices form principal |
 | Wagon loss | Durability falls below zero | It clamps to zero and destruction runs once |
 | Wagon loss | Destroyed in Preparation | Ownership and preparation references are removed |
 | Wagon loss | Destroyed while Traveling | Trade fails and cargo/food losses enter settlement snapshot |

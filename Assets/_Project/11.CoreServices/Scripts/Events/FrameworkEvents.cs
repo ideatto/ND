@@ -8,6 +8,7 @@
  *
  * Main Features
  * - 공용 데이터 준비 완료, 저장 데이터 로드 완료, scene 변경, 무역 완료/정산, 인게임 화면 상태 변경 이벤트를 제공한다.
+ * - 구조 대출 발급·상환·종료와 출발 전 제한 모드 진입·해제의 저장 확정 이벤트를 제공한다.
  * - debug ForceRouteEvent 주입 hook 알림을 제공한다.
  * - 이벤트 발행 시 framework log를 남겨 디버그 흐름을 추적할 수 있게 한다.
  *
@@ -28,6 +29,7 @@
  * - 이벤트 인자의 null 가능성은 발행하는 서비스의 상태 검증에 따른다.
  */
 using System;
+using ND.Economy;
 
 namespace ND.Framework
 {
@@ -78,6 +80,21 @@ namespace ND.Framework
         /// 인게임 화면 상태가 preparation, traveling, settlement 중 하나로 변경될 때 발생한다.
         /// </summary>
         public static event Action<InGameScreenState> InGameScreenChanged;
+
+        /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
+        public static event Action<IssueRescueLoanResult> RescueLoanIssued;
+
+        /// <summary>구조 대출 상환 저장이 성공한 뒤 한 번 발생한다.</summary>
+        public static event Action<RepayRescueLoanResult> RescueLoanRepaid;
+
+        /// <summary>전액 상환 저장으로 구조 대출이 비활성화된 뒤 발생한다.</summary>
+        public static event Action RescueLoanClosed;
+
+        /// <summary>구조 대출 발급 저장으로 출발 전 제한 모드에 진입한 뒤 발생한다.</summary>
+        public static event Action RescueRestrictedModeEntered;
+
+        /// <summary>무역 출발과 제한 해제 상태가 함께 저장된 뒤 발생한다.</summary>
+        public static event Action RescueRestrictedModeExited;
 
         /// <summary>
         /// debug ForceRouteEvent가 Traveling trade에 route event 1회 주입 hook을 등록했을 때 발생한다.
@@ -186,6 +203,36 @@ namespace ND.Framework
             // 화면 router의 상태 변화는 UI 패널 전환의 기준이므로 상태값을 로그에 남긴다.
             FrameworkLog.Info($"InGameScreenChanged event raised. ScreenState: {screenState}");
             InGameScreenChanged?.Invoke(screenState);
+        }
+
+        public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)
+        {
+            FrameworkLog.Info($"RescueLoanIssued event raised. LoanId: {result?.LoanId ?? string.Empty}");
+            RescueLoanIssued?.Invoke(result);
+        }
+
+        public static void RaiseRescueLoanRepaid(RepayRescueLoanResult result)
+        {
+            FrameworkLog.Info($"RescueLoanRepaid event raised. Amount: {result?.RepaidAmount ?? 0L}");
+            RescueLoanRepaid?.Invoke(result);
+        }
+
+        public static void RaiseRescueLoanClosed()
+        {
+            FrameworkLog.Info("RescueLoanClosed event raised.");
+            RescueLoanClosed?.Invoke();
+        }
+
+        public static void RaiseRescueRestrictedModeEntered()
+        {
+            FrameworkLog.Info("RescueRestrictedModeEntered event raised.");
+            RescueRestrictedModeEntered?.Invoke();
+        }
+
+        public static void RaiseRescueRestrictedModeExited()
+        {
+            FrameworkLog.Info("RescueRestrictedModeExited event raised.");
+            RescueRestrictedModeExited?.Invoke();
         }
 
         /// <summary>
