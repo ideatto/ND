@@ -709,78 +709,41 @@ public class DataViewDataSmokeTest : MonoBehaviour
     {
         AssertDefaultCaravanCollections();
 
+        // The UI consumes the contract instead of constructing slot data or reading SaveData directly.
+        ICaravanOverviewViewDataProvider provider = new TestCaravanOverviewViewDataProvider();
+        CaravanOverviewViewData overview = provider.GetOverview();
+
+        Debug.Assert(
+            overview != null
+                && overview.caravans != null
+                && overview.caravans.Length == TestCaravanOverviewViewDataProvider.SlotCount,
+            "Caravan Overview Provider Smoke Test failed: the Provider must return all four non-null slot entries.");
+        Debug.Assert(
+            overview.selectedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId,
+            "Caravan Overview Provider Smoke Test failed: the default selected Caravan was not preserved.");
+
+        CaravanBlockViewData prepareBlock = FindCaravanBlock(overview.caravans, 0);
+        CaravanBlockViewData travelingBlock = FindCaravanBlock(overview.caravans, 1);
+        CaravanBlockViewData availableEmptyBlock = FindCaravanBlock(overview.caravans, 2);
+        CaravanBlockViewData lockedEmptyBlock = FindCaravanBlock(overview.caravans, 3);
+
+        Debug.Assert(
+            prepareBlock != null
+                && travelingBlock != null
+                && availableEmptyBlock != null
+                && lockedEmptyBlock != null,
+            "Caravan Overview Provider Smoke Test failed: slot indices 0 through 3 must all be present.");
+
         // Runtime Caravan IDs are copied into ViewData; the UI does not create or derive them.
         var prepareCaravan = new CaravanData
         {
-            caravanId = "smoke-caravan-prepare",
+            caravanId = TestCaravanOverviewViewDataProvider.PrepareCaravanId,
             state = JourneyState.Prepare
         };
         var travelingCaravan = new CaravanData
         {
-            caravanId = "smoke-caravan-traveling",
+            caravanId = TestCaravanOverviewViewDataProvider.TravelingCaravanId,
             state = JourneyState.Traveling
-        };
-
-        var prepareBlock = new CaravanBlockViewData
-        {
-            slotIndex = 0,
-            slotState = CaravanSlotState.Occupied,
-            caravanId = prepareCaravan.caravanId,
-            displayName = "Preparation Caravan",
-            state = prepareCaravan.state,
-            canBeginTradePreparation = true
-        };
-        var travelingBlock = new CaravanBlockViewData
-        {
-            slotIndex = 1,
-            slotState = CaravanSlotState.Occupied,
-            caravanId = travelingCaravan.caravanId,
-            displayName = "Traveling Caravan",
-            state = travelingCaravan.state,
-            wagonContentId = "smoke-wagon-medium",
-            animalIcons = new[]
-            {
-                new AnimalIconViewData
-                {
-                    animalContentId = "smoke-horse",
-                    quantity = 2
-                }
-            },
-            cargoIcons = new[]
-            {
-                new CargoIconViewData
-                {
-                    itemId = "smoke-grain",
-                    quantity = 10
-                }
-            },
-            canBeginTradePreparation = false,
-            tradePreparationBlockedReason = "A traveling Caravan cannot begin another trade."
-        };
-        var availableEmptyBlock = new CaravanBlockViewData
-        {
-            slotIndex = 2,
-            slotState = CaravanSlotState.Empty,
-            tradePreparationBlockedReason = "Create a Caravan before starting trade preparation."
-        };
-        var lockedEmptyBlock = new CaravanBlockViewData
-        {
-            slotIndex = 3,
-            slotState = CaravanSlotState.Locked,
-            lockedReason = "Complete the required quest to unlock this Caravan slot.",
-            tradePreparationBlockedReason = "This Caravan slot is locked."
-        };
-
-        var overview = new CaravanOverviewViewData
-        {
-            selectedCaravanId = prepareCaravan.caravanId,
-            caravans = new[]
-            {
-                prepareBlock,
-                travelingBlock,
-                availableEmptyBlock,
-                lockedEmptyBlock
-            }
         };
 
         AssertOccupiedCaravanBlock(prepareBlock, prepareCaravan);
@@ -791,6 +754,69 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertSelectedCaravanExists(overview);
         AssertTravelingCaravanContents(travelingBlock);
         AssertCaravanSettingViewData(prepareCaravan, travelingCaravan);
+        AssertCaravanOverviewProviderSelection();
+        AssertCaravanOverviewProviderSnapshotIsolation(provider);
+    }
+
+    // Finds a fixed slot without assuming that a production Provider must return the array in slot order.
+    private static CaravanBlockViewData FindCaravanBlock(CaravanBlockViewData[] blocks, int slotIndex)
+    {
+        if (blocks == null)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < blocks.Length; index++)
+        {
+            CaravanBlockViewData block = blocks[index];
+            if (block != null && block.slotIndex == slotIndex)
+            {
+                return block;
+            }
+        }
+
+        return null;
+    }
+
+    // Verifies that the temporary fixture supports valid selection previews and rejects unknown IDs.
+    private static void AssertCaravanOverviewProviderSelection()
+    {
+        ICaravanOverviewViewDataProvider travelingProvider =
+            new TestCaravanOverviewViewDataProvider(TestCaravanOverviewViewDataProvider.TravelingCaravanId);
+        CaravanOverviewViewData travelingOverview = travelingProvider.GetOverview();
+        AssertSelectedCaravanExists(travelingOverview);
+        Debug.Assert(
+            travelingOverview.selectedCaravanId == TestCaravanOverviewViewDataProvider.TravelingCaravanId,
+            "Caravan Overview Provider Smoke Test failed: a valid traveling selection was not preserved.");
+
+        ICaravanOverviewViewDataProvider invalidProvider =
+            new TestCaravanOverviewViewDataProvider("unknown-caravan");
+        Debug.Assert(
+            string.IsNullOrEmpty(invalidProvider.GetOverview().selectedCaravanId),
+            "Caravan Overview Provider Smoke Test failed: an unknown Caravan ID must not become selected.");
+    }
+
+    // Verifies that mutable ViewData returned to UI code cannot corrupt the next Provider snapshot.
+    private static void AssertCaravanOverviewProviderSnapshotIsolation(
+        ICaravanOverviewViewDataProvider provider)
+    {
+        CaravanOverviewViewData mutableOverview = provider.GetOverview();
+        CaravanBlockViewData mutablePrepareBlock = FindCaravanBlock(mutableOverview.caravans, 0);
+        CaravanBlockViewData mutableTravelingBlock = FindCaravanBlock(mutableOverview.caravans, 1);
+
+        mutableOverview.selectedCaravanId = string.Empty;
+        mutablePrepareBlock.displayName = "Mutated by UI";
+        mutableTravelingBlock.animalIcons[0].quantity = 999;
+
+        CaravanOverviewViewData freshOverview = provider.GetOverview();
+        CaravanBlockViewData freshPrepareBlock = FindCaravanBlock(freshOverview.caravans, 0);
+        CaravanBlockViewData freshTravelingBlock = FindCaravanBlock(freshOverview.caravans, 1);
+
+        Debug.Assert(
+            freshOverview.selectedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId
+                && freshPrepareBlock.displayName == "Preparation Caravan"
+                && freshTravelingBlock.animalIcons[0].quantity == 2,
+            "Caravan Overview Provider Smoke Test failed: UI mutations leaked into a later Provider snapshot.");
     }
 
     // Keeps collection defaults safe for UI binding before a provider supplies actual slots.
@@ -945,16 +971,16 @@ public class DataViewDataSmokeTest : MonoBehaviour
     private static void AssertTravelingCaravanContents(CaravanBlockViewData block)
     {
         Debug.Assert(
-            block.wagonContentId == "smoke-wagon-medium",
+            block.wagonContentId == "test-wagon-medium",
             "Caravan Overview Smoke Test failed: wagon content ID was not preserved.");
         Debug.Assert(
             block.animalIcons.Length == 1
-                && block.animalIcons[0].animalContentId == "smoke-horse"
+                && block.animalIcons[0].animalContentId == "test-horse"
                 && block.animalIcons[0].quantity == 2,
             "Caravan Overview Smoke Test failed: animal icon data was not preserved.");
         Debug.Assert(
             block.cargoIcons.Length == 1
-                && block.cargoIcons[0].itemId == "smoke-grain"
+                && block.cargoIcons[0].itemId == "test-grain"
                 && block.cargoIcons[0].quantity == 10,
             "Caravan Overview Smoke Test failed: cargo icon data was not preserved.");
     }

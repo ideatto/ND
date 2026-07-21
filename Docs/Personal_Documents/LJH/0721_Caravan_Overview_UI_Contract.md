@@ -45,6 +45,16 @@
 
 Overview 블록의 동물·화물 배열은 작은 아이콘이나 수량 배지를 위한 표시 요약이다. S3·S4 상세 패널의 편집 원본으로 사용하지 않는다.
 
+### 3.1 Overview Provider 계약
+
+`ICaravanOverviewViewDataProvider.GetOverview()`는 UI가 `SaveData`나 런타임 `CaravanData`를 직접 조회하지 않도록 완성된 `CaravanOverviewViewData` 스냅샷을 제공한다.
+
+- 반환 ViewData와 모든 배열은 `null`이 아니어야 한다.
+- UI가 반환 객체를 변경하더라도 다음 조회 결과가 오염되지 않아야 한다.
+- Provider는 슬롯 상태, 선택 ID, 출발 가능 여부와 차단 사유를 결정한다.
+- `TestCaravanOverviewViewDataProvider`는 실제 다중 Caravan 저장 구조가 연결되기 전 UI·SmokeTest에서만 사용하는 임시 구현이다.
+- 선택 변경, 생성, 구성 저장은 조회 Provider가 아니라 별도 Framework Command가 담당한다.
+
 ---
 
 ## 4. 편집 권한
