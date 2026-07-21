@@ -12,6 +12,7 @@
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
  * - SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
+ * - 구조 대출 원금, 잔액, 활성 여부와 출발 전 제한 상태를 저장한다.
  * - 상점 재고(marketInventories)와 구매 준비(marketPurchasePreparation)를 WorldSaveData에 저장한다.
  * - 거점 창고(homeInventory)와 마을 건물 진행(villageBuildings)을 PlayerSaveData에 저장한다.
  *
@@ -88,6 +89,11 @@ namespace ND.Framework
         /// </summary>
         public PendingSettlementSaveData pendingSettlement = new PendingSettlementSaveData();
 
+        /// <summary>
+        /// 구조 대출의 발급·상환 및 출발 전 제한 상태이다.
+        /// </summary>
+        public RescueLoanSaveData rescueLoan = new RescueLoanSaveData();
+
         /// <summary>Active trade departure-time preparation snapshot.</summary>
         public TradePreparationCommitSaveData tradePreparationCommit = new TradePreparationCommitSaveData();
 
@@ -100,6 +106,20 @@ namespace ND.Framework
         /// 튜토리얼 진행 상태를 저장하는 데이터이다.
         /// </summary>
         public TutorialSaveData tutorial = new TutorialSaveData();
+    }
+
+    /// <summary>
+    /// 구조 대출의 영속 상태를 보관하는 DTO이다.
+    /// </summary>
+    [Serializable]
+    public sealed class RescueLoanSaveData
+    {
+        public string loanId = string.Empty;
+        public long originalPrincipal;
+        public long remainingPrincipal;
+        public bool isActive;
+        public long issuedUtcTicks;
+        public bool isRestrictedPreparation;
     }
 
     /// <summary>

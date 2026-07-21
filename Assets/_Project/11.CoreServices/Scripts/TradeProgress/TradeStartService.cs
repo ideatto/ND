@@ -21,9 +21,11 @@
  *
  * Important Notes
  * - tradeId가 기록되지 않으면 출발을 framework blocked 결과로 거부한다.
- * - Core 출발이 최종 실패한 경우 이미 기록된 tradeProgress를 되돌리지 않는다.
+ * - 즉시 저장 출발은 tradeProgress, caravan, 구조 대출 제한 상태를 한 저장 경계에서 확정한다.
  */
 using System;
+using ND.Economy;
+using UnityEngine;
 
 namespace ND.Framework
 {
@@ -105,6 +107,17 @@ namespace ND.Framework
             }
 
             var saveData = getCurrentSaveData != null ? getCurrentSaveData() : null;
+            if (saveData == null || saveData.tradeProgress == null || saveData.caravan == null)
+            {
+                FrameworkLog.Warning("Trade start was blocked because required save data is missing.");
+                return CreateFrameworkBlockedResult();
+            }
+
+            var tradeProgressSnapshot = JsonUtility.ToJson(saveData.tradeProgress);
+            var caravanSaveSnapshot = JsonUtility.ToJson(saveData.caravan);
+            var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
+            var restrictedPreparationBefore = saveData.rescueLoan != null
+                && saveData.rescueLoan.isRestrictedPreparation;
             var expectedSeconds = CaravanCalculator.GetTravelSeconds(caravan, distanceKm);
             var expectedDuration = TimeSpan.FromSeconds(Math.Max(0f, expectedSeconds));
 
@@ -118,6 +131,13 @@ namespace ND.Framework
             // 저장 기록이 실패하면 Core 출발을 진행해도 framework가 상태를 추적할 수 없으므로 거부한다.
             if (!LastRecordSucceeded)
             {
+                RestoreDepartureSnapshot(
+                    saveData,
+                    caravan,
+                    tradeProgressSnapshot,
+                    caravanSaveSnapshot,
+                    runtimeCaravanSnapshot,
+                    restrictedPreparationBefore);
                 return CreateFrameworkBlockedResult();
             }
 
@@ -126,41 +146,273 @@ namespace ND.Framework
             if (!result.canDepart)
             {
                 FrameworkLog.Warning("Trade start was recorded but Core departure failed during final validation.");
+                RestoreDepartureSnapshot(
+                    saveData,
+                    caravan,
+                    tradeProgressSnapshot,
+                    caravanSaveSnapshot,
+                    runtimeCaravanSnapshot,
+                    restrictedPreparationBefore);
+                LastRecordSucceeded = false;
                 return result;
             }
 
-            // 출발 성공 후 이전 정산 cache를 비우고 runtime caravan 상태를 저장 DTO에 반영한다.
-            if (saveData != null)
-            {
-                clearSettlementCache?.Invoke();
-                CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-            }
-
-            // Register after cache cleanup so a future cleanup implementation cannot clear the
-            // newly departed caravan needed by repeated trade cycles.
-            setActiveCaravan?.Invoke(caravan);
-
-            // UI가 즉시 traveling 화면으로 전환되도록 router에 상태 변경을 요청한다.
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
+            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
 
             if (saveImmediately)
             {
-                // 즉시 저장 옵션에서는 출발 기록과 caravan 상태가 디스크에 남도록 저장 서비스를 호출한다.
                 if (saveService == null)
                 {
                     FrameworkLog.Warning("Trade start time was recorded but save was skipped because save service is null.");
-                    return result;
+                    RestoreDepartureSnapshot(
+                        saveData,
+                        caravan,
+                        tradeProgressSnapshot,
+                        caravanSaveSnapshot,
+                        runtimeCaravanSnapshot,
+                        restrictedPreparationBefore);
+                    LastRecordSucceeded = false;
+                    return CreateFrameworkBlockedResult();
                 }
 
-                saveService.Save(saveData);
+                if (saveData.rescueLoan != null)
+                {
+                    saveData.rescueLoan.isRestrictedPreparation = false;
+                }
+
+                var saveResult = saveService.Save(saveData);
+                if (!saveResult.Succeeded)
+                {
+                    RestoreDepartureSnapshot(
+                        saveData,
+                        caravan,
+                        tradeProgressSnapshot,
+                        caravanSaveSnapshot,
+                        runtimeCaravanSnapshot,
+                        restrictedPreparationBefore);
+                    LastRecordSucceeded = false;
+                    return CreateFrameworkBlockedResult();
+                }
+
+                if (restrictedPreparationBefore)
+                {
+                    FrameworkEvents.RaiseRescueRestrictedModeExited();
+                }
             }
 
+            clearSettlementCache?.Invoke();
+            setActiveCaravan?.Invoke(caravan);
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
+
             return result;
+        }
+
+        private static void RestoreDepartureSnapshot(
+            SaveData saveData,
+            CaravanData runtimeCaravan,
+            string tradeProgressSnapshot,
+            string caravanSaveSnapshot,
+            string runtimeCaravanSnapshot,
+            bool restrictedPreparationBefore)
+        {
+            JsonUtility.FromJsonOverwrite(tradeProgressSnapshot, saveData.tradeProgress);
+            JsonUtility.FromJsonOverwrite(caravanSaveSnapshot, saveData.caravan);
+            JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, runtimeCaravan);
+            if (saveData.rescueLoan != null)
+            {
+                saveData.rescueLoan.isRestrictedPreparation = restrictedPreparationBefore;
+            }
         }
 
         private static DepartureValidationResult CreateFrameworkBlockedResult()
         {
             return new DepartureValidationResult { canDepart = false };
+        }
+    }
+
+    /// <summary>
+    /// 구조 대출 계산 결과를 현재 저장 상태에 원자적으로 반영하는 command service이다.
+    /// </summary>
+    public sealed class RescueLoanCommandService
+    {
+        private readonly ISaveService saveService;
+        private readonly Func<SaveData> getSaveData;
+        private readonly RescueLoanDefinition definition;
+        private readonly Func<long> utcTicksProvider;
+
+        public RescueLoanCommandService(
+            ISaveService saveService,
+            Func<SaveData> getSaveData,
+            RescueLoanDefinition definition,
+            Func<long> utcTicksProvider)
+        {
+            this.saveService = saveService;
+            this.getSaveData = getSaveData;
+            this.definition = definition;
+            this.utcTicksProvider = utcTicksProvider;
+        }
+
+        /// <summary>현재 저장 상태가 출발 전 제한 모드이면 true이다.</summary>
+        public bool IsRestrictedPreparation
+        {
+            get
+            {
+                var data = getSaveData != null ? getSaveData() : null;
+                return data != null && data.rescueLoan != null
+                    && data.rescueLoan.isRestrictedPreparation;
+            }
+        }
+
+        /// <summary>현재 재화와 대출 활성 상태로 복구 필요·대출 가능·재파산 상태를 계산한다.</summary>
+        public RescueStatusResult EvaluateStatus()
+        {
+            var data = getSaveData != null ? getSaveData() : null;
+            return RescueLoanCalculator.EvaluateStatus(new RescueStatusInput
+            {
+                UsableTradeMoney = data != null && data.player != null
+                    ? data.player.tradingCurrency
+                    : -1L,
+                MinimumTradeCost = definition != null ? definition.MinimumTradeCost : 0L,
+                HasActiveLoan = data != null && data.rescueLoan != null && data.rescueLoan.isActive
+            });
+        }
+
+        /// <summary>
+        /// 고정 원금 구조 대출을 발급하고 재화와 대출 상태를 한 번 저장한다.
+        /// </summary>
+        /// <returns>계산 또는 입력 실패는 InvalidData, 저장 실패는 저장 서비스 결과를 반환한다.</returns>
+        public SaveResult IssueRescueLoan()
+        {
+            var data = GetValidData();
+            if (data == null || definition == null || utcTicksProvider == null)
+            {
+                return InvalidCommand("Rescue loan issue dependencies or save data are invalid.");
+            }
+
+            var calculation = RescueLoanCalculator.Issue(new IssueRescueLoanInput
+            {
+                LoanId = definition.LoanId,
+                TradeMoneyBefore = data.player.tradingCurrency,
+                MinimumTradeCost = definition.MinimumTradeCost,
+                HasActiveLoan = data.rescueLoan.isActive,
+                IssuedUtcTicks = utcTicksProvider()
+            });
+            if (!calculation.Success)
+            {
+                return InvalidCommand($"Rescue loan issue was rejected: {calculation.FailureReason}.");
+            }
+
+            var currencyBefore = data.player.tradingCurrency;
+            var loanBefore = CloneLoan(data.rescueLoan);
+            data.player.tradingCurrency = calculation.TradeMoneyAfter;
+            data.rescueLoan.loanId = calculation.LoanId;
+            data.rescueLoan.originalPrincipal = calculation.Principal;
+            data.rescueLoan.remainingPrincipal = calculation.RemainingPrincipal;
+            data.rescueLoan.isActive = true;
+            data.rescueLoan.issuedUtcTicks = calculation.IssuedUtcTicks;
+            data.rescueLoan.isRestrictedPreparation = calculation.EnterRestrictedMode;
+
+            var result = saveService.Save(data);
+            if (!result.Succeeded)
+            {
+                RestoreLoan(data, currencyBefore, loanBefore);
+                return result;
+            }
+
+            FrameworkEvents.RaiseRescueLoanIssued(calculation);
+            if (calculation.EnterRestrictedMode)
+            {
+                FrameworkEvents.RaiseRescueRestrictedModeEntered();
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 요청 금액을 명시적으로 상환하고 재화와 대출 상태를 한 번 저장한다.
+        /// </summary>
+        /// <returns>계산 또는 입력 실패는 InvalidData, 저장 실패는 저장 서비스 결과를 반환한다.</returns>
+        public SaveResult RepayRescueLoan(long amount)
+        {
+            var data = GetValidData();
+            if (data == null || definition == null)
+            {
+                return InvalidCommand("Rescue loan repayment dependencies or save data are invalid.");
+            }
+
+            var calculation = RescueLoanCalculator.Repay(new RepayRescueLoanInput
+            {
+                TradeMoneyBefore = data.player.tradingCurrency,
+                MinimumTradeCost = definition.MinimumTradeCost,
+                OriginalPrincipal = data.rescueLoan.originalPrincipal,
+                RemainingPrincipalBefore = data.rescueLoan.remainingPrincipal,
+                IsActive = data.rescueLoan.isActive,
+                IsRestrictedPreparation = data.rescueLoan.isRestrictedPreparation,
+                RequestedAmount = amount
+            });
+            if (!calculation.Success)
+            {
+                return InvalidCommand($"Rescue loan repayment was rejected: {calculation.FailureReason}.");
+            }
+
+            var currencyBefore = data.player.tradingCurrency;
+            var loanBefore = CloneLoan(data.rescueLoan);
+            data.player.tradingCurrency = calculation.TradeMoneyAfter;
+            data.rescueLoan.remainingPrincipal = calculation.RemainingPrincipalAfter;
+            data.rescueLoan.isActive = calculation.IsActiveAfter;
+            data.rescueLoan.isRestrictedPreparation = calculation.IsRestrictedPreparationAfter;
+
+            var result = saveService.Save(data);
+            if (!result.Succeeded)
+            {
+                RestoreLoan(data, currencyBefore, loanBefore);
+                return result;
+            }
+
+            FrameworkEvents.RaiseRescueLoanRepaid(calculation);
+            if (!calculation.IsActiveAfter)
+            {
+                FrameworkEvents.RaiseRescueLoanClosed();
+            }
+
+            return result;
+        }
+
+        private SaveData GetValidData()
+        {
+            var data = getSaveData != null ? getSaveData() : null;
+            return saveService != null && data != null && data.player != null && data.rescueLoan != null
+                ? data
+                : null;
+        }
+
+        private static SaveResult InvalidCommand(string message)
+        {
+            return SaveResult.Failure(SaveFailureReason.InvalidData, message, "rescueLoan");
+        }
+
+        private static RescueLoanSaveData CloneLoan(RescueLoanSaveData source)
+        {
+            return new RescueLoanSaveData
+            {
+                loanId = source.loanId,
+                originalPrincipal = source.originalPrincipal,
+                remainingPrincipal = source.remainingPrincipal,
+                isActive = source.isActive,
+                issuedUtcTicks = source.issuedUtcTicks,
+                isRestrictedPreparation = source.isRestrictedPreparation
+            };
+        }
+
+        private static void RestoreLoan(SaveData data, long currencyBefore, RescueLoanSaveData loanBefore)
+        {
+            data.player.tradingCurrency = currencyBefore;
+            data.rescueLoan.loanId = loanBefore.loanId;
+            data.rescueLoan.originalPrincipal = loanBefore.originalPrincipal;
+            data.rescueLoan.remainingPrincipal = loanBefore.remainingPrincipal;
+            data.rescueLoan.isActive = loanBefore.isActive;
+            data.rescueLoan.issuedUtcTicks = loanBefore.issuedUtcTicks;
+            data.rescueLoan.isRestrictedPreparation = loanBefore.isRestrictedPreparation;
         }
     }
 }
