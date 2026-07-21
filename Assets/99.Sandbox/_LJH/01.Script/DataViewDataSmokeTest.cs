@@ -9,23 +9,45 @@ public class DataViewDataSmokeTest : MonoBehaviour
     [ContextMenu("Run ViewData Smoke Test")]
     private void RunViewDataSmokeTest()
     {
+        if (!ValidateRequiredAssets())
+        {
+            return;
+        }
+
+        // Keeps each feature contract isolated so a failure identifies the affected data path.
+        AssertTradePrepareDraftBehavior();
+        AssertTradePrepareFlowViewData();
+        AssertTradeResultData();
+        AssertCurrencyProjectionScenarios();
+        AssertCaravanOverviewViewData();
+
+        Debug.Log("ViewData Smoke Test PASSED.");
+    }
+
+    // Verifies the scene references required by the legacy TradePrepare smoke scenarios.
+    private bool ValidateRequiredAssets()
+    {
         if (town == null || route == null || item == null)
         {
             Debug.LogError("Smoke Test failed: town, route, or item is not assigned.");
-            return;
+            return false;
         }
 
         if (route.FromTown == null || route.ToTown == null)
         {
             Debug.LogError("Smoke Test failed: route FromTown or ToTown is not assigned.");
-            return;
+            return false;
         }
 
-        var saveData = new SaveData();
-        saveData.player.currentTownId = town.TownId;
+        return true;
+    }
 
+    // Verifies Draft mutation, snapshot isolation, duplicate prevention, and cancellation rules.
+    private void AssertTradePrepareDraftBehavior()
+    {
         var prepareDraft = new TradePrepareDraft
         {
+            selectedCaravanId = "smoke-caravan-prepare",
             currentTownId = town.TownId,
             selectedDestinationTownId = route.ToTownId,
             selectedRouteId = route.RouteId
@@ -43,8 +65,9 @@ public class DataViewDataSmokeTest : MonoBehaviour
         var draftChangeCount = 0;
         var draftStore = new TradePrepareDraftStore();
         draftStore.DraftChanged += _ => draftChangeCount++;
-        draftStore.Reset(town.TownId);
+        draftStore.ResetForCaravan("smoke-caravan-prepare", town.TownId);
         var storeResetTownMatched = draftStore.Current.currentTownId == town.TownId;
+        var storeResetCaravanMatched = draftStore.Current.selectedCaravanId == "smoke-caravan-prepare";
         var mutableDraftSnapshot = draftStore.Current;
         mutableDraftSnapshot.selectedBuyItems.Add(new TradeItemBundle { itemId = "snapshot-only", quantity = 1 });
         var storeSnapshotIsolated = draftStore.Current.selectedBuyItems.Count == 0;
@@ -75,12 +98,30 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         draftStore.Cancel();
         var storeCancelClearedDraft = string.IsNullOrEmpty(draftStore.Current.currentTownId)
+            && string.IsNullOrEmpty(draftStore.Current.selectedCaravanId)
             && draftStore.Current.SelectedMercenaryIds.Count == 0;
 
-        AssertCurrencyProjection(2000L, 600L, 300L, 1400L, 1100L, true, true);
-        AssertCurrencyProjection(2000L, 2100L, 0L, 0L, 0L, false, false);
-        AssertCurrencyProjection(2000L, 1700L, 500L, 300L, 0L, true, false);
-        AssertCurrencyProjection(2000L, 2000L, 0L, 0L, 0L, true, true);
+        Debug.Assert(firstMercenarySelection, "Draft Smoke Test failed: first mercenary selection should succeed.");
+        Debug.Assert(!duplicateMercenarySelection, "Draft Smoke Test failed: duplicate mercenary selection should fail.");
+        Debug.Assert(prepareDraft.SelectedMercenaryIds.Count == 1, "Draft Smoke Test failed: duplicate mercenary ID should not be stored.");
+        Debug.Assert(storeResetTownMatched, "Draft Store Smoke Test failed: Reset should set currentTownId.");
+        Debug.Assert(storeResetCaravanMatched, "Draft Store Smoke Test failed: ResetForCaravan should preserve selectedCaravanId.");
+        Debug.Assert(storeSnapshotIsolated, "Draft Store Smoke Test failed: modifying a snapshot should not mutate the stored draft.");
+        Debug.Assert(storeAnimalSelectionUpdated, "Draft Store Smoke Test failed: animal selection should update without duplicates.");
+        Debug.Assert(storeItemSelectionUpdated, "Draft Store Smoke Test failed: item selection should update without duplicates.");
+        Debug.Assert(storeZeroQuantityRemovedItem, "Draft Store Smoke Test failed: zero item quantity should remove the selection.");
+        Debug.Assert(storePreventedDuplicateMercenary, "Draft Store Smoke Test failed: mercenary IDs should not be duplicated.");
+        Debug.Assert(storeClearedAnimalsAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear animal selections.");
+        Debug.Assert(storeClearedCargoAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear cargo selections.");
+        Debug.Assert(storeCancelClearedDraft, "Draft Store Smoke Test failed: Cancel should clear the current draft.");
+        Debug.Assert(draftChangeCount > 0, "Draft Store Smoke Test failed: draft changes should raise DraftChanged.");
+    }
+
+    // Preserves the existing TradePrepare condition and ViewData projection coverage.
+    private void AssertTradePrepareFlowViewData()
+    {
+        var saveData = new SaveData();
+        saveData.player.currentTownId = town.TownId;
 
         if (town.UnlockedByDefault)
             saveData.world.unlockedTownIds.Add(town.TownId);
@@ -377,6 +418,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
 
         var prepareViewData = new TradePrepareViewData
         {
+            selectedCaravanId = "smoke-caravan-prepare",
             currentTownId = town.TownId,
             currentTownName = town.DisplayName,
 
@@ -531,42 +573,9 @@ public class DataViewDataSmokeTest : MonoBehaviour
         };
 
 
-        var result = new TradeResultData
-        {
-            isSuccess = false,
-            tradeId = "trade_test_001",
-            routeId = route.RouteId,
-            fromTownId = route.FromTownId,
-            toTownId = route.ToTownId,
-            failureReason = FailureReason.FoodShortage,
-            messages =
-            {
-                new TradeResultMessageData
-                {
-                    type = TradeResultMessageType.Error,
-                    messageCode = "FOOD_SHORTAGE",
-                    messageText = "Trade failed because food was insufficient."
-                 }
-             }
-        };
-
         Debug.Log($"Town: {townViewData.displayName} / Unlocked: {townViewData.isUnlocked} / Current: {townViewData.isCurrentTown} / CanSelect: {townViewData.canSelect}");
         Debug.Assert(townViewData.townId == town.TownId, "Smoke Test failed: townId mismatch.");
         Debug.Assert(townViewData.isCurrentTown, "Smoke Test failed: current town should be true.");
-
-        Debug.Assert(firstMercenarySelection, "Draft Smoke Test failed: first mercenary selection should succeed.");
-        Debug.Assert(!duplicateMercenarySelection, "Draft Smoke Test failed: duplicate mercenary selection should fail.");
-        Debug.Assert(prepareDraft.SelectedMercenaryIds.Count == 1, "Draft Smoke Test failed: duplicate mercenary ID should not be stored.");
-        Debug.Assert(storeResetTownMatched, "Draft Store Smoke Test failed: Reset should set currentTownId.");
-        Debug.Assert(storeSnapshotIsolated, "Draft Store Smoke Test failed: modifying a snapshot should not mutate the stored draft.");
-        Debug.Assert(storeAnimalSelectionUpdated, "Draft Store Smoke Test failed: animal selection should update without duplicates.");
-        Debug.Assert(storeItemSelectionUpdated, "Draft Store Smoke Test failed: item selection should update without duplicates.");
-        Debug.Assert(storeZeroQuantityRemovedItem, "Draft Store Smoke Test failed: zero item quantity should remove the selection.");
-        Debug.Assert(storePreventedDuplicateMercenary, "Draft Store Smoke Test failed: mercenary IDs should not be duplicated.");
-        Debug.Assert(storeClearedAnimalsAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear animal selections.");
-        Debug.Assert(storeClearedCargoAfterWagonChange, "Draft Store Smoke Test failed: changing wagon should clear cargo selections.");
-        Debug.Assert(storeCancelClearedDraft, "Draft Store Smoke Test failed: Cancel should clear the current draft.");
-        Debug.Assert(draftChangeCount > 0, "Draft Store Smoke Test failed: draft changes should raise DraftChanged.");
 
         Debug.Log($"Item: {itemViewData.displayName} / Buy: {itemViewData.purchasePrice} / Sell: {itemViewData.sellPrice}");
         Debug.Assert(itemViewData.itemId == item.ItemId, "Smoke Test failed: itemId mismatch.");
@@ -588,6 +597,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(prepareViewData.tradeItems.Length > 0, "Prepare Smoke Test failed: tradeItems should not be empty.");
         Debug.Assert(prepareViewData.loadedItems.Length > 0, "Prepare Smoke Test failed: loadedItems should not be empty.");
         Debug.Assert(prepareViewData.loadedItems[0].quantity > 0, "Prepare Smoke Test failed: loaded item quantity should be positive.");
+        Debug.Assert(prepareViewData.selectedCaravanId == "smoke-caravan-prepare", "Prepare Smoke Test failed: selectedCaravanId mismatch.");
         Debug.Assert(prepareViewData.selectedRouteId == route.RouteId, "Prepare Smoke Test failed: selectedRouteId mismatch.");
         Debug.Assert(prepareViewData.startCondition != null, "Prepare Smoke Test failed: startCondition should not be null.");
         Debug.Assert(prepareViewData.startCondition.canStart == successCondition.canStart, "Prepare Smoke Test failed: success condition mismatch.");
@@ -664,11 +674,421 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(multipleWarningPrepareViewData.startCondition.hasWarning, "Prepare Smoke Test failed: multiple warning case should show warning.");
         Debug.Assert(multipleWarningPrepareViewData.startCondition.warningMessages.Count >= 3, "Prepare Smoke Test failed: multiple warning case should contain all warning messages.");
 
-        Debug.Log($"Result Message: [{result.messages[0].type}] {result.messages[0].messageCode} / {result.messages[0].messageText}");
-        Debug.Assert(result.messages.Count > 0, "Smoke Test failed: result messages should not be empty.");
-        Debug.Assert(result.failureReason == FailureReason.FoodShortage, "Smoke Test failed: failureReason mismatch.");
+    }
 
-        Debug.Log("ViewData Smoke Test PASSED.");
+    // Verifies that a failed trade result preserves its route, failure reason, and display message.
+    private void AssertTradeResultData()
+    {
+        var result = new TradeResultData
+        {
+            isSuccess = false,
+            tradeId = "trade_test_001",
+            routeId = route.RouteId,
+            fromTownId = route.FromTownId,
+            toTownId = route.ToTownId,
+            failureReason = FailureReason.FoodShortage,
+            messages =
+            {
+                new TradeResultMessageData
+                {
+                    type = TradeResultMessageType.Error,
+                    messageCode = "FOOD_SHORTAGE",
+                    messageText = "Trade failed because food was insufficient."
+                }
+            }
+        };
+
+        Debug.Log($"Result Message: [{result.messages[0].type}] {result.messages[0].messageCode} / {result.messages[0].messageText}");
+        Debug.Assert(result.routeId == route.RouteId, "Trade Result Smoke Test failed: routeId mismatch.");
+        Debug.Assert(result.messages.Count > 0, "Trade Result Smoke Test failed: result messages should not be empty.");
+        Debug.Assert(result.failureReason == FailureReason.FoodShortage, "Trade Result Smoke Test failed: failureReason mismatch.");
+    }
+
+    // Verifies the overview contract for occupied, available-empty, and locked-empty slots.
+    private static void AssertCaravanOverviewViewData()
+    {
+        AssertDefaultCaravanCollections();
+
+        // The UI consumes the contract instead of constructing slot data or reading SaveData directly.
+        ICaravanOverviewViewDataProvider provider = new TestCaravanOverviewViewDataProvider();
+        CaravanOverviewViewData overview = provider.GetOverview();
+
+        Debug.Assert(
+            overview != null
+                && overview.caravans != null
+                && overview.caravans.Length == TestCaravanOverviewViewDataProvider.SlotCount,
+            "Caravan Overview Provider Smoke Test failed: the Provider must return all four non-null slot entries.");
+        Debug.Assert(
+            overview.selectedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId,
+            "Caravan Overview Provider Smoke Test failed: the default selected Caravan was not preserved.");
+
+        CaravanBlockViewData prepareBlock = FindCaravanBlock(overview.caravans, 0);
+        CaravanBlockViewData travelingBlock = FindCaravanBlock(overview.caravans, 1);
+        CaravanBlockViewData availableEmptyBlock = FindCaravanBlock(overview.caravans, 2);
+        CaravanBlockViewData lockedEmptyBlock = FindCaravanBlock(overview.caravans, 3);
+
+        Debug.Assert(
+            prepareBlock != null
+                && travelingBlock != null
+                && availableEmptyBlock != null
+                && lockedEmptyBlock != null,
+            "Caravan Overview Provider Smoke Test failed: slot indices 0 through 3 must all be present.");
+
+        // Runtime Caravan IDs are copied into ViewData; the UI does not create or derive them.
+        var prepareCaravan = new CaravanData
+        {
+            caravanId = TestCaravanOverviewViewDataProvider.PrepareCaravanId,
+            state = JourneyState.Prepare
+        };
+        var travelingCaravan = new CaravanData
+        {
+            caravanId = TestCaravanOverviewViewDataProvider.TravelingCaravanId,
+            state = JourneyState.Traveling
+        };
+
+        AssertOccupiedCaravanBlock(prepareBlock, prepareCaravan);
+        AssertOccupiedCaravanBlock(travelingBlock, travelingCaravan);
+        AssertAvailableEmptyCaravanBlock(availableEmptyBlock);
+        AssertLockedEmptyCaravanBlock(lockedEmptyBlock);
+        AssertUniqueCaravanSlotIndices(overview.caravans);
+        AssertSelectedCaravanExists(overview);
+        AssertTravelingCaravanContents(travelingBlock);
+        AssertCaravanSettingViewData(prepareCaravan, travelingCaravan);
+        AssertCaravanOverviewProviderSelection();
+        AssertCaravanOverviewProviderSnapshotIsolation(provider);
+    }
+
+    // Finds a fixed slot without assuming that a production Provider must return the array in slot order.
+    private static CaravanBlockViewData FindCaravanBlock(CaravanBlockViewData[] blocks, int slotIndex)
+    {
+        if (blocks == null)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < blocks.Length; index++)
+        {
+            CaravanBlockViewData block = blocks[index];
+            if (block != null && block.slotIndex == slotIndex)
+            {
+                return block;
+            }
+        }
+
+        return null;
+    }
+
+    // Verifies that the temporary fixture supports valid selection previews and rejects unknown IDs.
+    private static void AssertCaravanOverviewProviderSelection()
+    {
+        ICaravanOverviewViewDataProvider travelingProvider =
+            new TestCaravanOverviewViewDataProvider(TestCaravanOverviewViewDataProvider.TravelingCaravanId);
+        CaravanOverviewViewData travelingOverview = travelingProvider.GetOverview();
+        AssertSelectedCaravanExists(travelingOverview);
+        Debug.Assert(
+            travelingOverview.selectedCaravanId == TestCaravanOverviewViewDataProvider.TravelingCaravanId,
+            "Caravan Overview Provider Smoke Test failed: a valid traveling selection was not preserved.");
+
+        ICaravanOverviewViewDataProvider invalidProvider =
+            new TestCaravanOverviewViewDataProvider("unknown-caravan");
+        Debug.Assert(
+            string.IsNullOrEmpty(invalidProvider.GetOverview().selectedCaravanId),
+            "Caravan Overview Provider Smoke Test failed: an unknown Caravan ID must not become selected.");
+    }
+
+    // Verifies that mutable ViewData returned to UI code cannot corrupt the next Provider snapshot.
+    private static void AssertCaravanOverviewProviderSnapshotIsolation(
+        ICaravanOverviewViewDataProvider provider)
+    {
+        CaravanOverviewViewData mutableOverview = provider.GetOverview();
+        CaravanBlockViewData mutablePrepareBlock = FindCaravanBlock(mutableOverview.caravans, 0);
+        CaravanBlockViewData mutableTravelingBlock = FindCaravanBlock(mutableOverview.caravans, 1);
+
+        mutableOverview.selectedCaravanId = string.Empty;
+        mutablePrepareBlock.displayName = "Mutated by UI";
+        mutableTravelingBlock.animalIcons[0].quantity = 999;
+
+        CaravanOverviewViewData freshOverview = provider.GetOverview();
+        CaravanBlockViewData freshPrepareBlock = FindCaravanBlock(freshOverview.caravans, 0);
+        CaravanBlockViewData freshTravelingBlock = FindCaravanBlock(freshOverview.caravans, 1);
+
+        Debug.Assert(
+            freshOverview.selectedCaravanId == TestCaravanOverviewViewDataProvider.PrepareCaravanId
+                && freshPrepareBlock.displayName == "Preparation Caravan"
+                && freshTravelingBlock.animalIcons[0].quantity == 2,
+            "Caravan Overview Provider Smoke Test failed: UI mutations leaked into a later Provider snapshot.");
+    }
+
+    // Keeps collection defaults safe for UI binding before a provider supplies actual slots.
+    private static void AssertDefaultCaravanCollections()
+    {
+        var overview = new CaravanOverviewViewData();
+        var block = new CaravanBlockViewData();
+
+        Debug.Assert(
+            overview.caravans != null && overview.caravans.Length == 0,
+            "Caravan Overview Smoke Test failed: the default slot array should be empty, not null.");
+        Debug.Assert(
+            block.animalIcons != null && block.animalIcons.Length == 0,
+            "Caravan Overview Smoke Test failed: the default animal array should be empty, not null.");
+        Debug.Assert(
+            block.cargoIcons != null && block.cargoIcons.Length == 0,
+            "Caravan Overview Smoke Test failed: the default cargo array should be empty, not null.");
+        Debug.Assert(
+            block.slotState == CaravanSlotState.Unknown,
+            "Caravan Overview Smoke Test failed: an uninitialized slot must remain Unknown.");
+    }
+
+    // Verifies that an occupied slot preserves the Framework-assigned runtime identity and state.
+    private static void AssertOccupiedCaravanBlock(
+        CaravanBlockViewData block,
+        CaravanData runtimeCaravan)
+    {
+        Debug.Assert(
+            block != null && runtimeCaravan != null,
+            "Caravan Overview Smoke Test failed: occupied slot inputs must not be null.");
+        Debug.Assert(
+            block.slotState == CaravanSlotState.Occupied,
+            "Caravan Overview Smoke Test failed: an assigned Caravan must use the Occupied slot state.");
+        Debug.Assert(
+            !string.IsNullOrEmpty(runtimeCaravan.caravanId)
+                && block.caravanId == runtimeCaravan.caravanId,
+            "Caravan Overview Smoke Test failed: runtime caravanId was not preserved in ViewData.");
+        Debug.Assert(
+            block.state == runtimeCaravan.state,
+            "Caravan Overview Smoke Test failed: runtime JourneyState was not preserved in ViewData.");
+        Debug.Assert(
+            string.IsNullOrEmpty(block.lockedReason),
+            "Caravan Overview Smoke Test failed: an unlocked occupied slot must not have a locked reason.");
+
+        if (runtimeCaravan.state == JourneyState.Prepare)
+        {
+            Debug.Assert(
+                block.canBeginTradePreparation && string.IsNullOrEmpty(block.tradePreparationBlockedReason),
+                "Caravan Overview Smoke Test failed: a Preparation Caravan should allow the route flow.");
+        }
+        else
+        {
+            Debug.Assert(
+                !block.canBeginTradePreparation && !string.IsNullOrEmpty(block.tradePreparationBlockedReason),
+                "Caravan Overview Smoke Test failed: a non-Preparation Caravan should explain why trade preparation is blocked.");
+        }
+    }
+
+    // Verifies that an unlocked empty slot can represent a future Caravan creation target.
+    private static void AssertAvailableEmptyCaravanBlock(CaravanBlockViewData block)
+    {
+        AssertEmptyCaravanData(block);
+        Debug.Assert(
+            block.slotState == CaravanSlotState.Empty,
+            "Caravan Overview Smoke Test failed: an available creation slot must use the Empty state.");
+        Debug.Assert(
+            string.IsNullOrEmpty(block.lockedReason),
+            "Caravan Overview Smoke Test failed: an available empty slot must not have a locked reason.");
+    }
+
+    // Verifies that a locked empty slot provides a user-facing explanation.
+    private static void AssertLockedEmptyCaravanBlock(CaravanBlockViewData block)
+    {
+        AssertEmptyCaravanData(block);
+        Debug.Assert(
+            block.slotState == CaravanSlotState.Locked,
+            "Caravan Overview Smoke Test failed: an unavailable slot must use the Locked state.");
+        Debug.Assert(
+            !string.IsNullOrEmpty(block.lockedReason),
+            "Caravan Overview Smoke Test failed: a locked empty slot must provide lockedReason.");
+    }
+
+    // Applies the shared rule that an empty slot carries no Caravan-specific configuration.
+    private static void AssertEmptyCaravanData(CaravanBlockViewData block)
+    {
+        Debug.Assert(
+            block != null
+                && (block.slotState == CaravanSlotState.Empty
+                    || block.slotState == CaravanSlotState.Locked),
+            "Caravan Overview Smoke Test failed: a slot without a Caravan must be Empty or Locked.");
+        Debug.Assert(
+            string.IsNullOrEmpty(block.caravanId)
+                && string.IsNullOrEmpty(block.displayName)
+                && string.IsNullOrEmpty(block.wagonContentId),
+            "Caravan Overview Smoke Test failed: an empty slot must not contain Caravan identity or wagon data.");
+        Debug.Assert(
+            block.animalIcons != null && block.animalIcons.Length == 0,
+            "Caravan Overview Smoke Test failed: an empty slot must not contain assigned animals.");
+        Debug.Assert(
+            block.cargoIcons != null && block.cargoIcons.Length == 0,
+            "Caravan Overview Smoke Test failed: an empty slot must not contain cargo summaries.");
+        Debug.Assert(
+            !block.canBeginTradePreparation && !string.IsNullOrEmpty(block.tradePreparationBlockedReason),
+            "Caravan Overview Smoke Test failed: an empty or locked slot must explain why trade preparation is blocked.");
+    }
+
+    // Detects ambiguous UI routing caused by two blocks claiming the same fixed slot.
+    private static void AssertUniqueCaravanSlotIndices(CaravanBlockViewData[] blocks)
+    {
+        Debug.Assert(
+            blocks != null,
+            "Caravan Overview Smoke Test failed: the slot array must not be null.");
+
+        for (var firstIndex = 0; firstIndex < blocks.Length; firstIndex++)
+        {
+            Debug.Assert(
+                blocks[firstIndex] != null,
+                "Caravan Overview Smoke Test failed: a slot entry must not be null.");
+
+            for (var secondIndex = firstIndex + 1; secondIndex < blocks.Length; secondIndex++)
+            {
+                Debug.Assert(
+                    blocks[secondIndex] != null
+                        && blocks[firstIndex].slotIndex != blocks[secondIndex].slotIndex,
+                    "Caravan Overview Smoke Test failed: slotIndex values must be unique.");
+            }
+        }
+    }
+
+    // Verifies that overview selection resolves to exactly one occupied Caravan block.
+    private static void AssertSelectedCaravanExists(CaravanOverviewViewData overview)
+    {
+        var matchCount = 0;
+
+        for (var index = 0; index < overview.caravans.Length; index++)
+        {
+            CaravanBlockViewData block = overview.caravans[index];
+            if (block != null
+                && block.slotState == CaravanSlotState.Occupied
+                && block.caravanId == overview.selectedCaravanId)
+            {
+                matchCount++;
+            }
+        }
+
+        Debug.Assert(
+            matchCount == 1,
+            "Caravan Overview Smoke Test failed: selectedCaravanId must resolve to one occupied block.");
+    }
+
+    // Verifies icon lookup IDs and quantities for a populated traveling Caravan block.
+    private static void AssertTravelingCaravanContents(CaravanBlockViewData block)
+    {
+        Debug.Assert(
+            block.wagonContentId == "test-wagon-medium",
+            "Caravan Overview Smoke Test failed: wagon content ID was not preserved.");
+        Debug.Assert(
+            block.animalIcons.Length == 1
+                && block.animalIcons[0].animalContentId == "test-horse"
+                && block.animalIcons[0].quantity == 2,
+            "Caravan Overview Smoke Test failed: animal icon data was not preserved.");
+        Debug.Assert(
+            block.cargoIcons.Length == 1
+                && block.cargoIcons[0].itemId == "test-grain"
+                && block.cargoIcons[0].quantity == 10,
+            "Caravan Overview Smoke Test failed: cargo icon data was not preserved.");
+    }
+
+    // Verifies that extracted S3/S4 contracts remain editable only for Preparation Caravans.
+    private static void AssertCaravanSettingViewData(
+        CaravanData prepareCaravan,
+        CaravanData travelingCaravan)
+    {
+        var prepareSetting = new CaravanSettingViewData
+        {
+            caravanId = prepareCaravan.caravanId,
+            caravanDisplayName = "Preparation Caravan",
+            state = prepareCaravan.state,
+            canEdit = true,
+            selectedWagonId = "smoke-wagon-medium",
+            wagons = new[] { new WagonViewData { wagonId = "smoke-wagon-medium" } },
+            draftAnimals = new[]
+            {
+                new DraftAnimalViewData
+                {
+                    draftAnimalId = "smoke-horse",
+                    selectedAmount = 2
+                }
+            }
+        };
+        var travelingSetting = new CaravanSettingViewData
+        {
+            caravanId = travelingCaravan.caravanId,
+            caravanDisplayName = "Traveling Caravan",
+            state = travelingCaravan.state,
+            canEdit = false,
+            editBlockedReason = "Caravan settings cannot be changed while the Caravan is traveling."
+        };
+        var prepareLoad = new CaravanLoadSettingViewData
+        {
+            caravanId = prepareCaravan.caravanId,
+            caravanDisplayName = "Preparation Caravan",
+            state = prepareCaravan.state,
+            canEdit = true,
+            availableItems = new[] { new TradeItemViewData { itemId = "smoke-grain" } },
+            plannedItems = new[]
+            {
+                new CargoItemViewData
+                {
+                    itemId = "smoke-grain",
+                    quantity = 10,
+                    totalPurchasePrice = 100
+                }
+            },
+            currentLoad = 10f,
+            maxLoad = 100f,
+            usedInventorySlotCount = 1,
+            maxInventorySlotCount = 5,
+            totalPlannedPurchaseCost = 100,
+            estimatedCurrencyAfterPurchase = 900
+        };
+        var travelingLoad = new CaravanLoadSettingViewData
+        {
+            caravanId = travelingCaravan.caravanId,
+            caravanDisplayName = "Traveling Caravan",
+            state = travelingCaravan.state,
+            canEdit = false,
+            editBlockedReason = "Cargo cannot be changed while the Caravan is traveling."
+        };
+
+        Debug.Assert(
+            prepareSetting.canEdit
+                && string.IsNullOrEmpty(prepareSetting.editBlockedReason)
+                && prepareSetting.wagons.Length == 1
+                && prepareSetting.draftAnimals.Length == 1,
+            "Caravan Setting Smoke Test failed: Preparation settings should be editable and populated.");
+        Debug.Assert(
+            !travelingSetting.canEdit && !string.IsNullOrEmpty(travelingSetting.editBlockedReason),
+            "Caravan Setting Smoke Test failed: Traveling settings should be read-only with a reason.");
+        Debug.Assert(
+            prepareLoad.canEdit
+                && string.IsNullOrEmpty(prepareLoad.editBlockedReason)
+                && prepareLoad.plannedItems.Length == 1
+                && prepareLoad.totalPlannedPurchaseCost == 100,
+            "Caravan Setting Smoke Test failed: Preparation cargo should expose an editable plan.");
+        Debug.Assert(
+            !travelingLoad.canEdit && !string.IsNullOrEmpty(travelingLoad.editBlockedReason),
+            "Caravan Setting Smoke Test failed: Traveling cargo should be read-only with a reason.");
+
+        var defaultSetting = new CaravanSettingViewData();
+        var defaultLoad = new CaravanLoadSettingViewData();
+        Debug.Assert(
+            defaultSetting.wagons != null
+                && defaultSetting.wagons.Length == 0
+                && defaultSetting.draftAnimals != null
+                && defaultSetting.draftAnimals.Length == 0,
+            "Caravan Setting Smoke Test failed: setting collections must default to empty arrays.");
+        Debug.Assert(
+            defaultLoad.availableItems != null
+                && defaultLoad.availableItems.Length == 0
+                && defaultLoad.plannedItems != null
+                && defaultLoad.plannedItems.Length == 0,
+            "Caravan Setting Smoke Test failed: load collections must default to empty arrays.");
+    }
+
+    // Groups the currency projection boundaries separately from other ViewData contracts.
+    private static void AssertCurrencyProjectionScenarios()
+    {
+        AssertCurrencyProjection(2000L, 600L, 300L, 1400L, 1100L, true, true);
+        AssertCurrencyProjection(2000L, 2100L, 0L, 0L, 0L, false, false);
+        AssertCurrencyProjection(2000L, 1700L, 500L, 300L, 0L, true, false);
+        AssertCurrencyProjection(2000L, 2000L, 0L, 0L, 0L, true, true);
     }
 
     private static void AssertCurrencyProjection(

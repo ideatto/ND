@@ -31,8 +31,15 @@ public sealed class TradePrepareFlowController : IDisposable
 
     public void Initialize(string currentTownId)
     {
+        InitializeForCaravan(string.Empty, currentTownId);
+    }
+
+    // Begins destination, route, and mercenary preparation for the Caravan selected in the overview.
+    // Legacy callers may continue using Initialize until the scene routes an explicit Caravan ID.
+    public void InitializeForCaravan(string caravanId, string currentTownId)
+    {
         IsCommitted = false;
-        draftStore.Reset(currentTownId);
+        draftStore.ResetForCaravan(caravanId, currentTownId);
     }
 
     // Call this only after settlement claim succeeds. It releases the committed

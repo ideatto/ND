@@ -25,6 +25,10 @@ public class CargoEntry
 [Serializable]
 public class CaravanData
 {
+    // Stores the stable identifier assigned by the Caravan creation and persistence system.
+    // This data holder does not generate, replace, or derive the value from a trade ID.
+    public string caravanId = string.Empty;
+
     // ── 구성 (준비 단계에서 채움) ──────────────────────────────
     public imsiWagonData wagon;                                              // 마차 (1대)
     public List<imsiAnimalData> animals = new List<imsiAnimalData>();            // 견인 동물 목록
