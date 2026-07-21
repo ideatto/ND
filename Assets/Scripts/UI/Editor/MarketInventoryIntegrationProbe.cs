@@ -62,6 +62,7 @@ public static class MarketInventoryIntegrationProbe
             TradeItemData[] catalog = CreateCatalog();
             VerifyDeterministicRefresh(catalog, checks);
             VerifyJsonCurrencyCargoRoundTrip(catalog, checks);
+            VerifyDeltaTransactionAndRollback(catalog, checks);
             WriteResult(resultPath, true, checks, string.Empty);
             Debug.Log("Market inventory integration probe passed.");
         }
@@ -99,26 +100,26 @@ public static class MarketInventoryIntegrationProbe
         var firstService = new MemorySaveService(firstSave);
         var secondService = new MemorySaveService(secondSave);
 
-        Assert(MarketInventorySession.TryOpen(
+        Assert(MarketInventoryMutationSession.TryOpen(
             firstSave, firstService, new FixedTimeProvider(time), "town-a", catalog,
-            3, 10, 60d, 77, out MarketInventorySession first, out string firstError), firstError);
-        Assert(MarketInventorySession.TryOpen(
+            3, 10, 60d, 77, out MarketInventoryMutationSession first, out string firstError), firstError);
+        Assert(MarketInventoryMutationSession.TryOpen(
             secondSave, secondService, new FixedTimeProvider(time), "town-a", catalog,
-            3, 10, 60d, 77, out MarketInventorySession second, out string secondError), secondError);
+            3, 10, 60d, 77, out MarketInventoryMutationSession second, out string secondError), secondError);
 
-        string firstSignature = Signature(first.Stocks);
-        string secondSignature = Signature(second.Stocks);
+        string firstSignature = Signature(first.View.Stocks);
+        string secondSignature = Signature(second.View.Stocks);
         Assert(firstSignature == secondSignature, "Same town, period, and seed must generate the same inventory.");
-        Assert(first.Stocks.Any(stock => IsFood(stock.Item)), "Generated inventory must contain food.");
+        Assert(first.View.Stocks.Any(stock => IsFood(stock.Item)), "Generated inventory must contain food.");
         checks.Add("deterministic_generation_and_required_food");
 
         long previousRefresh = firstSave.world.marketInventories[0].refreshIndex;
-        Assert(MarketInventorySession.TryOpen(
+        Assert(MarketInventoryMutationSession.TryOpen(
             firstSave, firstService, new FixedTimeProvider(time.AddSeconds(61)), "town-a", catalog,
-            3, 10, 60d, 77, out MarketInventorySession refreshed, out string refreshError), refreshError);
+            3, 10, 60d, 77, out MarketInventoryMutationSession refreshed, out string refreshError), refreshError);
         long nextRefresh = firstSave.world.marketInventories[0].refreshIndex;
         Assert(nextRefresh > previousRefresh, "Elapsed refresh interval must advance refreshIndex.");
-        Assert(refreshed.Stocks.Count == 3, "Refreshed inventory must preserve configured slot count.");
+        Assert(refreshed.View.Stocks.Count == 3, "Refreshed inventory must preserve configured slot count.");
         checks.Add("time_based_refresh");
     }
 
@@ -127,11 +128,11 @@ public static class MarketInventoryIntegrationProbe
         var saveService = new JsonSaveService();
         FrameworkSaveData save = NewSave(1000L);
         DateTime time = new DateTime(2026, 7, 14, 1, 0, 0, DateTimeKind.Utc);
-        Assert(MarketInventorySession.TryOpen(
+        Assert(MarketInventoryMutationSession.TryOpen(
             save, saveService, new FixedTimeProvider(time), "town-json", catalog,
-            4, 20, 3600d, 99, out MarketInventorySession session, out string openError), openError);
+            4, 20, 3600d, 99, out MarketInventoryMutationSession session, out string openError), openError);
 
-        MarketStockView selected = session.Stocks.First(stock => stock.Quantity >= 1);
+        MarketStockView selected = session.View.Stocks.First(stock => stock.Quantity >= 1);
         int quantity = Math.Min(2, selected.Quantity);
         var requests = new List<CargoPurchaseRequest>
         {
@@ -195,6 +196,84 @@ public static class MarketInventoryIntegrationProbe
                 tradingCurrency = currency
             }
         };
+    }
+
+    private static void VerifyDeltaTransactionAndRollback(TradeItemData[] catalog, List<string> checks)
+    {
+        DateTime time = new DateTime(2026, 7, 14, 2, 0, 0, DateTimeKind.Utc);
+        FrameworkSaveData save = NewSave(1000L);
+        save.caravan.cargo.Add(CreateCargo(catalog.First(item => item.ItemId == "cloth"), 3));
+        save.caravan.cargo.Add(CreateCargo(catalog.First(item => item.ItemId == "bread"), 2));
+        var service = new MemorySaveService(save);
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save, service, new FixedTimeProvider(time), "town-delta", catalog,
+            4, 20, 3600d, 101, out MarketInventoryMutationSession session, out string error), error);
+
+        MarketStockView purchase = session.View.Stocks.First(stock => stock.Item.ItemId != "cloth");
+        int purchaseStockBefore = purchase.Quantity;
+        long expectedCurrency = 1000L - purchase.UnitPrice + catalog.First(item => item.ItemId == "cloth").BaseSellPrice * 2L;
+        MarketTransactionResult result = MarketTransactionCommand.Execute(
+            session,
+            new[]
+            {
+                new MarketTransactionLine { ItemId = purchase.Item.ItemId, BuyQuantity = 1 },
+                new MarketTransactionLine { ItemId = "cloth", SellQuantity = 2 }
+            },
+            100f);
+
+        Assert(result.Success, "Delta transaction failed: " + result.ErrorCode);
+        Assert(save.player.tradingCurrency == expectedCurrency, "Delta transaction currency mismatch.");
+        Assert(CargoQuantity(save, "cloth") == 1, "Sale must remove only the sold quantity.");
+        Assert(CargoQuantity(save, "bread") == 2, "Unrelated cargo must be preserved.");
+        Assert(CargoQuantity(save, purchase.Item.ItemId) >= 1, "Purchase must add only the bought quantity.");
+        Assert(session.View.Stocks.First(stock => stock.Item.ItemId == purchase.Item.ItemId).Quantity == purchaseStockBefore - 1,
+            "Purchase must decrement market stock.");
+        checks.Add("market_transaction_delta_preserves_unrelated_cargo");
+
+        FrameworkSaveData failingSave = NewSave(1000L);
+        failingSave.caravan.cargo.Add(CreateCargo(catalog.First(item => item.ItemId == "cloth"), 3));
+        var failingService = new MemorySaveService(failingSave) { FailSaves = true };
+        Assert(MarketInventoryMutationSession.TryOpen(
+            failingSave, failingService, new FixedTimeProvider(time), "town-rollback", catalog,
+            4, 20, 3600d, 102, out MarketInventoryMutationSession failingSession, out string failingError), failingError);
+        MarketStockView failingPurchase = failingSession.View.Stocks.First(stock => stock.Item.ItemId != "cloth");
+        int failingStockBefore = failingPurchase.Quantity;
+        MarketTransactionResult failed = MarketTransactionCommand.Execute(
+            failingSession,
+            new[] { new MarketTransactionLine { ItemId = failingPurchase.Item.ItemId, BuyQuantity = 1 } },
+            100f);
+
+        Assert(!failed.Success && failed.ErrorCode == MarketInventoryMutationSession.ErrorSaveFailed,
+            "Save failure must be reported by the transaction command.");
+        Assert(failingSave.player.tradingCurrency == 1000L, "Save failure must restore currency.");
+        Assert(CargoQuantity(failingSave, "cloth") == 3 && CargoQuantity(failingSave, failingPurchase.Item.ItemId) == 0,
+            "Save failure must restore cargo.");
+        Assert(failingSession.View.Stocks.First(stock => stock.Item.ItemId == failingPurchase.Item.ItemId).Quantity == failingStockBefore,
+            "Save failure must restore market stock.");
+        checks.Add("market_transaction_save_failure_rolls_back");
+    }
+
+    private static CargoEntrySaveData CreateCargo(TradeItemData item, int quantity)
+    {
+        return new CargoEntrySaveData
+        {
+            quantity = quantity,
+            item = new TradeItemSaveData
+            {
+                itemId = item.ItemId,
+                itemName = item.DisplayName,
+                weight = item.Weight,
+                basePrice = item.BaseBuyPrice,
+                maxCount = item.MaxCount
+            }
+        };
+    }
+
+    private static int CargoQuantity(FrameworkSaveData save, string itemId)
+    {
+        return save.caravan.cargo
+            .Where(entry => entry?.item != null && entry.item.itemId == itemId)
+            .Sum(entry => entry.quantity);
     }
 
     private static TradeItemData[] CreateCatalog()
@@ -302,6 +381,8 @@ public static class MarketInventoryIntegrationProbe
             this.data = data;
         }
 
+        public bool FailSaves { get; set; }
+
         public bool HasSaveData() => data != null;
         public FrameworkSaveData CreateNewGameData() => data = NewSave(1000L);
         public FrameworkSaveData Load() => data;
@@ -309,6 +390,9 @@ public static class MarketInventoryIntegrationProbe
         /// <returns>메모리 참조 갱신 후 항상 성공 결과.</returns>
         public SaveResult Save(FrameworkSaveData value)
         {
+            if (FailSaves)
+                return SaveResult.Failure(SaveFailureReason.WriteFailed, "Forced probe failure.", "marketTransaction");
+
             data = value;
             return SaveResult.Success();
         }
