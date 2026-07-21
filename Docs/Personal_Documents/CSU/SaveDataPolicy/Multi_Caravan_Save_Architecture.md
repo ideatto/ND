@@ -6,7 +6,7 @@ Framework owns persistence DTOs, normalization, stable key lookup, UTC timestamp
 
 ## Aggregate model
 
-`caravans[]`, `tradeProgressEntries[]`, and `pendingSettlements[]` are independent lists joined by IDs. A Caravan may be Preparation, Traveling, SettlementPending, Completed, or Failed. Multiple entries may travel or await settlement simultaneously. There is no global active Caravan in the target source of truth.
+In numeric schema version 6, `caravans[]`, `tradeProgressEntries[]`, and `pendingSettlements[]` are the serialized source-of-truth lists joined by IDs. A Caravan may be Preparation, Traveling, SettlementPending, Completed, or Failed. The storage shape permits multiple entries to travel or await settlement simultaneously; the current coordinator and commands do not yet implement that multi-active behavior. `selectedCaravanId` is UI/application focus, not a global command target.
 
 Runtime lookup views use `caravanId` and composite `(caravanId, tradeId)` keys. They are rebuilt after normalization, never serialized. Duplicate IDs are load validation errors, not last-write-wins conditions.
 
@@ -26,7 +26,18 @@ Preparation --depart+save--> Traveling --finalize+save--> SettlementPending
 
 ## Current repository bridge
 
-The current runtime has one `CaravanSaveData`, one `TradeProgressSaveData`, one `PendingSettlementSaveData`, one coordinator active-Caravan reference, and settlement events keyed only by `tradeId`. These may remain temporarily, but must not be treated as the target model. Full migration belongs in follow-up branches after contract approval.
+The repository has completed the version 6 collection cutover but retains non-serialized `caravan`, `tradeProgress`, and `pendingSettlement` compatibility properties. Each resolves only the entry addressed by `selectedCaravanId`. The current coordinator still has one active-Caravan runtime reference, `TryStartTrade(...)` has no explicit `caravanId`, Claim is `ClaimSettlementAndReset()`, and settlement events are keyed only by `tradeId`. These APIs are partial compatibility surfaces, not the collection source of truth or proof of multi-active execution support.
+
+New state-changing contracts require explicit identity:
+
+- `Depart(caravanId, request)` or a compatibly named `TryStartTrade(caravanId, request)`
+- `FinalizeSettlement(caravanId, tradeId)`
+- `ClaimSettlement(caravanId, tradeId)`
+- `TradeSettlementReady(caravanId, tradeId, result)`
+
+The selected Caravan must never be used to infer these targets. A command concerning one Caravan must not be blocked merely because another Caravan is Traveling or SettlementPending. The addressed Caravan must reject departure while it is Traveling or has an unresolved pending settlement.
+
+Normal data permits at most one active Traveling progress and one unresolved pending settlement per Caravan. An exact duplicate `(caravanId, tradeId)` is corrupt/duplicate persisted data. Multiple pending entries with the same `caravanId` but different `tradeId` are ambiguous recovery data: record a visible recovery error and block automatic Depart/Claim for that Caravan. Do not choose or delete an entry automatically; executable recovery behavior is follow-up work.
 
 Commands validate that a player-owned asset is usable and not locked by another Traveling or SettlementPending flow. Investment-quest submissions require an explicit `caravanId` for each item stack and reject unavailable Caravan goods; home temporary inventory is excluded.
 
