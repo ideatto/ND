@@ -2,6 +2,13 @@
 public class TradePrepareConditionInput
 {
     public bool isTradeAlreadyActive;
+
+    // Requires an explicit departure selection only after a multi-Caravan option Provider is connected.
+    // Legacy single-Caravan scenes remain usable while that Provider and panel binding are pending.
+    public bool isDepartureCaravanSelectionRequired;
+
+    // Indicates whether TradePrepareUI selected a departure Caravan for the current Draft.
+    public bool isDepartureCaravanSelected;
     public bool isRouteSelected;
     public bool isRouteUnlocked;
 

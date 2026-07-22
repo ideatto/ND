@@ -1,11 +1,15 @@
-using UnityEngine;
+using System;
 
 [System.Serializable]
 public class TradePrepareViewData
 {
-    // Identifies the Caravan selected before the route and departure flow begins.
-    // Framework supplies this stable ID from the overview selection.
-    public string selectedCaravanId;
+    // Contains the Caravan presets that can be selected inside the trade-preparation flow.
+    // The Overview focus is intentionally not reused as the departure selection.
+    public TradePrepareCaravanOptionViewData[] caravanOptions = Array.Empty<TradePrepareCaravanOptionViewData>();
+
+    // Identifies the Caravan selected inside the current departure Draft.
+    // UI code forwards the Provider-owned ID and never derives a replacement ID.
+    public string departureCaravanId = string.Empty;
 
     public string currentTownId;
     public string currentTownName;
@@ -65,4 +69,24 @@ public class TradePrepareViewData
     public float baseExpectedTravelTime;
     public float finalExpectedTravelTime;
     public float selectedMoveSpeed;
+}
+
+[System.Serializable]
+public sealed class TradePrepareCaravanOptionViewData
+{
+    // Identifies one Caravan preset available to the current preparation session.
+    public string caravanId = string.Empty;
+
+    // Provides the user-facing preset name displayed by the selection UI.
+    public string displayName = string.Empty;
+
+    // Describes the current journey state without exposing mutable runtime data.
+    public JourneyState state = JourneyState.Prepare;
+
+    // Indicates whether this Caravan may be selected for a new departure Draft.
+    public bool canSelect;
+
+    // Explains why this Caravan cannot be selected for departure.
+    // This value must remain empty while canSelect is true.
+    public string disabledReason = string.Empty;
 }

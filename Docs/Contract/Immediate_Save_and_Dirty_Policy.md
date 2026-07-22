@@ -10,7 +10,7 @@ void MarkDirty(SaveDirtyReason reason, string entityId = null);
 bool IsDirty { get; }
 ```
 
-`SaveResult` contains `Succeeded`, a stable `SaveFailureReason`, and diagnostic text safe for logs. `SaveResult Save(...)` is the single approved target; a separate `TrySave()` or `void Save()` wrapper is not part of it. Existing production callers may require staged migration. A successful save clears only the dirty revision included in that attempt; changes made during an in-flight save remain Dirty.
+`SaveResult` contains `Succeeded`, `FailureReason: SaveFailureReason`, `Message: string`, and `FailedDataCategory: string`. `Message` is diagnostic text safe for logs. `SaveResult Save(...)` is the single approved target; a separate `TrySave()` or `void Save()` wrapper is not part of it. The API and result type are implemented, but caller-side result inspection, rollback, retry, and queue adoption remain partial or pending as identified in the inventory. A successful save clears only the dirty revision included in that attempt; changes made during an in-flight save remain Dirty.
 
 This branch does not implement a timer, queue, merging, retry, or transaction engine.
 
@@ -45,3 +45,5 @@ SaveData snapshots use the same deep-copy path as persistence, followed by norma
 Non-critical confirmed changes mark Dirty: per-Caravan destination/route/setup/cargo/food preparation, purchase preview changes, and other explicitly approved non-critical confirmed state. Cancel preparation also marks Dirty. Display-only UI state, formatted strings, selected tabs, open popups, hover/selection, and button interactability never mark Dirty.
 
 `MarkDirty` records intent; it does not imply disk persistence. Queries are side-effect free. Immediate save may also mark a revision internally, but success must durably include it before publishing success events.
+
+`PreparationChanged(caravanId, dirtyRevision)` is a non-committed notification that preparation state changed in memory and was marked Dirty. It may refresh UI, but it never proves disk persistence. `SaveSucceeded(savedRevision)` is the committed notification that the save containing revisions through `savedRevision` succeeded. `SaveFailed(attemptedRevision, failureReason)` reports failure without converting the attempted preparation changes into committed state. If a newer revision is created while a save is in flight, the aggregate remains Dirty after the older revision succeeds.

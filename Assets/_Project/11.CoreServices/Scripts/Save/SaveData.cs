@@ -9,6 +9,7 @@
  * Main Features
  * - 현재 저장 schema version을 제공한다.
  * - Core caravan runtime data(M2 포함)를 직렬화 가능한 DTO 형태로 보관한다.
+ * - caravan에 배치된 마차·동물·용병의 보유 개체 식별자를 저장한다.
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
  * - caravan별 SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
@@ -394,6 +395,8 @@ namespace ND.Framework
     [Serializable]
     public sealed class WagonSaveData
     {
+        /// <summary>마차 종류와 별개로 플레이어가 보유한 한 대를 식별하는 안정 ID이다.</summary>
+        public string instanceId = string.Empty;
         public string wagonName = string.Empty;
         public float overLoad;
         public float maxLoad;
@@ -410,6 +413,8 @@ namespace ND.Framework
     [Serializable]
     public sealed class AnimalSaveData
     {
+        /// <summary>동물 종류와 별개로 플레이어가 보유한 한 개체를 식별하는 안정 ID이다.</summary>
+        public string instanceId = string.Empty;
         public string animalName = string.Empty;
         public float speed = 1f;
         public float foodPerKm;
@@ -424,6 +429,8 @@ namespace ND.Framework
     [Serializable]
     public sealed class MercenarySaveData
     {
+        /// <summary>용병 종류와 별개로 플레이어가 보유한 한 명을 식별하는 안정 ID이다.</summary>
+        public string instanceId = string.Empty;
         public string mercName = string.Empty;
         public int combatPower;
         public int contractCount;

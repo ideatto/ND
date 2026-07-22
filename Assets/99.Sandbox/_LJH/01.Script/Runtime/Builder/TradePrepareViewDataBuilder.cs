@@ -43,7 +43,7 @@ public sealed class TradePrepareViewDataBuilder
 
         Dictionary<string, int> finalCargoQuantities =
             TradePrepareCaravanFactory.CreateFinalCargoQuantities(draft, saveData);
-        CaravanData previewCaravan = TradePrepareCaravanFactory.Create(draft, context);
+        CaravanData previewCaravan = TradePrepareCaravanFactory.CreatePreview(draft, context);
 
         float currentLoad = CaravanCalculator.GetCurrentLoad(previewCaravan);
         float overloadLimit = CaravanCalculator.GetFinalEfficientLoad(previewCaravan);
@@ -102,6 +102,10 @@ public sealed class TradePrepareViewDataBuilder
         TradePrepareConditionInput conditionInput = new TradePrepareConditionInput
         {
             isTradeAlreadyActive = IsTradeAlreadyActive(saveData),
+            // Do not break the existing single-Caravan scene before its multi-Caravan Provider is connected.
+            // Once options exist, TradePrepareUI must choose one before departure can be requested.
+            isDepartureCaravanSelectionRequired = context.caravanOptions != null && context.caravanOptions.Length > 0,
+            isDepartureCaravanSelected = !string.IsNullOrEmpty(draft.departureCaravanId),
             isRouteSelected = selectedRoute != null,
             isRouteUnlocked = routeUnlocked,
             isWagonRequired = true,
@@ -139,9 +143,10 @@ public sealed class TradePrepareViewDataBuilder
 
         return new TradePrepareViewData
         {
-            // The selected Caravan identity must survive ViewData projection so every later UI request
-            // remains scoped to the same Caravan chosen in the overview flow.
-            selectedCaravanId = draft.selectedCaravanId ?? string.Empty,
+            // Departure choices come from the preparation Provider and remain separate from Overview focus.
+            caravanOptions = BuildCaravanOptions(context.caravanOptions),
+            // The Draft identity survives projection so later preparation requests stay on the selected preset.
+            departureCaravanId = draft.departureCaravanId ?? string.Empty,
             currentTownId = currentTownId,
             currentTownName = currentTown != null ? currentTown.DisplayName : string.Empty,
             currentTradingCurrency = currentTradingCurrency,
@@ -181,6 +186,34 @@ public sealed class TradePrepareViewDataBuilder
                 ? selectedRoute.Distance / finalTravelTime
                 : 0f
         };
+    }
+
+    private static TradePrepareCaravanOptionViewData[] BuildCaravanOptions(
+        TradePrepareCaravanOptionViewData[] source)
+    {
+        source = source ?? new TradePrepareCaravanOptionViewData[0];
+        var result = new List<TradePrepareCaravanOptionViewData>();
+
+        for (int index = 0; index < source.Length; index++)
+        {
+            TradePrepareCaravanOptionViewData option = source[index];
+            if (option == null)
+            {
+                continue;
+            }
+
+            // A deep copy prevents UI changes from mutating Provider-owned option data.
+            result.Add(new TradePrepareCaravanOptionViewData
+            {
+                caravanId = option.caravanId ?? string.Empty,
+                displayName = option.displayName ?? string.Empty,
+                state = option.state,
+                canSelect = option.canSelect,
+                disabledReason = option.disabledReason ?? string.Empty
+            });
+        }
+
+        return result.ToArray();
     }
 
     internal static CaravanData CreatePreviewCaravan(

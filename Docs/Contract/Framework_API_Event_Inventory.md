@@ -11,8 +11,8 @@
 
 | 영역 | 이름 | 종류 | 현재 시그니처 | 목표 시그니처 | 상태 | 구현 위치 | 호출자/구독자 | Multi-Caravan | 후속 작업 |
 |---|---|---|---|---|---|---|---|---|---|
-| Save | Save | Command/Result | `SaveResult Save(SaveData data)` | 동일 | Implemented | `ISaveService.cs`, `JsonSaveService.cs` | FrameworkRoot, TradeStart, Coordinator, Loan, Building, debug | Aggregate 저장 가능 | 반환값을 무시하는 lifecycle/debug 호출부 정리 |
-| Save | SaveResult | Result | `SaveResult { Succeeded, FailureReason, Message, FailedDataCategory }` | 동일 | Implemented | `ISaveService.cs` | 중요 Command가 검사; 일부 호출부는 무시 | 해당 없음 | 모든 committed mutation에서 검사 |
+| Save | Save | Command/Result | `SaveResult Save(SaveData data)` | 동일 | Implemented; caller migration Partial | `ISaveService.cs`, `JsonSaveService.cs` | FrameworkRoot, TradeStart, Coordinator, Loan, Building, debug | Aggregate 저장 가능 | 반환값을 무시하는 lifecycle/debug 호출부와 rollback 정리 |
+| Save | SaveResult | Result | `SaveResult { Succeeded: bool, FailureReason: SaveFailureReason, Message: string, FailedDataCategory: string }` | 동일 | Implemented; caller migration Partial | `ISaveService.cs` | 중요 Command가 검사; 일부 호출부는 무시 | 해당 없음 | 모든 committed mutation에서 검사; retry/queue는 별도 Missing |
 | Save | MarkDirty | Command | 없음 | `void MarkDirty(SaveDirtyReason reason, string entityId = null)` | Contract Only | 문서 계약만 존재 | production 호출자 없음 | ID 수용 목표 | 구현 및 dirty Query 추가 |
 | Save | dirty state | Query | 없음 | read-only dirty Query | Contract Only | 문서 계약만 존재 | production 호출자 없음 | Aggregate 상태 | 구체 타입 확정 |
 | Save | retry/queue | Service | 없음 | 순차 retry/queue | Missing | 없음 | 없음 | batch 결과 보존 필요 | 구체 계약 결정 |
@@ -23,12 +23,13 @@
 | Settlement | ClaimSettlementAndReset | Compatibility | `[Obsolete] bool ClaimSettlementAndReset()` | `ClaimSettlement(caravanId, tradeId)` | Deprecated | `TradeProgressCoordinator.cs` | legacy/debug 가능 | selected pending 추론 | canonical API에 한 번만 위임 후 제거 준비 |
 | Settlement | Bridge ClaimSettlementAndReset | UI Compatibility | `bool ClaimSettlementAndReset()` | ID 기반 Claim 호출 | Deprecated | `SettlementUiBridge` | `SettlementUiDataAdapter.OnClickClaimSettlement()` | bridge cache로 ID 보완, bool로 결과 축약 | serialized callback 확인 후 adapter 교체 |
 | Settlement | TradeSettlementReady | Event | `Action<string caravanId, string tradeId, JourneyResultData>` | 동일 ID payload, read-only snapshot | Partial | `FrameworkEvents.cs`; raise: coordinator/restore | `SettlementUiBridge`; bridge event는 UI adapter가 구독 | ID payload는 대응 | Save 성공→runtime commit 뒤 발행; mutable payload 교체 시점 결정 |
-| Trade | TradeOfflineCompleted | Event | `Action<string tradeId>` | ID 기반 recovery result/event | Partial | `FrameworkEvents.cs` | offline recovery raise; 구독자 확인 필요 | `caravanId` 없음 | canonical recovery 계약에 통합 |
-| Trade | CompleteTradeRequested | Debug Event | `Action` | explicit ID debug request 또는 직접 Command | Deprecated | `FrameworkEvents.cs` | coordinator 구독 | 대상 ID 없음 | ForceCompleteTrade adapter로 이관 |
+| Settlement | SettlementClaimed | Event | 없음 | `Action<string caravanId, string tradeId>` | Contract Only | 문서 계약만 존재 | production 구독자 없음 | exact composite key | Claim mutation과 Save 및 runtime commit 성공 뒤 entry당 1회 발행 |
+| Trade | TradeOfflineCompleted | Event | `Action<string tradeId>` | `Action<string caravanId, string tradeId>` recovery notification | Partial | `FrameworkEvents.cs` | offline recovery raise; 구독자 확인 필요 | 현재 `caravanId` 없음 | canonical recovery 계약에 통합 |
+| Trade | CompleteTradeRequested | Debug Event | `Action` | 호환 adapter 내부에서 explicit-ID `ForceCompleteTrade(caravanId, tradeId)`에 1회 위임 | Deprecated | `FrameworkEvents.cs` | coordinator 구독 | 현재 대상 ID 없음 | 자체 mutation/save/event 경로 금지; ID를 제공할 수 없으면 visible rejection |
 | Preparation | UpdatePreparation | Command | 없음 | explicit `caravanId` Command | Contract Only | 문서 계약만 존재 | production 호출자 없음 | 목표 대응 | 구현 |
 | Preparation | UpdatePurchasePreview | Command | 없음 | explicit `caravanId` Command | Contract Only | 문서 계약만 존재 | production 호출자 없음 | 목표 대응 | 구현 |
 | Preparation | CancelPreparation | Command | 없음 | explicit `caravanId` Command | Contract Only | 문서 계약만 존재 | production 호출자 없음 | 목표 대응 | 구현 |
-| Preparation | PreparationChanged | Event | 없음 | ID-bearing committed/dirty Event | Contract Only | 문서 계약만 존재 | production 구독자 없음 | 목표 대응 | 구현 |
+| Preparation | PreparationChanged | Event | 없음 | `Action<string caravanId, long dirtyRevision>` non-committed Event | Contract Only | 문서 계약만 존재 | production 구독자 없음 | explicit `caravanId` | 메모리 변경/UI 갱신만 통지; 저장 완료는 `SaveSucceeded`가 담당 |
 | InvestmentQuest | Complete with currency | Command | 없음 | `InvestmentQuestCommandResult CompleteInvestmentQuestWithCurrency(string investmentQuestId)` | Contract Only | 문서 계약만 존재 | production 호출자 없음 | Quest ID 명시 | Stage 2 구현 |
 | InvestmentQuest | Complete with goods | Command | 없음 | `InvestmentQuestCommandResult CompleteInvestmentQuestWithGoods(string investmentQuestId, IReadOnlyList<InvestmentGoodsContribution> contributions)` | Contract Only | 문서 계약만 존재 | production 호출자 없음 | 각 contribution에 `caravanId` | Stage 2 구현 |
 | InvestmentQuest | Completed | Event | 없음 | ID-bearing committed Event | Contract Only | 문서 계약만 존재 | production 구독자 없음 | 대응 목표 | Save 성공 후 발행 |
@@ -61,7 +62,8 @@
 
 ## 검증 계약
 
-- settlement Save 성공 후 Event 1회, 실패 시 0회
+- settlement batch Save 성공 후 완료 entry마다 `TradeSettlementReady` 1회, 실패 시 전체 0회
+- Claim Save 성공 후 해당 entry에 `SettlementClaimed` 1회, 실패 시 0회
 - legacy API는 canonical API에 1회만 위임
 - Building/InvestmentQuest Save 실패 시 committed Event 없음
 - Rescue Loan rollback/Event 회귀

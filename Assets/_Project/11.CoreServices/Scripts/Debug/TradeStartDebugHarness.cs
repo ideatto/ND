@@ -17,9 +17,10 @@
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
  * - FillSampleCaravan()으로 테스트 caravan을 채운 뒤 StartTradeAndRecordTime()을 호출하는 흐름을 권장한다.
+ * - FillSampleCaravan / 출발 직전에 선택 caravan 저장 ID를 runtime caravanId에 동기화한다.
  *
  * Main Public APIs
- * - FillSampleCaravan(): debug caravan을 기본값으로 채운다.
+ * - FillSampleCaravan(): debug caravan을 기본값으로 채우고 선택 저장 caravanId를 맞춘다.
  * - StartTradeAndRecordTime(): 무역 출발과 기록을 시도한다.
  * - CheckTradeProgressAndCompletion(): 진행률 갱신과 정산 생성을 확인한다.
  * - RunM1LoopIntegritySmoke(): 출발-정산-claim loop를 3회 검증한다.
@@ -35,6 +36,7 @@
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
  * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
+ * - 샘플 caravan은 ID를 생성하지 않으며, FrameworkRoot의 선택 caravan 저장 ID를 재사용한다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
@@ -117,6 +119,7 @@ namespace ND.Framework
             caravan.currentDurability = caravan.wagon.maxDurability;
 
             ApplyConsumptionRateNormalization();
+            SyncCaravanIdFromSelectedSave();
 
             FrameworkLog.Info("Sample caravan filled for trade start debug.");
         }
@@ -136,6 +139,8 @@ namespace ND.Framework
 
             var tradeStart = FrameworkRoot.Instance.TradeStart;
             ApplyConsumptionRateNormalization();
+            // FillSampleCaravan을 거치지 않은 Inspector 편집 경로도 선택 저장 ID를 맞춘다.
+            SyncCaravanIdFromSelectedSave();
             var result = tradeStart.TryStartTrade(caravan, distanceKm, tradeId, routeId);
             // Core 검증 실패 사유를 그대로 로그에 남겨 테스트 데이터 조정을 쉽게 한다.
             if (!result.canDepart)
@@ -1091,6 +1096,39 @@ namespace ND.Framework
             }
 
             commands.ForceRouteEvent(debugRouteEventId);
+        }
+
+        /// <summary>
+        /// debug runtime caravanId가 비어 있으면 선택 caravan 저장 ID를 복사한다.
+        /// </summary>
+        /// <remarks>
+        /// 샘플 caravan은 ID를 생성하지 않는다. FrameworkRoot 또는 선택 caravan이 없으면 변경하지 않는다.
+        /// </remarks>
+        private void SyncCaravanIdFromSelectedSave()
+        {
+            if (caravan == null || !string.IsNullOrEmpty(caravan.caravanId))
+            {
+                return;
+            }
+
+            var saveData = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null;
+            if (saveData == null)
+            {
+                return;
+            }
+
+            var savedId = saveData.caravan != null ? saveData.caravan.caravanId : null;
+            if (string.IsNullOrEmpty(savedId))
+            {
+                savedId = saveData.selectedCaravanId;
+            }
+
+            if (string.IsNullOrEmpty(savedId))
+            {
+                return;
+            }
+
+            caravan.caravanId = savedId;
         }
 
         private void ApplyConsumptionRateNormalization()
