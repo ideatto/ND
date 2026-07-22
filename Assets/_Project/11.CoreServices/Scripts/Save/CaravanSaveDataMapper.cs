@@ -23,6 +23,7 @@
  *
  * Important Notes
  * - runtimeData 또는 saveData가 null이면 CopyToSave는 저장 데이터를 변경하지 않는다.
+ * - CopyToSave는 runtime caravanId가 비어 있으면 저장 DTO의 기존 caravanId를 유지한다.
  * - starveGraceSeconds 기본값은 300초이며 debug harness는 별도로 덮어쓸 수 있다.
  */
 using System.Collections.Generic;
@@ -89,6 +90,10 @@ namespace ND.Framework
         /// </summary>
         /// <param name="runtimeData">Core 계산에 사용된 runtime caravan 데이터.</param>
         /// <param name="saveData">값을 덮어쓸 저장 DTO.</param>
+        /// <remarks>
+        /// runtime caravanId가 null이거나 빈 문자열이면 저장 DTO의 기존 caravanId를 유지한다.
+        /// debug/sample runtime처럼 ID가 비어 있는 입력이 selectedCaravanId·자산 잠금 연동을 깨뜨리지 않게 하기 위함이다.
+        /// </remarks>
         public static void CopyToSave(CaravanData runtimeData, CaravanSaveData saveData)
         {
             if (runtimeData == null || saveData == null)
@@ -102,6 +107,12 @@ namespace ND.Framework
             CopyAnimals(runtimeData.animals, saveData.animals);
             CopyMercenaries(runtimeData.mercenaries, saveData.mercenaries);
             CopyCargo(runtimeData.cargo, saveData.cargo);
+
+            // 빈 runtime ID로 저장 ID를 지우면 NormalizeData가 새 ID를 발급해 child 연동이 끊긴다.
+            if (!string.IsNullOrEmpty(runtimeData.caravanId))
+            {
+                saveData.caravanId = runtimeData.caravanId;
+            }
 
             saveData.foodAmount = runtimeData.foodAmount;
             saveData.foodUnitWeight = runtimeData.foodUnitWeight;
