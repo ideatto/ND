@@ -7,6 +7,7 @@
  * - Play mode ContextMenu smoke와 동일한 coordinator 경로를 서비스 조립으로 재현한다.
  *
  * Main Features
+ * - Verifies asset ID generation, normalization stability, duplicate repair, and mapper round trips.
  * - caravan ID 기반 플레이어 출발 command의 성공, 중복, 병렬 caravan, pending, 저장 실패와 재진입을 검증한다.
  * - 구조 대출 발급 → 제한 모드 → 무역 출발 → 제한 해제 → 수동 상환 통합 검증.
  * - 원자 claim: 저장 실패 원복, 정상 claim, currentTownId/Town 이벤트, 중복 claim 거부, 재실행 Town 복원 검증.
@@ -56,11 +57,14 @@ namespace ND.Framework.Editor
         [MenuItem("ND/Framework/Run M1 Loop + Economy E2E Checks")]
         public static void RunAll()
         {
+            RunAssetInstanceIdPersistenceChecks();
             RunMultiCaravanSaveDataChecks();
             RunMultiCaravanDepartureCommandChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
+            RunArrivalSalePendingE2E();
+            RunAutomaticArrivalClaimE2E();
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
@@ -70,6 +74,64 @@ namespace ND.Framework.Editor
             RunPendingSettlementRestoreE2E(TestContext.Create());
             RunOfflineProgressE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
+        }
+
+        private static void RunAssetInstanceIdPersistenceChecks()
+        {
+            var firstGeneratedId = SaveDataLookup.NewInstanceId();
+            var secondGeneratedId = SaveDataLookup.NewInstanceId();
+            Guid parsedId;
+            if (firstGeneratedId.Length != 32 || !Guid.TryParse(firstGeneratedId, out parsedId)
+                || firstGeneratedId == secondGeneratedId)
+            {
+                throw new InvalidOperationException("Asset instance ID generation did not produce unique N-format GUIDs.");
+            }
+
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            var caravan = data.caravans[0];
+            caravan.wagon.wagonName = "Persistence Wagon";
+            caravan.wagon.instanceId = firstGeneratedId;
+            caravan.animals.Add(new AnimalSaveData
+            {
+                instanceId = firstGeneratedId,
+                animalName = "Persistence Horse"
+            });
+            caravan.mercenaries.Add(new MercenarySaveData
+            {
+                mercName = "Persistence Guard"
+            });
+
+            if (!JsonSaveService.NormalizeData(data)
+                || caravan.wagon.instanceId != firstGeneratedId
+                || string.IsNullOrWhiteSpace(caravan.animals[0].instanceId)
+                || caravan.animals[0].instanceId == firstGeneratedId
+                || string.IsNullOrWhiteSpace(caravan.mercenaries[0].instanceId))
+            {
+                throw new InvalidOperationException("Asset instance ID backfill, preservation, or duplicate repair failed.");
+            }
+
+            var animalId = caravan.animals[0].instanceId;
+            var mercenaryId = caravan.mercenaries[0].instanceId;
+            if (JsonSaveService.NormalizeData(data)
+                || caravan.wagon.instanceId != firstGeneratedId
+                || caravan.animals[0].instanceId != animalId
+                || caravan.mercenaries[0].instanceId != mercenaryId)
+            {
+                throw new InvalidOperationException("Asset instance ID normalization was not stable on a second pass.");
+            }
+
+            var runtime = CaravanSaveDataMapper.ToRuntime(caravan);
+            var roundTrip = new CaravanSaveData();
+            CaravanSaveDataMapper.CopyToSave(runtime, roundTrip);
+            if (roundTrip.wagon.instanceId != firstGeneratedId
+                || roundTrip.animals.Count != 1 || roundTrip.animals[0].instanceId != animalId
+                || roundTrip.mercenaries.Count != 1 || roundTrip.mercenaries[0].instanceId != mercenaryId)
+            {
+                throw new InvalidOperationException("Asset instance IDs were not preserved by the save/runtime mapper round trip.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Asset instance ID generation, normalization, and mapper round trip passed.");
         }
 
         private static void RunMultiCaravanSaveDataChecks()
@@ -1052,10 +1114,10 @@ namespace ND.Framework.Editor
                 throw new InvalidOperationException("Pending restore E2E failed because restored cache did not match saved pending result.");
             }
 
-            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Traveling)
             {
                 throw new InvalidOperationException(
-                    $"Pending restore E2E failed: screen was {context.ScreenRouter.CurrentScreenState}, expected Settlement.");
+                    $"Pending restore E2E failed: successful arrival opened Settlement before the sale step. Screen: {context.ScreenRouter.CurrentScreenState}.");
             }
 
             var firstClaim = ClaimCurrentSettlement(context);
@@ -1404,6 +1466,7 @@ namespace ND.Framework.Editor
             {
                 wagon = new imsiWagonData
                 {
+                    instanceId = SaveDataLookup.NewInstanceId(),
                     wagonName = "Editor Test Wagon",
                     overLoad = 30f,
                     maxLoad = 60f,
@@ -1418,6 +1481,7 @@ namespace ND.Framework.Editor
 
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Editor Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
@@ -1425,10 +1489,19 @@ namespace ND.Framework.Editor
             });
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Editor Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
+            });
+
+            caravan.mercenaries.Add(new imsiMercenaryData
+            {
+                instanceId = SaveDataLookup.NewInstanceId(),
+                mercName = "Editor Guard",
+                combatPower = 10,
+                contractCount = 1
             });
 
             var item = new imsiTradeItemData
@@ -1569,10 +1642,12 @@ namespace ND.Framework.Editor
             }
 
             context.Coordinator.ForceCompleteActiveTrade();
-            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Traveling
+                || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending)
             {
                 throw new InvalidOperationException(
-                    $"Atomic claim E2E expected Settlement before claim, got {context.ScreenRouter.CurrentScreenState}.");
+                    "Atomic claim E2E expected a saved pending result without automatic Settlement presentation. "
+                    + $"Screen={context.ScreenRouter.CurrentScreenState}, State={context.SaveData.tradeProgress.state}.");
             }
 
             var currencyBefore = context.SaveData.player.tradingCurrency;
@@ -1684,12 +1759,129 @@ namespace ND.Framework.Editor
             if (ClaimCurrentSettlement(mismatchContext)
                 || mismatchContext.SaveData.player.tradingCurrency != mismatchCurrency
                 || mismatchContext.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
-                || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+                || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Traveling)
             {
                 throw new InvalidOperationException("Destination mismatch E2E mutated claim state.");
             }
 
             Debug.Log("[Framework M1 E2E] Atomic claim rollback, normal claim, Town event, duplicate reject, relaunch, and destination validation passed.");
+        }
+
+        private static void RunAutomaticArrivalClaimE2E()
+        {
+            var context = TestContext.Create(new ConfigurableSaveService());
+            var bridgeObject = new GameObject("SettlementAutoArrivalE2E");
+            var bridge = bridgeObject.AddComponent<SettlementUiBridge>();
+            bridge.Initialize(
+                () => context.SaveData,
+                context.Coordinator,
+                context.ScreenRouter,
+                autoClaimOnArrival: true);
+
+            int settlementScreenEvents = 0;
+            int townScreenEvents = 0;
+            Action<InGameScreenState> onScreenChanged = state =>
+            {
+                if (state == InGameScreenState.Settlement) settlementScreenEvents++;
+                if (state == InGameScreenState.Town) townScreenEvents++;
+            };
+            FrameworkEvents.InGameScreenChanged += onScreenChanged;
+
+            try
+            {
+                CaravanData caravan = CreateSampleCaravan(context.GameTime);
+                if (!context.TradeStart.TryStartTrade(
+                        caravan,
+                        DistanceKm,
+                        "editor_auto_arrival_claim",
+                        RouteId).canDepart)
+                {
+                    throw new InvalidOperationException("Automatic arrival E2E failed to start trade.");
+                }
+
+                context.Coordinator.ForceCompleteActiveTrade();
+
+                bool pendingCleared = context.SaveData.pendingSettlement == null
+                    || !context.SaveData.pendingSettlement.hasResult;
+                if (!pendingCleared
+                    || context.SaveData.tradeProgress.state == TradeProgressState.SettlementPending
+                    || context.ScreenRouter.CurrentScreenState != InGameScreenState.Town
+                    || settlementScreenEvents != 0
+                    || townScreenEvents != 1
+                    || bridge.HasPendingSettlement)
+                {
+                    throw new InvalidOperationException(
+                        "Automatic arrival E2E failed. "
+                        + $"State={context.SaveData.tradeProgress.state}, "
+                        + $"Screen={context.ScreenRouter.CurrentScreenState}, "
+                        + $"SettlementEvents={settlementScreenEvents}, TownEvents={townScreenEvents}, "
+                        + $"PendingCleared={pendingCleared}, BridgePending={bridge.HasPendingSettlement}.");
+                }
+
+                Debug.Log("[Framework M1 E2E] Automatic arrival claim passed. Settlement UI skipped -> Town.");
+            }
+            finally
+            {
+                FrameworkEvents.InGameScreenChanged -= onScreenChanged;
+                UnityEngine.Object.DestroyImmediate(bridgeObject);
+            }
+        }
+
+        private static void RunArrivalSalePendingE2E()
+        {
+            var context = TestContext.Create(new ConfigurableSaveService());
+            var bridgeObject = new GameObject("SettlementArrivalSalePendingE2E");
+            var bridge = bridgeObject.AddComponent<SettlementUiBridge>();
+            bridge.Initialize(
+                () => context.SaveData,
+                context.Coordinator,
+                context.ScreenRouter,
+                autoClaimOnArrival: false);
+
+            int settlementReadyEvents = 0;
+            bridge.SettlementReady += (_, __) => settlementReadyEvents++;
+
+            try
+            {
+                CaravanData caravan = CreateSampleCaravan(context.GameTime);
+                if (!context.TradeStart.TryStartTrade(
+                        caravan,
+                        DistanceKm,
+                        "editor_arrival_sale_pending",
+                        RouteId).canDepart)
+                {
+                    throw new InvalidOperationException("Arrival sale pending E2E failed to start trade.");
+                }
+
+                context.Coordinator.ForceCompleteActiveTrade();
+                string caravanId = context.SaveData.selectedCaravanId;
+                string tradeId = context.SaveData.tradeProgress.activeTradeId;
+                if (context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                    || context.SaveData.pendingSettlement == null
+                    || !context.SaveData.pendingSettlement.hasResult
+                    || !bridge.HasPendingSettlement
+                    || settlementReadyEvents != 0
+                    || context.ScreenRouter.CurrentScreenState == InGameScreenState.Settlement)
+                {
+                    throw new InvalidOperationException(
+                        "Arrival sale pending E2E did not preserve the pre-sale settlement boundary.");
+                }
+
+                if (!bridge.PresentSettlement(caravanId, tradeId)
+                    || settlementReadyEvents != 1
+                    || context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement
+                    || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending)
+                {
+                    throw new InvalidOperationException(
+                        "Arrival sale pending E2E failed to present the saved settlement explicitly.");
+                }
+
+                Debug.Log("[Framework M1 E2E] Arrival remains pending until sale completion presents settlement.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(bridgeObject);
+            }
         }
 
         private static bool ClaimCurrentSettlement(TestContext context)

@@ -43,6 +43,11 @@ namespace ND.Framework
         /// <summary>
         /// 정산 claim과 목적지 위치 저장이 완료된 마을 화면이다.
         /// </summary>
-        Town
+        Town,
+
+        /// <summary>
+        /// Town에서 진입하는 일시적인 시장 UI 화면이다. SaveData에는 저장하지 않는다.
+        /// </summary>
+        Market
     }
 }

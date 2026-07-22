@@ -280,11 +280,13 @@ public sealed class TradePrepareStartAdapter
             routeId = routeId,
             selectedWagonId = draft.selectedWagonId,
             selectedAnimals = CreateSelectedAnimalSnapshots(draft),
-            purchaseCost = Math.Max(0L, viewData.totalPurchaseCost - viewData.draftAnimalFoodCost),
-            foodCost = viewData.draftAnimalFoodCost > 0L ? viewData.draftAnimalFoodCost : 0L,
+            purchaseCost = 0L,
+            foodCost = 0L,
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
-            estimatedSellRevenue = viewData.estimatedSellRevenue > 0L ? viewData.estimatedSellRevenue : 0L,
-            purchasedItems = CreatePurchasedItemSnapshots(draft, viewData),
+            // Market sale revenue is committed immediately by MarketTransactionCommand.
+            // Departure/arrival settlement must never credit the carried cargo automatically.
+            estimatedSellRevenue = 0L,
+            purchasedItems = new TradeItemBundle[0],
             selectedMercenaryIds = mercenaryIds
         };
     }
@@ -311,52 +313,4 @@ public sealed class TradePrepareStartAdapter
         return result;
     }
 
-    private static TradeItemBundle[] CreatePurchasedItemSnapshots(
-        TradePrepareDraft draft,
-        TradePrepareViewData viewData)
-    {
-        if (draft == null || draft.selectedBuyItems == null)
-        {
-            return new TradeItemBundle[0];
-        }
-
-        var result = new TradeItemBundle[draft.selectedBuyItems.Count];
-        for (int index = 0; index < draft.selectedBuyItems.Count; index++)
-        {
-            TradeItemBundle selected = draft.selectedBuyItems[index];
-            TradeItemViewData priced = FindTradeItemViewData(
-                viewData != null ? viewData.tradeItems : null,
-                selected != null ? selected.itemId : null);
-            result[index] = selected == null ? null : new TradeItemBundle
-            {
-                itemId = selected.itemId ?? string.Empty,
-                quantity = selected.quantity > 0 ? selected.quantity : 0,
-                purchaseUnitPrice = priced != null ? Math.Max(0L, priced.purchasePrice) : 0L,
-                sellUnitPrice = priced != null ? Math.Max(0L, priced.sellPrice) : 0L
-            };
-        }
-
-        return result;
-    }
-
-    private static TradeItemViewData FindTradeItemViewData(
-        TradeItemViewData[] items,
-        string itemId)
-    {
-        if (items == null || string.IsNullOrEmpty(itemId))
-        {
-            return null;
-        }
-
-        for (int index = 0; index < items.Length; index++)
-        {
-            TradeItemViewData item = items[index];
-            if (item != null && string.Equals(item.itemId, itemId, StringComparison.Ordinal))
-            {
-                return item;
-            }
-        }
-
-        return null;
-    }
 }

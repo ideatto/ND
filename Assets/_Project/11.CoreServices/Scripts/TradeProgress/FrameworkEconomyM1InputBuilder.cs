@@ -48,19 +48,6 @@ namespace ND.Framework
                 return null;
             }
 
-            if (!TryGetPrimaryCargo(caravan, out var cargoEntry, out var itemId))
-            {
-                FrameworkLog.Warning("Economy M1 input build skipped because caravan has no valid cargo entry.");
-                return null;
-            }
-
-            SharedTradeItemDefinition tradeItemDefinition;
-            if (!sharedGameData.TryGetTradeItem(itemId, out tradeItemDefinition))
-            {
-                FrameworkLog.Warning($"Economy M1 input build skipped because trade item '{itemId}' was not found in shared game data.");
-                return null;
-            }
-
             var routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
             SharedRouteDefinition routeDefinition;
             if (string.IsNullOrEmpty(routeId) || !sharedGameData.TryGetRoute(routeId, out routeDefinition))
@@ -69,46 +56,22 @@ namespace ND.Framework
                 return null;
             }
 
-            var sellQuantity = cargoEntry.quantity - journeyResult.cargoLost;
-            if (sellQuantity < 0)
-            {
-                sellQuantity = 0;
-            }
-
             var cartRepairCost = journeyResult.durabilityLost > 0f
                 ? (long)journeyResult.durabilityLost * DurabilityRepairCostPerPoint
                 : 0L;
 
-            var world = saveData.world;
-            var seasonId = world != null ? world.currentSeasonId ?? string.Empty : string.Empty;
-            var disasterId = world != null ? world.currentDisasterId ?? string.Empty : string.Empty;
-
             return new EconomyM1LoopInput
             {
-                PriceInput = new ND.Economy.PriceCalculationInput
-                {
-                    TradeItemId = tradeItemDefinition.Id,
-                    FromTownId = routeDefinition.FromTownId ?? string.Empty,
-                    ToTownId = routeDefinition.ToTownId ?? string.Empty,
-                    RouteId = routeDefinition.Id ?? string.Empty,
-                    Quantity = sellQuantity,
-                    BaseBuyPrice = tradeItemDefinition.BaseBuyPrice,
-                    BaseSellPrice = tradeItemDefinition.BaseSellPrice,
-                    SeasonId = seasonId,
-                    DisasterId = disasterId,
-                    PlayerGrowthLevel = saveData.player.playerGrowthLevel,
-                    CaravanGrowthLevel = saveData.player.caravanGrowthLevel,
-                    Modifiers = tradeItemDefinition.PriceModifiers != null
-                        ? new System.Collections.Generic.List<PriceModifierInput>(tradeItemDefinition.PriceModifiers)
-                        : new System.Collections.Generic.List<PriceModifierInput>()
-                },
+                CalculateItemTrade = false,
                 CurrencyState = new CurrencyState
                 {
                     TradeMoney = saveData.player.tradingCurrency,
                     DevelopmentCurrency = saveData.player.developmentCurrency
                 },
                 TradeId = saveData.tradeProgress.activeTradeId ?? string.Empty,
-                FoodCost = routeDefinition.BaseFoodCost,
+                // 먹이는 출발 마켓에서 일반 상품처럼 구매되어 이미 tradingCurrency에 반영된다.
+                // 경로 기본 식량비까지 정산에서 다시 차감하면 같은 먹이를 이중 결제하게 된다.
+                FoodCost = 0L,
                 MercenaryCost = routeDefinition.BaseMercenaryCost,
                 CartRepairCost = cartRepairCost,
                 LoanRepayment = 0L,
@@ -119,36 +82,5 @@ namespace ND.Framework
             };
         }
 
-        private static bool TryGetPrimaryCargo(CaravanData caravan, out CargoEntry cargoEntry, out string itemId)
-        {
-            cargoEntry = null;
-            itemId = string.Empty;
-
-            if (caravan.cargo == null)
-            {
-                return false;
-            }
-
-            for (var index = 0; index < caravan.cargo.Count; index++)
-            {
-                var entry = caravan.cargo[index];
-                if (entry == null || entry.item == null || entry.quantity <= 0)
-                {
-                    continue;
-                }
-
-                var candidateId = entry.item.id;
-                if (string.IsNullOrEmpty(candidateId))
-                {
-                    continue;
-                }
-
-                cargoEntry = entry;
-                itemId = candidateId;
-                return true;
-            }
-
-            return false;
-        }
     }
 }
