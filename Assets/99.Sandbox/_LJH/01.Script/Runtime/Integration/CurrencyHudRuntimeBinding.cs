@@ -17,6 +17,7 @@ public sealed class CurrencyHudRuntimeBinding : MonoBehaviour
     {
         FrameworkEvents.LoadCompleted += HandleLoadCompleted;
         FrameworkEvents.SceneChanged += HandleSceneChanged;
+        FrameworkEvents.TradingCurrencyChanged += HandleTradingCurrencyChanged;
 
         TrySubscribeToPlayerManager();
         PublishCurrentSaveData();
@@ -33,6 +34,7 @@ public sealed class CurrencyHudRuntimeBinding : MonoBehaviour
     {
         FrameworkEvents.LoadCompleted -= HandleLoadCompleted;
         FrameworkEvents.SceneChanged -= HandleSceneChanged;
+        FrameworkEvents.TradingCurrencyChanged -= HandleTradingCurrencyChanged;
         UnsubscribeFromPlayerManager();
     }
 
@@ -50,6 +52,11 @@ public sealed class CurrencyHudRuntimeBinding : MonoBehaviour
     }
 
     private void HandleGoldChanged(long tradingCurrency)
+    {
+        Publish(tradingCurrency);
+    }
+
+    private void HandleTradingCurrencyChanged(long tradingCurrency)
     {
         Publish(tradingCurrency);
     }

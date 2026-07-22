@@ -462,6 +462,7 @@ namespace ND.Framework
             }
 
             ClearSettlementCache();
+            FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
 
             return true;
@@ -577,6 +578,7 @@ namespace ND.Framework
             }
 
             if (LastSettlementTradeId == tradeId) ClearSettlementCache();
+            FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
             return ClaimSettlementResult.Success(saveResult);
         }

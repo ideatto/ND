@@ -81,6 +81,11 @@ namespace ND.Framework
         /// </summary>
         public static event Action<InGameScreenState> InGameScreenChanged;
 
+        /// <summary>
+        /// SaveData에 확정 반영된 플레이어 무역 화폐가 변경되었을 때 발생한다.
+        /// </summary>
+        public static event Action<long> TradingCurrencyChanged;
+
         /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
         public static event Action<IssueRescueLoanResult> RescueLoanIssued;
 
@@ -203,6 +208,13 @@ namespace ND.Framework
             // 화면 router의 상태 변화는 UI 패널 전환의 기준이므로 상태값을 로그에 남긴다.
             FrameworkLog.Info($"InGameScreenChanged event raised. ScreenState: {screenState}");
             InGameScreenChanged?.Invoke(screenState);
+        }
+
+        /// <summary>확정된 플레이어 무역 화폐 스냅샷을 구독자에게 전달한다.</summary>
+        public static void RaiseTradingCurrencyChanged(long tradingCurrency)
+        {
+            FrameworkLog.Info($"TradingCurrencyChanged event raised. Currency: {tradingCurrency}");
+            TradingCurrencyChanged?.Invoke(tradingCurrency);
         }
 
         public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)
