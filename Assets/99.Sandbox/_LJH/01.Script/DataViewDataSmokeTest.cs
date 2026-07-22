@@ -20,6 +20,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertTradeResultData();
         AssertCurrencyProjectionScenarios();
         AssertCaravanOverviewViewData();
+        AssertCaravanSettingServices();
 
         Debug.Log("ViewData Smoke Test PASSED.");
     }
@@ -1078,14 +1079,42 @@ public class DataViewDataSmokeTest : MonoBehaviour
             caravanDisplayName = "Preparation Caravan",
             state = prepareCaravan.state,
             canEdit = true,
-            selectedWagonId = "smoke-wagon-medium",
-            wagons = new[] { new WagonViewData { wagonId = "smoke-wagon-medium" } },
+            selectedWagonInstanceId = "smoke-wagon-instance-01",
+            selectedAnimalInstanceIds = new[]
+            {
+                "smoke-horse-instance-01",
+                "smoke-horse-instance-02"
+            },
+            wagons = new[]
+            {
+                new WagonViewData
+                {
+                    wagonId = "smoke-wagon-medium",
+                    wagonInstanceId = "smoke-wagon-instance-01",
+                    wagonType = WagonType.WagonWithAnimals,
+                    minRequireAnimals = 1,
+                    maxPullAnimals = 2,
+                    isOwned = true,
+                    canSelect = true
+                }
+            },
             draftAnimals = new[]
             {
                 new DraftAnimalViewData
                 {
                     draftAnimalId = "smoke-horse",
-                    selectedAmount = 2
+                    draftAnimalInstanceId = "smoke-horse-instance-01",
+                    selectedAmount = 1,
+                    isEligibleForSelectedWagon = true,
+                    canSelect = true
+                },
+                new DraftAnimalViewData
+                {
+                    draftAnimalId = "smoke-horse",
+                    draftAnimalInstanceId = "smoke-horse-instance-02",
+                    selectedAmount = 1,
+                    isEligibleForSelectedWagon = true,
+                    canSelect = true
                 }
             }
         };
@@ -1101,6 +1130,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         {
             caravanId = prepareCaravan.caravanId,
             caravanDisplayName = "Preparation Caravan",
+            currentTownId = "smoke-base-town",
             state = prepareCaravan.state,
             canEdit = true,
             availableItems = new[] { new TradeItemViewData { itemId = "smoke-grain" } },
@@ -1132,15 +1162,22 @@ public class DataViewDataSmokeTest : MonoBehaviour
         Debug.Assert(
             prepareSetting.canEdit
                 && string.IsNullOrEmpty(prepareSetting.editBlockedReason)
+                && prepareSetting.selectedWagonInstanceId == "smoke-wagon-instance-01"
+                && prepareSetting.selectedAnimalInstanceIds.Length == 2
                 && prepareSetting.wagons.Length == 1
-                && prepareSetting.draftAnimals.Length == 1,
-            "Caravan Setting Smoke Test failed: Preparation settings should be editable and populated.");
+                && prepareSetting.wagons[0].wagonId == "smoke-wagon-medium"
+                && prepareSetting.wagons[0].wagonInstanceId == "smoke-wagon-instance-01"
+                && prepareSetting.draftAnimals.Length == 2
+                && prepareSetting.draftAnimals[0].draftAnimalId == "smoke-horse"
+                && prepareSetting.draftAnimals[0].draftAnimalInstanceId == "smoke-horse-instance-01",
+            "Caravan Setting Smoke Test failed: content and owned-instance identities must remain distinct.");
         Debug.Assert(
             !travelingSetting.canEdit && !string.IsNullOrEmpty(travelingSetting.editBlockedReason),
             "Caravan Setting Smoke Test failed: Traveling settings should be read-only with a reason.");
         Debug.Assert(
             prepareLoad.canEdit
                 && string.IsNullOrEmpty(prepareLoad.editBlockedReason)
+                && prepareLoad.currentTownId == "smoke-base-town"
                 && prepareLoad.plannedItems.Length == 1
                 && prepareLoad.totalPlannedPurchaseCost == 100,
             "Caravan Setting Smoke Test failed: Preparation cargo should expose an editable plan.");
@@ -1154,7 +1191,9 @@ public class DataViewDataSmokeTest : MonoBehaviour
             defaultSetting.wagons != null
                 && defaultSetting.wagons.Length == 0
                 && defaultSetting.draftAnimals != null
-                && defaultSetting.draftAnimals.Length == 0,
+                && defaultSetting.draftAnimals.Length == 0
+                && defaultSetting.selectedAnimalInstanceIds != null
+                && defaultSetting.selectedAnimalInstanceIds.Length == 0,
             "Caravan Setting Smoke Test failed: setting collections must default to empty arrays.");
         Debug.Assert(
             defaultLoad.availableItems != null
@@ -1162,6 +1201,124 @@ public class DataViewDataSmokeTest : MonoBehaviour
                 && defaultLoad.plannedItems != null
                 && defaultLoad.plannedItems.Length == 0,
             "Caravan Setting Smoke Test failed: load collections must default to empty arrays.");
+
+        // The detached S3 adapter must preserve instance IDs in its UI-owned Draft snapshot.
+        var panelObject = new GameObject("CaravanSettingPanelSmokeTest");
+        try
+        {
+            AnimalInventoryPanel panel = panelObject.AddComponent<AnimalInventoryPanel>();
+            bool populated = panel.Populate(prepareSetting);
+            bool draftCreated = panel.TryCreateSettingDraft(prepareCaravan.caravanId, out CaravanSettingDraft draft);
+            Debug.Assert(
+                populated
+                    && panel.CanConfirmCaravanSetting()
+                    && draftCreated
+                    && draft != null
+                    && draft.caravanId == prepareCaravan.caravanId
+                    && draft.selectedWagonInstanceId == "smoke-wagon-instance-01"
+                    && draft.SelectedAnimalInstanceIds.Count == 2
+                    && draft.SelectedAnimalInstanceIds[0] == "smoke-horse-instance-01"
+                    && draft.SelectedAnimalInstanceIds[1] == "smoke-horse-instance-02",
+                "Caravan Setting Smoke Test failed: S3 must return the selected owned-instance IDs.");
+
+            var walkingSetting = new CaravanSettingViewData
+            {
+                caravanId = prepareCaravan.caravanId,
+                state = JourneyState.Prepare,
+                canEdit = true,
+                wagons = prepareSetting.wagons,
+                draftAnimals = prepareSetting.draftAnimals
+            };
+            bool walkingPopulated = panel.Populate(walkingSetting);
+            bool walkingDraftCreated = panel.TryCreateSettingDraft(
+                prepareCaravan.caravanId,
+                out CaravanSettingDraft walkingDraft);
+            Debug.Assert(
+                walkingPopulated
+                    && panel.CanConfirmCaravanSetting()
+                    && walkingDraftCreated
+                    && walkingDraft != null
+                    && string.IsNullOrEmpty(walkingDraft.selectedWagonInstanceId)
+                    && walkingDraft.SelectedAnimalInstanceIds.Count == 0,
+                "Caravan Setting Smoke Test failed: a wagon-free walking configuration must remain valid.");
+        }
+        finally
+        {
+            Object.DestroyImmediate(panelObject);
+        }
+    }
+
+    // Verifies the replaceable S3 Provider and Command boundary without touching Framework SaveData.
+    private static void AssertCaravanSettingServices()
+    {
+        var serviceObject = new GameObject("CaravanSettingServiceSmokeTest");
+        try
+        {
+            TestCaravanSettingService service = serviceObject.AddComponent<TestCaravanSettingService>();
+            ICaravanSettingViewDataProvider provider = service;
+            ICaravanSettingCommand command = service;
+
+            CaravanSettingViewData initial = provider.GetSetting(TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                initial != null
+                    && initial.canEdit
+                    && initial.selectedWagonInstanceId == TestCaravanSettingService.WagonInstanceId
+                    && initial.selectedAnimalInstanceIds.Length == 2,
+                "Caravan Setting Service Smoke Test failed: Provider did not return the editable S3 snapshot.");
+
+            // Mutating one UI snapshot must not leak into the Provider's next authoritative snapshot.
+            initial.selectedAnimalInstanceIds[0] = "ui-mutated-instance";
+            CaravanSettingViewData isolated = provider.GetSetting(TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                isolated.selectedAnimalInstanceIds[0] == TestCaravanSettingService.FirstAnimalInstanceId,
+                "Caravan Setting Service Smoke Test failed: Provider snapshots are not isolated.");
+
+            var walkingDraft = new CaravanSettingDraft
+            {
+                caravanId = TestCaravanSettingService.PrepareCaravanId
+            };
+            CaravanSettingCommandResult walkingResult = command.Execute(walkingDraft);
+            CaravanSettingViewData walkingSnapshot = provider.GetSetting(TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                walkingResult != null
+                    && walkingResult.succeeded
+                    && string.IsNullOrEmpty(walkingSnapshot.selectedWagonInstanceId)
+                    && walkingSnapshot.selectedAnimalInstanceIds.Length == 0,
+                "Caravan Setting Service Smoke Test failed: a valid walking Draft was not committed in memory.");
+
+            var invalidTravelingDraft = new CaravanSettingDraft
+            {
+                caravanId = TestCaravanSettingService.TravelingCaravanId,
+                selectedWagonInstanceId = TestCaravanSettingService.WagonInstanceId
+            };
+            invalidTravelingDraft.SelectAnimal(TestCaravanSettingService.FirstAnimalInstanceId);
+            CaravanSettingCommandResult travelingResult = command.Execute(invalidTravelingDraft);
+            Debug.Assert(
+                travelingResult != null
+                    && !travelingResult.succeeded
+                    && travelingResult.errorCode == CaravanSettingFailureCodes.CaravanNotEditable,
+                "Caravan Setting Service Smoke Test failed: a Traveling Caravan edit was not rejected.");
+
+            var invalidAssetDraft = new CaravanSettingDraft
+            {
+                caravanId = TestCaravanSettingService.PrepareCaravanId,
+                selectedWagonInstanceId = "unknown-wagon-instance"
+            };
+            CaravanSettingCommandResult invalidAssetResult = command.Execute(invalidAssetDraft);
+            Debug.Assert(
+                invalidAssetResult != null
+                    && !invalidAssetResult.succeeded
+                    && invalidAssetResult.errorCode == CaravanSettingFailureCodes.AssetNotOwned,
+                "Caravan Setting Service Smoke Test failed: an unknown owned-instance ID was not rejected.");
+
+            Debug.Assert(
+                provider.GetSetting("missing-caravan") == null,
+                "Caravan Setting Service Smoke Test failed: an unknown caravanId must not produce S3 data.");
+        }
+        finally
+        {
+            Object.DestroyImmediate(serviceObject);
+        }
     }
 
     // Groups the currency projection boundaries separately from other ViewData contracts.
