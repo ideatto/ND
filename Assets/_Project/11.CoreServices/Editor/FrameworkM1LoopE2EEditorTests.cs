@@ -7,6 +7,7 @@
  * - Play mode ContextMenu smoke와 동일한 coordinator 경로를 서비스 조립으로 재현한다.
  *
  * Main Features
+ * - Verifies asset ID generation, normalization stability, duplicate repair, and mapper round trips.
  * - caravan ID 기반 플레이어 출발 command의 성공, 중복, 병렬 caravan, pending, 저장 실패와 재진입을 검증한다.
  * - 구조 대출 발급 → 제한 모드 → 무역 출발 → 제한 해제 → 수동 상환 통합 검증.
  * - 원자 claim: 저장 실패 원복, 정상 claim, currentTownId/Town 이벤트, 중복 claim 거부, 재실행 Town 복원 검증.
@@ -56,6 +57,7 @@ namespace ND.Framework.Editor
         [MenuItem("ND/Framework/Run M1 Loop + Economy E2E Checks")]
         public static void RunAll()
         {
+            RunAssetInstanceIdPersistenceChecks();
             RunMultiCaravanSaveDataChecks();
             RunMultiCaravanDepartureCommandChecks();
             RunRescueLoanIntegrationChecks();
@@ -72,6 +74,64 @@ namespace ND.Framework.Editor
             RunPendingSettlementRestoreE2E(TestContext.Create());
             RunOfflineProgressE2E(TestContext.Create());
             Debug.Log("[Framework M1 E2E] All checks passed.");
+        }
+
+        private static void RunAssetInstanceIdPersistenceChecks()
+        {
+            var firstGeneratedId = SaveDataLookup.NewInstanceId();
+            var secondGeneratedId = SaveDataLookup.NewInstanceId();
+            Guid parsedId;
+            if (firstGeneratedId.Length != 32 || !Guid.TryParse(firstGeneratedId, out parsedId)
+                || firstGeneratedId == secondGeneratedId)
+            {
+                throw new InvalidOperationException("Asset instance ID generation did not produce unique N-format GUIDs.");
+            }
+
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            var caravan = data.caravans[0];
+            caravan.wagon.wagonName = "Persistence Wagon";
+            caravan.wagon.instanceId = firstGeneratedId;
+            caravan.animals.Add(new AnimalSaveData
+            {
+                instanceId = firstGeneratedId,
+                animalName = "Persistence Horse"
+            });
+            caravan.mercenaries.Add(new MercenarySaveData
+            {
+                mercName = "Persistence Guard"
+            });
+
+            if (!JsonSaveService.NormalizeData(data)
+                || caravan.wagon.instanceId != firstGeneratedId
+                || string.IsNullOrWhiteSpace(caravan.animals[0].instanceId)
+                || caravan.animals[0].instanceId == firstGeneratedId
+                || string.IsNullOrWhiteSpace(caravan.mercenaries[0].instanceId))
+            {
+                throw new InvalidOperationException("Asset instance ID backfill, preservation, or duplicate repair failed.");
+            }
+
+            var animalId = caravan.animals[0].instanceId;
+            var mercenaryId = caravan.mercenaries[0].instanceId;
+            if (JsonSaveService.NormalizeData(data)
+                || caravan.wagon.instanceId != firstGeneratedId
+                || caravan.animals[0].instanceId != animalId
+                || caravan.mercenaries[0].instanceId != mercenaryId)
+            {
+                throw new InvalidOperationException("Asset instance ID normalization was not stable on a second pass.");
+            }
+
+            var runtime = CaravanSaveDataMapper.ToRuntime(caravan);
+            var roundTrip = new CaravanSaveData();
+            CaravanSaveDataMapper.CopyToSave(runtime, roundTrip);
+            if (roundTrip.wagon.instanceId != firstGeneratedId
+                || roundTrip.animals.Count != 1 || roundTrip.animals[0].instanceId != animalId
+                || roundTrip.mercenaries.Count != 1 || roundTrip.mercenaries[0].instanceId != mercenaryId)
+            {
+                throw new InvalidOperationException("Asset instance IDs were not preserved by the save/runtime mapper round trip.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Asset instance ID generation, normalization, and mapper round trip passed.");
         }
 
         private static void RunMultiCaravanSaveDataChecks()
@@ -1406,6 +1466,7 @@ namespace ND.Framework.Editor
             {
                 wagon = new imsiWagonData
                 {
+                    instanceId = SaveDataLookup.NewInstanceId(),
                     wagonName = "Editor Test Wagon",
                     overLoad = 30f,
                     maxLoad = 60f,
@@ -1420,6 +1481,7 @@ namespace ND.Framework.Editor
 
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Editor Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
@@ -1427,10 +1489,19 @@ namespace ND.Framework.Editor
             });
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Editor Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
+            });
+
+            caravan.mercenaries.Add(new imsiMercenaryData
+            {
+                instanceId = SaveDataLookup.NewInstanceId(),
+                mercName = "Editor Guard",
+                combatPower = 10,
+                contractCount = 1
             });
 
             var item = new imsiTradeItemData
