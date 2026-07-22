@@ -151,7 +151,26 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>⑦ 무역 종료(도착) — 정산(⑧)으로 이어질 지점. 데모는 로그만.</summary>
     public event Action OnJourneyFinished;
 
+    /// <summary>Requests the latest setting snapshot for one Overview-selected Caravan.</summary>
+    public event Action<string> OnCaravanSettingDataRequested;
+
+    /// <summary>Requests the latest cargo and current-town market snapshot for one Overview-selected Caravan.</summary>
+    public event Action<string> OnCaravanCargoDataRequested;
+
+    /// <summary>Raised after a detached Overview edit session closes without routing back to S1.</summary>
+    public event Action OnCaravanEditClosed;
+
+    /// <summary>Forwards an S3 UI Draft for Framework validation and persistence.</summary>
+    public event Action<CaravanSettingDraft> OnCaravanSettingConfirmRequested;
+
     // ══ 진행 상태 ═══════════════════════════════════════════════
+
+    private enum DetachedCaravanEditMode
+    {
+        None,
+        Setting,
+        Cargo
+    }
 
     private string selTownId = "", selRouteId = "";
     private float distanceKm;
@@ -164,6 +183,14 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     private string lastFromTownName;     // ⑦ 진행 화면 타이틀용(요약에서 계산한 출발 도시)
     private float lastDuration;          // ⑦ 진행 카운트다운용(요약에서 계산한 소요 초)
     private bool wired;                  // 버튼/이벤트 중복 구독 방지
+    private string activeCaravanEditId = "";
+    private DetachedCaravanEditMode detachedCaravanEditMode;
+
+    /// <summary>Identifies the Caravan currently waiting for or displaying detached edit data.</summary>
+    public string ActiveCaravanEditId => activeCaravanEditId;
+
+    /// <summary>True only while S3 or S4 was requested directly from Caravan Overview.</summary>
+    public bool IsDetachedCaravanEditOpen => detachedCaravanEditMode != DetachedCaravanEditMode.None;
 
     /// <summary>슬롯 하나에 저장된 상단 구성(구조화).</summary>
     private class SlotComp
@@ -181,6 +208,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>플로우 시작 — 프로바이더 주입 후 호출. ① 도시+루트부터 연다.</summary>
     public void Begin()
     {
+        // A normal trade-preparation entry must not inherit a previous Overview edit target.
+        ClearDetachedCaravanEditState();
         WireOnce();
 
         // 슬롯 저장소 초기화(전부 빈칸)
@@ -195,6 +224,112 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             townRoutePanel.Populate(TownProvider());
 
         GoTownRoute();
+    }
+
+    /// <summary>Starts a detached S3 request for the Caravan selected in Overview.</summary>
+    public void OpenCaravanSetting(string caravanId)
+    {
+        RequestDetachedCaravanEdit(
+            caravanId,
+            DetachedCaravanEditMode.Setting,
+            OnCaravanSettingDataRequested);
+    }
+
+    /// <summary>Starts a detached S4 request for the Caravan selected in Overview.</summary>
+    public void OpenCaravanCargo(string caravanId)
+    {
+        RequestDetachedCaravanEdit(
+            caravanId,
+            DetachedCaravanEditMode.Cargo,
+            OnCaravanCargoDataRequested);
+    }
+
+    /// <summary>Displays Provider-owned S3 data only when it matches the pending Overview request.</summary>
+    public bool ShowCaravanSetting(CaravanSettingViewData viewData)
+    {
+        if (detachedCaravanEditMode != DetachedCaravanEditMode.Setting
+            || viewData == null
+            || string.IsNullOrWhiteSpace(viewData.caravanId)
+            || !string.Equals(activeCaravanEditId, viewData.caravanId.Trim(), StringComparison.Ordinal))
+        {
+            // Rejecting mismatched responses prevents a delayed Provider result from opening another Caravan.
+            Debug.LogError("Rejected Caravan setting data because it does not match the pending edit request.", this);
+            return false;
+        }
+
+        if (animalPanel == null || !animalPanel.Populate(viewData))
+        {
+            Debug.LogError($"Failed to bind S3 for Caravan {activeCaravanEditId}.", this);
+            return false;
+        }
+
+        // Detached S3 does not have a previous linear trade step, so its Back action stays unavailable.
+        if (animalBack != null)
+        {
+            animalBack.interactable = false;
+            animalBack.gameObject.SetActive(false);
+        }
+        if (saveToggle != null)
+        {
+            // Detached editing persists through a Framework command, not the legacy in-memory slot toggle.
+            saveToggle.SetIsOnWithoutNotify(false);
+            saveToggle.gameObject.SetActive(false);
+        }
+        if (animalNext != null)
+            animalNext.interactable = viewData.canEdit && animalPanel.CanConfirmCaravanSetting();
+
+        SetTradeRootActive(true);
+        ShowOnly(2);
+        return true;
+    }
+
+    /// <summary>Closes only a detached Overview edit instead of restarting the trade flow at S1.</summary>
+    public void CloseCaravanEdit()
+    {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.None)
+            return;
+
+        // Detached edits own no trade route Draft, so closing them must not invoke trade cancellation.
+        ClearDetachedCaravanEditState();
+        ShowOnly(-1);
+        SetTradeRootActive(false);
+        OnCaravanEditClosed?.Invoke();
+    }
+
+    private void RequestDetachedCaravanEdit(
+        string caravanId,
+        DetachedCaravanEditMode mode,
+        Action<string> dataRequest)
+    {
+        string normalizedCaravanId = string.IsNullOrWhiteSpace(caravanId)
+            ? string.Empty
+            : caravanId.Trim();
+        if (string.IsNullOrEmpty(normalizedCaravanId))
+        {
+            // Missing identity must fail closed before an unrelated Caravan panel can become visible.
+            Debug.LogError("Cannot open a detached Caravan edit because caravanId is empty.", this);
+            return;
+        }
+
+        if (dataRequest == null)
+        {
+            // Opening stale legacy data would make the UI appear to edit the requested Caravan incorrectly.
+            Debug.LogWarning(
+                $"Cannot open detached Caravan {mode}: no data Provider is connected for {normalizedCaravanId}.",
+                this);
+            return;
+        }
+
+        WireOnce();
+        activeCaravanEditId = normalizedCaravanId;
+        detachedCaravanEditMode = mode;
+        dataRequest.Invoke(normalizedCaravanId);
+    }
+
+    private void ClearDetachedCaravanEditState()
+    {
+        activeCaravanEditId = string.Empty;
+        detachedCaravanEditMode = DetachedCaravanEditMode.None;
     }
 
     /// <summary>패널 C# 이벤트·버튼 구독(1회만). 정헌님 패널의 UnityEvent는 씬에서 연결.</summary>
@@ -318,6 +453,9 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 웨건을 넣었을 때 — 이후 적재량 계산에 사용
     private void OnWagonPlaced(TransportSelectPanel.TransportEntry w)
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+            return;
+
         transport = w;
         hasTransport = true;
     }
@@ -325,6 +463,9 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 웨건을 뺐을 때 — 상태 동기화. 웨건 없는 구성은 저장 대상이 아니므로 저장도 해제.
     private void OnWagonRemoved()
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+            return;
+
         hasTransport = false;
         if (saveToggle != null && saveToggle.isOn)
         {
@@ -336,6 +477,14 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 동물 편성 변경 → Next(요구량 충족 시) 활성
     private void OnAnimalsChanged(IReadOnlyList<AnimalInventoryPanel.AnimalPick> picks, bool valid)
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+        {
+            // Detached S3 keeps its own instance-based Draft and must not alter legacy slot memory.
+            if (animalNext != null)
+                animalNext.interactable = animalPanel != null && animalPanel.CanConfirmCaravanSetting();
+            return;
+        }
+
         pickedAnimals.Clear();
         pickedAnimals.AddRange(picks);
         if (animalNext != null) animalNext.interactable = valid;
@@ -346,6 +495,30 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // ③ 하단 [Next] → ④(적재). 구성을 거쳤으므로 ④ Back은 ③으로.
     private void FromAnimalsNext()
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+        {
+            if (animalPanel == null
+                || !animalPanel.TryCreateSettingDraft(activeCaravanEditId, out CaravanSettingDraft draft))
+            {
+                Debug.LogError(
+                    $"Cannot confirm Caravan setting edit for {activeCaravanEditId}: the instance-based Draft is invalid.",
+                    this);
+                return;
+            }
+
+            if (OnCaravanSettingConfirmRequested == null)
+            {
+                // UI keeps the edit open until a Framework command consumer can validate and persist it.
+                Debug.LogWarning(
+                    $"Cannot confirm Caravan setting edit for {activeCaravanEditId}: no command consumer is connected.",
+                    this);
+                return;
+            }
+
+            OnCaravanSettingConfirmRequested.Invoke(draft);
+            return;
+        }
+
         itemsFromSavedSlot = false;
         GoCargo();
     }
@@ -430,6 +603,17 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         itemsFromSavedSlot = false;
         pickedAnimals.Clear();
         if (animalNext != null) animalNext.interactable = false;
+        if (animalBack != null)
+        {
+            // Normal trade preparation restores the S3 back route hidden by detached editing.
+            animalBack.gameObject.SetActive(true);
+            animalBack.interactable = true;
+        }
+        if (saveToggle != null)
+        {
+            // The legacy linear flow still uses this toggle for its temporary slot composition.
+            saveToggle.gameObject.SetActive(true);
+        }
 
         if (animalPanel != null)
         {
@@ -614,6 +798,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public void ShowTraveling(TradeProgressViewData viewData)
     {
         // A loaded traveling save can enter S7 without visiting the preparation screens first.
+        // Framework screen routing supersedes any pending detached Overview edit.
+        ClearDetachedCaravanEditState();
         SetTradeRootActive(true);
         WireOnce();
         if (cancelWarning != null) cancelWarning.Close();
@@ -626,6 +812,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     {
         // This manager controls visibility only. Settlement calculation and claim remain in
         // Framework, preventing the UI flow from duplicating or mutating settlement results.
+        ClearDetachedCaravanEditState();
         SetTradeRootActive(true);
         WireOnce();
         ShowOnly(6);
@@ -635,6 +822,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public void HideTradeScreens()
     {
         // Settlement UI has a separate adapter, so this manager only hides its own panels.
+        ClearDetachedCaravanEditState();
         if (progressPanel != null) progressPanel.StopTimer();
         ShowOnly(-1);
         SetTradeRootActive(false);

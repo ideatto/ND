@@ -20,8 +20,13 @@ public sealed class CaravanSettingViewData
     // This value must remain empty while canEdit is true.
     public string editBlockedReason = string.Empty;
 
-    // Identifies the wagon currently assigned to this Caravan.
-    public string selectedWagonId = string.Empty;
+    // Identifies the owned wagon instance currently assigned to this Caravan.
+    // This is intentionally different from WagonViewData.wagonId, which identifies shared content.
+    public string selectedWagonInstanceId = string.Empty;
+
+    // Identifies each owned animal instance currently assigned to this Caravan.
+    // Individual IDs preserve asset-lock ownership when multiple animals share one content definition.
+    public string[] selectedAnimalInstanceIds = Array.Empty<string>();
 
     // Contains the wagons displayed by the extracted legacy S3 selection UI.
     public WagonViewData[] wagons = Array.Empty<WagonViewData>();
@@ -38,6 +43,9 @@ public sealed class CaravanLoadSettingViewData
 
     // Provides the user-facing Caravan name shown by the load setting panel.
     public string caravanDisplayName = string.Empty;
+
+    // Identifies the town whose market inventory and prices must be shown for this Caravan.
+    public string currentTownId = string.Empty;
 
     // Describes the current journey state without requiring the panel to query runtime data.
     public JourneyState state = JourneyState.Prepare;
