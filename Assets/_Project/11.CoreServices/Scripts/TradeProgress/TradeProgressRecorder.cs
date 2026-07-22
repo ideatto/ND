@@ -12,7 +12,7 @@
  * - 정산 대기, 완료, 실패 상태를 저장 데이터에 기록한다.
  *
  * Usage for Team Members
- * - TradeStartService가 출발 확정 전에 RecordStartedTrade(...)를 호출한다.
+ * - TradeStartService가 출발 확정 전에 caravan ID를 지정해 RecordStartedTrade(...)를 호출한다.
  * - TradeProgressCoordinator가 정산 생성과 claim 후 상태 기록에 사용한다.
  *
  * Main Public APIs
@@ -65,6 +65,30 @@ namespace ND.Framework
             string routeId,
             TimeSpan expectedDuration)
         {
+            return RecordStartedTrade(
+                saveData,
+                saveData != null ? saveData.selectedCaravanId : string.Empty,
+                tradeId,
+                routeId,
+                expectedDuration);
+        }
+
+        /// <summary>
+        /// 지정한 caravan의 무역 출발 정보를 저장 데이터에 기록한다.
+        /// </summary>
+        /// <param name="saveData">기록 대상 저장 데이터.</param>
+        /// <param name="caravanId">진행 상태를 소유할 caravan ID.</param>
+        /// <param name="tradeId">시작할 무역 ID.</param>
+        /// <param name="routeId">유효성이 확인된 route ID.</param>
+        /// <param name="expectedDuration">예상 이동 시간.</param>
+        /// <returns>대상 caravan의 진행 상태 기록에 성공하면 true.</returns>
+        public bool RecordStartedTrade(
+            SaveData saveData,
+            string caravanId,
+            string tradeId,
+            string routeId,
+            TimeSpan expectedDuration)
+        {
             // 저장 데이터가 없으면 active trade ID를 복구할 수 없으므로 출발 기록을 거부한다.
             if (saveData == null)
             {
@@ -79,13 +103,19 @@ namespace ND.Framework
                 return false;
             }
 
-            // 구버전 또는 부분 저장 데이터에서도 무역 진행 상태를 기록할 수 있도록 하위 DTO를 생성한다.
-            if (saveData.tradeProgress == null)
+            CaravanSaveData caravan;
+            if (!SaveDataLookup.TryGetCaravan(saveData, caravanId, out caravan))
             {
-                saveData.tradeProgress = new TradeProgressSaveData();
+                FrameworkLog.Warning($"Trade start time was not recorded because caravan was not found. CaravanId: {caravanId}");
+                return false;
             }
 
-            var progress = saveData.tradeProgress;
+            TradeProgressSaveData progress;
+            var hasProgress = SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress);
+            if (!hasProgress)
+            {
+                progress = new TradeProgressSaveData { caravanId = caravanId };
+            }
             var normalizedTradeId = tradeId ?? string.Empty;
             // 식별자 없는 무역은 이후 정산과 UI 이벤트를 연결할 수 없으므로 차단한다.
             if (string.IsNullOrEmpty(normalizedTradeId))
@@ -126,11 +156,8 @@ namespace ND.Framework
             progress.inGameTimeMultiplierAtStart = inGameTimeProvider != null
                 ? inGameTimeProvider.InGameTimeMultiplier
                 : 1f;
-
-            if (saveData.caravan != null)
-            {
-                saveData.caravan.elapsedInGameSeconds = 0f;
-            }
+            caravan.elapsedInGameSeconds = 0f;
+            SaveDataLookup.SetTradeProgress(saveData, caravanId, progress);
 
             return true;
         }
