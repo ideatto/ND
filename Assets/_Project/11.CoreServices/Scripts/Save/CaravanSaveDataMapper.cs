@@ -9,6 +9,7 @@
  * Main Features
  * - CaravanSaveData를 runtime CaravanData로 복원한다.
  * - runtime CaravanData의 현재 상태를 CaravanSaveData에 복사한다.
+ * - caravan ID와 배치 자산의 안정적인 보유 개체 ID를 생성 없이 보존한다.
  * - 저장 DTO의 null list와 M2 기본값을 정규화한다.
  *
  * Usage for Team Members
@@ -49,6 +50,7 @@ namespace ND.Framework
 
             var caravan = new CaravanData
             {
+                caravanId = saveData.caravanId,
                 wagon = ToRuntime(saveData.wagon),
                 foodAmount = saveData.foodAmount,
                 foodUnitWeight = saveData.foodUnitWeight,
@@ -211,6 +213,7 @@ namespace ND.Framework
 
             return new imsiWagonData
             {
+                instanceId = saveData.instanceId,
                 wagonName = saveData.wagonName,
                 overLoad = saveData.overLoad,
                 maxLoad = saveData.maxLoad,
@@ -226,6 +229,7 @@ namespace ND.Framework
         {
             if (runtimeData == null)
             {
+                saveData.instanceId = string.Empty;
                 saveData.wagonName = string.Empty;
                 saveData.overLoad = 0f;
                 saveData.maxLoad = 0f;
@@ -237,6 +241,7 @@ namespace ND.Framework
                 return;
             }
 
+            saveData.instanceId = runtimeData.instanceId ?? string.Empty;
             saveData.wagonName = runtimeData.wagonName ?? string.Empty;
             saveData.overLoad = runtimeData.overLoad;
             saveData.maxLoad = runtimeData.maxLoad;
@@ -264,6 +269,7 @@ namespace ND.Framework
 
                 target.Add(new imsiAnimalData
                 {
+                    instanceId = animal.instanceId,
                     animalName = animal.animalName,
                     speed = animal.speed,
                     foodPerKm = animal.foodPerKm,
@@ -291,6 +297,7 @@ namespace ND.Framework
 
                 target.Add(new AnimalSaveData
                 {
+                    instanceId = animal.instanceId ?? string.Empty,
                     animalName = animal.animalName ?? string.Empty,
                     speed = animal.speed,
                     foodPerKm = animal.foodPerKm,
@@ -318,6 +325,7 @@ namespace ND.Framework
 
                 target.Add(new imsiMercenaryData
                 {
+                    instanceId = mercenary.instanceId,
                     mercName = mercenary.mercName,
                     combatPower = mercenary.combatPower,
                     contractCount = mercenary.contractCount
@@ -342,6 +350,7 @@ namespace ND.Framework
 
                 target.Add(new MercenarySaveData
                 {
+                    instanceId = mercenary.instanceId ?? string.Empty,
                     mercName = mercenary.mercName ?? string.Empty,
                     combatPower = mercenary.combatPower,
                     contractCount = mercenary.contractCount
