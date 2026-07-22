@@ -7,6 +7,7 @@
  * - 저장 데이터가 없거나 유효하지 않은 경우 새 게임 데이터로 복구한다.
  *
  * Main Features
+ * - Load normalizes persistent asset instance IDs and writes changed data once.
  * - 저장 파일 존재 확인, 새 저장 데이터 생성, JSON 로드/저장, 저장 파일 삭제를 제공한다.
  * - 로드/저장 전 하위 DTO의 null 값을 정규화한다.
  * - Save(...)는 정규화, 직렬화, 파일 쓰기 단계별 SaveResult를 반환한다.
@@ -24,6 +25,7 @@
  * - ResetSaveData(): 저장 파일을 삭제한다.
  *
  * Important Notes
+ * - Wagon, Animal, and Mercenary instance IDs share one global uniqueness set.
  * - 저장 파일 이름은 save_data.json으로 고정되어 있다.
  * - version 5 단일 caravan 저장은 version 6 ID 기반 컬렉션 구조로 마이그레이션한다.
  * - version 5 세이브에 상점 재고·구매 준비 필드가 없어도 NormalizeData가 빈 컨테이너로 보정한다.
@@ -130,7 +132,15 @@ namespace ND.Framework
                     return CreateNewGameData();
                 }
 
-                NormalizeData(data);
+                var normalized = NormalizeData(data);
+                if (normalized)
+                {
+                    var normalizationSaveResult = Save(data);
+                    if (!normalizationSaveResult.Succeeded)
+                    {
+                        FrameworkLog.Error($"Normalized save data could not be written: {normalizationSaveResult.Message}");
+                    }
+                }
                 FrameworkLog.Info($"Save data loaded. Version: {data.version}");
                 return data;
             }
@@ -231,8 +241,14 @@ namespace ND.Framework
             }
         }
 
-        public static void NormalizeData(SaveData data)
+        /// <summary>
+        /// 저장 DTO의 필수 컨테이너와 영속 자산 ID를 정규화한다.
+        /// </summary>
+        /// <param name="data">직접 수정할 저장 데이터.</param>
+        /// <returns>자산 컨테이너 또는 자산 ID가 변경되었으면 true.</returns>
+        public static bool NormalizeData(SaveData data)
         {
+            var assetDataChanged = false;
             // 저장 파일이 구버전이거나 일부 하위 객체가 누락된 경우 runtime 서비스가 null을 직접 다루지 않게 보정한다.
             if (data.player == null)
             {
@@ -295,6 +311,7 @@ namespace ND.Framework
             }
 
             var caravanIds = new HashSet<string>();
+            var usedInstanceIds = new HashSet<string>();
             for (var caravanIndex = 0; caravanIndex < data.caravans.Count; caravanIndex++)
             {
                 var caravan = data.caravans[caravanIndex];
@@ -303,7 +320,42 @@ namespace ND.Framework
                     caravan = new CaravanSaveData();
                     data.caravans[caravanIndex] = caravan;
                 }
+                if (caravan.wagon == null || caravan.animals == null || caravan.mercenaries == null)
+                {
+                    assetDataChanged = true;
+                }
+
                 CaravanSaveDataMapper.Normalize(caravan);
+                if (!string.IsNullOrWhiteSpace(caravan.wagon.wagonName))
+                {
+                    assetDataChanged |= EnsureUniqueInstanceId(
+                        ref caravan.wagon.instanceId,
+                        usedInstanceIds,
+                        "Wagon",
+                        caravan.wagon.wagonName);
+                }
+
+                for (var animalIndex = 0; animalIndex < caravan.animals.Count; animalIndex++)
+                {
+                    var animal = caravan.animals[animalIndex];
+                    if (animal == null) continue;
+                    assetDataChanged |= EnsureUniqueInstanceId(
+                        ref animal.instanceId,
+                        usedInstanceIds,
+                        "Animal",
+                        animal.animalName);
+                }
+
+                for (var mercenaryIndex = 0; mercenaryIndex < caravan.mercenaries.Count; mercenaryIndex++)
+                {
+                    var mercenary = caravan.mercenaries[mercenaryIndex];
+                    if (mercenary == null) continue;
+                    assetDataChanged |= EnsureUniqueInstanceId(
+                        ref mercenary.instanceId,
+                        usedInstanceIds,
+                        "Mercenary",
+                        mercenary.mercName);
+                }
                 if (string.IsNullOrEmpty(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
                 {
                     if (!string.IsNullOrEmpty(caravan.caravanId))
@@ -378,6 +430,35 @@ namespace ND.Framework
             {
                 data.tutorial = new TutorialSaveData();
             }
+
+            return assetDataChanged;
+        }
+
+        private static bool EnsureUniqueInstanceId(
+            ref string instanceId,
+            HashSet<string> usedInstanceIds,
+            string assetType,
+            string assetLabel)
+        {
+            if (!string.IsNullOrWhiteSpace(instanceId) && usedInstanceIds.Add(instanceId))
+            {
+                return false;
+            }
+
+            var duplicateId = instanceId;
+            do
+            {
+                instanceId = SaveDataLookup.NewInstanceId();
+            }
+            while (!usedInstanceIds.Add(instanceId));
+
+            if (!string.IsNullOrWhiteSpace(duplicateId))
+            {
+                FrameworkLog.Warning(
+                    $"Duplicate asset instance ID was replaced. Type: {assetType}, Label: {assetLabel}, InstanceId: {duplicateId}");
+            }
+
+            return true;
         }
 
         private static void ValidateChildData(SaveData data, HashSet<string> caravanIds)
