@@ -95,12 +95,17 @@ namespace ND.Framework.Editor
         {
             var save = new SaveData();
             save.player.currentTownId = "river-town";
-            save.tradeProgress.state = TradeProgressState.Completed;
-            save.tradeProgress.activeTradeId = "completed-trade";
-            save.tradeProgress.activeRouteId = "river-route";
-            save.tradeProgress.tradeStartUtcTick = 10L;
-            save.tradeProgress.expectedTradeEndUtcTick = 20L;
-            save.caravan.elapsedInGameSeconds = 15f;
+            var progress = new TradeProgressSaveData
+            {
+                caravanId = save.selectedCaravanId
+            };
+            save.tradeProgressEntries.Add(progress);
+            progress.state = TradeProgressState.Completed;
+            progress.activeTradeId = "completed-trade";
+            progress.activeRouteId = "river-route";
+            progress.tradeStartUtcTick = 10L;
+            progress.expectedTradeEndUtcTick = 20L;
+            save.caravans[0].elapsedInGameSeconds = 15f;
             return save;
         }
 
