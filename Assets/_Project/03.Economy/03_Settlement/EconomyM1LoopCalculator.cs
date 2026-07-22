@@ -15,26 +15,30 @@ namespace ND.Economy
                 ? new CurrencyState()
                 : input.CurrencyState.Clone();
 
-            PriceCalculationResult priceResult = PriceCalculator.Calculate(input.PriceInput);
-            if (!priceResult.IsValid)
+            PriceCalculationResult priceResult = null;
+            var soldItems = new List<SoldItemInput>();
+            if (input.CalculateItemTrade)
             {
-                return Fail("PriceCalculationFailed:" + priceResult.ErrorCode, priceResult, null, null, null, null, null, workingCurrency);
+                priceResult = PriceCalculator.Calculate(input.PriceInput);
+                if (!priceResult.IsValid)
+                {
+                    return Fail("PriceCalculationFailed:" + priceResult.ErrorCode, priceResult, null, null, null, null, null, workingCurrency);
+                }
+
+                soldItems.Add(new SoldItemInput
+                {
+                    TradeItemId = input.PriceInput.TradeItemId,
+                    Quantity = input.PriceInput.Quantity,
+                    TotalBuyPrice = priceResult.TotalBuyPrice,
+                    TotalSellPrice = priceResult.TotalSellPrice
+                });
             }
 
             SettlementBreakdown settlement = SettlementCalculator.Calculate(new SettlementInput
             {
                 TradeId = input.TradeId,
                 TradeMoneyBefore = workingCurrency.TradeMoney,
-                SoldItems = new List<SoldItemInput>
-                {
-                    new SoldItemInput
-                    {
-                        TradeItemId = input.PriceInput.TradeItemId,
-                        Quantity = input.PriceInput.Quantity,
-                        TotalBuyPrice = priceResult.TotalBuyPrice,
-                        TotalSellPrice = priceResult.TotalSellPrice
-                    }
-                },
+                SoldItems = soldItems,
                 FoodCost = input.FoodCost,
                 MercenaryCost = input.MercenaryCost,
                 CartRepairCost = input.CartRepairCost,

@@ -29,6 +29,10 @@ public class CaravanData
     // This data holder does not generate, replace, or derive the value from a trade ID.
     public string caravanId = string.Empty;
 
+    // 현재 머무는 마을의 안정적인 ID. 이동 중에는 출발 마을을 유지하며,
+    // 정산 Claim이 성공한 뒤 Framework가 도착지 또는 복귀 거점으로 갱신한다.
+    public string currentTownId = string.Empty;
+
     // ── 구성 (준비 단계에서 채움) ──────────────────────────────
     public imsiWagonData wagon;                                              // 마차 (1대)
     public List<imsiAnimalData> animals = new List<imsiAnimalData>();            // 견인 동물 목록

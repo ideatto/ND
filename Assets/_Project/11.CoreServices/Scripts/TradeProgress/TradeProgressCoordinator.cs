@@ -771,6 +771,12 @@ namespace ND.Framework
             }
 
             FrameworkEvents.RaiseTradeSettlementReady(pending.caravanId, LastSettlementTradeId, LastSettlementResult);
+            if (LastSettlementResult.grade == JourneyResultGrade.Failed)
+            {
+                // A failed journey never reaches a destination market, so it has no arrival
+                // sale step and proceeds directly to failure settlement presentation.
+                inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            }
             FrameworkLog.Info($"Pending settlement restored. TradeId: {LastSettlementTradeId}, Grade: {LastSettlementResult.grade}");
             return true;
         }
@@ -881,6 +887,7 @@ namespace ND.Framework
             LastSettlementResult = result;
 
             var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            ApplyRouteMinimumFoodConsumption(saveData, caravan, result, sharedGameData);
             if (sharedGameData == null || !sharedGameData.IsLoaded)
             {
                 FrameworkLog.Warning("Economy M1 settlement preview skipped because shared game data is not loaded.");
@@ -896,9 +903,44 @@ namespace ND.Framework
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.caravanId, settlementTradeId, result);
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            if (result.grade == JourneyResultGrade.Failed)
+            {
+                // Successful arrivals wait for the caravan status UI and sell-only flow.
+                // Failed journeys have no destination market and show settlement immediately.
+                inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            }
 
             return true;
+        }
+
+        private static void ApplyRouteMinimumFoodConsumption(
+            SaveData saveData,
+            CaravanData caravan,
+            JourneyResultData result,
+            ISharedGameDataProvider sharedGameData)
+        {
+            if (saveData?.tradeProgress == null || caravan == null || result == null
+                || sharedGameData == null || !sharedGameData.IsLoaded)
+            {
+                return;
+            }
+
+            string routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
+            if (string.IsNullOrEmpty(routeId)
+                || !sharedGameData.TryGetRoute(routeId, out SharedRouteDefinition route))
+            {
+                return;
+            }
+
+            int minimumConsumed = Mathf.CeilToInt(
+                Mathf.Max(0, route.BaseRequiredFoodQuantity) * Mathf.Clamp01(caravan.progress01));
+            int alreadyConsumed = Mathf.Max(0, Mathf.RoundToInt(result.foodConsumed));
+            int additionalConsumption = Mathf.Min(
+                Mathf.Max(0, minimumConsumed - alreadyConsumed),
+                Mathf.Max(0, caravan.foodAmount));
+
+            caravan.foodAmount -= additionalConsumption;
+            result.foodConsumed = alreadyConsumed + additionalConsumption;
         }
 
         private bool CanClaimCachedSettlement(SaveData saveData)

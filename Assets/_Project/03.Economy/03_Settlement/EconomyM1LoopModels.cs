@@ -5,6 +5,11 @@ namespace ND.Economy
     [Serializable]
     public sealed class EconomyM1LoopInput
     {
+        /// <summary>
+        /// True only for legacy/direct item-trade calculations. Travel settlement sets this
+        /// to false so arriving never buys or sells cargo automatically.
+        /// </summary>
+        public bool CalculateItemTrade = true;
         public PriceCalculationInput PriceInput = new PriceCalculationInput();
         public CurrencyState CurrencyState = new CurrencyState();
         public string TradeId = string.Empty;

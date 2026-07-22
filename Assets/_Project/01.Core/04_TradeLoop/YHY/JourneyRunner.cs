@@ -304,9 +304,14 @@ public static class JourneyRunner
 
         // [M2] 정산 데이터에 계산값 포함 (완료기준: 실제이동시간·총식량소모·출발적재량·최종적정적재량·과적비율)
         result.travelSeconds      = caravan.progress01 * caravan.totalSeconds;         // 실제 이동한 시간(초)
+        int departureFoodAmount   = caravan.foodAmount;
         float remainingFood       = CaravanCalculator.GetRemainingFood(caravan);
         if (remainingFood < 0f) remainingFood = 0f;                                    // 음수 방어
-        result.foodConsumed       = caravan.foodAmount - remainingFood;                // 총 식량 소모
+        // 정산 결과만 기록하고 foodAmount를 출발값으로 남겨 두면, 도착 마켓에서
+        // 남은 먹이를 Cargo로 되돌릴 때 출발 시 적재한 먹이가 전부 복원된다.
+        // Cargo 수량은 정수이므로 사용할 수 있는 완전한 단위만 잔량으로 확정한다.
+        caravan.foodAmount        = (int)remainingFood;
+        result.foodConsumed       = departureFoodAmount - caravan.foodAmount;          // 실제 정수 재고 소모량
         result.departureLoad      = caravan.runDepartureLoad;                          // 출발 시 짐무게
         result.finalEfficientLoad = CaravanCalculator.GetFinalEfficientLoad(caravan);  // 최종 적정 적재량
         result.overloadRatio      = (result.finalEfficientLoad > 0f && result.departureLoad > result.finalEfficientLoad)

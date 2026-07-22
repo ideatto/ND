@@ -180,6 +180,18 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// Leaves the post-settlement town state and starts a fresh trade-preparation cycle.
+        /// The save transition is committed before the Preparation screen is announced.
+        /// </summary>
+        public bool TryBeginTradePreparationFromTown()
+        {
+            return TradePreparationEntryCommand.TryExecute(
+                CurrentSaveData,
+                SaveService,
+                InGameScreenRouter);
+        }
+
+        /// <summary>
         /// 저장 데이터를 로드하고 loading scene으로 이동한다.
         /// </summary>
         /// <remarks>
@@ -315,7 +327,8 @@ namespace ND.Framework
             SettlementUiBridge.Initialize(
                 () => CurrentSaveData,
                 TradeProgressCoordinator,
-                InGameScreenRouter);
+                InGameScreenRouter,
+                autoClaimOnArrival: false);
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
@@ -382,7 +395,10 @@ namespace ND.Framework
         private string pendingCaravanId = string.Empty;
         private string pendingTradeId = string.Empty;
         private JourneyResultData pendingResult;
+        private bool settlementPresentationRequested;
         private bool isClaimProcessing;
+        private bool autoClaimOnArrival;
+        private bool frameworkEventsSubscribed;
 
         /// <summary>
         /// 표시 가능한 pending settlement가 준비되었을 때 발생한다.
@@ -417,11 +433,14 @@ namespace ND.Framework
         public void Initialize(
             Func<SaveData> getCurrentSaveData,
             TradeProgressCoordinator tradeProgressCoordinator,
-            InGameScreenStateRouter inGameScreenRouter)
+            InGameScreenStateRouter inGameScreenRouter,
+            bool autoClaimOnArrival = false)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.tradeProgressCoordinator = tradeProgressCoordinator;
             this.inGameScreenRouter = inGameScreenRouter;
+            this.autoClaimOnArrival = autoClaimOnArrival;
+            SubscribeFrameworkEvents();
         }
 
         /// <summary>
@@ -436,6 +455,33 @@ namespace ND.Framework
             tradeId = pendingTradeId;
             result = pendingResult;
             return result != null;
+        }
+
+        public bool IsSettlementPresentationRequested => settlementPresentationRequested;
+
+        /// <summary>
+        /// 사용자가 도착한 caravan의 판매 단계를 마친 뒤 해당 정산 화면을 명시적으로 연다.
+        /// 도착 이벤트 자체는 결과를 보존하기만 하며 이 API를 호출하기 전에는 Claim하거나 UI를 열지 않는다.
+        /// </summary>
+        public bool PresentSettlement(string caravanId, string tradeId)
+        {
+            SaveData saveData = GetSaveData();
+            PendingSettlementSaveData pending;
+            JourneyResultData result;
+            if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, tradeId, out pending)
+                || !PendingSettlementSaveDataMapper.TryToRuntime(pending, out result)
+                || !IsSettlementEntryValid(caravanId, tradeId, result))
+            {
+                return false;
+            }
+
+            pendingCaravanId = caravanId ?? string.Empty;
+            pendingTradeId = tradeId ?? string.Empty;
+            pendingResult = result;
+            settlementPresentationRequested = true;
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            SettlementReady?.Invoke(pendingTradeId, pendingResult);
+            return true;
         }
 
         /// <summary>
@@ -489,18 +535,42 @@ namespace ND.Framework
             pendingCaravanId = string.Empty;
             pendingTradeId = string.Empty;
             pendingResult = null;
+            settlementPresentationRequested = false;
         }
 
         private void OnEnable()
         {
             // 정산 결과 생성 이벤트를 받아 UI 표시 cache로 전환하기 위해 활성화 시 구독한다.
-            FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
+            SubscribeFrameworkEvents();
         }
 
         private void OnDisable()
         {
             // 비활성 bridge가 stale settlement 이벤트를 받지 않도록 구독을 해제한다.
+            UnsubscribeFrameworkEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFrameworkEvents();
+        }
+
+        private void SubscribeFrameworkEvents()
+        {
+            if (frameworkEventsSubscribed)
+                return;
+
+            FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
+            frameworkEventsSubscribed = true;
+        }
+
+        private void UnsubscribeFrameworkEvents()
+        {
+            if (!frameworkEventsSubscribed)
+                return;
+
             FrameworkEvents.TradeSettlementReady -= HandleSettlementReady;
+            frameworkEventsSubscribed = false;
         }
 
         private void HandleSettlementReady(string caravanId, string tradeId, JourneyResultData result)
@@ -515,8 +585,26 @@ namespace ND.Framework
             pendingCaravanId = caravanId ?? string.Empty;
             pendingTradeId = tradeId ?? string.Empty;
             pendingResult = result;
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
-            SettlementReady?.Invoke(pendingTradeId, pendingResult);
+            settlementPresentationRequested = false;
+
+            // Compatibility probes may still opt into automatic Claim explicitly. Runtime
+            // initialization disables it so arrival remains pending until the sale flow calls
+            // PresentSettlement(caravanId, tradeId).
+            if (autoClaimOnArrival)
+            {
+                if (ClaimSettlementAndReset())
+                {
+                    FrameworkLog.Info($"Settlement auto-claimed on arrival. TradeId: {tradeId}");
+                    return;
+                }
+
+                FrameworkLog.Warning(
+                    $"Settlement auto-claim failed; keeping pending result for recovery UI. TradeId: {tradeId}");
+            }
+
+            // A saved ready event only marks this caravan as awaiting player action. The
+            // Caravan status UI opens the sell-only panel, and that flow explicitly presents
+            // settlement after the player confirms or skips selling.
         }
 
         private bool IsSettlementEntryValid(string caravanId, string tradeId, JourneyResultData result)

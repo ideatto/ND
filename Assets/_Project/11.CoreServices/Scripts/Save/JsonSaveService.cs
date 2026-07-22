@@ -326,6 +326,11 @@ namespace ND.Framework
                 }
 
                 CaravanSaveDataMapper.Normalize(caravan);
+                if (string.IsNullOrWhiteSpace(caravan.currentTownId))
+                {
+                    // Version 6 and earlier saves only tracked the selected player's town.
+                    // Preserve that location as the safest migration fallback for each caravan.
+                    caravan.currentTownId = data.player.currentTownId;
                 if (!string.IsNullOrWhiteSpace(caravan.wagon.wagonName))
                 {
                     assetDataChanged |= EnsureUniqueInstanceId(
