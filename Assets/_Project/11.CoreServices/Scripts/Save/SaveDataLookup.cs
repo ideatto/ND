@@ -115,7 +115,15 @@ namespace ND.Framework
             }
         }
 
-        internal static string NewCaravanId() => Guid.NewGuid().ToString("N");
+        internal static string NewCaravanId() => NewPersistentGuid();
+
+        /// <summary>
+        /// 플레이어가 보유한 개별 자산을 식별할 영속 GUID를 생성한다.
+        /// </summary>
+        /// <returns>하이픈이 없는 32자 GUID 문자열.</returns>
+        public static string NewInstanceId() => NewPersistentGuid();
+
+        private static string NewPersistentGuid() => Guid.NewGuid().ToString("N");
 
         private static bool HasCaravan(SaveData data, string caravanId)
         {

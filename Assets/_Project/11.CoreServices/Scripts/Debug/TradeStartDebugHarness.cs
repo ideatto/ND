@@ -7,6 +7,7 @@
  * - FrameworkRoot의 TradeStartService와 TradeProgressCoordinator를 개발 중 빠르게 호출할 수 있게 한다.
  *
  * Main Features
+ * - Sample Wagon, Animal, and Mercenary assets receive persistent instance IDs.
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
  * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
  * - Pause 중 식량 elapsed 정지 smoke, Failed 정산 화면 smoke, Force* World debug smoke를 제공한다.
@@ -80,6 +81,7 @@ namespace ND.Framework
             {
                 wagon = new imsiWagonData
                 {
+                    instanceId = SaveDataLookup.NewInstanceId(),
                     wagonName = "Debug Wagon",
                     overLoad = 30f,
                     maxLoad = 60f,
@@ -94,6 +96,7 @@ namespace ND.Framework
 
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Debug Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
@@ -101,10 +104,19 @@ namespace ND.Framework
             });
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Debug Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
+            });
+
+            caravan.mercenaries.Add(new imsiMercenaryData
+            {
+                instanceId = SaveDataLookup.NewInstanceId(),
+                mercName = "Debug Guard",
+                combatPower = 10,
+                contractCount = 1
             });
 
             var item = new imsiTradeItemData
