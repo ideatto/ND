@@ -1,6 +1,6 @@
 # Save Recovery Test Matrix
 
-Status in this contract branch: numeric schema version 6 and the collection persistence shape are active. Multi-active commands, coordination, and the remaining recovery behavior below are contract-only unless separately identified as implemented; all listed cases remain pending automation/manual execution in implementation branches.
+Status in this contract branch: numeric schema version 6 and the collection persistence shape are active. Unless a row explicitly says otherwise, every case below is **Contract Only — implementation and verification pending**. The matrix specifies expected behavior and does not claim that automation, Unity compilation, Console inspection, or runtime verification has completed.
 
 | Area | Scenario | Expected result |
 |---|---|---|
@@ -26,6 +26,7 @@ Status in this contract branch: numeric schema version 6 and the collection pers
 | Settlement | Invalid ID pair | Rejected without mutation |
 | Investment quest | Pay full currency cost once | Currency, completion, and unlock commit together |
 | Investment quest | Submit goods from one or several Caravans | Only explicit usable Caravan stacks are deducted |
+| Investment quest | Mix currency and goods in one request | Rejected without mutation; exactly one full payment mode is allowed |
 | Investment quest | Submit home inventory or Traveling goods | Rejected without mutation |
 | Investment quest | Complete twice | No duplicate deduction or unlock |
 | Loan | Currency is below `MinimumTradeCost` and no active loan exists | Calculator eligibility allows an offer |
@@ -78,10 +79,11 @@ Status in this contract branch: numeric schema version 6 and the collection pers
 | Wagon repair | Positive repair is valid | Cost is floored once and durability increases |
 | Wagon repair | Positive repair calculates to zero | Minimum cost is one |
 | Wagon repair | Exceeds maximum or wagon is destroyed | Rejected without mutation |
-| Building | Transfer selected Caravan cargo home | Both inventories save together |
+| Building | Transfer explicitly addressed Caravan cargo home | Command uses the supplied `caravanId`; both inventories save together |
 | Building | Upgrade using home materials | Materials deduct and stable-ID level increments together |
 | Building | Attempt direct Caravan material use | Rejected without mutation |
-| Building | DisplayName-era save loads | Approved adapter or migration resolves stable ID |
+| Building | Version 6 displayName-era save is opened | No automatic adapter/migration infers `buildingId`; original/backup is preserved and a visible version 7 reset is required |
+| Investment quest version | Version 6 or legacy donation/progress data is opened | No automatic v7 conversion or completion inference; visible reset starts `investmentQuestCompletions` as an empty list |
 
 ## Test levels
 

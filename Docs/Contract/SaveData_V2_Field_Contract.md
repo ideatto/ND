@@ -10,13 +10,13 @@ Version 7 목표는 Unity-serializable List를 persisted source로 사용하고 
 
 ```text
 SaveData
-|- version, metadata(lastSavedUtcTicks)
+|- version, lastSavedUtcTicks
 |- player(currencies, growth levels, home inventory, villageBuildings[])
 |- selectedCaravanId
 |- caravans[]
 |- tradeProgressEntries[]
 |- pendingSettlements[]
-|- world(unlockedTownIds[], unlockedRouteIds[], investmentQuestCompletions[])
+|- world(unlockedTownIds[], unlockedRouteIds[], investmentQuestCompletions[], eventConsumptions[])
 |- rescueLoan
 `- tutorial/world mutable state
 ```
@@ -33,7 +33,12 @@ SaveData
 | Building | `buildingId`, `level` | `displayName`, localization, icon, costs, effects |
 | InvestmentQuest | `investmentQuestId`, `townId`, `completedUtcTicks` | state/isCompleted/isRewardClaimed, progress/contribution, costs, unlock definition |
 | World | unlocked town/route ID lists | definition values와 표시 데이터 |
+| Event consumption | `eventId: string`, `consumptionCount: int` | occurrence instances and reconstructable definition data |
 | Rescue loan | 승인된 loan DTO 원본 상태 | eligibility, UI text, 계산값 |
+
+`lastSavedUtcTicks: long` is a top-level `SaveData` field and is not nested under a `metadata` object.
+
+Repeatable and one-time event consumption is stored at `SaveData.world.eventConsumptions` as entries containing `eventId: string` and non-negative `consumptionCount: int`. Runtime occurrences are reconstructed from those values and shared definitions; per-occurrence finalized random results belong in their owning trade/settlement snapshot rather than this DTO.
 
 ## Building DTO
 
@@ -63,6 +68,8 @@ public sealed class InvestmentQuestCompletionSaveData
 ```
 
 권장 root는 `SaveData.world.investmentQuestCompletions`이며 primary key는 `investmentQuestId`다. entry 존재가 one-time completion 상태다. contribution은 Command input이고 제출 이력이나 파생 progress는 저장하지 않는다.
+
+Version 6 donation/progress/contribution data and existing unlock entries are not converted into InvestmentQuest completion entries. After the explicit reset boundary, the version 7 completion collection starts empty.
 
 ## Compatibility boundary
 

@@ -21,9 +21,11 @@ Normal data permits at most one unresolved pending settlement per Caravan. Exact
 3. Sets any legacy settlement `LoanRepayment` input to zero and does not mutate rescue-loan principal.
 4. Saves the staged aggregate immediately.
 5. On save failure reports failure and leaves the externally visible durable state uncommitted.
-6. On success publishes one completion event and clears prepared goods/food while preserving fixed setup.
+6. On success publishes `SettlementClaimed(caravanId, tradeId)` once for that claimed entry and clears prepared goods/food while preserving fixed setup.
 
 Settlement finalization follows the same commit boundary: stage pending state, Save once, require `SaveResult` success, commit runtime state, then publish `TradeSettlementReady(caravanId, tradeId, result)`. Save failure rolls back the staged tick/batch and publishes no committed Event or forced screen transition.
+
+`TradeSettlementReady` means a saved result is available to view and claim; it never means that rewards were paid. `SettlementClaimed` means reward application, matching pending removal, Save success, and runtime commit completed. Claim Save failure publishes neither a claimed Event nor a success UI transition.
 
 Settlement finalization, pending snapshots, and Claim contain no rescue-loan repayment choice or amount. A non-positive or positive settlement payout never changes `remainingPrincipal`. Partial or full repayment is performed only through the separate `RepayRescueLoan(long amount)` command after restricted preparation has ended. Settlement reward application, trade state, pending removal, preparation cleanup, aggregate save, completion event, and UI refresh remain one staged transaction; rescue-loan repayment is a different transaction with its own currency/loan snapshot and rollback.
 
