@@ -317,6 +317,8 @@ public static class MarketInventoryIntegrationProbe
             "Market return must be rejected when the current screen is not Market.");
         Assert(TownTradePreparationEntryController.CanBeginFromScreen(InGameScreenState.Town),
             "Trade preparation entry must be allowed from the Town screen.");
+        Assert(TownTradePreparationEntryController.CanBeginFromScreen(InGameScreenState.Preparation),
+            "Trade preparation entry must reopen an existing Preparation screen without another save transition.");
         Assert(!TownTradePreparationEntryController.CanBeginFromScreen(InGameScreenState.Market),
             "Trade preparation entry must be blocked until the Market screen returns to Town.");
 

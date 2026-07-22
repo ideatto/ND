@@ -32,8 +32,24 @@ public sealed class TownTradePreparationEntryController : MonoBehaviour
         }
 
         FrameworkRoot root = FrameworkRoot.Instance;
-        if (root == null || root.InGameScreenRouter == null ||
-            !CanBeginFromScreen(root.InGameScreenRouter.CurrentScreenState) ||
+        if (root == null || root.InGameScreenRouter == null)
+        {
+            Debug.LogWarning(
+                "[Town Trade] Trade preparation could not be started from the current state.",
+                this);
+            return false;
+        }
+
+        InGameScreenState currentState = root.InGameScreenRouter.CurrentScreenState;
+        if (currentState == InGameScreenState.Preparation)
+        {
+            // A fresh game already owns a valid Preparation state, so opening the view must not
+            // reset or save Framework state again before the player selects a Caravan.
+            tradeScreenPresenter.OpenTradeScreen();
+            return true;
+        }
+
+        if (currentState != InGameScreenState.Town ||
             !root.TryBeginTradePreparationFromTown())
         {
             Debug.LogWarning(
@@ -42,12 +58,15 @@ public sealed class TownTradePreparationEntryController : MonoBehaviour
             return false;
         }
 
+        // A completed cycle returns to Town. Framework must commit the new Preparation state
+        // before the UI opens, otherwise the Presenter immediately closes the Town screen again.
         tradeScreenPresenter.OpenTradeScreen();
         return true;
     }
 
     public static bool CanBeginFromScreen(InGameScreenState screenState)
     {
-        return screenState == InGameScreenState.Town;
+        return screenState == InGameScreenState.Town ||
+               screenState == InGameScreenState.Preparation;
     }
 }
