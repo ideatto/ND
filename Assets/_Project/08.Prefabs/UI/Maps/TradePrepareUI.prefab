@@ -29662,26 +29662,6 @@ PrefabInstance:
       propertyPath: paymentPanel
       value: 
       objectReference: {fileID: 6388708746523280173}
-    - target: {fileID: 5032963898695143581, guid: 564ba5012aa965f46aebea9d94da86db, type: 3}
-      propertyPath: onPaymentCompleted.m_PersistentCalls.m_Calls.Array.size
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5032963898695143581, guid: 564ba5012aa965f46aebea9d94da86db, type: 3}
-      propertyPath: onPaymentCompleted.m_PersistentCalls.m_Calls.Array.data[0].m_Target
-      value: 
-      objectReference: {fileID: 6308273598796661662}
-    - target: {fileID: 5032963898695143581, guid: 564ba5012aa965f46aebea9d94da86db, type: 3}
-      propertyPath: onPaymentCompleted.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 5032963898695143581, guid: 564ba5012aa965f46aebea9d94da86db, type: 3}
-      propertyPath: onPaymentCompleted.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: OnClickClaimSettlement
-      objectReference: {fileID: 0}
-    - target: {fileID: 5032963898695143581, guid: 564ba5012aa965f46aebea9d94da86db, type: 3}
-      propertyPath: onPaymentCompleted.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
-      value: ND.Framework.SettlementUiDataAdapter, Assembly-CSharp
-      objectReference: {fileID: 0}
     - target: {fileID: 5052068064191236044, guid: 564ba5012aa965f46aebea9d94da86db, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5

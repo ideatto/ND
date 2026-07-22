@@ -131,6 +131,38 @@ public class AnimalInventoryPanel : MonoBehaviour
         Populate(animalEntries, wagonEntries);
     }
 
+    /// <summary>
+    /// Refreshes runtime-owned quantity and wagon eligibility without rebuilding the wagon slots.
+    /// Selecting a wagon rebuilds TradePrepareViewData, so the copied entries must not keep their
+    /// pre-selection canSelect values.
+    /// </summary>
+    public void RefreshAnimalAvailability(IReadOnlyList<AnimalEntry> source)
+    {
+        if (source == null)
+            return;
+
+        for (int i = 0; i < animals.Count; i++)
+        {
+            AnimalEntry current = animals[i];
+            for (int j = 0; j < source.Count; j++)
+            {
+                AnimalEntry updated = source[j];
+                if (!string.Equals(current.id, updated.id, StringComparison.Ordinal))
+                    continue;
+
+                animals[i] = updated;
+                if (counts.TryGetValue(updated.id, out int selected)
+                    && selected > updated.ownedCount)
+                {
+                    counts[updated.id] = Mathf.Max(0, updated.ownedCount);
+                }
+                break;
+            }
+        }
+
+        FillSlots();
+    }
+
     /// <summary>[Edit] → 웨건 선택 팝업 열기.</summary>
     private void OpenWagonPopup()
     {

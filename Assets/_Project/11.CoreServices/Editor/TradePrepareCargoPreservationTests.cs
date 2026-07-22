@@ -89,7 +89,7 @@ public sealed class TradePrepareCargoPreservationTests
     public void Create_PreservesSavedCargoMissingFromCurrentMarketCatalog()
     {
         FrameworkSaveData saveData = CreateSaveCargo("remote-material", 4);
-        CaravanData result = TradePrepareCaravanFactory.Create(
+        CaravanData result = TradePrepareCaravanFactory.CreatePreview(
             new TradePrepareDraft(),
             new TradePrepareBuildContext { saveData = saveData });
 

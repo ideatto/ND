@@ -328,7 +328,7 @@ namespace ND.Framework
                 () => CurrentSaveData,
                 TradeProgressCoordinator,
                 InGameScreenRouter,
-                autoClaimOnArrival: true);
+                autoClaimOnArrival: false);
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
@@ -395,6 +395,7 @@ namespace ND.Framework
         private string pendingCaravanId = string.Empty;
         private string pendingTradeId = string.Empty;
         private JourneyResultData pendingResult;
+        private bool settlementPresentationRequested;
         private bool isClaimProcessing;
         private bool autoClaimOnArrival;
         private bool frameworkEventsSubscribed;
@@ -456,6 +457,33 @@ namespace ND.Framework
             return result != null;
         }
 
+        public bool IsSettlementPresentationRequested => settlementPresentationRequested;
+
+        /// <summary>
+        /// 사용자가 도착한 caravan의 판매 단계를 마친 뒤 해당 정산 화면을 명시적으로 연다.
+        /// 도착 이벤트 자체는 결과를 보존하기만 하며 이 API를 호출하기 전에는 Claim하거나 UI를 열지 않는다.
+        /// </summary>
+        public bool PresentSettlement(string caravanId, string tradeId)
+        {
+            SaveData saveData = GetSaveData();
+            PendingSettlementSaveData pending;
+            JourneyResultData result;
+            if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, tradeId, out pending)
+                || !PendingSettlementSaveDataMapper.TryToRuntime(pending, out result)
+                || !IsSettlementEntryValid(caravanId, tradeId, result))
+            {
+                return false;
+            }
+
+            pendingCaravanId = caravanId ?? string.Empty;
+            pendingTradeId = tradeId ?? string.Empty;
+            pendingResult = result;
+            settlementPresentationRequested = true;
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            SettlementReady?.Invoke(pendingTradeId, pendingResult);
+            return true;
+        }
+
         /// <summary>
         /// 현재 pending settlement를 claim하고 준비 상태로 되돌린다.
         /// </summary>
@@ -507,6 +535,7 @@ namespace ND.Framework
             pendingCaravanId = string.Empty;
             pendingTradeId = string.Empty;
             pendingResult = null;
+            settlementPresentationRequested = false;
         }
 
         private void OnEnable()
@@ -556,11 +585,11 @@ namespace ND.Framework
             pendingCaravanId = caravanId ?? string.Empty;
             pendingTradeId = tradeId ?? string.Empty;
             pendingResult = result;
+            settlementPresentationRequested = false;
 
-            // Runtime arrival no longer requires the settlement receipt panel. Reuse the
-            // existing atomic claim path so destination, Economy values and pending cleanup
-            // are still saved as one operation. A failed claim keeps the cached result and
-            // falls back to the existing Settlement UI for recovery.
+            // Compatibility probes may still opt into automatic Claim explicitly. Runtime
+            // initialization disables it so arrival remains pending until the sale flow calls
+            // PresentSettlement(caravanId, tradeId).
             if (autoClaimOnArrival)
             {
                 if (ClaimSettlementAndReset())
@@ -573,8 +602,9 @@ namespace ND.Framework
                     $"Settlement auto-claim failed; keeping pending result for recovery UI. TradeId: {tradeId}");
             }
 
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
-            SettlementReady?.Invoke(pendingTradeId, pendingResult);
+            // A saved ready event only marks this caravan as awaiting player action. The
+            // Caravan status UI opens the sell-only panel, and that flow explicitly presents
+            // settlement after the player confirms or skips selling.
         }
 
         private bool IsSettlementEntryValid(string caravanId, string tradeId, JourneyResultData result)

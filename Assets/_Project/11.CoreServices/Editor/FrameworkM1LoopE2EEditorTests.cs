@@ -61,6 +61,7 @@ namespace ND.Framework.Editor
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
+            RunArrivalSalePendingE2E();
             RunAutomaticArrivalClaimE2E();
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
@@ -1053,10 +1054,10 @@ namespace ND.Framework.Editor
                 throw new InvalidOperationException("Pending restore E2E failed because restored cache did not match saved pending result.");
             }
 
-            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Traveling)
             {
                 throw new InvalidOperationException(
-                    $"Pending restore E2E failed: screen was {context.ScreenRouter.CurrentScreenState}, expected Settlement.");
+                    $"Pending restore E2E failed: successful arrival opened Settlement before the sale step. Screen: {context.ScreenRouter.CurrentScreenState}.");
             }
 
             var firstClaim = ClaimCurrentSettlement(context);
@@ -1570,10 +1571,12 @@ namespace ND.Framework.Editor
             }
 
             context.Coordinator.ForceCompleteActiveTrade();
-            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+            if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Traveling
+                || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending)
             {
                 throw new InvalidOperationException(
-                    $"Atomic claim E2E expected Settlement before claim, got {context.ScreenRouter.CurrentScreenState}.");
+                    "Atomic claim E2E expected a saved pending result without automatic Settlement presentation. "
+                    + $"Screen={context.ScreenRouter.CurrentScreenState}, State={context.SaveData.tradeProgress.state}.");
             }
 
             var currencyBefore = context.SaveData.player.tradingCurrency;
@@ -1685,7 +1688,7 @@ namespace ND.Framework.Editor
             if (ClaimCurrentSettlement(mismatchContext)
                 || mismatchContext.SaveData.player.tradingCurrency != mismatchCurrency
                 || mismatchContext.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
-                || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement)
+                || mismatchContext.ScreenRouter.CurrentScreenState != InGameScreenState.Traveling)
             {
                 throw new InvalidOperationException("Destination mismatch E2E mutated claim state.");
             }
@@ -1749,6 +1752,63 @@ namespace ND.Framework.Editor
             finally
             {
                 FrameworkEvents.InGameScreenChanged -= onScreenChanged;
+                UnityEngine.Object.DestroyImmediate(bridgeObject);
+            }
+        }
+
+        private static void RunArrivalSalePendingE2E()
+        {
+            var context = TestContext.Create(new ConfigurableSaveService());
+            var bridgeObject = new GameObject("SettlementArrivalSalePendingE2E");
+            var bridge = bridgeObject.AddComponent<SettlementUiBridge>();
+            bridge.Initialize(
+                () => context.SaveData,
+                context.Coordinator,
+                context.ScreenRouter,
+                autoClaimOnArrival: false);
+
+            int settlementReadyEvents = 0;
+            bridge.SettlementReady += (_, __) => settlementReadyEvents++;
+
+            try
+            {
+                CaravanData caravan = CreateSampleCaravan(context.GameTime);
+                if (!context.TradeStart.TryStartTrade(
+                        caravan,
+                        DistanceKm,
+                        "editor_arrival_sale_pending",
+                        RouteId).canDepart)
+                {
+                    throw new InvalidOperationException("Arrival sale pending E2E failed to start trade.");
+                }
+
+                context.Coordinator.ForceCompleteActiveTrade();
+                string caravanId = context.SaveData.selectedCaravanId;
+                string tradeId = context.SaveData.tradeProgress.activeTradeId;
+                if (context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending
+                    || context.SaveData.pendingSettlement == null
+                    || !context.SaveData.pendingSettlement.hasResult
+                    || !bridge.HasPendingSettlement
+                    || settlementReadyEvents != 0
+                    || context.ScreenRouter.CurrentScreenState == InGameScreenState.Settlement)
+                {
+                    throw new InvalidOperationException(
+                        "Arrival sale pending E2E did not preserve the pre-sale settlement boundary.");
+                }
+
+                if (!bridge.PresentSettlement(caravanId, tradeId)
+                    || settlementReadyEvents != 1
+                    || context.ScreenRouter.CurrentScreenState != InGameScreenState.Settlement
+                    || context.SaveData.tradeProgress.state != TradeProgressState.SettlementPending)
+                {
+                    throw new InvalidOperationException(
+                        "Arrival sale pending E2E failed to present the saved settlement explicitly.");
+                }
+
+                Debug.Log("[Framework M1 E2E] Arrival remains pending until sale completion presents settlement.");
+            }
+            finally
+            {
                 UnityEngine.Object.DestroyImmediate(bridgeObject);
             }
         }

@@ -304,6 +304,12 @@ namespace ND.Framework
                     data.caravans[caravanIndex] = caravan;
                 }
                 CaravanSaveDataMapper.Normalize(caravan);
+                if (string.IsNullOrWhiteSpace(caravan.currentTownId))
+                {
+                    // Version 6 and earlier saves only tracked the selected player's town.
+                    // Preserve that location as the safest migration fallback for each caravan.
+                    caravan.currentTownId = data.player.currentTownId;
+                }
                 if (string.IsNullOrEmpty(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
                 {
                     if (!string.IsNullOrEmpty(caravan.caravanId))

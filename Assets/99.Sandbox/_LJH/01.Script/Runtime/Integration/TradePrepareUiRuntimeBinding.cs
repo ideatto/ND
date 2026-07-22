@@ -218,6 +218,9 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     {
         if (townRoutePanel != null && viewData != null)
             townRoutePanel.Populate(viewData);
+
+        if (animalPanel != null && animalPanel.gameObject.activeInHierarchy)
+            animalPanel.RefreshAnimalAvailability(BuildAnimalEntries());
     }
 
     private void HandleRouteSelected(string destinationTownId, string routeId, float distance)
@@ -537,6 +540,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
         // Selecting a different wagon clears dependent animal and cargo choices in DraftStore.
         runtimeContext.SelectWagon(wagon.id);
+        animalPanel?.RefreshAnimalAvailability(BuildAnimalEntries());
     }
 
     private void HandleWagonRemoved()

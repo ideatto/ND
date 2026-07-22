@@ -5,6 +5,9 @@ namespace ND.Economy
 {
     public static class MarketTransactionCalculator
     {
+        public const string StoverItemId = "Stover";
+        public const int FixedStoverMarketStock = 999;
+
         public static MarketTransactionResult CalculateMarketTransaction(MarketTransactionInput input)
         {
             if (input == null)
@@ -59,7 +62,11 @@ namespace ND.Economy
                         return result;
                     }
 
-                    if (item.BuyQuantity > item.MarketStockBefore)
+                    int marketStockBefore = GetEffectiveMarketStock(
+                        item.ItemId,
+                        item.MarketStockBefore);
+
+                    if (item.BuyQuantity > marketStockBefore)
                     {
                         result.FailureReason = MarketTransactionFailureReason.InsufficientStock;
                         result.FailedItemId = item.ItemId;
@@ -69,7 +76,9 @@ namespace ND.Economy
                     long purchaseCost = checked(item.BuyUnitPrice * item.BuyQuantity);
                     long saleRevenue = checked(item.SellUnitPrice * item.SellQuantity);
                     int cargoAfter = checked(item.CargoQuantityBefore + item.BuyQuantity - item.SellQuantity);
-                    int stockAfter = checked(item.MarketStockBefore - item.BuyQuantity + item.SellQuantity);
+                    int stockAfter = IsStover(item.ItemId)
+                        ? FixedStoverMarketStock
+                        : checked(marketStockBefore - item.BuyQuantity + item.SellQuantity);
                     float weightDelta = item.UnitWeight * (item.BuyQuantity - item.SellQuantity);
                     int slotsBeforeForItem = GetRequiredSlots(item.CargoQuantityBefore, item.MaxStackQuantity);
                     int slotsAfterForItem = GetRequiredSlots(cargoAfter, item.MaxStackQuantity);
@@ -85,7 +94,7 @@ namespace ND.Economy
                         SellQuantity = item.SellQuantity,
                         CargoQuantityBefore = item.CargoQuantityBefore,
                         CargoQuantityAfter = cargoAfter,
-                        MarketStockBefore = item.MarketStockBefore,
+                        MarketStockBefore = marketStockBefore,
                         MarketStockAfter = stockAfter,
                         PurchaseCost = purchaseCost,
                         SaleRevenue = saleRevenue,
@@ -169,6 +178,18 @@ namespace ND.Economy
         {
             if (quantity <= 0) return 0;
             return checked((quantity - 1) / maxStackQuantity + 1);
+        }
+
+        private static bool IsStover(string itemId)
+        {
+            return string.Equals(itemId, StoverItemId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static int GetEffectiveMarketStock(string itemId, int storedStock)
+        {
+            return IsStover(itemId)
+                ? FixedStoverMarketStock
+                : Math.Max(0, storedStock);
         }
 
         private static MarketTransactionResult Fail(

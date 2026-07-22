@@ -254,6 +254,12 @@ namespace ND.Framework
         public string caravanId = string.Empty;
 
         /// <summary>
+        /// 이 caravan이 현재 머무는 마을 ID이다. 이동 중에는 출발 마을을 유지하고,
+        /// 정산 Claim이 성공했을 때 목적지 또는 실패 복귀 거점으로 갱신한다.
+        /// </summary>
+        public string currentTownId = string.Empty;
+
+        /// <summary>
         /// 선택된 wagon 정보이다.
         /// </summary>
         public WagonSaveData wagon = new WagonSaveData();

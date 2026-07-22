@@ -771,6 +771,12 @@ namespace ND.Framework
             }
 
             FrameworkEvents.RaiseTradeSettlementReady(pending.caravanId, LastSettlementTradeId, LastSettlementResult);
+            if (LastSettlementResult.grade == JourneyResultGrade.Failed)
+            {
+                // A failed journey never reaches a destination market, so it has no arrival
+                // sale step and proceeds directly to failure settlement presentation.
+                inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            }
             FrameworkLog.Info($"Pending settlement restored. TradeId: {LastSettlementTradeId}, Grade: {LastSettlementResult.grade}");
             return true;
         }
@@ -897,12 +903,10 @@ namespace ND.Framework
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             saveService?.Save(saveData);
             FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.caravanId, settlementTradeId, result);
-
-            // The ready event may auto-claim the settlement and route to Town. Only request
-            // Settlement while the same trade is still waiting to be claimed.
-            if (saveData.tradeProgress != null
-                && saveData.tradeProgress.state == TradeProgressState.SettlementPending)
+            if (result.grade == JourneyResultGrade.Failed)
             {
+                // Successful arrivals wait for the caravan status UI and sell-only flow.
+                // Failed journeys have no destination market and show settlement immediately.
                 inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
             }
 

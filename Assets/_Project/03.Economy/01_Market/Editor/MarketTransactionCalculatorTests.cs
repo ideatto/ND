@@ -153,6 +153,45 @@ namespace ND.Economy.Editor
             Assert.That(result.CargoSlotsAfter, Is.EqualTo(1));
         }
 
+        [Test]
+        public void CalculateMarketTransaction_KeepsStoverMarketStockAt999AfterPurchase()
+        {
+            MarketTransactionResult result = MarketTransactionCalculator.CalculateMarketTransaction(
+                Input(new MarketTransactionItemInput
+                {
+                    ItemId = "Stover",
+                    MarketStockBefore = 3,
+                    BuyQuantity = 2,
+                    BuyUnitPrice = 1L,
+                    UnitWeight = 0.1f,
+                    MaxStackQuantity = 99
+                }));
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Items[0].MarketStockBefore, Is.EqualTo(999));
+            Assert.That(result.Items[0].MarketStockAfter, Is.EqualTo(999));
+        }
+
+        [Test]
+        public void CalculateMarketTransaction_KeepsStoverMarketStockAt999AfterSale()
+        {
+            MarketTransactionResult result = MarketTransactionCalculator.CalculateMarketTransaction(
+                Input(new MarketTransactionItemInput
+                {
+                    ItemId = "stover",
+                    CargoQuantityBefore = 2,
+                    MarketStockBefore = 0,
+                    SellQuantity = 1,
+                    SellUnitPrice = 1L,
+                    UnitWeight = 0.1f,
+                    MaxStackQuantity = 99
+                }));
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Items[0].MarketStockBefore, Is.EqualTo(999));
+            Assert.That(result.Items[0].MarketStockAfter, Is.EqualTo(999));
+        }
+
         private static MarketTransactionInput Input(MarketTransactionItemInput item)
         {
             var input = new MarketTransactionInput

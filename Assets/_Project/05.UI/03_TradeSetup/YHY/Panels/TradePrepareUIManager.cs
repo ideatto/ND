@@ -174,6 +174,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         public List<AnimalInventoryPanel.AnimalPick> animals = new List<AnimalInventoryPanel.AnimalPick>();
     }
     private readonly List<AnimalInventoryPanel.AnimalPick> pickedAnimals = new List<AnimalInventoryPanel.AnimalPick>();
+    private SettlementPaymentFlowController settlementPaymentFlow;
 
     // ══ 시작 ═══════════════════════════════════════════════════
 
@@ -236,10 +237,11 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
                 GetComponent<ND.Framework.SettlementUiDataAdapter>();
             if (settlementAdapter != null)
             {
-                settlementPanel.PaymentCompleted.RemoveListener(
-                    settlementAdapter.OnClickClaimSettlement);
-                settlementPanel.PaymentCompleted.AddListener(
-                    settlementAdapter.OnClickClaimSettlement);
+                settlementPaymentFlow = GetComponent<SettlementPaymentFlowController>();
+                if (settlementPaymentFlow == null)
+                    settlementPaymentFlow = gameObject.AddComponent<SettlementPaymentFlowController>();
+
+                settlementPaymentFlow.Configure(settlementPanel, settlementAdapter);
             }
         }
 
