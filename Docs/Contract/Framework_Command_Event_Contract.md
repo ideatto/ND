@@ -41,7 +41,9 @@ For the first rescue-loan integration stage, `IssueRescueLoan()` and `RepayRescu
 
 ## Proposed committed events
 
-Payloads include stable IDs and commit/save revision where available: preparation changed/cancelled, trade departed/state changed, settlement ready/claimed, investment quest completed, content unlocked, loan issued/repaid/closed, rescue restricted mode entered/exited, rebankruptcy detected, wagon destroyed/repaired, building upgraded, save succeeded/failed, and Dirty state changed.
+Committed payloads include stable IDs and commit/save revision where available: trade departed/state changed, settlement ready, `SettlementClaimed(caravanId, tradeId)`, investment quest completed, content unlocked, loan issued/repaid/closed, rescue restricted mode entered/exited, rebankruptcy detected, wagon destroyed/repaired, building upgraded, and save succeeded/failed. `SettlementClaimed` is emitted once per claimed entry only after reward application, pending removal, Save success, and runtime commit.
+
+`PreparationChanged(caravanId, dirtyRevision)` and Dirty-state changes are non-committed notifications. They report an in-memory change and may refresh UI, but do not prove persistence. `SaveSucceeded(savedRevision)` separately reports which revision became durable; `SaveFailed(attemptedRevision, failureReason)` reports failure without committing the attempted change.
 
 Events may repeat across subscription/recovery boundaries. Consumers deduplicate by IDs/revision and never apply rewards based only on receiving an event. Save failure events contain reason metadata but no mutable SaveData.
 
@@ -75,7 +77,7 @@ Each owner inventories and migrates their own scripts; ownership is confirmed ra
 
 ### Stage 5 - Event timing transition
 
-After the result-based Save API works: validate command, stage mutation, save, confirm `SaveResult`, commit runtime state, then publish the completion event. No event is described as committed while the production `void Save()` path remains active.
+For each migrated caller: validate command, stage mutation, save, confirm `SaveResult`, commit runtime state, then publish the committed completion event. The Save API/result type is implemented, but a caller is not described as committed until its result inspection and rollback/commit ordering are implemented and verified.
 
 ### Stage 6 - Legacy removal
 
