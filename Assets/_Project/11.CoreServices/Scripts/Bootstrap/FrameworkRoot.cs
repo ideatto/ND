@@ -303,7 +303,8 @@ namespace ND.Framework
                 ClearSettlementRuntimeCache,
                 // Register every newly departed caravan so the coordinator never reuses the
                 // claimed Prepare-state caravan left by the previous trade cycle.
-                TradeProgressCoordinator.SetActiveCaravan);
+                TradeProgressCoordinator.SetActiveCaravan,
+                () => SharedGameData);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
 
             // 실제 MinimumTradeCost는 Content/Progression 공급 전까지 0으로 두어 command가 안전하게 거부되게 한다.

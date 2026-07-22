@@ -7,6 +7,7 @@
  * - Play mode ContextMenu smoke와 동일한 coordinator 경로를 서비스 조립으로 재현한다.
  *
  * Main Features
+ * - caravan ID 기반 플레이어 출발 command의 성공, 중복, 병렬 caravan, pending, 저장 실패와 재진입을 검증한다.
  * - 구조 대출 발급 → 제한 모드 → 무역 출발 → 제한 해제 → 수동 상환 통합 검증.
  * - 원자 claim: 저장 실패 원복, 정상 claim, currentTownId/Town 이벤트, 중복 claim 거부, 재실행 Town 복원 검증.
  * - SharedGameData 로드, 3회 loop integrity, settle 후 currency 불변·claim 후 currency 변화 검증.
@@ -56,6 +57,7 @@ namespace ND.Framework.Editor
         public static void RunAll()
         {
             RunMultiCaravanSaveDataChecks();
+            RunMultiCaravanDepartureCommandChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
@@ -123,6 +125,152 @@ namespace ND.Framework.Editor
             {
                 throw new InvalidOperationException("Multi-caravan ID normalization failed.");
             }
+        }
+
+        private static void RunMultiCaravanDepartureCommandChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var command = CreatePlayerDepartureCommand(context, save);
+            var firstId = context.SaveData.selectedCaravanId;
+            CaravanSaveData firstSave;
+            SaveDataLookup.TryGetCaravan(context.SaveData, firstId, out firstSave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), firstSave);
+
+            var secondRuntime = CreateSampleCaravan(context.GameTime);
+            var secondSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            CaravanSaveDataMapper.CopyToSave(secondRuntime, secondSave);
+            context.SaveData.caravans.Add(secondSave);
+
+            var first = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = firstId,
+                RouteId = RouteId
+            });
+            if (!first.DepartureSucceeded || !first.SaveSucceeded || string.IsNullOrEmpty(first.TradeId)
+                || firstSave.state != JourneyState.Traveling || save.SaveCalls != 1)
+            {
+                throw new InvalidOperationException("Multi-caravan departure command happy path failed.");
+            }
+
+            var duplicate = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = firstId,
+                RouteId = RouteId
+            });
+            if (duplicate.DepartureSucceeded || duplicate.FailureReason != TradeDepartureFailureReason.AlreadyTraveling
+                || save.SaveCalls != 1)
+            {
+                throw new InvalidOperationException("Same-caravan duplicate departure was not blocked.");
+            }
+
+            var second = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = secondSave.caravanId,
+                RouteId = RouteId
+            });
+            TradeProgressSaveData firstProgress;
+            TradeProgressSaveData secondProgress;
+            if (!second.DepartureSucceeded || !second.SaveSucceeded || first.TradeId == second.TradeId
+                || !SaveDataLookup.TryGetTradeProgress(context.SaveData, firstId, out firstProgress)
+                || !SaveDataLookup.TryGetTradeProgress(context.SaveData, secondSave.caravanId, out secondProgress)
+                || firstProgress.activeTradeId != first.TradeId || secondProgress.activeTradeId != second.TradeId)
+            {
+                throw new InvalidOperationException("Independent caravan departure failed or overwrote another progress entry.");
+            }
+
+            var pendingSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), pendingSave);
+            context.SaveData.caravans.Add(pendingSave);
+            context.SaveData.pendingSettlements.Add(new PendingSettlementSaveData
+            {
+                caravanId = pendingSave.caravanId,
+                tradeId = "pending-trade",
+                hasResult = true
+            });
+            var pending = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = pendingSave.caravanId,
+                RouteId = RouteId
+            });
+            var missing = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = "missing-caravan",
+                RouteId = RouteId
+            });
+            if (pending.FailureReason != TradeDepartureFailureReason.SettlementPending
+                || missing.FailureReason != TradeDepartureFailureReason.CaravanNotFound)
+            {
+                throw new InvalidOperationException("Pending or missing caravan validation failed.");
+            }
+
+            var invalidCoreSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            context.SaveData.caravans.Add(invalidCoreSave);
+            var saveCallsBeforeCoreFailure = save.SaveCalls;
+            var coreRejected = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = invalidCoreSave.caravanId,
+                RouteId = RouteId
+            });
+            var invalidRoute = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = invalidCoreSave.caravanId,
+                RouteId = "missing-route"
+            });
+            if (coreRejected.FailureReason != TradeDepartureFailureReason.CoreRejected
+                || coreRejected.CoreResult == null || coreRejected.CoreResult.canDepart
+                || invalidRoute.FailureReason != TradeDepartureFailureReason.RouteNotFound
+                || save.SaveCalls != saveCallsBeforeCoreFailure)
+            {
+                throw new InvalidOperationException("Core rejection or route validation mutated persistent state.");
+            }
+
+            var failingSave = new ConfigurableSaveService { ShouldSucceed = false };
+            var failingContext = TestContext.Create(failingSave);
+            var failingCommand = CreatePlayerDepartureCommand(failingContext, failingSave);
+            CaravanSaveData failingCaravan;
+            SaveDataLookup.TryGetCaravan(failingContext.SaveData, failingContext.SaveData.selectedCaravanId, out failingCaravan);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(failingContext.GameTime), failingCaravan);
+            var failedSaveResult = failingCommand.Depart(new TradeDepartureRequest
+            {
+                CaravanId = failingCaravan.caravanId,
+                RouteId = RouteId
+            });
+            TradeProgressSaveData rolledBackProgress;
+            if (!failedSaveResult.DepartureSucceeded || failedSaveResult.SaveSucceeded
+                || failedSaveResult.FailureReason != TradeDepartureFailureReason.SaveFailed
+                || failingCaravan.state == JourneyState.Traveling
+                || SaveDataLookup.TryGetTradeProgress(failingContext.SaveData, failingCaravan.caravanId, out rolledBackProgress))
+            {
+                throw new InvalidOperationException("Departure save failure result or rollback policy failed.");
+            }
+
+            TradeDepartureResult reentered = null;
+            var reentrySave = new ConfigurableSaveService();
+            var reentryContext = TestContext.Create(reentrySave);
+            var reentryCommand = CreatePlayerDepartureCommand(reentryContext, reentrySave);
+            CaravanSaveData reentryCaravan;
+            SaveDataLookup.TryGetCaravan(reentryContext.SaveData, reentryContext.SaveData.selectedCaravanId, out reentryCaravan);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(reentryContext.GameTime), reentryCaravan);
+            var reentryRequest = new TradeDepartureRequest { CaravanId = reentryCaravan.caravanId, RouteId = RouteId };
+            reentrySave.OnSave = () => reentered = reentryCommand.Depart(reentryRequest);
+            var reentryFirst = reentryCommand.Depart(reentryRequest);
+            if (!reentryFirst.DepartureSucceeded || reentered == null
+                || reentered.FailureReason != TradeDepartureFailureReason.RequestInProgress
+                || reentrySave.SaveCalls != 1)
+            {
+                throw new InvalidOperationException("Same-caravan departure reentry was not blocked.");
+            }
+        }
+
+        private static TradeStartService CreatePlayerDepartureCommand(TestContext context, ISaveService saveService)
+        {
+            return new TradeStartService(
+                () => context.SaveData,
+                saveService,
+                new TradeProgressRecorder(context.GameTime, context.GameTime),
+                context.ScreenRouter,
+                getSharedGameData: () => context.SharedGameData);
         }
 
         private static void RunRescueLoanIntegrationChecks()
@@ -412,6 +560,7 @@ namespace ND.Framework.Editor
         {
             public bool ShouldSucceed = true;
             public int SaveCalls;
+            public Action OnSave;
 
             public bool HasSaveData() => false;
             public SaveData CreateNewGameData() => new SaveData();
@@ -419,6 +568,7 @@ namespace ND.Framework.Editor
             public SaveResult Save(SaveData data)
             {
                 SaveCalls++;
+                OnSave?.Invoke();
                 return ShouldSucceed
                     ? SaveResult.Success()
                     : SaveResult.Failure(SaveFailureReason.WriteFailed, "test failure");
@@ -1365,7 +1515,8 @@ namespace ND.Framework.Editor
                     {
                         StageTestCommit(saveData, sharedGameData, commitStore);
                         coordinator.SetActiveCaravan(caravan);
-                    });
+                    },
+                    () => sharedGameData);
 
                 return new TestContext
                 {

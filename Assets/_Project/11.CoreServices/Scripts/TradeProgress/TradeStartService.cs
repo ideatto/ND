@@ -17,6 +17,7 @@
  *
  * Main Public APIs
  * - LastRecordSucceeded: 마지막 출발 요청의 framework 기록 성공 여부.
+ * - Depart(...): caravan ID 기반 플레이어 출발, 즉시 저장, 결과 반환 command.
  * - TryStartTrade(...): caravan 출발과 저장 데이터 기록을 시도한다.
  *
  * Important Notes
@@ -25,11 +26,89 @@
  * - runtime caravanId가 비어 있으면 선택 caravan 저장 ID를 출발 전에 채워 CopyToSave·자산 잠금이 동일 ID를 쓰게 한다.
  */
 using System;
+using System.Collections.Generic;
 using ND.Economy;
 using UnityEngine;
 
 namespace ND.Framework
 {
+    /// <summary>플레이어 출발 command가 거부되거나 저장되지 않은 단계를 구분한다.</summary>
+    public enum TradeDepartureFailureReason
+    {
+        None,
+        InvalidRequest,
+        CaravanNotFound,
+        RouteNotFound,
+        AlreadyTraveling,
+        SettlementPending,
+        ActiveTradeExists,
+        RequestInProgress,
+        CoreRejected,
+        RecordFailed,
+        SaveFailed
+    }
+
+    /// <summary>플레이어 출발 대상 caravan과 route를 지정하는 최소 요청이다.</summary>
+    public sealed class TradeDepartureRequest
+    {
+        /// <summary>출발할 저장 caravan의 안정 ID.</summary>
+        public string CaravanId { get; set; }
+
+        /// <summary>공용 route catalog에 존재해야 하는 route ID.</summary>
+        public string RouteId { get; set; }
+    }
+
+    /// <summary>Core 출발과 영속 저장의 결과를 분리해 반환한다.</summary>
+    public sealed class TradeDepartureResult
+    {
+        private TradeDepartureResult(
+            bool departureSucceeded,
+            string tradeId,
+            TradeDepartureFailureReason failureReason,
+            DepartureValidationResult coreResult,
+            SaveResult saveResult)
+        {
+            DepartureSucceeded = departureSucceeded;
+            TradeId = tradeId ?? string.Empty;
+            FailureReason = failureReason;
+            CoreResult = coreResult;
+            SaveResult = saveResult;
+        }
+
+        /// <summary>Core 출발이 성공했으면 true. 저장 실패 후 rollback된 경우에도 true이다.</summary>
+        public bool DepartureSucceeded { get; }
+
+        /// <summary>출발 처리 중 한 번 생성된 trade ID. 출발 전 거부이면 빈 문자열이다.</summary>
+        public string TradeId { get; }
+
+        /// <summary>Framework 또는 Core 처리 실패 단계.</summary>
+        public TradeDepartureFailureReason FailureReason { get; }
+
+        /// <summary>Core가 출발을 거부한 경우 원본 사유 목록을 포함하는 결과. 그 외에는 null이다.</summary>
+        public DepartureValidationResult CoreResult { get; }
+
+        /// <summary>즉시 저장을 시도한 경우의 저장 결과. 출발 전 거부이면 null이다.</summary>
+        public SaveResult SaveResult { get; }
+
+        /// <summary>영속 저장소 기록까지 완료되었으면 true.</summary>
+        public bool SaveSucceeded => SaveResult != null && SaveResult.Succeeded;
+
+        internal static TradeDepartureResult Rejected(
+            TradeDepartureFailureReason reason,
+            DepartureValidationResult coreResult = null)
+        {
+            return new TradeDepartureResult(false, string.Empty, reason, coreResult, null);
+        }
+
+        internal static TradeDepartureResult Departed(string tradeId, SaveResult saveResult)
+        {
+            var failure = saveResult != null && saveResult.Succeeded
+                ? TradeDepartureFailureReason.None
+                : TradeDepartureFailureReason.SaveFailed;
+            return new TradeDepartureResult(true, tradeId, failure, null, saveResult);
+        }
+    }
+
     /// <summary>
     /// 무역 출발 요청을 Core 검증, 저장 데이터 기록, 화면 전환으로 연결하는 서비스이다.
     /// </summary>
@@ -41,6 +120,8 @@ namespace ND.Framework
         private readonly InGameScreenStateRouter inGameScreenRouter;
         private readonly Action clearSettlementCache;
         private readonly Action<CaravanData> setActiveCaravan;
+        private readonly Func<ISharedGameDataProvider> getSharedGameData;
+        private readonly HashSet<string> departureRequestsInProgress = new HashSet<string>();
 
         /// <summary>
         /// 마지막 TryStartTrade 호출에서 TradeProgressRecorder 기록이 성공했는지 나타낸다.
@@ -62,7 +143,8 @@ namespace ND.Framework
             TradeProgressRecorder tradeProgressRecorder,
             InGameScreenStateRouter inGameScreenRouter = null,
             Action clearSettlementCache = null,
-            Action<CaravanData> setActiveCaravan = null)
+            Action<CaravanData> setActiveCaravan = null,
+            Func<ISharedGameDataProvider> getSharedGameData = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
@@ -70,6 +152,170 @@ namespace ND.Framework
             this.inGameScreenRouter = inGameScreenRouter;
             this.clearSettlementCache = clearSettlementCache;
             this.setActiveCaravan = setActiveCaravan;
+            this.getSharedGameData = getSharedGameData;
+        }
+
+        /// <summary>
+        /// 저장 데이터의 특정 caravan을 지정해 플레이어 무역 출발을 처리한다.
+        /// </summary>
+        /// <param name="request">caravan ID와 route ID를 포함하는 요청.</param>
+        /// <returns>Core 출발과 즉시 저장 성공 여부를 각각 확인할 수 있는 결과.</returns>
+        /// <remarks>
+        /// 같은 caravan의 재진입은 처리 중에 차단되며, 저장 성공 후 선택 caravan에 한해 Traveling 화면을 갱신한다.
+        /// </remarks>
+        public TradeDepartureResult Depart(TradeDepartureRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.CaravanId)
+                || string.IsNullOrWhiteSpace(request.RouteId))
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.InvalidRequest);
+            }
+
+            var caravanId = request.CaravanId;
+            if (!departureRequestsInProgress.Add(caravanId))
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.RequestInProgress);
+            }
+
+            try
+            {
+                return DepartInternal(caravanId, request.RouteId);
+            }
+            finally
+            {
+                departureRequestsInProgress.Remove(caravanId);
+            }
+        }
+
+        private TradeDepartureResult DepartInternal(string caravanId, string routeId)
+        {
+            var saveData = getCurrentSaveData != null ? getCurrentSaveData() : null;
+            CaravanSaveData caravanSave;
+            if (!SaveDataLookup.TryGetCaravan(saveData, caravanId, out caravanSave))
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.CaravanNotFound);
+            }
+
+            TradeProgressSaveData progress;
+            if (HasOwnedProgress(saveData, caravanId)
+                && !SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress))
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.ActiveTradeExists);
+            }
+
+            if (SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress))
+            {
+                if (progress.state == TradeProgressState.SettlementPending)
+                    return TradeDepartureResult.Rejected(TradeDepartureFailureReason.SettlementPending);
+                if (progress.state == TradeProgressState.Traveling)
+                    return TradeDepartureResult.Rejected(TradeDepartureFailureReason.AlreadyTraveling);
+                if (!string.IsNullOrEmpty(progress.activeTradeId))
+                    return TradeDepartureResult.Rejected(TradeDepartureFailureReason.ActiveTradeExists);
+            }
+
+            PendingSettlementSaveData pending;
+            if (HasOwnedPending(saveData, caravanId)
+                || SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, null, out pending))
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.SettlementPending);
+            }
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            SharedRouteDefinition route;
+            if (sharedGameData == null || !sharedGameData.TryGetRoute(routeId, out route) || route == null)
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.RouteNotFound);
+            }
+
+            var runtimeCaravan = CaravanSaveDataMapper.ToRuntime(caravanSave);
+            var coreResult = CaravanValidator.Validate(runtimeCaravan);
+            if (!coreResult.canDepart)
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.CoreRejected, coreResult);
+            }
+
+            var runtimeSnapshot = JsonUtility.ToJson(runtimeCaravan);
+            var caravanSnapshot = JsonUtility.ToJson(caravanSave);
+            var progressSnapshot = progress != null ? JsonUtility.ToJson(progress) : null;
+            var tradeId = Guid.NewGuid().ToString("D");
+            var expectedSeconds = CaravanCalculator.GetTravelSeconds(runtimeCaravan, route.Distance);
+            if (tradeProgressRecorder == null || !tradeProgressRecorder.RecordStartedTrade(
+                    saveData, caravanId, tradeId, routeId,
+                    TimeSpan.FromSeconds(Math.Max(0f, expectedSeconds))))
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.RecordFailed);
+            }
+
+            coreResult = JourneyRunner.TryDepart(runtimeCaravan, route.Distance);
+            if (!coreResult.canDepart)
+            {
+                RestoreCommandSnapshot(saveData, caravanId, caravanSave, runtimeCaravan,
+                    progressSnapshot, caravanSnapshot, runtimeSnapshot);
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.CoreRejected, coreResult);
+            }
+
+            CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
+            var saveResult = saveService != null
+                ? saveService.Save(saveData)
+                : SaveResult.Failure(SaveFailureReason.InvalidData, "Trade departure save service is missing.");
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                RestoreCommandSnapshot(saveData, caravanId, caravanSave, runtimeCaravan,
+                    progressSnapshot, caravanSnapshot, runtimeSnapshot);
+                FrameworkLog.Warning($"Trade departure save failed. CaravanId: {caravanId}, TradeId: {tradeId}");
+                return TradeDepartureResult.Departed(tradeId, saveResult);
+            }
+
+            setActiveCaravan?.Invoke(runtimeCaravan);
+            if (saveData.selectedCaravanId == caravanId)
+            {
+                inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
+            }
+
+            return TradeDepartureResult.Departed(tradeId, saveResult);
+        }
+
+        private static void RestoreCommandSnapshot(
+            SaveData saveData,
+            string caravanId,
+            CaravanSaveData caravanSave,
+            CaravanData runtimeCaravan,
+            string progressSnapshot,
+            string caravanSnapshot,
+            string runtimeSnapshot)
+        {
+            JsonUtility.FromJsonOverwrite(caravanSnapshot, caravanSave);
+            JsonUtility.FromJsonOverwrite(runtimeSnapshot, runtimeCaravan);
+            if (progressSnapshot == null)
+            {
+                SaveDataLookup.SetTradeProgress(saveData, caravanId, null);
+                return;
+            }
+
+            var restoredProgress = JsonUtility.FromJson<TradeProgressSaveData>(progressSnapshot);
+            SaveDataLookup.SetTradeProgress(saveData, caravanId, restoredProgress);
+        }
+
+        private static bool HasOwnedProgress(SaveData saveData, string caravanId)
+        {
+            if (saveData == null || saveData.tradeProgressEntries == null) return false;
+            for (var index = 0; index < saveData.tradeProgressEntries.Count; index++)
+            {
+                var entry = saveData.tradeProgressEntries[index];
+                if (entry != null && entry.caravanId == caravanId) return true;
+            }
+            return false;
+        }
+
+        private static bool HasOwnedPending(SaveData saveData, string caravanId)
+        {
+            if (saveData == null || saveData.pendingSettlements == null) return false;
+            for (var index = 0; index < saveData.pendingSettlements.Count; index++)
+            {
+                var entry = saveData.pendingSettlements[index];
+                if (entry != null && entry.caravanId == caravanId) return true;
+            }
+            return false;
         }
 
         /// <summary>
