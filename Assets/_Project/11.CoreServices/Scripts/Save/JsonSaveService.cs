@@ -331,6 +331,7 @@ namespace ND.Framework
                     // Version 6 and earlier saves only tracked the selected player's town.
                     // Preserve that location as the safest migration fallback for each caravan.
                     caravan.currentTownId = data.player.currentTownId;
+                }
                 if (!string.IsNullOrWhiteSpace(caravan.wagon.wagonName))
                 {
                     assetDataChanged |= EnsureUniqueInstanceId(
@@ -438,6 +439,7 @@ namespace ND.Framework
 
             return assetDataChanged;
         }
+
 
         private static bool EnsureUniqueInstanceId(
             ref string instanceId,
