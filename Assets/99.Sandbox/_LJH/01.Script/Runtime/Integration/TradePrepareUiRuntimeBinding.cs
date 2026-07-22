@@ -337,7 +337,9 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         {
             automaticCargoLoading = true,
             restoreOwnedCargo = true,
-            gold = viewData != null ? viewData.currentTradingCurrency : 0L,
+            // Currency is global player state. Detached Caravan S4 must not inherit a stale or
+            // newly-created TradePrepare Draft projection, so always read the current SaveData value.
+            gold = ReadCurrentTradingCurrency(),
             maxLoad = viewData != null ? viewData.maxLoad : 0f,
             requiredFood = viewData != null ? viewData.requiredDraftAnimalFoodQuantity : 0,
             shopItems = items.ToArray(),
@@ -406,6 +408,9 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     private void HandleCargoLoadChanged(IReadOnlyList<CargoLoadingPanelController.CargoSelection> snapshot)
     {
+        if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+            return;
+
         if (!TryOpenPreparationMarket() || marketTradePanel.Model == null)
             return;
 
@@ -475,7 +480,16 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     private void CancelCargoTransactionDraft()
     {
+        if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+            return;
+
         marketTradePanel?.CancelDraft();
+    }
+
+    private static long ReadCurrentTradingCurrency()
+    {
+        ND.Framework.SaveData saveData = ND.Framework.FrameworkRoot.Instance?.CurrentSaveData;
+        return saveData?.player != null ? Math.Max(0L, saveData.player.tradingCurrency) : 0L;
     }
 
     private static TradeItemViewData CreateCargoViewData(MarketTradeItemState item)

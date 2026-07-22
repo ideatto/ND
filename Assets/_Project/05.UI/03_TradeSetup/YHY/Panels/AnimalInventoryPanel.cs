@@ -93,6 +93,7 @@ public class AnimalInventoryPanel : MonoBehaviour
         ClearAll();
         allowEditing = true;
         EnsureWired();
+        ApplyInventoryStartPadding();
         if (ownedWagons != null) wagonInventory.AddRange(ownedWagons);
 
         // 웨건 미선택 상태로 시작
@@ -131,6 +132,15 @@ public class AnimalInventoryPanel : MonoBehaviour
         RefreshWagonArea();
         ClearWagonSlots();       // 웨건 없음 → 슬롯 없음
         UpdateInventoryLabels(); // 잔량 표시
+    }
+
+    private void ApplyInventoryStartPadding()
+    {
+        GridLayoutGroup layout = inventoryContainer != null
+            ? inventoryContainer.GetComponent<GridLayoutGroup>()
+            : null;
+        if (layout != null)
+            layout.padding = new RectOffset(16, 8, 14, 8);
     }
 
     public void Populate(TradePrepareViewData viewData)

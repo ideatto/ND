@@ -34,6 +34,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// </summary>
     public Func<bool> TryCommitCargoTransaction { get; set; }
 
+    /// <summary>
+    /// Optional detached Caravan S4 handler. When assigned, Continue confirms the Caravan-owned
+    /// cargo plan and never advances into the normal market/mercenary flow.
+    /// </summary>
+    public Func<bool> TryCommitDetachedCargoPlan { get; set; }
+
     /// <summary>Optional authoritative validation for the current market draft.</summary>
     public Func<bool> CanCommitCargoTransaction { get; set; }
 
@@ -106,6 +112,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private RectTransform[] shopSlots = Array.Empty<RectTransform>();
     private RectTransform[] loadedSlots = Array.Empty<RectTransform>();
+    private int detachedInventorySlotLimit = -1;
     private ScrollRect shopScrollRect;
     private ScrollRect loadedScrollRect;
 
@@ -130,15 +137,19 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     public int RequiredFood => selectedRoute == null
         ? requiredFood
         : selectedRoute.BaseRequiredFoodQuantity;
-    public int InventorySlotLimit => selectedWagon == null
-        ? loadedSlots.Length
-        : selectedWagon.InventorySlotCount;
+    public int InventorySlotLimit => detachedInventorySlotLimit >= 0
+        ? detachedInventorySlotLimit
+        : selectedWagon == null
+            ? loadedSlots.Length
+            : selectedWagon.InventorySlotCount;
     public float CurrentLoad => loadedLines.Sum(line => line.Item == null ? 0f : line.Item.Weight * line.Quantity);
     public float MaximumLoad => GetCoreMaximumLoad();
     public int LoadedFood => loadedLines
         .Where(line => line.Item != null && IsFood(line.Item))
         .Sum(line => line.Quantity);
-    public bool CanProceed => (CanCommitCargoTransaction?.Invoke() ?? pendingPurchaseCost <= currentGold)
+    public bool CanProceed => (TryCommitDetachedCargoPlan != null
+            ? cargoEditingEnabled
+            : (CanCommitCargoTransaction?.Invoke() ?? pendingPurchaseCost <= currentGold))
         && CurrentLoad <= MaximumLoad + 0.0001f
         && LoadedSlotCount <= InventorySlotLimit;
     private int LoadedSlotCount => loadedLines.Count(line => line.Item != null && line.Quantity > 0);
@@ -287,6 +298,74 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         ClosePurchasePopupImmediate();
     }
 
+    public void SetDetachedInventorySlotLimit(int slotLimit)
+    {
+        detachedInventorySlotLimit = Mathf.Max(0, slotLimit);
+        EnsureDynamicSlots();
+        WireSlotInteractions();
+        RefreshAll();
+    }
+
+    public void ClearDetachedInventorySlotLimit()
+    {
+        detachedInventorySlotLimit = -1;
+        RefreshAll();
+    }
+
+    public void SetDetachedPresentation(bool detached)
+    {
+        Transform loadUiBadge = FindDeepChild(transform, "LoadUiBadge");
+        if (loadUiBadge != null)
+            loadUiBadge.gameObject.SetActive(!detached);
+
+        if (foodWarningText != null)
+            foodWarningText.gameObject.SetActive(!detached);
+
+        TMP_Text nextLabel = nextButton == null
+            ? null
+            : nextButton.GetComponentInChildren<TMP_Text>(true);
+        if (nextLabel != null)
+            nextLabel.text = detached ? "물품 적재" : "용병 고용";
+
+        if (nextButton != null)
+        {
+            RectTransform nextRect = nextButton.transform as RectTransform;
+            nextRect.sizeDelta = detached ? new Vector2(152f, 36f) : new Vector2(180f, 44f);
+            nextRect.anchoredPosition = detached ? new Vector2(392f, -128f) : new Vector2(364f, -116f);
+        }
+
+        TMP_Text loadedInventoryLabel = FindText("LoadedInventoryLabel");
+        if (loadedInventoryLabel != null)
+        {
+            RectTransform labelRect = loadedInventoryLabel.rectTransform;
+            labelRect.anchoredPosition = detached ? new Vector2(12f, -10f) : new Vector2(12f, -12f);
+            labelRect.sizeDelta = detached ? new Vector2(220f, 30f) : new Vector2(156f, 44f);
+        }
+
+        if (loadedGrid != null)
+        {
+            loadedGrid.anchoredPosition = detached ? new Vector2(20f, -12f) : new Vector2(20f, -52f);
+            GridLayoutGroup layout = loadedGrid.GetComponent<GridLayoutGroup>();
+            if (layout != null)
+            {
+                layout.padding = detached
+                    ? new RectOffset(12, 0, 40, 4)
+                    : new RectOffset(0, 0, 0, 0);
+                layout.spacing = detached ? new Vector2(12f, 12f) : new Vector2(20f, 12f);
+            }
+        }
+
+        if (loadedFoodText != null)
+        {
+            RectTransform loadedFoodRect = loadedFoodText.rectTransform;
+            loadedFoodRect.anchoredPosition = new Vector2(loadedFoodRect.anchoredPosition.x, -26f);
+        }
+
+        UpdateGridContentHeight(loadedGrid, InventorySlotLimit);
+        RefreshLoadedSlots();
+        RefreshStatus();
+    }
+
     public void SetCargoTransactionError(string errorCode)
     {
         cargoTransactionError = errorCode ?? string.Empty;
@@ -375,6 +454,20 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             .ToArray();
     }
 
+    /// <summary>Returns an ID-only snapshot for the detached Caravan cargo-plan command.</summary>
+    public CargoSelection[] BuildCargoSelections()
+    {
+        return loadedLines
+            .Where(line => line.Item != null && line.Quantity > 0)
+            .GroupBy(line => line.Item.ItemId)
+            .Select(group => new CargoSelection
+            {
+                itemId = group.Key ?? string.Empty,
+                quantity = group.Sum(line => line.Quantity)
+            })
+            .ToArray();
+    }
+
     public void BackToPreviousStep()
     {
         // Returning to wagon/animal selection can change cargo capacity, so discard only the
@@ -399,6 +492,14 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void ContinueToMercenaryHire()
     {
+        if (TryCommitDetachedCargoPlan != null)
+        {
+            // Detached S4 owns no market transaction or next mercenary step. Its synchronous
+            // command consumer closes the edit only after a successful plan confirmation.
+            TryCommitDetachedCargoPlan.Invoke();
+            return;
+        }
+
         if (!CanProceed)
             return;
 
@@ -499,9 +600,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private void EnsureDynamicSlots()
     {
         int requiredShopSlots = Mathf.Max(1, shopItems?.Length ?? 0);
-        int requiredLoadedSlots = Mathf.Max(1, selectedWagon == null
-            ? loadedSlots.Length
-            : selectedWagon.InventorySlotCount);
+        int requiredLoadedSlots = Mathf.Max(1, InventorySlotLimit);
 
         EnsureSlotCapacity(shopGrid, requiredShopSlots, "ShopItemSlot");
         EnsureSlotCapacity(loadedGrid, requiredLoadedSlots, "LoadedItemSlot");
@@ -1007,14 +1106,17 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 icon.preserveAspect = true;
             }
 
+            bool detached = TryCommitDetachedCargoPlan != null;
             if (quantity != null)
-                quantity.text = hasLine ? line.Quantity.ToString() : string.Empty;
+                quantity.text = hasLine && !detached ? line.Quantity.ToString() : string.Empty;
 
             if (foodBadge != null)
             {
-                bool isFood = hasLine && IsFood(line.Item);
-                foodBadge.gameObject.SetActive(isFood);
-                foodBadge.text = isFood ? "먹이" : string.Empty;
+                bool showBadge = hasLine && (detached || IsFood(line.Item));
+                foodBadge.gameObject.SetActive(showBadge);
+                foodBadge.text = !showBadge
+                    ? string.Empty
+                    : detached ? line.Quantity.ToString() : "먹이";
             }
         }
 
@@ -1247,7 +1349,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private int GetAffordableCount(int shopIndex)
     {
-        long available = ProjectedCurrencyAfterCargoTransaction != null
+        long available = TryCommitDetachedCargoPlan != null
+            ? Math.Max(0L, currentGold - pendingPurchaseCost)
+            : ProjectedCurrencyAfterCargoTransaction != null
             ? Math.Max(0L, ProjectedCurrencyAfterCargoTransaction())
             : Math.Max(0L, currentGold - pendingPurchaseCost);
         long unitPrice = GetMarketBuyUnitPrice(shopIndex);
@@ -1431,9 +1535,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private static bool IsFood(TradeItemData item)
     {
-        return item != null &&
-               (item.Category == TradeItemCategory.Food ||
-                item.Category == TradeItemCategory.DraftAnimalsFood);
+        return item != null && item.Category == TradeItemCategory.DraftAnimalsFood;
     }
 
     private TMP_Text FindText(string objectName)

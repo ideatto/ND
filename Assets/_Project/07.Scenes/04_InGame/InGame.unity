@@ -5477,6 +5477,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45c223ed5b984379a029475fcdc2344e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TestCaravanSettingService
+  cargoCatalog:
+  - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
+  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  defaultCatalogStock: 20
 --- !u!114 &2147000004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5493,6 +5499,8 @@ MonoBehaviour:
   tradePrepareUi: {fileID: 1691106466}
   settingProviderBehaviour: {fileID: 2147000003}
   settingCommandBehaviour: {fileID: 2147000003}
+  loadSettingProviderBehaviour: {fileID: 2147000003}
+  loadSettingCommandBehaviour: {fileID: 2147000003}
   noticeUI: {fileID: 1691106465}
   settingOpenRequested:
     m_PersistentCalls:

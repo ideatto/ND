@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MercenaryData
   mercenaryId: 
   displayName: 
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: df8caf3c2b36c3743a07ce8af2e684bc, type: 3}
   description: 
   rarity: 0
   baseBuyPrice: 0
