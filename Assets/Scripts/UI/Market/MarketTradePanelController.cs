@@ -271,9 +271,12 @@ namespace ND.UI.Market
         [SerializeField] private MarketData[] marketCatalog = Array.Empty<MarketData>();
         [SerializeField] private bool overrideMaximumCargoWeight;
         [SerializeField, Min(0f)] private float maximumCargoWeight = 100f;
+        private bool overrideMaximumCargoSlots;
+        private int maximumCargoSlots;
         [SerializeField] private int worldSeed = 20260721;
 
         private MarketTradePanelModel model;
+        private bool allowPreparationAccess;
 
         public event Action<IReadOnlyList<MarketTradeItemState>> StateChanged;
         public event Action<MarketTransactionResult> TransactionCompleted;
@@ -295,9 +298,16 @@ namespace ND.UI.Market
 
         public void Configure(MarketData data, float cargoWeightLimit)
         {
+            Configure(data, cargoWeightLimit, -1);
+        }
+
+        public void Configure(MarketData data, float cargoWeightLimit, int cargoSlotLimit)
+        {
             marketData = data;
             overrideMaximumCargoWeight = true;
             maximumCargoWeight = Mathf.Max(0f, cargoWeightLimit);
+            overrideMaximumCargoSlots = cargoSlotLimit >= 0;
+            maximumCargoSlots = Math.Max(0, cargoSlotLimit);
         }
 
         public void ConfigureCatalog(IEnumerable<MarketData> markets)
@@ -307,6 +317,20 @@ namespace ND.UI.Market
         }
 
         public bool Open()
+        {
+            return OpenInternal(false);
+        }
+
+        /// <summary>
+        /// Opens the current-town market for the cargo preparation step. Preparation is allowed
+        /// only as an explicit caller choice; the ordinary Town/Market panel contract stays strict.
+        /// </summary>
+        public bool OpenForTradePreparation()
+        {
+            return OpenInternal(true);
+        }
+
+        private bool OpenInternal(bool allowPreparation)
         {
             FrameworkRoot root = FrameworkRoot.Instance;
             if (root == null || root.CurrentSaveData == null || root.SaveService == null || root.GameTime == null)
@@ -327,9 +351,12 @@ namespace ND.UI.Market
             string accessError = ValidateTownMarketAccess(
                 root.CurrentSaveData,
                 root.SharedGameData,
-                marketData.MarketId);
+                marketData.MarketId,
+                allowPreparation);
             if (!string.IsNullOrEmpty(accessError))
                 return FailOpen(accessError);
+
+            allowPreparationAccess = allowPreparation;
 
             if (model != null && string.Equals(model.MarketId, marketData.MarketId, StringComparison.Ordinal))
             {
@@ -380,7 +407,9 @@ namespace ND.UI.Market
             float cargoWeightLimit = overrideMaximumCargoWeight
                 ? maximumCargoWeight
                 : ResolveMaximumCargoWeight(root.CurrentSaveData);
-            int cargoSlotLimit = ResolveMaximumCargoSlots(root.CurrentSaveData);
+            int cargoSlotLimit = overrideMaximumCargoSlots
+                ? maximumCargoSlots
+                : ResolveMaximumCargoSlots(root.CurrentSaveData);
             model = new MarketTradePanelModel(commands, cargoWeightLimit, cargoSlotLimit);
             SetError(string.Empty);
             RaiseStateChanged();
@@ -420,13 +449,17 @@ namespace ND.UI.Market
         {
             model?.CancelDraft();
             model = null;
+            allowPreparationAccess = false;
             SetError(string.Empty);
             RaiseStateChanged();
         }
 
         private void HandleScreenChanged(InGameScreenState state)
         {
-            if (state != InGameScreenState.Town && state != InGameScreenState.Market && model != null)
+            bool accessible = state == InGameScreenState.Town
+                || state == InGameScreenState.Market
+                || (allowPreparationAccess && state == InGameScreenState.Preparation);
+            if (!accessible && model != null)
                 Close();
         }
 
@@ -436,7 +469,11 @@ namespace ND.UI.Market
             FrameworkRoot root = FrameworkRoot.Instance;
             string accessError = model == null
                 ? MarketInventoryMutationSession.ErrorInvalidFramework
-                : ValidateTownMarketAccess(root?.CurrentSaveData, root?.SharedGameData, model.MarketId);
+                : ValidateTownMarketAccess(
+                    root?.CurrentSaveData,
+                    root?.SharedGameData,
+                    model.MarketId,
+                    allowPreparationAccess);
             if (!string.IsNullOrEmpty(accessError))
             {
                 result = MarketTransactionResult.Fail(accessError, model?.TradingCurrency ?? 0L);
@@ -454,11 +491,14 @@ namespace ND.UI.Market
         public static string ValidateTownMarketAccess(
             ND.Framework.SaveData saveData,
             ISharedGameDataProvider sharedGameData,
-            string marketId)
+            string marketId,
+            bool allowPreparation = false)
         {
             if (saveData == null || sharedGameData == null || !sharedGameData.IsLoaded)
                 return MarketInventoryMutationSession.ErrorInvalidFramework;
-            if (InGameScreenStateRouter.MapFromSaveData(saveData) != InGameScreenState.Town)
+            InGameScreenState state = InGameScreenStateRouter.MapFromSaveData(saveData);
+            if (state != InGameScreenState.Town
+                && !(allowPreparation && state == InGameScreenState.Preparation))
                 return ErrorNotInTown;
 
             string currentTownId = saveData.player?.currentTownId;
@@ -528,6 +568,7 @@ namespace ND.UI.Market
         private bool FailOpen(string error)
         {
             model = null;
+            allowPreparationAccess = false;
             SetError(error);
             Debug.LogError($"[Market Panel] Open failed: {error}", this);
             return false;
@@ -557,6 +598,48 @@ namespace ND.UI.Market
                     hash = hash * 31 + character;
                 return hash;
             }
+        }
+    }
+
+    /// <summary>
+    /// Converts the Cargo panel's final quantities into explicit market buy/sell deltas.
+    /// This class is pure and does not mutate UI, SaveData, currency, or market inventory.
+    /// </summary>
+    public static class CargoMarketTransactionDeltaBuilder
+    {
+        public static List<MarketTransactionLine> Build(
+            IReadOnlyList<CargoLoadingPanelController.CargoSelection> finalCargo,
+            IReadOnlyList<MarketTradeItemState> marketItems)
+        {
+            Dictionary<string, int> finalQuantities =
+                (finalCargo ?? Array.Empty<CargoLoadingPanelController.CargoSelection>())
+                .Where(item => !string.IsNullOrWhiteSpace(item.itemId))
+                .GroupBy(item => item.itemId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(item => Math.Max(0, item.quantity)),
+                    StringComparer.Ordinal);
+
+            var lines = new List<MarketTransactionLine>();
+            foreach (MarketTradeItemState marketItem in marketItems ?? Array.Empty<MarketTradeItemState>())
+            {
+                if (marketItem == null || string.IsNullOrWhiteSpace(marketItem.ItemId))
+                    continue;
+
+                finalQuantities.TryGetValue(marketItem.ItemId, out int finalQuantity);
+                int delta = finalQuantity - Math.Max(0, marketItem.CargoQuantity);
+                if (delta == 0)
+                    continue;
+
+                lines.Add(new MarketTransactionLine
+                {
+                    ItemId = marketItem.ItemId,
+                    BuyQuantity = Math.Max(0, delta),
+                    SellQuantity = Math.Max(0, -delta)
+                });
+            }
+
+            return lines;
         }
     }
 }

@@ -27,9 +27,29 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// </summary>
     public event Action<IReadOnlyList<CargoSelection>> LoadChanged;
 
+    /// <summary>
+    /// Optional integration boundary invoked before S4 advances to the mercenary step.
+    /// The UI owns only its draft; the assigned command must atomically persist cargo,
+    /// market stock, and currency. Returning false keeps this panel open.
+    /// </summary>
+    public Func<bool> TryCommitCargoTransaction { get; set; }
+
+    /// <summary>Optional authoritative validation for the current market draft.</summary>
+    public Func<bool> CanCommitCargoTransaction { get; set; }
+
+    /// <summary>Optional projected currency after the current market draft.</summary>
+    public Func<long> ProjectedCurrencyAfterCargoTransaction { get; set; }
+
+    /// <summary>
+    /// Optional integration boundary used when the whole preparation is cancelled.
+    /// It must discard presentation draft only and must not mutate saved cargo.
+    /// </summary>
+    public Action CancelCargoTransactionDraft { get; set; }
+
     [Header("상점 데이터")]
     [SerializeField] private TradeItemData[] shopItems = Array.Empty<TradeItemData>();
     [SerializeField] private int[] initialStocks = Array.Empty<int>();
+    private long[] marketBuyUnitPrices = Array.Empty<long>();
 
     [Header("무역 준비 값")]
     [SerializeField] private WagonData selectedWagon;
@@ -92,6 +112,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private int selectedShopIndex = -1;
     private int selectedPurchaseCount = 1;
     private long pendingPurchaseCost;
+    private string cargoTransactionError = string.Empty;
     private bool cargoEditingEnabled = true;
     private Coroutine panelAnimation;
     private Coroutine popupAnimation;
@@ -117,11 +138,13 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     public int LoadedFood => loadedLines
         .Where(line => line.Item != null && IsFood(line.Item))
         .Sum(line => line.Quantity);
-    public bool CanProceed => pendingPurchaseCost <= currentGold
+    public bool CanProceed => (CanCommitCargoTransaction?.Invoke() ?? pendingPurchaseCost <= currentGold)
         && CurrentLoad <= MaximumLoad + 0.0001f
         && LoadedSlotCount <= InventorySlotLimit;
     private int LoadedSlotCount => loadedLines.Count(line => line.Item != null && line.Quantity > 0);
-    public long MercenaryBudget => Math.Max(0L, currentGold - pendingPurchaseCost);
+    public long MercenaryBudget => ProjectedCurrencyAfterCargoTransaction != null
+        ? Math.Max(0L, ProjectedCurrencyAfterCargoTransaction())
+        : Math.Max(0L, currentGold - pendingPurchaseCost);
 
     private float GetCoreMaximumLoad()
     {
@@ -189,11 +212,23 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         TradeItemData[] items,
         int[] stocks)
     {
+        Configure(availableGold, maxLoad, foodRequirement, items, stocks, (long[])null);
+    }
+
+    public void Configure(
+        long availableGold,
+        float maxLoad,
+        int foodRequirement,
+        TradeItemData[] items,
+        int[] stocks,
+        long[] buyUnitPrices)
+    {
         currentGold = Math.Max(0, availableGold);
         maximumLoad = Mathf.Max(0f, maxLoad);
         requiredFood = Mathf.Max(0, foodRequirement);
         shopItems = items ?? Array.Empty<TradeItemData>();
         initialStocks = stocks ?? Array.Empty<int>();
+        marketBuyUnitPrices = buyUnitPrices ?? Array.Empty<long>();
 
         EnsureDynamicSlots();
         WireSlotInteractions();
@@ -227,7 +262,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             int quantity = useOwnedCargo
                 ? quantityToLoad
                 : Mathf.Min(quantityToLoad, remainingStocks[shopIndex]);
-            long unitPrice = useOwnedCargo ? 0L : shopItems[shopIndex].BaseBuyPrice;
+            long unitPrice = useOwnedCargo ? 0L : GetMarketBuyUnitPrice(shopIndex);
             if (quantity <= 0 || !TryAddLoadedQuantity(
                     shopItems[shopIndex],
                     quantity,
@@ -238,7 +273,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (!useOwnedCargo)
             {
                 remainingStocks[shopIndex] -= quantity;
-                pendingPurchaseCost += shopItems[shopIndex].BaseBuyPrice * quantity;
+                pendingPurchaseCost += GetMarketBuyUnitPrice(shopIndex) * quantity;
             }
         }
 
@@ -250,6 +285,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         cargoEditingEnabled = enabled;
         ClosePurchasePopupImmediate();
+    }
+
+    public void SetCargoTransactionError(string errorCode)
+    {
+        cargoTransactionError = errorCode ?? string.Empty;
+        RefreshStatus();
     }
 
     public void Configure(
@@ -336,6 +377,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void BackToPreviousStep()
     {
+        // Returning to wagon/animal selection can change cargo capacity, so discard only the
+        // uncommitted market draft. Saved cargo and previously committed trades remain intact.
+        CancelCargoTransactionDraft?.Invoke();
         ClosePurchasePopupImmediate();
         HidePanel(() =>
         {
@@ -348,6 +392,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void CancelTradePreparation()
     {
+        CancelCargoTransactionDraft?.Invoke();
         ResetCargo();
         HidePanel(() => onTradeCancelled.Invoke());
     }
@@ -355,6 +400,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     public void ContinueToMercenaryHire()
     {
         if (!CanProceed)
+            return;
+
+        // Market trading is committed at the cargo step, independently from departure.
+        // A failed transaction must not advance to mercenary/summary or start a trade.
+        if (TryCommitCargoTransaction != null && !TryCommitCargoTransaction())
             return;
 
         if (mercenaryHireController == null)
@@ -384,6 +434,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void CancelTradeFromMercenaryHire()
     {
+        CancelCargoTransactionDraft?.Invoke();
         ResetCargo();
         onTradeCancelled.Invoke();
     }
@@ -405,6 +456,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void ClearLoadedSlot(int slotIndex)
     {
+        if (!cargoEditingEnabled)
+            return;
+
         LoadedLine line = GetVisibleLoadedLine(slotIndex);
         if (line == null)
             return;
@@ -914,11 +968,13 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (countText != null)
                 countText.text = $"재고 {remainingStocks[i]}";
             if (priceText != null)
-                priceText.text = $"{item.BaseBuyPrice:N0} G";
+                priceText.text = $"{GetMarketBuyUnitPrice(i):N0} G";
 
             Button button = shopSlots[i].GetComponent<Button>();
             if (button != null)
-                button.interactable = remainingStocks[i] > 0 && GetAffordableCount(item) > 0;
+                button.interactable = cargoEditingEnabled
+                    && remainingStocks[i] > 0
+                    && GetAffordableCount(i) > 0;
         }
 
         UpdateGridContentHeight(shopGrid, shopItems?.Length ?? 0);
@@ -1028,7 +1084,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         if (foodWarningText != null)
         {
-            if (CurrentLoad > MaximumLoad)
+            if (!string.IsNullOrWhiteSpace(cargoTransactionError))
+            {
+                foodWarningText.text = $"Transaction failed: {cargoTransactionError}";
+                foodWarningText.color = new Color(1f, 0.34f, 0.3f);
+            }
+            else if (CurrentLoad > MaximumLoad)
             {
                 foodWarningText.text = "최대 적재량을 초과했습니다.";
                 foodWarningText.color = new Color(1f, 0.34f, 0.3f);
@@ -1122,7 +1183,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             popupInfoText.text =
                 $"{item.Description}\n\n" +
                 $"분류  {item.Category}    등급  {item.Rarity}\n" +
-                $"가격  {item.BaseBuyPrice:N0} G    무게  {item.Weight:0.##}\n" +
+                $"가격  {GetMarketBuyUnitPrice(selectedShopIndex):N0} G    무게  {item.Weight:0.##}\n" +
                 $"{specialty}    재고  {remainingStocks[selectedShopIndex]}";
         }
 
@@ -1137,7 +1198,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         TMP_Text loadLabel = popupLoadButton.GetComponentInChildren<TMP_Text>(true);
         if (loadLabel != null)
-            loadLabel.text = $"적재  {(item.BaseBuyPrice * selectedPurchaseCount):N0} G";
+            loadLabel.text = $"적재  {(GetMarketBuyUnitPrice(selectedShopIndex) * selectedPurchaseCount):N0} G";
     }
 
     private void SetPopupCount(int value)
@@ -1157,7 +1218,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             return 0;
 
         int byStock = remainingStocks[selectedShopIndex];
-        int byMoney = GetAffordableCount(item);
+        int byMoney = GetAffordableCount(selectedShopIndex);
         int byWeight = item.Weight <= 0f
             ? byStock
             : Mathf.FloorToInt(Mathf.Max(0f, MaximumLoad - CurrentLoad) / item.Weight);
@@ -1184,13 +1245,30 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         return partialStackCapacity + emptySlotCount * item.MaxCount;
     }
 
-    private int GetAffordableCount(TradeItemData item)
+    private int GetAffordableCount(int shopIndex)
     {
-        long available = Math.Max(0, currentGold - pendingPurchaseCost);
-        if (item.BaseBuyPrice <= 0)
+        long available = ProjectedCurrencyAfterCargoTransaction != null
+            ? Math.Max(0L, ProjectedCurrencyAfterCargoTransaction())
+            : Math.Max(0L, currentGold - pendingPurchaseCost);
+        long unitPrice = GetMarketBuyUnitPrice(shopIndex);
+        if (unitPrice <= 0)
             return int.MaxValue;
 
-        return (int)Math.Min(int.MaxValue, available / item.BaseBuyPrice);
+        return (int)Math.Min(int.MaxValue, available / unitPrice);
+    }
+
+    private long GetMarketBuyUnitPrice(int shopIndex)
+    {
+        if (shopIndex >= 0
+            && shopIndex < marketBuyUnitPrices.Length
+            && marketBuyUnitPrices[shopIndex] >= 0L)
+        {
+            return marketBuyUnitPrices[shopIndex];
+        }
+
+        return shopIndex >= 0 && shopIndex < shopItems.Length && shopItems[shopIndex] != null
+            ? Math.Max(0L, shopItems[shopIndex].BaseBuyPrice)
+            : 0L;
     }
 
     private void ConfirmPurchase()
@@ -1207,11 +1285,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (item == null || purchaseCount <= 0)
             return;
 
-        if (!TryAddLoadedQuantity(item, purchaseCount, item.BaseBuyPrice))
+        long unitPrice = GetMarketBuyUnitPrice(selectedShopIndex);
+        if (!TryAddLoadedQuantity(item, purchaseCount, unitPrice))
             return;
 
         remainingStocks[selectedShopIndex] -= purchaseCount;
-        pendingPurchaseCost += item.BaseBuyPrice * purchaseCount;
+        pendingPurchaseCost += unitPrice * purchaseCount;
 
         ClosePurchasePopup();
         RefreshAll();
@@ -1225,6 +1304,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// </summary>
     private void NotifyLoadChanged()
     {
+        cargoTransactionError = string.Empty;
         var quantityByItemId = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (LoadedLine line in loadedLines)

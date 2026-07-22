@@ -288,7 +288,7 @@ Inspector 연결:
 5. 화폐·재고·보유량·중량·슬롯 초과 거래가 차단된다.
 6. Market을 닫으면 Town으로 돌아온다.
 7. Town에서 다음 무역 준비를 시작할 수 있다.
-8. Cargo 준비 화면에 저장 Cargo 전체가 읽기 전용으로 표시된다.
+8. Cargo 준비 화면에서 저장 Cargo와 현재 Market 상품을 기준으로 구매·판매할 수 있다.
 9. 출발 후 이동과 정산을 지나도 판매하지 않은 Cargo가 유지된다.
 10. 도착 시 Settlement 패널을 기다리지 않고 자동 claim 후 Town이 표시된다.
 
@@ -301,10 +301,72 @@ Inspector 연결:
 
 ## 현재 자동 검증 결과
 
-- `Market inventory integration probe passed.` — v20
+- 마지막 Unity 실행 결과: `Market inventory integration probe passed.` — 구형 결과
+- 최신 코드 기준 v26 프로브는 재컴파일 시 자동 실행되며, 수동 메뉴 실행 후에도 아래 5.5의 신규 항목을 확인할 수 있다.
 - `Trade preparation entry probe passed (3/3).`
 - `Trade prepare cargo preservation probe passed (4/4).`
 - Framework 자동 도착 claim E2E 통과 로그 확인 완료
 - `git diff --check` 통과
 
 현재 Scene/Prefab asset은 이 작업에서 수정하지 않았다.
+
+## 5. 2026-07-22 최종 정정: Cargo 거래와 출발 Commit 분리
+
+이 절은 위의 과거 기록보다 우선하는 현재 기준이다.
+
+### 5.1 확정 플로우
+
+```text
+경로 선택
+-> 상단 선택
+-> 마차와 말 선택
+-> CargoLoadingPanelController에서 현재 마을 상품 구매·판매
+-> MarketTransactionCommand 즉시 저장
+-> 용병 선택
+-> Summary
+-> Depart는 이미 저장된 cargo로 출발만 확정
+-> 이동 중 이벤트·화물 손실
+-> 도착 Claim
+-> 잔존 cargo를 유지한 채 Town 진입
+```
+
+### 5.2 CargoLoadingPanelController의 현재 책임
+
+- 단순 읽기 전용 Cargo View가 아니다.
+- `SaveData.caravan.cargo`와 현재 마을 `MarketData`를 표시한다.
+- 기존 cargo 수량과 최종 적재 수량의 차이를 구매·판매 delta로 변환한다.
+- 선택한 마차·말의 중량과 슬롯 제한을 적용한다.
+- Next 클릭 시 시장 거래를 먼저 확정한다.
+- 거래 저장 실패 시 Cargo 패널에 남고 실패 코드를 표시한다.
+- 뒤로 가기는 미확정 draft만 폐기하며 이미 저장된 거래는 되돌리지 않는다.
+
+### 5.3 데이터 소유권
+
+```text
+CargoLoadingPanelController = 표시·입력
+MarketTradePanelModel       = buyDraft·sellDraft·preview
+MarketInventorySession      = 시장·cargo 조회
+MarketTransactionCommand    = currency·market stock·cargo 원자적 저장
+TradePrepareStartAdapter    = 출발 snapshot·용병·경로, 시장 거래 책임 없음
+Travel Settlement           = 이동 비용·이벤트·실제 화물 손실, 자동 판매 없음
+```
+
+### 5.4 출발 Commit 금지 항목
+
+`TradePrepareStartAdapter` 출발 commit은 다음 값을 반드시 제외한다.
+
+- `purchaseCost = 0`
+- `purchasedItems = []`
+- `estimatedSellRevenue = 0`
+
+시장 구매·판매는 Cargo 단계에서 이미 저장되었으므로 Summary/Depart/도착 정산에서 다시 차감·지급하지 않는다.
+
+### 5.5 검증 기준
+
+- `cargo_panel_final_quantity_to_market_delta`
+- `committed_market_cargo_is_departure_source_without_duplicate_charge`
+- `departure_commit_excludes_market_purchase_and_sale_settlement`
+- `trade_feature_prefab_runtime_market_wiring`
+- Cargo Next 성공 로그: `[TradePrepare Market] Cargo transaction committed.`
+- Cargo Next 실패 로그: `[TradePrepare Market] Cargo transaction failed: ERROR_CODE`
+- Summary Depart 시 시장 거래 로그와 추가 재화 변경이 없어야 한다.

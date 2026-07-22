@@ -37,10 +37,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         public float maxLoad;
         public TradeItemViewData[] selectedItems;
         public bool automaticCargoLoading;
+        public bool restoreOwnedCargo;
         public long gold;                 // 현재 소지 골드
         public int requiredFood;          // 반드시 적재해야 하는 먹이 수
         public TradeItemData[] shopItems; // 상점 판매 아이템(정헌님 Cargo 계약)
         public int[] stocks;              // 아이템별 재고(shopItems와 같은 순서)
+        public long[] buyUnitPrices;      // 현재 시장 갱신 구간의 확정 구매 단가
     }
 
     /// <summary>⑥ 요약 계산 질의 — 매니저가 아는 확정 선택값. 계산은 데이터 소스가 담당.</summary>
@@ -456,11 +458,27 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         {
             CargoConfig cfg = CargoProvider();
             float maxLoad = cfg.maxLoad > 0f ? cfg.maxLoad : ComputeMaxLoad();
-            cargoPanel.Configure(cfg.gold, maxLoad, cfg.requiredFood, cfg.shopItems, cfg.stocks);
+            cargoPanel.Configure(
+                cfg.gold,
+                maxLoad,
+                cfg.requiredFood,
+                cfg.shopItems,
+                cfg.stocks,
+                cfg.buyUnitPrices);
             cargoPanel.SetCargoEditingEnabled(!cfg.automaticCargoLoading);
-            cargoPanel.RestoreSelectedCargo(cfg.selectedItems, cfg.automaticCargoLoading);
+            cargoPanel.RestoreSelectedCargo(cfg.selectedItems, cfg.restoreOwnedCargo);
         }
         ShowOnly(3);
+    }
+
+    /// <summary>
+    /// Rebuilds S4 after Framework/SharedGameData finishes loading, but only while the Cargo
+    /// screen is currently visible. This avoids changing the user's active preparation step.
+    /// </summary>
+    public void RefreshCargoIfVisible()
+    {
+        if (cargoPanel != null && cargoPanel.gameObject.activeInHierarchy)
+            GoCargo();
     }
 
     /// <summary>현재 상단 구성의 최대 적재량 = 웨건 기본 + Σ(동물 최대적재 증가치 × 마릿수).</summary>

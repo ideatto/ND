@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using ND.Framework;
 using FrameworkSaveData = ND.Framework.SaveData;
@@ -82,6 +83,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     public void SelectWagon(string wagonId) => flowController?.SelectWagon(wagonId);
     public void SetAnimalQuantity(string animalId, int quantity) => flowController?.SetAnimalQuantity(animalId, quantity);
     public void SetBuyItemQuantity(string itemId, int quantity) => flowController?.SetBuyItemQuantity(itemId, quantity);
+    public void ClearCargoDraft() => flowController?.ClearCargo();
     public void SelectMercenary(string mercenaryId) => flowController?.SelectMercenary(mercenaryId);
     public void DeselectMercenary(string mercenaryId) => flowController?.DeselectMercenary(mercenaryId);
 
@@ -97,6 +99,21 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
                 ? currentTown.Market.TradeItems
                 : null,
             item => item != null ? item.ItemId : string.Empty);
+    }
+
+    public MarketData[] GetAvailableMarkets()
+    {
+        return (towns ?? Array.Empty<TownData>())
+            .Where(town => town != null && town.Market != null)
+            .Select(town => town.Market)
+            .GroupBy(market => market.MarketId ?? string.Empty, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+    }
+
+    public void RefreshFromCurrentSaveData()
+    {
+        flowController?.Refresh();
     }
 
     public TradePrepareStartResult TryStartTrade(string tradeId, bool saveImmediately = true)

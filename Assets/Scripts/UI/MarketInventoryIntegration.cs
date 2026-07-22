@@ -242,6 +242,11 @@ namespace ND.Framework.CargoLoading
             }
 
             created.EnsureSaveContainers();
+            if (!created.TryRestoreStoredDraftAnimalFoodToCargo())
+            {
+                error = ErrorSaveFailed;
+                return false;
+            }
             if (!created.TryResolveOrRefreshInventory())
             {
                 error = ErrorSaveFailed;
@@ -250,6 +255,42 @@ namespace ND.Framework.CargoLoading
 
             session = created;
             return true;
+        }
+
+        /// <summary>
+        /// Travel represents draft-animal food through CaravanSaveData.foodAmount instead of a
+        /// Cargo entry. Once the caravan is back in Town, restore the remaining whole units to
+        /// their trade-item form so the next Market screen can display, reuse, or sell them.
+        /// </summary>
+        private bool TryRestoreStoredDraftAnimalFoodToCargo()
+        {
+            int storedQuantity = Math.Max(0, saveData.caravan.foodAmount);
+            if (storedQuantity == 0)
+                return true;
+
+            TradeItemData foodItem = catalogById.Values.FirstOrDefault(
+                item => item != null && item.Category == TradeItemCategory.DraftAnimalsFood);
+            if (foodItem == null)
+                return true;
+
+            int foodBefore = saveData.caravan.foodAmount;
+            List<CargoEntrySaveData> cargoBefore = CloneCargo(saveData.caravan.cargo);
+            try
+            {
+                ApplyCargoDelta(foodItem.ItemId, storedQuantity);
+                saveData.caravan.foodAmount = 0;
+                SaveResult saveResult = saveService.Save(saveData);
+                if (saveResult != null && saveResult.Succeeded)
+                    return true;
+            }
+            catch
+            {
+                // Restore below so callers see the same state regardless of failure source.
+            }
+
+            saveData.caravan.foodAmount = foodBefore;
+            saveData.caravan.cargo = cargoBefore;
+            return false;
         }
 
         internal MarketTransactionResult ExecuteTransaction(

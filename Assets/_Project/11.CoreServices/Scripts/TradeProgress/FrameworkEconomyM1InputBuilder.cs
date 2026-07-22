@@ -69,7 +69,9 @@ namespace ND.Framework
                     DevelopmentCurrency = saveData.player.developmentCurrency
                 },
                 TradeId = saveData.tradeProgress.activeTradeId ?? string.Empty,
-                FoodCost = routeDefinition.BaseFoodCost,
+                // 먹이는 출발 마켓에서 일반 상품처럼 구매되어 이미 tradingCurrency에 반영된다.
+                // 경로 기본 식량비까지 정산에서 다시 차감하면 같은 먹이를 이중 결제하게 된다.
+                FoodCost = 0L,
                 MercenaryCost = routeDefinition.BaseMercenaryCost,
                 CartRepairCost = cartRepairCost,
                 LoanRepayment = 0L,

@@ -59,6 +59,7 @@ namespace ND.Framework.Editor
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
+            RunAutomaticArrivalClaimE2E();
             var context = TestContext.Create();
             RunLoopIntegritySmoke(context);
             RunEconomyE2E(context);
@@ -1539,6 +1540,66 @@ namespace ND.Framework.Editor
             }
 
             Debug.Log("[Framework M1 E2E] Atomic claim rollback, normal claim, Town event, duplicate reject, relaunch, and destination validation passed.");
+        }
+
+        private static void RunAutomaticArrivalClaimE2E()
+        {
+            var context = TestContext.Create(new ConfigurableSaveService());
+            var bridgeObject = new GameObject("SettlementAutoArrivalE2E");
+            var bridge = bridgeObject.AddComponent<SettlementUiBridge>();
+            bridge.Initialize(
+                () => context.SaveData,
+                context.Coordinator,
+                context.ScreenRouter,
+                autoClaimOnArrival: true);
+
+            int settlementScreenEvents = 0;
+            int townScreenEvents = 0;
+            Action<InGameScreenState> onScreenChanged = state =>
+            {
+                if (state == InGameScreenState.Settlement) settlementScreenEvents++;
+                if (state == InGameScreenState.Town) townScreenEvents++;
+            };
+            FrameworkEvents.InGameScreenChanged += onScreenChanged;
+
+            try
+            {
+                CaravanData caravan = CreateSampleCaravan(context.GameTime);
+                if (!context.TradeStart.TryStartTrade(
+                        caravan,
+                        DistanceKm,
+                        "editor_auto_arrival_claim",
+                        RouteId).canDepart)
+                {
+                    throw new InvalidOperationException("Automatic arrival E2E failed to start trade.");
+                }
+
+                context.Coordinator.ForceCompleteActiveTrade();
+
+                bool pendingCleared = context.SaveData.pendingSettlement == null
+                    || !context.SaveData.pendingSettlement.hasResult;
+                if (!pendingCleared
+                    || context.SaveData.tradeProgress.state == TradeProgressState.SettlementPending
+                    || context.ScreenRouter.CurrentScreenState != InGameScreenState.Town
+                    || settlementScreenEvents != 0
+                    || townScreenEvents != 1
+                    || bridge.HasPendingSettlement)
+                {
+                    throw new InvalidOperationException(
+                        "Automatic arrival E2E failed. "
+                        + $"State={context.SaveData.tradeProgress.state}, "
+                        + $"Screen={context.ScreenRouter.CurrentScreenState}, "
+                        + $"SettlementEvents={settlementScreenEvents}, TownEvents={townScreenEvents}, "
+                        + $"PendingCleared={pendingCleared}, BridgePending={bridge.HasPendingSettlement}.");
+                }
+
+                Debug.Log("[Framework M1 E2E] Automatic arrival claim passed. Settlement UI skipped -> Town.");
+            }
+            finally
+            {
+                FrameworkEvents.InGameScreenChanged -= onScreenChanged;
+                UnityEngine.Object.DestroyImmediate(bridgeObject);
+            }
         }
 
         private static bool ClaimCurrentSettlement(TestContext context)

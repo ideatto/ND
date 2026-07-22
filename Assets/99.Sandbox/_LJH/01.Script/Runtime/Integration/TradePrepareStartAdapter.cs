@@ -263,7 +263,9 @@ public sealed class TradePrepareStartAdapter
             purchaseCost = 0L,
             foodCost = 0L,
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
-            estimatedSellRevenue = viewData.estimatedSellRevenue > 0L ? viewData.estimatedSellRevenue : 0L,
+            // Market sale revenue is committed immediately by MarketTransactionCommand.
+            // Departure/arrival settlement must never credit the carried cargo automatically.
+            estimatedSellRevenue = 0L,
             purchasedItems = new TradeItemBundle[0],
             selectedMercenaryIds = mercenaryIds
         };

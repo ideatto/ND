@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ND.Framework.CargoLoading;
+using ND.UI.Market;
 using UnityEngine;
 
 /// <summary>
@@ -20,12 +23,19 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     [Header("S4 cargo view")]
     [SerializeField] private CargoLoadingPanelController cargoPanel;
+    [SerializeField] private MarketTradePanelController marketTradePanel;
 
     [Header("Departure warning")]
     [SerializeField] private NoticeUI departureWarning;
 
     private void OnEnable()
     {
+        ND.Framework.FrameworkEvents.SharedGameDataLoaded += HandleFrameworkDataReady;
+        ND.Framework.FrameworkEvents.LoadCompleted += HandleFrameworkDataReady;
+        EnsureMarketTradePanel();
+        if (marketTradePanel != null)
+            marketTradePanel.ErrorChanged += HandleMarketErrorChanged;
+
         if (uiManager != null)
         {
             // The existing manager asks providers for S3 data whenever that screen is entered.
@@ -60,10 +70,24 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             animalPanel.OnSelectionChanged += HandleAnimalSelectionChanged;
         }
 
+        if (cargoPanel != null)
+        {
+            cargoPanel.LoadChanged += HandleCargoLoadChanged;
+            cargoPanel.TryCommitCargoTransaction = TryCommitCargoTransaction;
+            cargoPanel.CanCommitCargoTransaction = CanCommitCargoTransaction;
+            cargoPanel.ProjectedCurrencyAfterCargoTransaction = GetProjectedCurrency;
+            cargoPanel.CancelCargoTransactionDraft = CancelCargoTransactionDraft;
+        }
+
     }
 
     private void OnDisable()
     {
+        ND.Framework.FrameworkEvents.SharedGameDataLoaded -= HandleFrameworkDataReady;
+        ND.Framework.FrameworkEvents.LoadCompleted -= HandleFrameworkDataReady;
+        if (marketTradePanel != null)
+            marketTradePanel.ErrorChanged -= HandleMarketErrorChanged;
+
         if (runtimeContext != null)
             runtimeContext.ViewDataChanged -= HandleViewDataChanged;
 
@@ -75,6 +99,19 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             animalPanel.OnWagonSelected -= HandleWagonSelected;
             animalPanel.OnWagonRemoved -= HandleWagonRemoved;
             animalPanel.OnSelectionChanged -= HandleAnimalSelectionChanged;
+        }
+
+        if (cargoPanel != null)
+        {
+            cargoPanel.LoadChanged -= HandleCargoLoadChanged;
+            if (cargoPanel.TryCommitCargoTransaction == TryCommitCargoTransaction)
+                cargoPanel.TryCommitCargoTransaction = null;
+            if (cargoPanel.CanCommitCargoTransaction == CanCommitCargoTransaction)
+                cargoPanel.CanCommitCargoTransaction = null;
+            if (cargoPanel.ProjectedCurrencyAfterCargoTransaction == GetProjectedCurrency)
+                cargoPanel.ProjectedCurrencyAfterCargoTransaction = null;
+            if (cargoPanel.CancelCargoTransactionDraft == CancelCargoTransactionDraft)
+                cargoPanel.CancelCargoTransactionDraft = null;
         }
 
 
@@ -247,6 +284,26 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     private TradePrepareUIManager.CargoConfig BuildCargoConfig()
     {
+        if (TryOpenPreparationMarket())
+        {
+            MarketTradePanelModel marketModel = marketTradePanel.Model;
+            MarketTradeItemState[] marketItems = marketModel.Items
+                .Where(item => item != null && item.Item != null)
+                .ToArray();
+            return new TradePrepareUIManager.CargoConfig
+            {
+                automaticCargoLoading = false,
+                restoreOwnedCargo = true,
+                gold = marketModel.TradingCurrency,
+                maxLoad = marketModel.MaximumCargoWeight,
+                requiredFood = runtimeContext?.CurrentViewData?.requiredDraftAnimalFoodQuantity ?? 0,
+                shopItems = marketItems.Select(item => item.Item).ToArray(),
+                stocks = marketItems.Select(item => Math.Max(0, item.MarketStock)).ToArray(),
+                buyUnitPrices = marketItems.Select(item => Math.Max(0L, item.BuyUnitPrice)).ToArray(),
+                selectedItems = marketItems.Select(CreateCargoViewData).ToArray()
+            };
+        }
+
         TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
         TradeItemData[] availableItems = runtimeContext != null
             ? runtimeContext.GetAvailableTradeItems()
@@ -276,12 +333,163 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         return new TradePrepareUIManager.CargoConfig
         {
             automaticCargoLoading = true,
+            restoreOwnedCargo = true,
             gold = viewData != null ? viewData.currentTradingCurrency : 0L,
             maxLoad = viewData != null ? viewData.maxLoad : 0f,
             requiredFood = viewData != null ? viewData.requiredDraftAnimalFoodQuantity : 0,
             shopItems = items.ToArray(),
             stocks = stocks.ToArray(),
+            buyUnitPrices = items.Select(item => item != null ? Math.Max(0L, item.BaseBuyPrice) : 0L).ToArray(),
             selectedItems = viewData != null ? viewData.tradeItems : Array.Empty<TradeItemViewData>()
+        };
+    }
+
+    private void EnsureMarketTradePanel()
+    {
+        if (marketTradePanel == null)
+            marketTradePanel = GetComponentInChildren<MarketTradePanelController>(true);
+        if (marketTradePanel == null)
+            marketTradePanel = gameObject.AddComponent<MarketTradePanelController>();
+
+        if (runtimeContext != null)
+            marketTradePanel.ConfigureCatalog(runtimeContext.GetAvailableMarkets());
+    }
+
+    private bool TryOpenPreparationMarket()
+    {
+        if (marketTradePanel == null)
+            return false;
+        if (marketTradePanel.IsOpen)
+            return true;
+        if (!IsFrameworkMarketReady())
+            return false;
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData != null)
+            marketTradePanel.Configure(
+                null,
+                Mathf.Max(0f, viewData.maxLoad),
+                Math.Max(0, viewData.maxInventorySlotCount));
+        return marketTradePanel.OpenForTradePreparation();
+    }
+
+    private void HandleFrameworkDataReady(ND.Framework.ISharedGameDataProvider _)
+    {
+        RefreshCargoMarketAfterFrameworkLoad();
+    }
+
+    private void HandleFrameworkDataReady(ND.Framework.SaveData _)
+    {
+        RefreshCargoMarketAfterFrameworkLoad();
+    }
+
+    private void RefreshCargoMarketAfterFrameworkLoad()
+    {
+        EnsureMarketTradePanel();
+        if (runtimeContext != null)
+            marketTradePanel.ConfigureCatalog(runtimeContext.GetAvailableMarkets());
+        uiManager?.RefreshCargoIfVisible();
+    }
+
+    private static bool IsFrameworkMarketReady()
+    {
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        return root != null
+            && root.CurrentSaveData != null
+            && root.SaveService != null
+            && root.GameTime != null
+            && root.SharedGameData != null
+            && root.SharedGameData.IsLoaded;
+    }
+
+    private void HandleCargoLoadChanged(IReadOnlyList<CargoLoadingPanelController.CargoSelection> snapshot)
+    {
+        if (!TryOpenPreparationMarket() || marketTradePanel.Model == null)
+            return;
+
+        List<MarketTransactionLine> lines = CargoMarketTransactionDeltaBuilder.Build(
+            snapshot,
+            marketTradePanel.Model.Items);
+
+        marketTradePanel.CancelDraft();
+        foreach (MarketTransactionLine line in lines)
+        {
+            marketTradePanel.SetBuyDraft(line.ItemId, line.BuyQuantity);
+            marketTradePanel.SetSellDraft(line.ItemId, line.SellQuantity);
+        }
+
+        MarketTradePanelModel model = marketTradePanel.Model;
+        cargoPanel?.SetCargoTransactionError(
+            model != null && model.HasDraft && !model.CanCommit
+                ? model.DraftValidationError
+                : string.Empty);
+    }
+
+    private bool CanCommitCargoTransaction()
+    {
+        MarketTradePanelModel model = marketTradePanel != null ? marketTradePanel.Model : null;
+        return model != null && (!model.HasDraft || model.CanCommit);
+    }
+
+    private long GetProjectedCurrency()
+    {
+        return marketTradePanel?.Model?.ProjectedTradingCurrency ?? 0L;
+    }
+
+    private bool TryCommitCargoTransaction()
+    {
+        MarketTradePanelModel model = marketTradePanel != null ? marketTradePanel.Model : null;
+        if (model == null)
+        {
+            cargoPanel?.SetCargoTransactionError(MarketInventoryMutationSession.ErrorInvalidFramework);
+            return false;
+        }
+        if (!model.HasDraft)
+            return true;
+
+        MarketTransactionResult result = marketTradePanel.Commit();
+        if (!result.Success)
+        {
+            Debug.LogError(
+                $"[TradePrepare Market] Cargo transaction failed: {result.ErrorCode}",
+                this);
+            return false;
+        }
+
+        runtimeContext?.ClearCargoDraft();
+        runtimeContext?.RefreshFromCurrentSaveData();
+        Debug.Log(
+            $"[TradePrepare Market] Cargo transaction committed. " +
+            $"Cost={result.PurchaseCost}, Revenue={result.SaleRevenue}, " +
+            $"Currency={result.TradingCurrencyAfter}",
+            this);
+        return true;
+    }
+
+    private void HandleMarketErrorChanged(string errorCode)
+    {
+        cargoPanel?.SetCargoTransactionError(errorCode);
+    }
+
+    private void CancelCargoTransactionDraft()
+    {
+        marketTradePanel?.CancelDraft();
+    }
+
+    private static TradeItemViewData CreateCargoViewData(MarketTradeItemState item)
+    {
+        return new TradeItemViewData
+        {
+            itemId = item.ItemId,
+            displayName = item.Item.DisplayName,
+            icon = item.Item.Icon,
+            purchasePrice = item.BuyUnitPrice,
+            sellPrice = item.SellUnitPrice,
+            ownedAmount = Math.Max(0, item.CargoQuantity),
+            contentQuantityLimit = Math.Max(0, item.MarketStock),
+            hasAuthoritativeStock = true,
+            unitWeight = Math.Max(0f, item.Item.Weight),
+            canBuy = item.MarketStock > 0,
+            canSell = item.CargoQuantity > 0
         };
     }
 

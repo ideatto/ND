@@ -31,13 +31,15 @@ using ND.Framework.CargoLoading;
 using ND.UI.Market;
 using UnityEditor;
 using UnityEngine;
+using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
 using FrameworkPlayerSaveData = ND.Framework.PlayerSaveData;
 using FrameworkSaveData = ND.Framework.SaveData;
+using FrameworkTradeProgressSaveData = ND.Framework.TradeProgressSaveData;
 
 [InitializeOnLoad]
 public static class MarketInventoryIntegrationProbe
 {
-    private const string SessionKey = "ND.MarketInventoryIntegrationProbe.20260722.v20";
+    private const string SessionKey = "ND.MarketInventoryIntegrationProbe.20260722.v27";
     private const string ResultFileName = "market-integration-test-result.json";
 
     static MarketInventoryIntegrationProbe()
@@ -47,6 +49,12 @@ public static class MarketInventoryIntegrationProbe
 
         SessionState.SetBool(SessionKey, true);
         EditorApplication.delayCall += Run;
+    }
+
+    [MenuItem("Tools/ND/Validation/Run Market Inventory Integration Probe")]
+    private static void RunFromMenu()
+    {
+        Run();
     }
 
     private static void Run()
@@ -65,11 +73,16 @@ public static class MarketInventoryIntegrationProbe
             VerifyDeltaTransactionAndRollback(catalog, checks);
             VerifyRejectedTransactionsDoNotMutate(catalog, checks);
             VerifyPanelDraftIsolation(catalog, checks);
+            VerifyCargoPanelDeltaAdapter(checks);
+            VerifyCommittedMarketCargoUsedAtDeparture(catalog, checks);
+            VerifyDepartureCommitExcludesMarketSettlement(checks);
             VerifyTownMarketAccessBoundaries(checks);
             VerifyTownMarketScreenTransitions(checks);
             VerifyCurrentTownMarketResolution(checks);
             VerifySavedCaravanCargoWeightLimit(checks);
             VerifyDestinationMarketCanSellCarriedForeignItem(catalog, checks);
+            VerifyStoredDraftAnimalFoodReturnsToCargo(catalog, checks);
+            VerifyTradeFeaturePrefabRuntimeWiring(checks);
             WriteResult(resultPath, true, checks, string.Empty);
             Debug.Log("Market inventory integration probe passed.");
         }
@@ -170,14 +183,27 @@ public static class MarketInventoryIntegrationProbe
 
     private static FrameworkSaveData NewSave(long currency)
     {
-        return new FrameworkSaveData
+        const string caravanId = "market-probe-caravan";
+        var save = new FrameworkSaveData
         {
+            selectedCaravanId = caravanId,
             player = new FrameworkPlayerSaveData
             {
                 currentTownId = "town-a",
                 tradingCurrency = currency
             }
         };
+
+        save.caravan = new FrameworkCaravanSaveData
+        {
+            caravanId = caravanId
+        };
+        save.tradeProgress = new FrameworkTradeProgressSaveData
+        {
+            caravanId = caravanId,
+            state = ND.Framework.TradeProgressState.Completed
+        };
+        return save;
     }
 
     private static void VerifyTownMarketAccessBoundaries(List<string> checks)
@@ -198,7 +224,52 @@ public static class MarketInventoryIntegrationProbe
         Assert(MarketTradePanelController.ValidateTownMarketAccess(
                 save, sharedData, "river-market") == MarketTradePanelController.ErrorNotInTown,
             "Market access must be rejected while traveling.");
+
+        save.tradeProgress.state = ND.Framework.TradeProgressState.Preparing;
+        Assert(MarketTradePanelController.ValidateTownMarketAccess(
+                save, sharedData, "river-market") == MarketTradePanelController.ErrorNotInTown,
+            "Ordinary market panels must remain unavailable during preparation.");
+        Assert(MarketTradePanelController.ValidateTownMarketAccess(
+                save, sharedData, "river-market", true) == string.Empty,
+            "Cargo preparation must explicitly opt in before using the current-town market.");
+        Assert(MarketTradePanelController.ValidateTownMarketAccess(
+                save, sharedData, "other-market", true) == MarketTradePanelController.ErrorTownMarketMismatch,
+            "Preparation access must never bypass the current-town market ID check.");
+
+        save.tradeProgress.state = ND.Framework.TradeProgressState.Traveling;
+        Assert(MarketTradePanelController.ValidateTownMarketAccess(
+                save, sharedData, "river-market", true) == MarketTradePanelController.ErrorNotInTown,
+            "Preparation opt-in must not allow market access while traveling.");
         checks.Add("town_market_access_state_and_id_validation");
+    }
+
+    private static void VerifyTradeFeaturePrefabRuntimeWiring(List<string> checks)
+    {
+        const string prefabPath = "Assets/_Project/08.Prefabs/UI/Trade/TradeFeature.prefab";
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        Assert(prefab != null, "TradeFeature prefab must exist for the production preparation flow.");
+
+        TradePrepareUiRuntimeBinding binding =
+            prefab.GetComponentInChildren<TradePrepareUiRuntimeBinding>(true);
+        TradePrepareRuntimeContextProvider runtimeContext =
+            prefab.GetComponentInChildren<TradePrepareRuntimeContextProvider>(true);
+        CargoLoadingPanelController cargoPanel =
+            prefab.GetComponentInChildren<CargoLoadingPanelController>(true);
+
+        Assert(binding != null,
+            "TradeFeature must contain TradePrepareUiRuntimeBinding.");
+        Assert(runtimeContext != null,
+            "TradeFeature must contain TradePrepareRuntimeContextProvider.");
+        Assert(cargoPanel != null,
+            "TradeFeature must contain CargoLoadingPanelController.");
+
+        var serializedBinding = new SerializedObject(binding);
+        Assert(serializedBinding.FindProperty("runtimeContext")?.objectReferenceValue == runtimeContext,
+            "TradePrepareUiRuntimeBinding.runtimeContext must reference the TradeFeature runtime provider.");
+        Assert(serializedBinding.FindProperty("cargoPanel")?.objectReferenceValue == cargoPanel,
+            "TradePrepareUiRuntimeBinding.cargoPanel must reference the production Cargo panel.");
+
+        checks.Add("trade_feature_prefab_runtime_market_wiring");
     }
 
     private static void VerifyTownMarketScreenTransitions(List<string> checks)
@@ -452,6 +523,158 @@ public static class MarketInventoryIntegrationProbe
         checks.Add("market_panel_draft_isolation_cancel_commit_and_failed_retry");
     }
 
+    private static void VerifyCargoPanelDeltaAdapter(List<string> checks)
+    {
+        var marketItems = new[]
+        {
+            new MarketTradeItemState { ItemId = "cloth", CargoQuantity = 3 },
+            new MarketTradeItemState { ItemId = "bread", CargoQuantity = 1 },
+            new MarketTradeItemState { ItemId = "apple", CargoQuantity = 0 }
+        };
+        var finalCargo = new[]
+        {
+            new CargoLoadingPanelController.CargoSelection { itemId = "cloth", quantity = 1 },
+            new CargoLoadingPanelController.CargoSelection { itemId = "bread", quantity = 3 },
+            new CargoLoadingPanelController.CargoSelection { itemId = "apple", quantity = 0 }
+        };
+
+        List<MarketTransactionLine> lines = CargoMarketTransactionDeltaBuilder.Build(
+            finalCargo,
+            marketItems);
+
+        MarketTransactionLine cloth = lines.Single(line => line.ItemId == "cloth");
+        MarketTransactionLine bread = lines.Single(line => line.ItemId == "bread");
+        Assert(lines.Count == 2
+            && cloth.BuyQuantity == 0 && cloth.SellQuantity == 2
+            && bread.BuyQuantity == 2 && bread.SellQuantity == 0,
+            "Cargo final quantities must convert to explicit buy/sell deltas only.");
+        checks.Add("cargo_panel_final_quantity_to_market_delta");
+    }
+
+    private static void VerifyStoredDraftAnimalFoodReturnsToCargo(
+        TradeItemData[] catalog,
+        List<string> checks)
+    {
+        FrameworkSaveData save = NewSave(1000L);
+        save.caravan.foodAmount = 5;
+        var service = new MemorySaveService(save);
+        bool opened = MarketInventoryMutationSession.TryOpen(
+            save,
+            service,
+            new FixedTimeProvider(new DateTime(2026, 7, 22, 3, 0, 0, DateTimeKind.Utc)),
+            "food-restore-market",
+            catalog,
+            5,
+            20,
+            3600d,
+            20260724,
+            out _,
+            out string error);
+
+        Assert(opened, "Market open must restore stored draft-animal food: " + error);
+        Assert(save.caravan.foodAmount == 0,
+            "Restored draft-animal food must leave the travel-only foodAmount field.");
+        Assert(CargoQuantity(save, "stover") == 5,
+            "Remaining draft-animal food must return to Cargo with its trade-item identity.");
+
+        FrameworkSaveData failingSave = NewSave(1000L);
+        failingSave.caravan.foodAmount = 4;
+        var failingService = new MemorySaveService(failingSave) { FailSaves = true };
+        bool failingOpened = MarketInventoryMutationSession.TryOpen(
+            failingSave,
+            failingService,
+            new FixedTimeProvider(new DateTime(2026, 7, 22, 3, 0, 0, DateTimeKind.Utc)),
+            "food-restore-failure-market",
+            catalog,
+            5,
+            20,
+            3600d,
+            20260724,
+            out _,
+            out string failingError);
+
+        Assert(!failingOpened && failingError == MarketInventoryMutationSession.ErrorSaveFailed,
+            "Failed food restoration save must block Market open with SAVE_FAILED.");
+        Assert(failingSave.caravan.foodAmount == 4 && CargoQuantity(failingSave, "stover") == 0,
+            "Failed food restoration must roll back both foodAmount and Cargo.");
+        checks.Add("remaining_draft_animal_food_returns_to_market_cargo");
+    }
+
+    private static void VerifyCommittedMarketCargoUsedAtDeparture(
+        TradeItemData[] catalog,
+        List<string> checks)
+    {
+        FrameworkSaveData save = NewSave(1000L);
+        TradeItemData cloth = catalog.First(item => item.ItemId == "cloth");
+        save.caravan.cargo.Add(CreateCargo(cloth, 2));
+        var service = new MemorySaveService(save);
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save,
+            service,
+            new FixedTimeProvider(new DateTime(2026, 7, 22, 2, 0, 0, DateTimeKind.Utc)),
+            "departure-market",
+            catalog,
+            4,
+            20,
+            3600d,
+            20260723,
+            out MarketInventoryMutationSession session,
+            out string error), error);
+
+        var model = new MarketTradePanelModel(session, 1000f, 20);
+        MarketTradeItemState purchase = model.Items.First(item => item.MarketStock > 0);
+        Assert(model.SetBuyDraft(purchase.ItemId, 1),
+            "Could not stage the market purchase used by departure preservation validation.");
+        MarketTransactionResult transaction = model.Commit();
+        Assert(transaction.Success, transaction.ErrorCode);
+
+        long currencyAfterMarketCommit = save.player.tradingCurrency;
+        Dictionary<string, int> savedCargo = save.caravan.cargo
+            .Where(entry => entry?.item != null && entry.quantity > 0)
+            .GroupBy(entry => entry.item.itemId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Sum(entry => entry.quantity), StringComparer.Ordinal);
+        var departureDraft = new TradePrepareDraft();
+        Dictionary<string, int> departureCargo = TradePrepareCaravanFactory.CreateFinalCargoQuantities(
+            departureDraft,
+            save);
+
+        Assert(savedCargo.Count == departureCargo.Count
+            && savedCargo.All(pair => departureCargo.TryGetValue(pair.Key, out int quantity)
+                && quantity == pair.Value),
+            "Departure with an empty purchase draft must use the already committed SaveData cargo exactly once.");
+        Assert(save.player.tradingCurrency == currencyAfterMarketCommit,
+            "Building departure cargo must not charge the committed market transaction again.");
+        checks.Add("committed_market_cargo_is_departure_source_without_duplicate_charge");
+    }
+
+    private static void VerifyDepartureCommitExcludesMarketSettlement(List<string> checks)
+    {
+        MethodInfo createCommit = typeof(TradePrepareStartAdapter).GetMethod(
+            "CreateCommitData",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert(createCommit != null, "Trade preparation commit factory was not found.");
+
+        var viewData = new TradePrepareViewData
+        {
+            totalPurchaseCost = 400L,
+            estimatedSellRevenue = 900L,
+            mercenaryCost = 50L
+        };
+        var commit = createCommit.Invoke(
+            null,
+            new object[] { new TradePrepareDraft(), viewData, "market-separated", "route" })
+            as TradePrepareCommitData;
+
+        Assert(commit != null
+            && commit.purchaseCost == 0L
+            && commit.estimatedSellRevenue == 0L
+            && (commit.purchasedItems == null || commit.purchasedItems.Length == 0),
+            "Departure commit must exclude already committed market purchases and automatic sale revenue.");
+        Assert(commit.mercenaryCost == 50L,
+            "Separating market settlement must preserve non-market departure costs.");
+        checks.Add("departure_commit_excludes_market_purchase_and_sale_settlement");
+    }
+
     private static void VerifyDeltaTransactionAndRollback(TradeItemData[] catalog, List<string> checks)
     {
         DateTime time = new DateTime(2026, 7, 14, 2, 0, 0, DateTimeKind.Utc);
@@ -653,7 +876,8 @@ public static class MarketInventoryIntegrationProbe
             CreateItem("apple", "Apple", TradeItemCategory.Food, 12L, 1f),
             CreateItem("cloth", "Cloth", TradeItemCategory.Material, 30L, 2f),
             CreateItem("fish", "Fish", TradeItemCategory.Material, 20L, 2f),
-            CreateItem("wheat", "Wheat", TradeItemCategory.Material, 8L, 1f)
+            CreateItem("wheat", "Wheat", TradeItemCategory.Material, 8L, 1f),
+            CreateItem("stover", "Stover", TradeItemCategory.DraftAnimalsFood, 1L, 0.1f)
         };
     }
 
