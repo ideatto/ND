@@ -8,26 +8,11 @@ public sealed class TestCaravanOverviewViewDataProvider : ICaravanOverviewViewDa
     public const string PrepareCaravanId = "test-caravan-prepare";
     public const string TravelingCaravanId = "test-caravan-traveling";
 
-    private readonly string selectedCaravanId;
-
-    // Selects the editable Caravan by default so a test UI can immediately exercise the trade button.
-    public TestCaravanOverviewViewDataProvider()
-        : this(PrepareCaravanId)
-    {
-    }
-
-    // Allows tests to preview either occupied slot without adding selection mutation to the Provider contract.
-    public TestCaravanOverviewViewDataProvider(string selectedCaravanId)
-    {
-        this.selectedCaravanId = NormalizeSelectedCaravanId(selectedCaravanId);
-    }
-
     public CaravanOverviewViewData GetOverview()
     {
         // A fresh object graph prevents UI-side changes from mutating later Provider results.
         return new CaravanOverviewViewData
         {
-            selectedCaravanId = selectedCaravanId,
             caravans = new[]
             {
                 CreatePrepareBlock(),
@@ -49,9 +34,7 @@ public sealed class TestCaravanOverviewViewDataProvider : ICaravanOverviewViewDa
             state = JourneyState.Prepare,
             wagonContentId = "test-wagon-walk",
             animalIcons = Array.Empty<AnimalIconViewData>(),
-            cargoIcons = Array.Empty<CargoIconViewData>(),
-            canBeginTradePreparation = true,
-            tradePreparationBlockedReason = string.Empty
+            cargoIcons = Array.Empty<CargoIconViewData>()
         };
     }
 
@@ -80,9 +63,7 @@ public sealed class TestCaravanOverviewViewDataProvider : ICaravanOverviewViewDa
                     itemId = "test-grain",
                     quantity = 10
                 }
-            },
-            canBeginTradePreparation = false,
-            tradePreparationBlockedReason = "A traveling Caravan cannot begin another trade."
+            }
         };
     }
 
@@ -91,8 +72,7 @@ public sealed class TestCaravanOverviewViewDataProvider : ICaravanOverviewViewDa
         return new CaravanBlockViewData
         {
             slotIndex = 2,
-            slotState = CaravanSlotState.Empty,
-            tradePreparationBlockedReason = "Create a Caravan before starting trade preparation."
+            slotState = CaravanSlotState.Empty
         };
     }
 
@@ -102,19 +82,7 @@ public sealed class TestCaravanOverviewViewDataProvider : ICaravanOverviewViewDa
         {
             slotIndex = 3,
             slotState = CaravanSlotState.Locked,
-            lockedReason = "Complete the required quest to unlock this Caravan slot.",
-            tradePreparationBlockedReason = "This Caravan slot is locked."
+            unlockHintText = "Complete the required quest to unlock this Caravan slot."
         };
-    }
-
-    private static string NormalizeSelectedCaravanId(string candidate)
-    {
-        // The fixture only advertises its two occupied IDs; any other value represents no selection.
-        if (candidate == PrepareCaravanId || candidate == TravelingCaravanId)
-        {
-            return candidate;
-        }
-
-        return string.Empty;
     }
 }

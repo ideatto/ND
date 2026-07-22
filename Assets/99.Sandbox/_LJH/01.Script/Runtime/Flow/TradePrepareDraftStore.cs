@@ -9,22 +9,34 @@ public sealed class TradePrepareDraftStore
 
     public event Action<TradePrepareDraft> DraftChanged;
 
-    // Preserves legacy callers that begin preparation before choosing an explicit Caravan.
+    // Opens a fresh preparation session without inheriting the Caravan focused in Overview.
     public void Reset(string currentTownId)
-    {
-        ResetForCaravan(string.Empty, currentTownId);
-    }
-
-    // Starts the route and departure Draft for the Caravan selected in the overview flow.
-    // Equipment and cargo settings remain owned by the selected Caravan and are not recreated here.
-    public void ResetForCaravan(string caravanId, string currentTownId)
     {
         current = new TradePrepareDraft
         {
-            selectedCaravanId = NormalizeId(caravanId),
             currentTownId = NormalizeId(currentTownId)
         };
 
+        NotifyChanged();
+    }
+
+    // Selects the departure Caravan inside TradePrepareUI and discards choices owned by the previous preset.
+    // This prevents route, cargo, equipment, or mercenary data from leaking between Caravan Drafts.
+    public void SelectDepartureCaravan(string caravanId)
+    {
+        var normalizedCaravanId = NormalizeId(caravanId);
+        if (current.departureCaravanId == normalizedCaravanId)
+        {
+            return;
+        }
+
+        current.departureCaravanId = normalizedCaravanId;
+        current.selectedDestinationTownId = string.Empty;
+        current.selectedRouteId = string.Empty;
+        current.selectedWagonId = string.Empty;
+        current.selectedAnimals.Clear();
+        current.selectedBuyItems.Clear();
+        current.ClearMercenaries();
         NotifyChanged();
     }
 

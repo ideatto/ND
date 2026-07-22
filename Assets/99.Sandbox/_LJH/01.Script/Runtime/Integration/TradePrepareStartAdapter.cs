@@ -96,7 +96,27 @@ public sealed class TradePrepareStartAdapter
                 null);
         }
 
-        TradePrepareCommitData commitData = CreateCommitData(draft, viewData, tradeId.Trim(), route.RouteId);
+        if (!TradePrepareCaravanFactory.TryCreateDeparture(
+            draft,
+            context,
+            out CaravanData caravan,
+            out string caravanErrorCode,
+            out string caravanErrorMessage))
+        {
+            return CreateFailure(
+                caravanErrorCode,
+                caravanErrorMessage,
+                tradeId,
+                viewData.startCondition,
+                null);
+        }
+
+        TradePrepareCommitData commitData = CreateCommitData(
+            draft,
+            viewData,
+            tradeId.Trim(),
+            route.RouteId,
+            caravan.caravanId);
         if ((commitData.mercenaryCost > 0L || commitData.purchasedItems.Length > 0) && commitSink == null)
         {
             return CreateFailure(
@@ -120,7 +140,6 @@ public sealed class TradePrepareStartAdapter
                 commitData);
         }
 
-        CaravanData caravan = TradePrepareCaravanFactory.Create(draft, context);
         TradePrepareGatewayResult gatewayResult;
         try
         {
@@ -242,7 +261,8 @@ public sealed class TradePrepareStartAdapter
         TradePrepareDraft draft,
         TradePrepareViewData viewData,
         string tradeId,
-        string routeId)
+        string routeId,
+        string departureCaravanId)
     {
         var mercenaryIds = new string[draft.SelectedMercenaryIds.Count];
         for (int index = 0; index < draft.SelectedMercenaryIds.Count; index++)
@@ -252,8 +272,8 @@ public sealed class TradePrepareStartAdapter
 
         return new TradePrepareCommitData
         {
-            // Keeps the departure snapshot scoped to the Caravan selected before the route flow.
-            caravanId = draft.selectedCaravanId,
+            // Keeps the departure snapshot scoped to the Caravan selected inside TradePrepareUI.
+            caravanId = departureCaravanId,
             tradeId = tradeId,
             currentTownId = draft.currentTownId,
             selectedDestinationTownId = draft.selectedDestinationTownId,

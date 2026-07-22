@@ -16,6 +16,15 @@ public class TradePrepareConditionEvaluator
                     warningMessages = new List<string>()
                 };
 
+            case TradePrepareConditionType.DepartureCaravanNotSelected:
+                return new TradePrepareConditionResult
+                {
+                    canStart = false,
+                    disabledReason = "Select a Caravan preset before starting the trade.",
+                    hasWarning = false,
+                    warningMessages = new List<string>()
+                };
+
             case TradePrepareConditionType.Available:
                 return new TradePrepareConditionResult
                 {
@@ -214,6 +223,9 @@ public class TradePrepareConditionEvaluator
     {
         if (input.isTradeAlreadyActive)
             return Create(TradePrepareConditionType.TradeAlreadyActive);
+
+        if (input.isDepartureCaravanSelectionRequired && !input.isDepartureCaravanSelected)
+            return Create(TradePrepareConditionType.DepartureCaravanNotSelected);
 
         if (!input.isRouteSelected)
             return Create(TradePrepareConditionType.RouteNotSelected);
