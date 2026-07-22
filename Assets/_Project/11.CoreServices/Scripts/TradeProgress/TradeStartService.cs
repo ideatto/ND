@@ -22,6 +22,7 @@
  * Important Notes
  * - tradeId가 기록되지 않으면 출발을 framework blocked 결과로 거부한다.
  * - 즉시 저장 출발은 선택 caravan의 trade progress와 snapshot, 구조 대출 제한 상태를 한 저장 경계에서 확정한다.
+ * - runtime caravanId가 비어 있으면 선택 caravan 저장 ID를 출발 전에 채워 CopyToSave·자산 잠금이 동일 ID를 쓰게 한다.
  */
 using System;
 using ND.Economy;
@@ -82,6 +83,7 @@ namespace ND.Framework
         /// <returns>Core 출발 검증 결과. framework 기록 실패 시 canDepart가 false인 결과를 반환한다.</returns>
         /// <remarks>
         /// 성공 시 선택 caravan의 progress와 snapshot이 변경되고 InGameScreenState.Traveling으로 전환된다.
+        /// runtime caravanId가 비어 있으면 출발 기록 전에 선택 caravan 저장 ID를 runtime에 복사한다.
         /// </remarks>
         public DepartureValidationResult TryStartTrade(
             CaravanData caravan,
@@ -112,6 +114,9 @@ namespace ND.Framework
                 FrameworkLog.Warning("Trade start was blocked because required save data is missing.");
                 return CreateFrameworkBlockedResult();
             }
+
+            // debug/sample runtime은 caravanId를 비운 채 올 수 있다. 선택 저장 caravan ID로 맞춘다.
+            SyncRuntimeCaravanIdFromSave(caravan, saveData.caravan);
 
             var tradeProgressBefore = saveData.tradeProgress;
             var tradeProgressSnapshot = tradeProgressBefore != null
@@ -208,6 +213,25 @@ namespace ND.Framework
             inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
 
             return result;
+        }
+
+        /// <summary>
+        /// runtime caravanId가 비어 있을 때 선택 caravan 저장 ID를 복사한다.
+        /// </summary>
+        /// <remarks>
+        /// ID를 새로 생성하지 않는다. 저장 DTO에도 유효 ID가 없으면 변경하지 않는다.
+        /// </remarks>
+        private static void SyncRuntimeCaravanIdFromSave(CaravanData runtimeCaravan, CaravanSaveData caravanSave)
+        {
+            if (runtimeCaravan == null
+                || !string.IsNullOrEmpty(runtimeCaravan.caravanId)
+                || caravanSave == null
+                || string.IsNullOrEmpty(caravanSave.caravanId))
+            {
+                return;
+            }
+
+            runtimeCaravan.caravanId = caravanSave.caravanId;
         }
 
         private static void RestoreDepartureSnapshot(
