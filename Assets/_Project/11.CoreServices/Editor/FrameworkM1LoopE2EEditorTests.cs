@@ -2795,7 +2795,21 @@ namespace ND.Framework.Editor
                         "Arrival sale pending E2E failed to present the saved settlement explicitly.");
                 }
 
-                Debug.Log("[Framework M1 E2E] Arrival remains pending until sale completion presents settlement.");
+                // Simulate the sell-only market's persisted mutation while the settled runtime
+                // Caravan still contains its pre-sale cargo snapshot.
+                context.SaveData.caravan.cargo.Clear();
+                context.SaveData.caravan.foodAmount = 0;
+
+                if (!bridge.ClaimSettlementAndReset()
+                    || context.SaveData.caravan.cargo.Count != 0
+                    || context.SaveData.caravan.foodAmount != 0)
+                {
+                    throw new InvalidOperationException(
+                        "Arrival sale pending E2E restored sold cargo or consumed food during settlement claim.");
+                }
+
+                Debug.Log(
+                    "[Framework M1 E2E] Arrival sale inventory remained authoritative through settlement claim.");
             }
             finally
             {

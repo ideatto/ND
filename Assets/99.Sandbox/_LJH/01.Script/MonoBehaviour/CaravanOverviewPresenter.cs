@@ -290,6 +290,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         ND.Framework.FrameworkEvents.LoadCompleted += HandleFrameworkLoadCompleted;
         ND.Framework.FrameworkEvents.InGameScreenChanged += HandleInGameScreenChanged;
         ND.Framework.FrameworkEvents.TradeSettlementReady += HandleTradeSettlementReady;
+        ND.Framework.FrameworkEvents.CaravanCargoChanged += HandleCaravanCargoChanged;
     }
 
     private void UnsubscribeFromFrameworkEvents()
@@ -297,6 +298,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         ND.Framework.FrameworkEvents.LoadCompleted -= HandleFrameworkLoadCompleted;
         ND.Framework.FrameworkEvents.InGameScreenChanged -= HandleInGameScreenChanged;
         ND.Framework.FrameworkEvents.TradeSettlementReady -= HandleTradeSettlementReady;
+        ND.Framework.FrameworkEvents.CaravanCargoChanged -= HandleCaravanCargoChanged;
     }
 
     private void HandleFrameworkLoadCompleted(ND.Framework.SaveData _)
@@ -313,6 +315,11 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         string _,
         string __,
         JourneyResultData ___)
+    {
+        Refresh();
+    }
+
+    private void HandleCaravanCargoChanged(string _)
     {
         Refresh();
     }

@@ -21,6 +21,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertTradeResultData();
         AssertCurrencyProjectionScenarios();
         AssertCaravanOverviewViewData();
+        AssertSaveDataCaravanOverviewProvider(item);
         AssertCaravanSettingServices(item);
 
         Debug.Log("ViewData Smoke Test PASSED.");
@@ -783,6 +784,65 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertTradePrepareCaravanSelectionContract();
     }
 
+    private static void AssertSaveDataCaravanOverviewProvider(TradeItemData catalogItem)
+    {
+        var providerObject = new GameObject("SaveDataCaravanOverviewProviderSmokeTest");
+        try
+        {
+            var provider = providerObject.AddComponent<SaveDataCaravanOverviewProviderBehaviour>();
+            provider.SetSaveDataForTests(null);
+            CaravanOverviewViewData unloadedOverview = provider.GetOverview();
+            Debug.Assert(
+                unloadedOverview != null
+                    && unloadedOverview.caravans.Length == SaveDataCaravanOverviewProviderBehaviour.SlotCount
+                    && FindCaravanBlock(unloadedOverview.caravans, 0).slotState == CaravanSlotState.Unknown,
+                "SaveData Caravan Overview Smoke Test failed: an unloaded Framework exposed fixture data.");
+
+            var saveData = new ND.Framework.SaveData();
+            saveData.caravans.Clear();
+            var caravan = new ND.Framework.CaravanSaveData
+            {
+                caravanId = "saved-overview-caravan",
+                state = JourneyState.Prepare
+            };
+            caravan.cargo.Add(new ND.Framework.CargoEntrySaveData
+            {
+                item = new ND.Framework.TradeItemSaveData
+                {
+                    itemId = catalogItem.ItemId,
+                    itemName = catalogItem.DisplayName,
+                    weight = catalogItem.Weight,
+                    basePrice = catalogItem.BaseBuyPrice,
+                    maxCount = catalogItem.MaxCount
+                },
+                quantity = 4
+            });
+            saveData.caravans.Add(caravan);
+            saveData.selectedCaravanId = caravan.caravanId;
+            provider.SetSaveDataForTests(saveData);
+
+            CaravanBlockViewData savedBlock = FindCaravanBlock(provider.GetOverview().caravans, 0);
+            Debug.Assert(
+                savedBlock != null
+                    && savedBlock.slotState == CaravanSlotState.Occupied
+                    && savedBlock.caravanId == caravan.caravanId
+                    && savedBlock.cargoIcons.Length == 1
+                    && savedBlock.cargoIcons[0].itemId == catalogItem.ItemId
+                    && savedBlock.cargoIcons[0].quantity == 4,
+                "SaveData Caravan Overview Smoke Test failed: saved Cargo was not projected.");
+
+            caravan.cargo.Clear();
+            CaravanBlockViewData soldBlock = FindCaravanBlock(provider.GetOverview().caravans, 0);
+            Debug.Assert(
+                soldBlock != null && soldBlock.cargoIcons.Length == 0,
+                "SaveData Caravan Overview Smoke Test failed: sold Cargo remained in the Overview.");
+        }
+        finally
+        {
+            Object.DestroyImmediate(providerObject);
+        }
+    }
+
     // Finds a fixed slot without assuming that a production Provider must return the array in slot order.
     private static CaravanBlockViewData FindCaravanBlock(CaravanBlockViewData[] blocks, int slotIndex)
     {
@@ -1446,6 +1506,61 @@ public class DataViewDataSmokeTest : MonoBehaviour
             Debug.Assert(
                 loadProvider.GetLoadSetting("missing-caravan") == null,
                 "Caravan Load Setting Smoke Test failed: an unknown caravanId must not produce S4 data.");
+
+            var frameworkSaveData = new ND.Framework.SaveData();
+            frameworkSaveData.caravans.Clear();
+            var savedCaravan = new ND.Framework.CaravanSaveData
+            {
+                caravanId = TestCaravanSettingService.PrepareCaravanId,
+                state = JourneyState.Prepare
+            };
+            savedCaravan.cargo.Add(new ND.Framework.CargoEntrySaveData
+            {
+                item = new ND.Framework.TradeItemSaveData
+                {
+                    itemId = catalogItem.ItemId,
+                    itemName = catalogItem.DisplayName,
+                    weight = catalogItem.Weight,
+                    basePrice = catalogItem.BaseBuyPrice,
+                    maxCount = catalogItem.MaxCount
+                },
+                quantity = 5
+            });
+            frameworkSaveData.caravans.Add(savedCaravan);
+            frameworkSaveData.selectedCaravanId = savedCaravan.caravanId;
+            service.SetSaveDataForTests(frameworkSaveData);
+
+            CaravanLoadSettingViewData savedCargoLoad = loadProvider.GetLoadSetting(savedCaravan.caravanId);
+            Debug.Assert(
+                savedCargoLoad != null
+                    && savedCargoLoad.plannedItems.Length == 1
+                    && savedCargoLoad.plannedItems[0].quantity == 5,
+                "Caravan Load Setting Smoke Test failed: Framework SaveData cargo was not authoritative.");
+
+            var frameworkDraft = new CaravanLoadSettingDraft
+            {
+                caravanId = savedCaravan.caravanId,
+                items = new List<CaravanLoadItemDraft>
+                {
+                    new CaravanLoadItemDraft { itemId = catalogItem.ItemId, quantity = 3 }
+                }
+            };
+            CaravanLoadSettingCommandResult frameworkDraftResult = loadCommand.Execute(frameworkDraft);
+            CaravanLoadSettingViewData activeDraftLoad = loadProvider.GetLoadSetting(savedCaravan.caravanId);
+            Debug.Assert(
+                frameworkDraftResult != null
+                    && frameworkDraftResult.succeeded
+                    && activeDraftLoad.plannedItems.Length == 1
+                    && activeDraftLoad.plannedItems[0].quantity == 3,
+                "Caravan Load Setting Smoke Test failed: an active uncommitted cargo draft was not preserved.");
+
+            // Simulate a successful sell-only transaction. Once authoritative SaveData changes,
+            // the old in-memory draft must not repopulate the UI.
+            savedCaravan.cargo.Clear();
+            CaravanLoadSettingViewData soldCargoLoad = loadProvider.GetLoadSetting(savedCaravan.caravanId);
+            Debug.Assert(
+                soldCargoLoad != null && soldCargoLoad.plannedItems.Length == 0,
+                "Caravan Load Setting Smoke Test failed: sold SaveData cargo was restored from plannedCargo.");
         }
         finally
         {

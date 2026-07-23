@@ -734,6 +734,11 @@ namespace ND.Framework
             if (!TryResolveClaimDestination(saveData, progress, out var destinationTownId))
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
 
+            // The destination market commits arrival sales directly to SaveData after the
+            // journey runtime has entered Settling. Reconcile those market-owned fields before
+            // Claim copies the runtime Caravan back, otherwise sold cargo can be restored.
+            CaravanSaveDataMapper.CopyMarketInventoryToRuntime(caravanSave, caravan);
+
             var saveDataSnapshot = JsonUtility.ToJson(saveData);
             var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
             var selectedCaravanIdBeforeClaim = saveData.selectedCaravanId;

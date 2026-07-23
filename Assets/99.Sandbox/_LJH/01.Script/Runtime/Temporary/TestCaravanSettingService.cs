@@ -9,8 +9,8 @@ using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
 /// Provides temporary S3/S4 fixture content while using Framework-owned Caravan identities.
 /// </summary>
 /// <remarks>
-/// This component reads SaveData.caravans for identity and journey state, but its wagon, animal,
-/// cargo catalog, and edit results remain in memory. Replace it with Framework implementations of
+/// This component reads SaveData.caravans for identity, journey state, and committed cargo, while
+/// its wagon, animal, cargo catalog, and uncommitted edit results remain in memory. Replace it with Framework implementations of
 /// ICaravanSettingViewDataProvider, ICaravanSettingCommand, ICaravanLoadSettingViewDataProvider,
 /// ICaravanLoadSettingCommand, ICaravanCargoCatalogProvider, and ITradePrepareCaravanOptionProvider
 /// before production persistence tests. The production implementations must read owned wagon and
@@ -52,6 +52,10 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         SecondAnimalInstanceId
     };
     private readonly List<CaravanLoadItemDraft> plannedCargo = new List<CaravanLoadItemDraft>();
+    private string plannedCargoCaravanId = string.Empty;
+    private string plannedCargoSaveBaseline = string.Empty;
+    private bool hasPlannedCargoDraft;
+    private FrameworkSaveData saveDataOverrideForTests;
 
     public CaravanSettingViewData GetSetting(string caravanId)
     {
@@ -161,9 +165,32 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         bool canEdit = state == JourneyState.Prepare;
         string capacityWagonInstanceId = canEdit ? selectedWagonInstanceId : WagonInstanceId;
         GetCapacity(capacityWagonInstanceId, out float maxLoad, out int maxSlots);
-        CargoItemViewData[] plannedItems = canEdit
-            ? CreatePlannedCargoSnapshot()
-            : Array.Empty<CargoItemViewData>();
+        CargoItemViewData[] plannedItems = Array.Empty<CargoItemViewData>();
+        if (canEdit)
+        {
+            if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
+            {
+                string savedCargoSignature = CreateCargoSignature(savedCaravan);
+                bool useDraft = hasPlannedCargoDraft
+                    && string.Equals(plannedCargoCaravanId, normalizedCaravanId, StringComparison.Ordinal)
+                    && string.Equals(plannedCargoSaveBaseline, savedCargoSignature, StringComparison.Ordinal);
+                if (useDraft)
+                {
+                    plannedItems = CreatePlannedCargoSnapshot();
+                }
+                else
+                {
+                    ClearPlannedCargoDraft();
+                    plannedItems = CreateSavedCargoSnapshot(savedCaravan);
+                }
+            }
+            else
+            {
+                // Standalone smoke fixtures have no FrameworkRoot and intentionally keep their
+                // temporary in-memory plan.
+                plannedItems = CreatePlannedCargoSnapshot();
+            }
+        }
         int usedSlots = plannedItems.Length;
         float currentLoad = 0f;
         for (int index = 0; index < plannedItems.Length; index++)
@@ -261,6 +288,12 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
 
         plannedCargo.Clear();
         plannedCargo.AddRange(validatedItems);
+        if (TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData savedCaravan))
+        {
+            plannedCargoCaravanId = caravanId;
+            plannedCargoSaveBaseline = CreateCargoSignature(savedCaravan);
+            hasPlannedCargoDraft = true;
+        }
         return CaravanLoadSettingCommandResult.Success();
     }
 
@@ -350,6 +383,60 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         cargoCatalog = items ?? Array.Empty<TradeItemData>();
     }
 
+    internal void SetSaveDataForTests(FrameworkSaveData saveData)
+    {
+        saveDataOverrideForTests = saveData;
+        ClearPlannedCargoDraft();
+    }
+
+    private CargoItemViewData[] CreateSavedCargoSnapshot(FrameworkCaravanSaveData caravan)
+    {
+        if (caravan?.cargo == null || caravan.cargo.Count == 0)
+            return Array.Empty<CargoItemViewData>();
+
+        var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        var savedItems = new Dictionary<string, TradeItemSaveData>(StringComparer.Ordinal);
+        for (int index = 0; index < caravan.cargo.Count; index++)
+        {
+            CargoEntrySaveData entry = caravan.cargo[index];
+            string itemId = NormalizeId(entry?.item?.itemId);
+            if (string.IsNullOrEmpty(itemId) || entry.quantity <= 0)
+                continue;
+
+            quantities.TryGetValue(itemId, out int quantity);
+            quantities[itemId] = checked(quantity + entry.quantity);
+            if (!savedItems.ContainsKey(itemId))
+                savedItems.Add(itemId, entry.item);
+        }
+
+        var result = new List<CargoItemViewData>(quantities.Count);
+        foreach (KeyValuePair<string, int> pair in quantities)
+        {
+            TradeItemSaveData savedItem = savedItems[pair.Key];
+            TradeItemData catalogItem = FindCatalogItem(pair.Key);
+            float unitWeight = catalogItem != null
+                ? Mathf.Max(0f, catalogItem.Weight)
+                : Mathf.Max(0f, savedItem.weight);
+            result.Add(new CargoItemViewData
+            {
+                itemId = pair.Key,
+                displayName = catalogItem != null ? catalogItem.DisplayName : savedItem.itemName,
+                icon = catalogItem != null ? catalogItem.Icon : null,
+                category = catalogItem != null ? catalogItem.Category : default,
+                quantity = pair.Value,
+                unitWeight = unitWeight,
+                totalWeight = unitWeight * pair.Value,
+                purchaseUnitPrice = Math.Max(0L, savedItem.basePrice),
+                estimatedSellUnitPrice = catalogItem != null
+                    ? Math.Max(0L, catalogItem.BaseSellPrice)
+                    : Math.Max(0L, savedItem.basePrice),
+                totalPurchasePrice = Math.Max(0L, savedItem.basePrice) * pair.Value
+            });
+        }
+
+        return result.ToArray();
+    }
+
     private CargoItemViewData[] CreatePlannedCargoSnapshot()
     {
         var result = new CargoItemViewData[plannedCargo.Count];
@@ -375,6 +462,53 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         }
 
         return result;
+    }
+
+    private FrameworkSaveData ResolveSaveData()
+    {
+        return saveDataOverrideForTests
+            ?? (FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null);
+    }
+
+    private bool TryGetFrameworkCaravan(
+        string caravanId,
+        out FrameworkCaravanSaveData caravan)
+    {
+        caravan = null;
+        FrameworkSaveData saveData = ResolveSaveData();
+        return saveData != null
+            && SaveDataLookup.TryGetCaravan(saveData, caravanId, out caravan);
+    }
+
+    private static string CreateCargoSignature(FrameworkCaravanSaveData caravan)
+    {
+        if (caravan?.cargo == null || caravan.cargo.Count == 0)
+            return string.Empty;
+
+        var quantities = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        for (int index = 0; index < caravan.cargo.Count; index++)
+        {
+            CargoEntrySaveData entry = caravan.cargo[index];
+            string itemId = NormalizeId(entry?.item?.itemId);
+            if (string.IsNullOrEmpty(itemId) || entry.quantity <= 0)
+                continue;
+
+            quantities.TryGetValue(itemId, out int quantity);
+            quantities[itemId] = checked(quantity + entry.quantity);
+        }
+
+        var signature = new System.Text.StringBuilder();
+        foreach (KeyValuePair<string, int> pair in quantities)
+            signature.Append(pair.Key).Append(':').Append(pair.Value).Append(';');
+        return signature.ToString();
+    }
+
+    private void ClearPlannedCargoDraft()
+    {
+        plannedCargo.Clear();
+        plannedCargoCaravanId = string.Empty;
+        plannedCargoSaveBaseline = string.Empty;
+        hasPlannedCargoDraft = false;
     }
 
     private CaravanSettingViewData CreateSettingSnapshot(
@@ -509,16 +643,14 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         };
     }
 
-    private static bool TryResolveCaravan(
+    private bool TryResolveCaravan(
         string caravanId,
         out JourneyState state,
         out string displayName)
     {
         state = JourneyState.Prepare;
         displayName = string.Empty;
-        FrameworkSaveData saveData = FrameworkRoot.Instance != null
-            ? FrameworkRoot.Instance.CurrentSaveData
-            : null;
+        FrameworkSaveData saveData = ResolveSaveData();
         if (saveData?.caravans != null && saveData.caravans.Count > 0)
         {
             for (int index = 0; index < saveData.caravans.Count; index++)
@@ -548,11 +680,9 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         return false;
     }
 
-    private static string ResolveCurrentTownId()
+    private string ResolveCurrentTownId()
     {
-        FrameworkSaveData saveData = FrameworkRoot.Instance != null
-            ? FrameworkRoot.Instance.CurrentSaveData
-            : null;
+        FrameworkSaveData saveData = ResolveSaveData();
         return saveData?.player != null && !string.IsNullOrWhiteSpace(saveData.player.currentTownId)
             ? saveData.player.currentTownId
             : "test-town";
