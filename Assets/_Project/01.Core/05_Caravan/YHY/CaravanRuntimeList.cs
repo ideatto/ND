@@ -7,11 +7,10 @@
 //        한 번에 변환한다. 자산 잠금(CaravanAssetLock)·Overview Provider가 "전체 상단"을
 //        봐야 하므로, 매퍼의 단건 변환(ToRuntime)을 여러 번 부르는 얇은 래퍼다.
 //
-// [caravanId 보정] 매퍼(CaravanSaveDataMapper.ToRuntime)는 현재 caravanId를
-//        런타임에 옮기지 않는다(Framework 소유라 Core가 매퍼를 못 고침).
-//        그대로 두면 런타임 CaravanData.caravanId가 전부 빈 값이 되어
-//        자산 잠금의 "자기 자신 제외"가 깨진다. → 변환 후 여기서 caravanId를 채운다.
-//        ※ 근본 해결(매퍼가 직접 매핑)은 천성욱님 협의 대상. 이 헬퍼는 그 전까지의 보정.
+// [caravanId] 매퍼(CaravanSaveDataMapper.ToRuntime)가 이제 caravanId·자산 instanceId를
+//        런타임으로 직접 매핑한다(2026-07-22 SaveData v6 asset-instance-id-persistence).
+//        따라서 여기서 별도 보정은 필요 없다 — 아래 채움은 매퍼가 비워둘 때를 대비한
+//        안전장치일 뿐이며, 정상 흐름에선 항상 건너뛴다.
 //
 // [경계] 저장 DTO·매퍼 정의는 Framework 소유. 여기선 "소비 + 얇은 조합"만 한다.
 //        상태 변경·저장은 하지 않는다(읽어서 런타임 사본을 만들 뿐).
@@ -27,7 +26,7 @@ using System.Collections.Generic;
 public static class CaravanRuntimeList
 {
     /// <summary>
-    /// saveData.caravans 전체를 런타임 CaravanData 리스트로 변환한다(caravanId 보정 포함).
+    /// saveData.caravans 전체를 런타임 CaravanData 리스트로 변환한다.
     /// saveData가 없거나 리스트가 비면 빈 리스트를 반환한다(절대 null 아님).
     /// </summary>
     public static List<CaravanData> Build(ND.Framework.SaveData saveData)
@@ -41,7 +40,7 @@ public static class CaravanRuntimeList
             CaravanData runtime = ND.Framework.CaravanSaveDataMapper.ToRuntime(saved);
             if (runtime == null) continue;
 
-            // 매퍼가 안 옮기는 caravanId를 저장 DTO에서 직접 채운다(자산 잠금 자기제외용).
+            // 안전장치: 매퍼가 caravanId를 이미 채운다(v6). 혹시 비어 있으면 저장 DTO에서 채운다.
             if (string.IsNullOrEmpty(runtime.caravanId) && !string.IsNullOrEmpty(saved.caravanId))
                 runtime.caravanId = saved.caravanId;
 

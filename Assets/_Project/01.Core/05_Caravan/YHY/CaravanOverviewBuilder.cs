@@ -60,10 +60,11 @@ public static class CaravanOverviewBuilder
                 // 슬롯 결정: 주입된 권위 판정 우선, 없으면 순서대로 [임시]
                 int slot = (getSlotIndex != null) ? getSlotIndex(c.caravanId) : fallbackCursor;
 
-                // 범위 밖이거나 이미 찬 슬롯이면 → 앞에서부터 빈 자리에 배치 (데이터 꼬임 방어)
-                if (slot < 0 || slot >= MaxSlots || slots[slot] != null)
-                    slot = FindFirstFreeSlot(slots);
-                if (slot < 0) break;   // 자리가 아예 없으면(5개 이상) 나머지는 버림 — MaxSlots 초과 방어
+                // 범위 밖·이미 찬 슬롯·잠긴 슬롯이면 → 해금된 빈 자리로 방어 배치 (데이터 꼬임 방어)
+                // ※ 잠긴 슬롯엔 상단을 앉히지 않는다 — 해금 규칙이 무의미해지므로.
+                if (slot < 0 || slot >= MaxSlots || slots[slot] != null || !IsUnlocked(isSlotUnlocked, slot))
+                    slot = FindFirstFreeUnlockedSlot(slots, isSlotUnlocked);
+                if (slot < 0) continue;   // 해금된 빈 자리가 없으면 이 상단은 표시하지 않음 (초과·꼬임 방어)
 
                 slots[slot] = CaravanBlockViewMapper.BuildOccupied(c, slot);
                 if (getSlotIndex == null) fallbackCursor = slot + 1;
@@ -93,11 +94,18 @@ public static class CaravanOverviewBuilder
         return overview;
     }
 
-    /// <summary>앞에서부터 첫 빈 슬롯 번호. 없으면 -1.</summary>
-    private static int FindFirstFreeSlot(CaravanBlockViewData[] slots)
+    /// <summary>슬롯 해금 여부 — 판정 함수가 없으면(연결 전) 전부 해금으로 간주 [임시].</summary>
+    private static bool IsUnlocked(Func<int, bool> isSlotUnlocked, int slot)
+    {
+        if (slot < 0 || slot >= MaxSlots) return false;   // 범위 밖은 항상 잠금 취급
+        return (isSlotUnlocked == null) || isSlotUnlocked(slot);
+    }
+
+    /// <summary>앞에서부터 첫 "해금된" 빈 슬롯 번호. 없으면 -1.</summary>
+    private static int FindFirstFreeUnlockedSlot(CaravanBlockViewData[] slots, Func<int, bool> isSlotUnlocked)
     {
         for (int i = 0; i < slots.Length; i++)
-            if (slots[i] == null) return i;
+            if (slots[i] == null && IsUnlocked(isSlotUnlocked, i)) return i;
         return -1;
     }
 }
