@@ -32,7 +32,7 @@
  * - RunPendingSettlementRestoreSmoke(): pendingSettlement 저장·캐시 소실·복구·claim을 검증한다.
  * - RunOfflineProgressSmoke(): Traveling 오프라인 미완료·완료·재호출·역행을 검증한다.
  * - RunForceWorldDebugSmoke(): ForceSeason/Disaster/RouteEvent 기본 재현을 검증한다.
- * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling inject hook을 검증한다.
+ * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling 실제 이벤트 적용을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
@@ -680,6 +680,12 @@ namespace ND.Framework
                 result.durabilityLost,
                 result.travelSeconds,
                 result.foodConsumed,
+                result.foodLost,
+                result.eventsOccurred,
+                result.battlesFought,
+                result.lostMercenaryInstanceIds?.ToArray() ?? new string[0],
+                result.wagonDestroyed,
+                result.destroyedWagonInstanceId,
                 result.departureLoad,
                 result.overloadRatio,
                 true,
@@ -1047,22 +1053,50 @@ namespace ND.Framework
             }
 
             FrameworkRoot.Instance.TradeProgressCoordinator?.SetActiveCaravan(caravan);
-            if (!commands.ForceRouteEvent(debugRouteEventId))
+            var provider = FrameworkRoot.Instance.SharedGameData;
+            if (provider == null || !provider.TryGetRoute(routeId, out var smokeRoute) ||
+                smokeRoute?.Events == null)
+            {
+                FrameworkLog.Warning("Force world debug smoke skipped: active route data is unavailable.");
+                return;
+            }
+
+            string combatEventId = string.Empty;
+            foreach (var routeEvent in smokeRoute.Events)
+            {
+                if (routeEvent != null && routeEvent.EventType == RouteEvent.Combat &&
+                    !string.IsNullOrWhiteSpace(routeEvent.Id))
+                {
+                    combatEventId = routeEvent.Id;
+                    break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(combatEventId))
+            {
+                FrameworkLog.Warning(
+                    $"Force world debug smoke skipped: route '{routeId}' has no Combat event test content.");
+                return;
+            }
+
+            int eventsBefore = caravan.runEventsOccurred;
+            int battlesBefore = caravan.runBattlesFought;
+            if (!commands.ForceRouteEvent(combatEventId))
             {
                 FrameworkLog.Warning("Force world debug smoke failed: ForceRouteEvent returned false while Traveling.");
                 return;
             }
 
-            if (!commands.TryConsumeForcedRouteEvent(smokeTradeId, out var consumedEventId)
-                || consumedEventId != debugRouteEventId.Trim())
+            if (caravan.runEventsOccurred != eventsBefore + 1 ||
+                caravan.runBattlesFought != battlesBefore + 1)
             {
                 FrameworkLog.Warning(
-                    $"Force world debug smoke failed: consumed event was '{consumedEventId}', expected '{debugRouteEventId}'.");
+                    "Force world debug smoke failed: forced Combat counters were not applied.");
                 return;
             }
 
             FrameworkLog.Info(
-                $"Force world debug smoke passed. Season={saveData.world.currentSeasonId}, Disaster='{saveData.world.currentDisasterId}', RouteEvent consumed.");
+                $"Force world debug smoke passed. Season={saveData.world.currentSeasonId}, Disaster='{saveData.world.currentDisasterId}', RouteEvent='{combatEventId}' applied.");
         }
 
         /// <summary>
