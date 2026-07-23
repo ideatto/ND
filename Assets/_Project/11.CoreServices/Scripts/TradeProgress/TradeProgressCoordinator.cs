@@ -359,7 +359,7 @@ namespace ND.Framework
                 try
                 {
                     if (!TryProcessTravelingEntry(
-                            saveData, progress, nowUtc, settlementEvents,
+                            saveData, progress, nowUtc, settlementEvents, false,
                             out var entryDirty, out var entrySettled))
                         continue;
 
@@ -398,6 +398,7 @@ namespace ND.Framework
             TradeProgressSaveData progress,
             DateTime nowUtc,
             List<SettlementNotification> settlementEvents,
+            bool isOfflineRestore,
             out bool dirty,
             out bool settled)
         {
@@ -405,7 +406,9 @@ namespace ND.Framework
             settled = false;
             if (!SaveDataLookup.TryGetCaravan(saveData, progress.caravanId, out var caravanSave))
             {
-                FrameworkLog.Warning($"Online trade save target lookup failed. CaravanId: {progress.caravanId}");
+                FrameworkLog.Warning(isOfflineRestore
+                    ? $"Offline trade restore skipped. Stage: SaveTargetLookup, CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}, Reason: CaravanSaveData was not found."
+                    : $"Online trade save target lookup failed. CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}");
                 return false;
             }
 
@@ -413,7 +416,9 @@ namespace ND.Framework
             if (caravan == null || caravan.caravanId != progress.caravanId
                 || caravanSave.caravanId != progress.caravanId)
             {
-                FrameworkLog.Warning($"Online trade runtime lookup failed. CaravanId: {progress.caravanId}");
+                FrameworkLog.Warning(isOfflineRestore
+                    ? $"Offline trade restore skipped. Stage: RuntimeLookup, CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}, Reason: Matching runtime caravan was not found."
+                    : $"Online trade runtime lookup failed. CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}");
                 return false;
             }
 
@@ -430,24 +435,27 @@ namespace ND.Framework
         }
 
         /// <summary>
-        /// Continue/Load 시 Traveling 무역에 오프라인 경과·진행도·식량을 적용하고 필요하면 정산을 생성한다.
+        /// Continue/Load 시 모든 Traveling 무역에 오프라인 경과·진행도·식량을 적용하고 필요하면 정산을 생성한다.
         /// </summary>
         /// <param name="saveData">로드된 SaveData. null이면 CurrentSaveData를 사용한다.</param>
         /// <returns>
-        /// 이번 호출에서 오프라인 완료로 settlement가 생성되면 true.
-        /// Traveling이 아니거나 역행으로 스킵하거나 아직 이동 중이면 false.
+        /// 이번 호출에서 하나 이상의 오프라인 완료 settlement가 생성되면 true.
+        /// Traveling entry가 없거나 역행으로 스킵하거나 모두 이동 중이면 false.
         /// </returns>
         /// <remarks>
         /// lastSavedUtcTicks 대비 시간 역행이면 TimeRollbackDetected를 발행하고 상태를 변경하지 않는다.
         /// evaluationUtc는 lastSaved + maxOfflineRealSeconds로 상한한다.
-        /// 오프라인 settle 성공 시 TradeOfflineCompleted를 한 번 발행한다.
+        /// 각 오프라인 settle 성공 시 해당 entry의 trade ID로 TradeOfflineCompleted를 한 번 발행한다.
         /// SettlementPending 복구는 RestorePendingSettlement가 담당하므로 이 메서드는 Traveling만 처리한다.
+        /// entry 하나의 실패는 caravan 또는 trade ID와 함께 경고하고 나머지 entry 처리를 계속한다.
         /// </remarks>
         public bool ApplyOfflineProgressOnLoad(SaveData saveData = null)
         {
             saveData = saveData ?? GetSaveData();
-            if (!CanUpdateTravelingTrade(saveData))
+            if (saveData?.tradeProgressEntries == null || gameTimeProvider == null)
             {
+                if (gameTimeProvider == null)
+                    FrameworkLog.Warning("Offline progress skipped because game time provider is missing.");
                 return false;
             }
 
@@ -461,35 +469,106 @@ namespace ND.Framework
                 return false;
             }
 
-            var caravan = GetRuntimeForProgress(saveData);
-            if (caravan == null)
+            var entries = new List<TradeProgressSaveData>(saveData.tradeProgressEntries);
+            var processed = new HashSet<TradeProgressSaveData>();
+            var dirty = false;
+            var settled = false;
+            var settlementEvents = new List<SettlementNotification>();
+
+            for (var index = 0; index < entries.Count; index++)
             {
-                FrameworkLog.Warning("Offline progress skipped because active caravan is missing.");
-                return false;
+                var progress = entries[index];
+                if (progress == null || progress.state != TradeProgressState.Traveling
+                    || !processed.Add(progress))
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(progress.caravanId)
+                    || string.IsNullOrWhiteSpace(progress.activeTradeId))
+                {
+                    var reason = string.IsNullOrWhiteSpace(progress.caravanId)
+                        ? "Caravan ID is missing."
+                        : "Active trade ID is missing.";
+                    FrameworkLog.Warning(
+                        $"Offline trade restore skipped. Stage: EntryValidation, CaravanId: {FormatCaravanIdForLog(progress.caravanId)}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}, Reason: {reason}");
+                    continue;
+                }
+
+                if (!HasValidOfflineTimeRange(progress))
+                {
+                    FrameworkLog.Warning(
+                        $"Offline trade progress skipped because UTC ticks are invalid. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}");
+                    continue;
+                }
+
+                try
+                {
+                    if (!TryProcessTravelingEntry(
+                            saveData, progress, evaluationUtc, settlementEvents, true,
+                            out var entryDirty, out var entrySettled))
+                        continue;
+
+                    dirty |= entryDirty;
+                    settled |= entrySettled;
+                }
+                catch (Exception exception)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline trade progress entry failed. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}, Stage: Restore, Error: {exception.Message}");
+                }
             }
 
-            SyncElapsedInGameSeconds(saveData, caravan, evaluationUtc);
-            var progress = CalculateProgress(saveData.tradeProgress, evaluationUtc);
-            JourneyRunner.SetProgress(caravan, progress);
-            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
-
-            if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
+            if (dirty)
             {
                 saveService?.Save(saveData);
-                FrameworkLog.Info(
-                    $"Offline progress applied while still traveling. EvaluationUtc: {evaluationUtc:o}, ElapsedInGameSeconds: {caravan.elapsedInGameSeconds}");
-                return false;
             }
 
-            var tradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
-            var settled = SettleActiveTrade(saveData, caravan);
-            if (settled)
+            for (var index = 0; index < settlementEvents.Count; index++)
             {
-                FrameworkEvents.RaiseTradeOfflineCompleted(tradeId);
-                FrameworkLog.Info($"Offline trade completed and settled. TradeId: {tradeId}");
+                var notification = settlementEvents[index];
+                FrameworkEvents.RaiseTradeSettlementReady(
+                    notification.CaravanId, notification.TradeId, notification.Result);
+                FrameworkEvents.RaiseTradeOfflineCompleted(notification.TradeId);
+                if (notification.Result.grade == JourneyResultGrade.Failed
+                    && notification.CaravanId == saveData.selectedCaravanId)
+                {
+                    inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+                }
             }
 
             return settled;
+        }
+
+        private static string FormatCaravanIdForLog(string caravanId)
+        {
+            return string.IsNullOrWhiteSpace(caravanId) ? "<empty>" : caravanId;
+        }
+
+        private static string FormatTradeIdForLog(string tradeId)
+        {
+            return string.IsNullOrWhiteSpace(tradeId) ? "<empty>" : tradeId;
+        }
+
+        private static bool HasValidOfflineTimeRange(TradeProgressSaveData progress)
+        {
+            if (progress == null || progress.tradeStartUtcTick <= 0
+                || progress.expectedTradeEndUtcTick <= progress.tradeStartUtcTick)
+            {
+                return false;
+            }
+
+            try
+            {
+                var startUtc = new DateTime(progress.tradeStartUtcTick, DateTimeKind.Utc);
+                var endUtc = new DateTime(progress.expectedTradeEndUtcTick, DateTimeKind.Utc);
+                var durationSeconds = (endUtc - startUtc).TotalSeconds;
+                return durationSeconds > 0d
+                    && !double.IsNaN(durationSeconds)
+                    && !double.IsInfinity(durationSeconds);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
         }
 
         /// <summary>
