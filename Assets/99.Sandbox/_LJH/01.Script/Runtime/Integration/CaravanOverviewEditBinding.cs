@@ -22,6 +22,9 @@ public sealed class CaravanIdUnityEvent : UnityEvent<string>
 /// <remarks>
 /// Provider and Command dependencies remain behind UI-owned interfaces so a temporary implementation
 /// can be replaced by Framework without changing the Overview Presenter or S3 panel.
+/// TODO(PRODUCTION): Replace Inspector references to TestCaravanSettingService with the Framework
+/// composition root's SaveData-backed S3/S4 query and command implementations. This binding and its
+/// interface-based injection points remain; only the in-memory service implementation is removed.
 /// </remarks>
 [DisallowMultipleComponent]
 public sealed class CaravanOverviewEditBinding : MonoBehaviour
@@ -66,6 +69,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
     private ICaravanLoadSettingViewDataProvider loadSettingProvider;
     private ICaravanLoadSettingCommand loadSettingCommand;
     private ICaravanCargoCatalogProvider cargoCatalogProvider;
+    private TradePrepareRuntimeContextProvider tradePrepareRuntimeContext;
     private bool hasRuntimeServiceOverride;
     private bool hasRuntimeLoadServiceOverride;
 
@@ -77,6 +81,8 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         {
             ResolveSerializedServices();
         }
+
+        InjectTradePrepareProviders();
 
         if (overviewPresenter == null)
         {
@@ -134,6 +140,19 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         CurrentEditTarget = CaravanOverviewEditTarget.None;
     }
 
+    /// <summary>
+    /// Completes runtime provider injection when the TradePrepare prefab is created after this
+    /// scene binding has already enabled.
+    /// </summary>
+    public void AttachTradePrepareRuntimeContext(TradePrepareRuntimeContextProvider runtimeContext)
+    {
+        if (runtimeContext == null)
+            return;
+
+        tradePrepareRuntimeContext = runtimeContext;
+        InjectTradePrepareProviders();
+    }
+
     /// <summary>Supports composition-root injection when production services are not scene components.</summary>
     public void SetSettingServices(
         ICaravanSettingViewDataProvider runtimeProvider,
@@ -143,6 +162,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         hasRuntimeServiceOverride = true;
         settingProvider = runtimeProvider;
         settingCommand = runtimeCommand;
+        tradePrepareRuntimeContext?.SetCaravanSettingProvider(settingProvider);
     }
 
     /// <summary>Returns S3 service resolution to the Inspector-assigned MonoBehaviours.</summary>
@@ -161,6 +181,9 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         loadSettingProvider = runtimeProvider;
         loadSettingCommand = runtimeCommand;
         cargoCatalogProvider = runtimeProvider as ICaravanCargoCatalogProvider;
+        tradePrepareRuntimeContext?.SetCaravanCargoPlanProvider(loadSettingProvider);
+        tradePrepareRuntimeContext?.SetCaravanOptionProvider(
+            runtimeProvider as ITradePrepareCaravanOptionProvider);
     }
 
     /// <summary>Returns S4 service resolution to the Inspector-assigned MonoBehaviours.</summary>
@@ -302,6 +325,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         // Only a successful Command may close S3 and refresh the Overview from authoritative data.
         tradePrepareUi?.CloseCaravanEdit();
         overviewPresenter?.Refresh();
+        tradePrepareRuntimeContext?.RefreshCaravanSetting(draft.caravanId);
     }
 
     private void HandleCargoDataRequested(string caravanId)
@@ -380,6 +404,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
 
         tradePrepareUi?.CloseCaravanEdit();
         overviewPresenter?.Refresh();
+        tradePrepareRuntimeContext?.RefreshCaravanCargoPlan(draft.caravanId);
     }
 
     private static long ReadCurrentTradingCurrency()
@@ -464,6 +489,8 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
             cargoCatalogProvider = loadSettingProviderBehaviour as ICaravanCargoCatalogProvider;
         }
 
+        InjectTradePrepareProviders();
+
         if (settingProviderBehaviour != null && settingProvider == null)
         {
             Debug.LogError(
@@ -511,6 +538,24 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         {
             noticeUI = FindFirstObjectByType<NoticeUI>(FindObjectsInactive.Include);
         }
+
+
+        if (tradePrepareRuntimeContext == null)
+        {
+            tradePrepareRuntimeContext = FindFirstObjectByType<TradePrepareRuntimeContextProvider>(
+                FindObjectsInactive.Include);
+        }
+    }
+
+    private void InjectTradePrepareProviders()
+    {
+        if (tradePrepareRuntimeContext == null)
+            return;
+
+        tradePrepareRuntimeContext.SetCaravanSettingProvider(settingProvider);
+        tradePrepareRuntimeContext.SetCaravanCargoPlanProvider(loadSettingProvider);
+        tradePrepareRuntimeContext.SetCaravanOptionProvider(
+            loadSettingProvider as ITradePrepareCaravanOptionProvider);
     }
 
 #if UNITY_EDITOR

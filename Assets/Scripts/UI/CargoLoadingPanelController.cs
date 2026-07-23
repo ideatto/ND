@@ -585,6 +585,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         loadedFoodText = FindText("LoadedFoodText");
         foodWarningText = FindText("FoodWarningText");
 
+        // S4 is saved before a Route is selected. Only loaded DraftAnimalsFood belongs here;
+        // route-dependent requirement and shortage are presented in the departure Summary.
+        if (feedConsumptionText != null)
+            feedConsumptionText.gameObject.SetActive(false);
+
         nextButton = FindDeepChild(transform, "NextButton")?.GetComponent<Button>();
         closeButton = FindDeepChild(transform, "CloseButton")?.GetComponent<Button>();
 

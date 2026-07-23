@@ -139,6 +139,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public Func<List<TransportSelectPanel.TransportEntry>> OwnedWagonProvider;
     /// <summary>④ 적재 화면 값(골드·먹이·상점) 공급자.</summary>
     public Func<CargoConfig> CargoProvider;
+    public Func<TradePrepareCaravanOptionViewData[]> CaravanOptionsProvider;
+    public Func<string, bool> DepartureCaravanSelector;
+    public Action ClearMercenarySelection;
+    public Func<MercenaryViewData[]> MercenaryOptionsProvider;
+    public Func<string, bool> MercenarySelector;
+    public Action RefreshPreparationDraft;
     /// <summary>⑥ 요약 계산(출발도시·위험도·음식·시간) 공급자 — 데모는 Core 계산기 사용.</summary>
     public Func<SummaryQuery, SummaryStats> SummaryStatsProvider;
     public Func<TradeSummaryPanel.SummaryData> SummaryProvider;
@@ -230,7 +236,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (townRoutePanel != null && TownProvider != null)
             townRoutePanel.Populate(TownProvider());
 
-        GoTownRoute();
+        GoCaravanSlot();
     }
 
     /// <summary>Starts a detached S3 request for the Caravan selected in Overview.</summary>
@@ -516,8 +522,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (animalNext != null) animalNext.onClick.AddListener(FromAnimalsNext);
         if (departButton != null) departButton.onClick.AddListener(Depart);
 
-        if (slotBack != null) slotBack.onClick.AddListener(GoTownRoute);
-        if (animalBack != null) animalBack.onClick.AddListener(GoCaravanSlot);
+        if (animalBack != null) animalBack.onClick.AddListener(GoTownRoute);
         if (summaryBack != null) summaryBack.onClick.AddListener(BackFromSummary);
         if (summaryCancel != null) summaryCancel.onClick.AddListener(OnTradeCancelledByPanels);   // ⑥ 무역 취소
 
@@ -566,7 +571,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         selTownId = townId;
         selRouteId = routeId;
         distanceKm = distance;
-        GoCaravanSlot();
+        GoMercenary();
     }
 
     // ══ ② 상단 슬롯 ═════════════════════════════════════════════
@@ -588,6 +593,26 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 하단 [Next] → 빈 슬롯이면 ③(구성), 저장된 슬롯이면 ④(적재).
     private void FromSlotNext()
     {
+        if (CaravanOptionsProvider != null)
+        {
+            string caravanId = caravanSlotPanel != null
+                ? caravanSlotPanel.SelectedCaravanId
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(caravanId)
+                || DepartureCaravanSelector == null
+                || !DepartureCaravanSelector(caravanId))
+            {
+                if (slotNext != null) slotNext.interactable = false;
+                return;
+            }
+
+            GoTownRoute();
+            return;
+        }
+
+        // TODO(PRODUCTION): Remove this legacy SlotComp branch once the production composition root
+        // always provides ITradePrepareCaravanOptionProvider. S0 must then select only a Framework
+        // Caravan ID and must never rebuild wagon/animal/cargo state in this UI manager.
         bool empty = caravanSlotPanel != null && caravanSlotPanel.IsSelectedEmpty();
         if (empty)
         {
@@ -749,6 +774,13 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>용병 고용 확정 → ⑥ 요약.</summary>
     public void OnMercenaryConfirmed()
     {
+        if (MercenarySelector != null && mercenaryPanel != null
+            && !MercenarySelector(mercenaryPanel.SelectedMercenaryId))
+        {
+            Debug.LogError("Cannot confirm the selected Mercenary because it is not a valid runtime option.", this);
+            return;
+        }
+
         GoSummary();
     }
 
@@ -756,18 +788,67 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
     private void GoTownRoute() { ShowOnly(0); }
 
+    private void GoMercenary()
+    {
+        if (mercenaryPanel == null)
+        {
+            Debug.LogError("Cannot open the Mercenary step because its panel is not connected.", this);
+            return;
+        }
+
+        // Re-entering this step intentionally starts with no previous hire selection. Clear the
+        // Runtime Draft as well as the panel state so Summary cannot retain a hidden old choice.
+        ClearMercenarySelection?.Invoke();
+        if (MercenaryOptionsProvider != null)
+        {
+            mercenaryPanel.Populate(
+                MercenaryOptionsProvider() ?? Array.Empty<MercenaryViewData>());
+        }
+
+        // S0 already selected a configured Caravan, so the normal preparation route skips
+        // the legacy Animals and Cargo editors. The existing Cargo-origin route keeps its
+        // own Back behavior, while this direct route explicitly returns to Route selection.
+        ShowOnly(-1);
+        long budget = cargoPanel != null ? cargoPanel.MercenaryBudget : 0L;
+        mercenaryPanel.Show(budget, GoTownRoute);
+    }
+
     private void GoCaravanSlot()
     {
         if (caravanSlotPanel != null)
         {
-            List<string> slots = new List<string>();
-            for (int i = 0; i < caravanSlotCount; i++)
-                slots.Add((caravanSlots != null && i < caravanSlots.Length) ? (caravanSlots[i] ?? "") : "");
-            caravanSlotPanel.Populate(slots);
+            if (CaravanOptionsProvider != null)
+            {
+                caravanSlotPanel.PopulateCaravanOptions(
+                    CaravanOptionsProvider() ?? Array.Empty<TradePrepareCaravanOptionViewData>());
+            }
+            else
+            {
+                List<string> slots = new List<string>();
+                for (int i = 0; i < caravanSlotCount; i++)
+                    slots.Add((caravanSlots != null && i < caravanSlots.Length) ? (caravanSlots[i] ?? "") : "");
+                caravanSlotPanel.Populate(slots);
+            }
             caravanSlotPanel.ResetSelection();
         }
         if (slotNext != null) slotNext.interactable = false;   // 슬롯 고르기 전엔 Next 잠금
+        if (slotBack != null) slotBack.interactable = CaravanOptionsProvider == null;
         ShowOnly(1);
+    }
+
+    public void RefreshCaravanOptionsIfVisible()
+    {
+        if (caravanSlotPanel == null
+            || !caravanSlotPanel.gameObject.activeInHierarchy
+            || CaravanOptionsProvider == null)
+        {
+            return;
+        }
+
+        caravanSlotPanel.PopulateCaravanOptions(
+            CaravanOptionsProvider() ?? Array.Empty<TradePrepareCaravanOptionViewData>());
+        caravanSlotPanel.ResetSelection();
+        if (slotNext != null) slotNext.interactable = false;
     }
 
     private void GoAnimals()
@@ -856,6 +937,10 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>⑥ 요약 — 선택값(질의)을 프로바이더에 넘겨 계산 결과를 받고, 패널에 바인딩한다.</summary>
     private void GoSummary()
     {
+        // Re-read Provider-owned Caravan/Cargo state immediately before rendering S6 so the
+        // values shown here are the same values that departure validation will consume.
+        RefreshPreparationDraft?.Invoke();
+
         if (summaryView != null)
         {
             if (SummaryProvider != null)
@@ -913,10 +998,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     private void BackFromSummary()
     {
         if (summaryPanel != null) summaryPanel.SetActive(false);
-        if (mercenaryPanel != null && cargoPanel != null)
-            mercenaryPanel.Show(cargoPanel.MercenaryBudget);
-        else
-            ShowOnly(3);   // 용병 패널이 없으면 ④로라도
+        GoMercenary();
     }
 
     /// <summary>⑥ 출발 — 확정 내용을 모아 이벤트로 알린다(출발 API 연결 지점).</summary>

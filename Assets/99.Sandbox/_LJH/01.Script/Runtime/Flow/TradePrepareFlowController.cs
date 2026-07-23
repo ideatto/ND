@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 public sealed class TradePrepareFlowController : IDisposable
 {
@@ -121,6 +122,101 @@ public sealed class TradePrepareFlowController : IDisposable
 
         return false;
     }
+
+    public bool ApplyCargoPlan(CaravanLoadSettingViewData plan)
+    {
+        if (IsCommitted || plan == null || string.IsNullOrWhiteSpace(plan.caravanId))
+            return false;
+
+        TradePrepareDraft currentDraft = draftStore.Current;
+        if (!string.Equals(
+            currentDraft.departureCaravanId,
+            plan.caravanId.Trim(),
+            StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        draftStore.ReplaceCargoPlan(plan.plannedItems);
+        return true;
+    }
+
+    public bool ApplyCaravanSetting(CaravanSettingViewData setting)
+    {
+        if (IsCommitted || setting == null || string.IsNullOrWhiteSpace(setting.caravanId))
+            return false;
+
+        TradePrepareDraft currentDraft = draftStore.Current;
+        if (!string.Equals(
+            currentDraft.departureCaravanId,
+            setting.caravanId.Trim(),
+            StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        string selectedWagonInstanceId = setting.selectedWagonInstanceId?.Trim() ?? string.Empty;
+        string selectedWagonId = string.Empty;
+        if (!string.IsNullOrEmpty(selectedWagonInstanceId))
+        {
+            WagonViewData wagon = Array.Find(
+                setting.wagons ?? Array.Empty<WagonViewData>(),
+                value => value != null && string.Equals(
+                    value.wagonInstanceId,
+                    selectedWagonInstanceId,
+                    StringComparison.Ordinal));
+            if (wagon == null || string.IsNullOrWhiteSpace(wagon.wagonId))
+                return false;
+            selectedWagonId = wagon.wagonId.Trim();
+        }
+
+        var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        var visitedInstances = new HashSet<string>(StringComparer.Ordinal);
+        string[] selectedAnimalInstances = setting.selectedAnimalInstanceIds ?? Array.Empty<string>();
+        DraftAnimalViewData[] animals = setting.draftAnimals ?? Array.Empty<DraftAnimalViewData>();
+        for (int index = 0; index < selectedAnimalInstances.Length; index++)
+        {
+            string instanceId = selectedAnimalInstances[index]?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(instanceId) || !visitedInstances.Add(instanceId))
+                return false;
+
+            DraftAnimalViewData animal = Array.Find(
+                animals,
+                value => value != null && string.Equals(
+                    value.draftAnimalInstanceId,
+                    instanceId,
+                    StringComparison.Ordinal));
+            if (animal == null || string.IsNullOrWhiteSpace(animal.draftAnimalId))
+                return false;
+
+            string contentId = animal.draftAnimalId.Trim();
+            quantities[contentId] = quantities.TryGetValue(contentId, out int quantity)
+                ? quantity + 1
+                : 1;
+        }
+
+        var selections = new List<DraftAnimalSelectionData>();
+        foreach (KeyValuePair<string, int> pair in quantities)
+        {
+            selections.Add(new DraftAnimalSelectionData
+            {
+                draftAnimalId = pair.Key,
+                quantity = pair.Value
+            });
+        }
+
+        int currentDurability = string.IsNullOrEmpty(selectedWagonId)
+            ? 0
+            : Math.Max(0, Array.Find(
+                setting.wagons ?? Array.Empty<WagonViewData>(),
+                value => value != null && string.Equals(
+                    value.wagonInstanceId,
+                    selectedWagonInstanceId,
+                    StringComparison.Ordinal))?.currentDurability ?? 0);
+        draftStore.ReplaceCaravanComposition(selectedWagonId, selections, currentDurability);
+        return true;
+    }
+
     public void SelectDestination(string townId) { if (!IsCommitted) draftStore.SelectDestination(townId); }
     public void SelectRoute(string routeId) { if (!IsCommitted) draftStore.SelectRoute(routeId); }
     public void SelectWagon(string wagonId) { if (!IsCommitted) draftStore.SelectWagon(wagonId); }

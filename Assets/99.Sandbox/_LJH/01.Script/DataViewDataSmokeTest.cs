@@ -1361,8 +1361,55 @@ public class DataViewDataSmokeTest : MonoBehaviour
                     && loadResult.succeeded
                     && committedLoad.plannedItems.Length == 1
                     && committedLoad.plannedItems[0].itemId == catalogItem.ItemId
-                    && committedLoad.plannedItems[0].quantity == 3,
+                    && committedLoad.plannedItems[0].quantity == 3
+                    && committedLoad.plannedItems[0].purchaseUnitPrice == catalogItem.BaseBuyPrice,
                 "Caravan Load Setting Smoke Test failed: a valid S4 Draft was not committed in memory.");
+
+            var planContext = new TradePrepareBuildContext
+            {
+                tradeItems = new[] { catalogItem },
+                caravanOptions = new[]
+                {
+                    new TradePrepareCaravanOptionViewData
+                    {
+                        caravanId = TestCaravanSettingService.PrepareCaravanId,
+                        state = JourneyState.Prepare,
+                        canSelect = true
+                    }
+                }
+            };
+            using (var planController = new TradePrepareFlowController(planContext))
+            {
+                planController.Initialize("test-town");
+                bool caravanSelected = planController.SelectDepartureCaravan(
+                    TestCaravanSettingService.PrepareCaravanId);
+                bool settingApplied = planController.ApplyCaravanSetting(
+                    provider.GetSetting(TestCaravanSettingService.PrepareCaravanId));
+                bool planApplied = planController.ApplyCargoPlan(committedLoad);
+                TradePrepareDraft departureDraft = planController.CurrentDraft;
+                bool mismatchedPlanRejected = !planController.ApplyCargoPlan(
+                    new CaravanLoadSettingViewData
+                    {
+                        caravanId = TestCaravanSettingService.TravelingCaravanId,
+                        plannedItems = System.Array.Empty<CargoItemViewData>()
+                    });
+                Debug.Assert(
+                    caravanSelected
+                        && settingApplied
+                        && planApplied
+                        && mismatchedPlanRejected
+                        && departureDraft.hasAuthoritativeCaravanComposition
+                        && departureDraft.selectedWagonCurrentDurability > 0
+                        && departureDraft.hasAuthoritativeCargoPlan
+                        && departureDraft.selectedWagonId == TestCaravanSettingService.WagonContentId
+                        && departureDraft.selectedAnimals.Count == 1
+                        && departureDraft.selectedAnimals[0].draftAnimalId == TestCaravanSettingService.AnimalContentId
+                        && departureDraft.selectedAnimals[0].quantity == 2
+                        && departureDraft.selectedBuyItems.Count == 1
+                        && departureDraft.selectedBuyItems[0].itemId == catalogItem.ItemId
+                        && departureDraft.selectedBuyItems[0].quantity == 3,
+                    "Caravan Setting Smoke Test failed: S3/S4 plans did not hydrate the matching departure Draft.");
+            }
 
             CaravanSettingCommandResult occupiedWalkingResult = command.Execute(walkingDraft);
             CaravanSettingViewData retainedWagon = provider.GetSetting(TestCaravanSettingService.PrepareCaravanId);

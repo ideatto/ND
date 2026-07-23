@@ -53,6 +53,7 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
         FrameworkRoot root = FrameworkRoot.Instance;
         InGameScreenState state = InGameScreenStateRouter.MapFromSaveData(
             root != null ? root.CurrentSaveData : null);
+
         HandleScreenChanged(state);
     }
 

@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bc5a88365ef36b24789d5d69a76119d7, type: 3}
   m_Name: Mercenary_Scout
   m_EditorClassIdentifier: Assembly-CSharp::MercenaryData
-  mercenaryId: 
-  displayName: 
+  mercenaryId: ScoutMercenary
+  displayName: "\uC815\uCC30\uBCD1"
   icon: {fileID: 21300000, guid: 8b9df205e3b8bb745899fbd115856397, type: 3}
   description: 
   rarity: 0
-  baseBuyPrice: 0
-  combatCapability: 0
-  unlockedByDefault: 0
+  baseBuyPrice: 50
+  combatCapability: 5
+  unlockedByDefault: 1
   affectModify: 0
   modifiers: []
