@@ -612,10 +612,40 @@ namespace ND.Framework
                     BaseRequiredMercenaryPower = item.BaseRequiredMercenaryPower,
                     BaseRiskLevel = item.BaseRiskLevel,
                     MaxEventCount = item.MaxEventCount,
+                    Events = ToRouteEvents(item.RouteEvents),
                     BaseFoodCost = item.BaseFoodCost,
                     BaseMercenaryCost = item.BaseMercenaryCost
                 });
             }
+        }
+
+        private static SharedRouteEventDefinition[] ToRouteEvents(global::RouteEventData[] source)
+        {
+            if (source == null || source.Length == 0)
+            {
+                return new SharedRouteEventDefinition[0];
+            }
+
+            var result = new List<SharedRouteEventDefinition>(source.Length);
+            foreach (global::RouteEventData item in source)
+            {
+                if (item == null) continue;
+                result.Add(new SharedRouteEventDefinition
+                {
+                    Id = item.routeEventId ?? string.Empty,
+                    EventType = item.eventType,
+                    DisplayName = item.displayName ?? string.Empty,
+                    Description = item.description ?? string.Empty,
+                    BanditCombatPower = item.BanditCombatPower,
+                    CargoLootRate = item.CargoLootRate,
+                    FodderLootRate = item.FodderLootRate,
+                    RewardType = item.eventRewardType,
+                    Reward = item.eventReward,
+                    MinReward = item.minReward,
+                    MaxReward = item.maxReward
+                });
+            }
+            return result.ToArray();
         }
 
         private static bool CanAddId<T>(Dictionary<string, T> target, string id, string label, List<string> errors)

@@ -91,6 +91,132 @@ namespace ND.Framework
     }
 
     /// <summary>
+    /// 거리 기반 Route 이벤트를 캐러밴 run 상태에 적용한다.
+    /// 동일 tradeId와 진행 거리에서는 호출 횟수와 무관하게 같은 결과를 만든다.
+    /// </summary>
+    public static class TradeRouteEventProcessor
+    {
+        public static void Process(
+            CaravanData caravan,
+            SharedRouteDefinition route,
+            string tradeId,
+            float eventIntervalKm = ND.Economy.TradeEventPreviewCalculator.DefaultEventIntervalKm,
+            float eventChancePerCheck = ND.Economy.TradeEventPreviewCalculator.DefaultEventChancePerCheck)
+        {
+            if (caravan == null || caravan.state != JourneyState.Traveling ||
+                string.IsNullOrEmpty(tradeId))
+            {
+                return;
+            }
+
+            int completedChecks = ND.Economy.TradeEventPreviewCalculator.CalculateCompletedEventCheckCount(
+                caravan.currentDistanceKm,
+                caravan.progress01,
+                eventIntervalKm);
+            if (completedChecks <= caravan.runEventChecksProcessed) return;
+
+            for (int checkIndex = caravan.runEventChecksProcessed;
+                 checkIndex < completedChecks;
+                 checkIndex++)
+            {
+                caravan.runEventChecksProcessed = checkIndex + 1;
+                if (route?.Events == null || route.Events.Length == 0) continue;
+                if (!ND.Economy.TradeEventPreviewCalculator.IsEventTriggered(
+                    tradeId,
+                    checkIndex,
+                    eventChancePerCheck))
+                {
+                    continue;
+                }
+
+                SharedRouteEventDefinition selectedEvent = SelectRouteEvent(
+                    route.Events,
+                    tradeId,
+                    checkIndex);
+                if (selectedEvent == null) continue;
+
+                // Lucky/Weather는 결과 공식과 정산 계약이 아직 없으므로 발생 완료로 기록하지 않는다.
+                // 판정 인덱스는 소비해 저장 중인 무역이 향후 코드 변경 후 다른 결과로 재생되는 것을 막는다.
+                if (selectedEvent.EventType != RouteEvent.Combat) continue;
+
+                caravan.runEventsOccurred++;
+                int raidSeed = ND.Economy.TradeEventPreviewCalculator.CalculateStableSeed(
+                    tradeId,
+                    checkIndex,
+                    0x52414944u);
+                JourneyRunner.ResolveBanditRaid(
+                    caravan,
+                    selectedEvent.BanditCombatPower,
+                    selectedEvent.CargoLootRate,
+                    selectedEvent.FodderLootRate,
+                    raidSeed);
+
+                if (caravan.runFatalReason != JourneyFailureReason.None) break;
+            }
+        }
+
+        public static bool ProcessForced(
+            CaravanData caravan,
+            SharedRouteDefinition route,
+            string tradeId,
+            string eventId)
+        {
+            if (caravan == null || caravan.state != JourneyState.Traveling ||
+                route?.Events == null || string.IsNullOrWhiteSpace(tradeId) ||
+                string.IsNullOrWhiteSpace(eventId))
+            {
+                return false;
+            }
+
+            SharedRouteEventDefinition selectedEvent = null;
+            foreach (SharedRouteEventDefinition candidate in route.Events)
+            {
+                if (candidate != null &&
+                    string.Equals(candidate.Id, eventId.Trim(), StringComparison.Ordinal))
+                {
+                    selectedEvent = candidate;
+                    break;
+                }
+            }
+
+            if (selectedEvent == null || selectedEvent.EventType != RouteEvent.Combat) return false;
+
+            int raidSeed = ND.Economy.TradeEventPreviewCalculator.CalculateStableSeed(
+                tradeId + "|forced|" + selectedEvent.Id,
+                caravan.runEventsOccurred,
+                0x52414944u);
+            caravan.runEventsOccurred++;
+            JourneyRunner.ResolveBanditRaid(
+                caravan,
+                selectedEvent.BanditCombatPower,
+                selectedEvent.CargoLootRate,
+                selectedEvent.FodderLootRate,
+                raidSeed);
+            return true;
+        }
+
+        private static SharedRouteEventDefinition SelectRouteEvent(
+            SharedRouteEventDefinition[] events,
+            string tradeId,
+            int checkIndex)
+        {
+            if (events == null || events.Length == 0) return null;
+
+            uint seed = unchecked((uint)ND.Economy.TradeEventPreviewCalculator.CalculateStableSeed(
+                tradeId,
+                checkIndex,
+                0x5441424Cu));
+            int start = (int)(seed % (uint)events.Length);
+            for (int offset = 0; offset < events.Length; offset++)
+            {
+                SharedRouteEventDefinition candidate = events[(start + offset) % events.Length];
+                if (candidate != null) return candidate;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 무역 진행률, 정산 생성, 정산 claim을 저장 데이터와 Core caravan 상태에 반영하는 coordinator이다.
     /// </summary>
     public sealed class TradeProgressCoordinator
@@ -288,6 +414,7 @@ namespace ND.Framework
             // 저장된 UTC 시작/종료 tick과 현재 시간을 비교해 Core caravan 진행률을 갱신한다.
             var progress = CalculateProgress(saveData.tradeProgress, gameTimeProvider.CurrentUtc);
             JourneyRunner.SetProgress(caravan, progress);
+            ProcessCompletedRouteEventChecks(saveData, caravan);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
 
             // 아직 도착하지 않았고 치명적 실패도 없으면 현재 진행률만 저장하고 settlement 생성은 미룬다.
@@ -346,6 +473,7 @@ namespace ND.Framework
             SyncElapsedInGameSeconds(saveData, caravan, evaluationUtc);
             var progress = CalculateProgress(saveData.tradeProgress, evaluationUtc);
             JourneyRunner.SetProgress(caravan, progress);
+            ProcessCompletedRouteEventChecks(saveData, caravan);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
 
             if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
@@ -830,8 +958,60 @@ namespace ND.Framework
 
             // Core progress를 도착값으로 맞춘 뒤 동일한 settlement 생성 경로를 재사용한다.
             JourneyRunner.SetProgress(caravan, JourneyRunner.ArrivalProgress);
+            ProcessCompletedRouteEventChecks(saveData, caravan);
             CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
             SettleActiveTrade(saveData, caravan);
+        }
+
+        /// <summary>
+        /// 현재 이동 거리까지 새로 통과한 이벤트 판정 구간만 처리한다.
+        /// 처리 완료 수를 Caravan run 상태에 기록해 온라인·오프라인 갱신의 중복 실행을 막는다.
+        /// </summary>
+        private void ProcessCompletedRouteEventChecks(SaveData saveData, CaravanData caravan)
+        {
+            if (saveData?.tradeProgress == null || caravan == null ||
+                caravan.state != JourneyState.Traveling)
+            {
+                return;
+            }
+
+            string tradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            string routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
+            if (string.IsNullOrEmpty(tradeId) || string.IsNullOrEmpty(routeId)) return;
+
+            ISharedGameDataProvider provider = getSharedGameData?.Invoke();
+            SharedRouteDefinition route = null;
+            bool hasRoute = provider != null && provider.TryGetRoute(routeId, out route) && route != null;
+            TradeRouteEventProcessor.Process(caravan, hasRoute ? route : null, tradeId);
+        }
+
+        public bool TryProcessForcedRouteEvent(string tradeId, string eventId)
+        {
+            SaveData saveData = GetSaveData();
+            if (!CanUpdateTravelingTrade(saveData) ||
+                saveData?.tradeProgress == null ||
+                !string.Equals(saveData.tradeProgress.activeTradeId, tradeId, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
+            ISharedGameDataProvider provider = getSharedGameData?.Invoke();
+            if (provider == null || !provider.TryGetRoute(routeId, out SharedRouteDefinition route) ||
+                route == null)
+            {
+                return false;
+            }
+
+            CaravanData caravan = EnsureActiveCaravan();
+            if (!TradeRouteEventProcessor.ProcessForced(caravan, route, tradeId, eventId))
+            {
+                return false;
+            }
+
+            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            SaveResult saveResult = saveService?.Save(saveData);
+            return saveResult != null && saveResult.Succeeded;
         }
 
         private bool ResolveOfflineEvaluationUtc(SaveData saveData, DateTime loadUtc, out DateTime evaluationUtc)

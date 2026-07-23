@@ -69,6 +69,12 @@ public class TradePrepareViewData
     public float baseExpectedTravelTime;
     public float finalExpectedTravelTime;
     public float selectedMoveSpeed;
+
+    // Distance-based event preview. Chances use 0..1 except the bandit safe-pass value (0..100%).
+    public int eventCheckCount;
+    public float eventOccurrenceProbability;
+    public float expectedEventCount;
+    public float banditSafePassChancePercent;
 }
 
 [System.Serializable]

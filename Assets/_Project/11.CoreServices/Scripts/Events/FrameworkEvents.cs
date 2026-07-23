@@ -107,7 +107,7 @@ namespace ND.Framework
         /// <remarks>
         /// 인자 순서는 tradeId, eventId이다.
         /// Core 로드/약탈 적용 API가 연결되기 전까지는 Framework stub hook이며, 구독자는 중복 처리를 방지해야 한다.
-        /// FrameworkDebugCommands.TryConsumeForcedRouteEvent로 pending hook을 1회 소모할 수 있다.
+        /// 이벤트가 실제 Core 처리와 저장까지 성공한 뒤 알림으로 발행된다.
         /// </remarks>
         public static event Action<string, string> RouteEventForced;
 
@@ -254,7 +254,7 @@ namespace ND.Framework
         /// <param name="eventId">주입할 route event ID.</param>
         /// <remarks>
         /// FrameworkDebugCommands.ForceRouteEvent가 Traveling 검증 후 호출한다.
-        /// Core 적용은 구독자 또는 TryConsumeForcedRouteEvent 경로에서 처리한다.
+        /// Core 적용과 저장은 FrameworkDebugCommands가 먼저 완료한다.
         /// </remarks>
         public static void RaiseRouteEventForced(string tradeId, string eventId)
         {
