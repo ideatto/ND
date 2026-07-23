@@ -21,6 +21,31 @@ public sealed class CaravanSlotView : MonoBehaviour
     [SerializeField] private GameObject journeyStateDisplay;
     [SerializeField] private TMP_Text journeyStateText;
 
+    [Header("Journey State Icons")]
+    [Tooltip("Optional icon target. When the matching Sprite is missing, journeyStateText remains visible as a fallback.")]
+    [SerializeField] private Image journeyStateIconImage;
+    [SerializeField] private Sprite prepareStateIcon;
+    [SerializeField] private Sprite travelingStateIcon;
+    [SerializeField] private Sprite settlingStateIcon;
+    [SerializeField] private Sprite completedStateIcon;
+    [Tooltip("Optional Animator on the state icon. Its controller should expose the configured bool parameter.")]
+    [SerializeField] private Animator journeyStateIconAnimator;
+    [SerializeField] private string travelingAnimatorParameter = "IsTraveling";
+
+    [Header("Action Icons")]
+    [Tooltip("Optional child Image placed inside the Set button.")]
+    [SerializeField] private Image settingButtonIconImage;
+    [SerializeField] private Sprite settingButtonIcon;
+    [Tooltip("Optional child Image placed inside the Cargo button.")]
+    [SerializeField] private Image cargoButtonIconImage;
+    [SerializeField] private Sprite cargoLoadButtonIcon;
+    [Tooltip("Reserved for the future arrival-sale action. It is not selected until Framework exposes a distinct sale-pending state.")]
+    [SerializeField] private Sprite cargoSellButtonIcon;
+    [Tooltip("Optional label hidden only when a valid Set icon is available.")]
+    [SerializeField] private TMP_Text settingButtonText;
+    [Tooltip("Optional label hidden only when a valid Cargo icon is available.")]
+    [SerializeField] private TMP_Text cargoButtonText;
+
     [Header("Empty State")]
     [Tooltip("A dedicated action shown only for an unlocked Empty slot. It requests creation without generating an ID in UI code.")]
     [SerializeField] private Button createButton;
@@ -43,6 +68,8 @@ public sealed class CaravanSlotView : MonoBehaviour
     private string currentCaravanId = string.Empty;
     private string currentUnlockHintText = string.Empty;
     private bool isCreatePending;
+    private bool canRequestSetting;
+    private bool canRequestCargo;
 
     public int SlotIndex => slotIndex;
     public bool IsCreatePending => isCreatePending;
@@ -62,6 +89,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     private void OnDisable()
     {
         UnregisterButtonListeners();
+        SetTravelingAnimation(false);
     }
 
     /// <summary>Applies one Provider-owned slot snapshot.</summary>
@@ -109,6 +137,8 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         SetText(displayNameText, unknownSlotLabel);
         SetText(journeyStateText, "-");
+        ClearJourneyStateIcon();
+        ApplyActionIcons();
         SetOccupiedControlsVisible(false);
         SetButtonsInteractable(false, false);
         SetCreateButtonVisible(false);
@@ -122,15 +152,17 @@ public sealed class CaravanSlotView : MonoBehaviour
             : data.displayName;
 
         SetText(displayNameText, displayName);
-        SetText(journeyStateText, data.state.ToString());
+        ApplyJourneyStatePresentation(data.state);
+        ApplyActionIcons();
         currentUnlockHintText = string.Empty;
         isCreatePending = false;
 
-        // Setting and Cargo panels decide whether their inner controls are editable.
-        // Overview buttons remain available so a traveling Caravan can still be inspected.
+        // Until Framework exposes a distinct arrival-sale state, only Prepare permits editing.
+        // Traveling, Settling, and Completed remain display-only to avoid mutating an active run.
         bool hasValidIdentity = !string.IsNullOrWhiteSpace(currentCaravanId);
+        bool canEdit = hasValidIdentity && data.state == JourneyState.Prepare;
         SetOccupiedControlsVisible(true);
-        SetButtonsInteractable(hasValidIdentity, hasValidIdentity);
+        SetButtonsInteractable(canEdit, canEdit);
         SetCreateButtonVisible(false);
         SetLockOverlayVisible(false, false);
     }
@@ -139,6 +171,8 @@ public sealed class CaravanSlotView : MonoBehaviour
     {
         SetText(displayNameText, emptySlotLabel);
         SetText(journeyStateText, "-");
+        ClearJourneyStateIcon();
+        ApplyActionIcons();
         currentUnlockHintText = string.Empty;
         isCreatePending = false;
 
@@ -155,6 +189,8 @@ public sealed class CaravanSlotView : MonoBehaviour
         // Locked is an unavailable Empty slot: keep the Empty base visible beneath the filter.
         SetText(displayNameText, emptySlotLabel);
         SetText(journeyStateText, "-");
+        ClearJourneyStateIcon();
+        ApplyActionIcons();
         currentUnlockHintText = string.IsNullOrWhiteSpace(unlockHintText)
             ? defaultUnlockHintText
             : unlockHintText;
@@ -223,6 +259,9 @@ public sealed class CaravanSlotView : MonoBehaviour
         bool canOpenSetting,
         bool canOpenCargo)
     {
+        canRequestSetting = canOpenSetting;
+        canRequestCargo = canOpenCargo;
+
         if (settingButton != null)
         {
             settingButton.interactable = canOpenSetting;
@@ -231,6 +270,106 @@ public sealed class CaravanSlotView : MonoBehaviour
         if (cargoButton != null)
         {
             cargoButton.interactable = canOpenCargo;
+        }
+    }
+
+    private void ApplyJourneyStatePresentation(JourneyState state)
+    {
+        SetText(journeyStateText, state.ToString());
+
+        Sprite stateIcon = ResolveJourneyStateIcon(state);
+        bool canShowIcon = journeyStateIconImage != null && stateIcon != null;
+
+        if (journeyStateIconImage != null)
+        {
+            journeyStateIconImage.sprite = stateIcon;
+            journeyStateIconImage.enabled = canShowIcon;
+            journeyStateIconImage.preserveAspect = true;
+        }
+
+        if (journeyStateText != null)
+        {
+            journeyStateText.gameObject.SetActive(!canShowIcon);
+        }
+
+        SetTravelingAnimation(canShowIcon && state == JourneyState.Traveling);
+    }
+
+    private Sprite ResolveJourneyStateIcon(JourneyState state)
+    {
+        switch (state)
+        {
+            case JourneyState.Prepare:
+                return prepareStateIcon;
+            case JourneyState.Traveling:
+                return travelingStateIcon;
+            case JourneyState.Settling:
+                return settlingStateIcon;
+            case JourneyState.Completed:
+                return completedStateIcon;
+            default:
+                return null;
+        }
+    }
+
+    private void ClearJourneyStateIcon()
+    {
+        SetTravelingAnimation(false);
+        if (journeyStateIconImage != null)
+        {
+            journeyStateIconImage.sprite = null;
+            journeyStateIconImage.enabled = false;
+        }
+
+        if (journeyStateText != null)
+        {
+            journeyStateText.gameObject.SetActive(true);
+        }
+
+    }
+
+    private void SetTravelingAnimation(bool isTraveling)
+    {
+        if (journeyStateIconAnimator == null
+            || string.IsNullOrWhiteSpace(travelingAnimatorParameter))
+        {
+            return;
+        }
+
+        int parameterHash = Animator.StringToHash(travelingAnimatorParameter);
+        foreach (AnimatorControllerParameter parameter in journeyStateIconAnimator.parameters)
+        {
+            if (parameter.nameHash == parameterHash
+                && parameter.type == AnimatorControllerParameterType.Bool)
+            {
+                journeyStateIconAnimator.SetBool(parameterHash, isTraveling);
+                return;
+            }
+        }
+    }
+
+    private void ApplyActionIcons()
+    {
+        ApplyOptionalButtonIcon(settingButtonIconImage, settingButtonText, settingButtonIcon);
+        ApplyOptionalButtonIcon(cargoButtonIconImage, cargoButtonText, cargoLoadButtonIcon);
+    }
+
+    private static void ApplyOptionalButtonIcon(
+        Image iconImage,
+        TMP_Text fallbackText,
+        Sprite icon)
+    {
+        bool canShowIcon = iconImage != null && icon != null;
+        if (iconImage != null)
+        {
+            iconImage.sprite = icon;
+            iconImage.enabled = canShowIcon;
+            iconImage.preserveAspect = true;
+        }
+
+        if (fallbackText != null)
+        {
+            fallbackText.gameObject.SetActive(!canShowIcon);
         }
     }
 
@@ -322,7 +461,9 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void HandleSettingClicked()
     {
-        if (currentState == CaravanSlotState.Occupied && !string.IsNullOrWhiteSpace(currentCaravanId))
+        if (canRequestSetting
+            && currentState == CaravanSlotState.Occupied
+            && !string.IsNullOrWhiteSpace(currentCaravanId))
         {
             SettingRequested?.Invoke(currentCaravanId);
         }
@@ -330,7 +471,9 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void HandleCargoClicked()
     {
-        if (currentState == CaravanSlotState.Occupied && !string.IsNullOrWhiteSpace(currentCaravanId))
+        if (canRequestCargo
+            && currentState == CaravanSlotState.Occupied
+            && !string.IsNullOrWhiteSpace(currentCaravanId))
         {
             CargoRequested?.Invoke(currentCaravanId);
         }

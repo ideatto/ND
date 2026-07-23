@@ -58,4 +58,29 @@ public class RouteData : ScriptableObject, IIdentifiableData
     public RouteEventData[] RouteEvents => routeEvents != null ? (RouteEventData[])routeEvents.Clone() : new RouteEventData[0];
     public int MaxEventCount => Mathf.Max(0, maxEventCount);
     #endregion
+
+    private void OnEnable()
+    {
+        NormalizeRouteEvents();
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        NormalizeRouteEvents();
+    }
+#endif
+
+    private void NormalizeRouteEvents()
+    {
+        if (routeEvents == null)
+            return;
+
+        for (int index = 0; index < routeEvents.Length; index++)
+        {
+            RouteEventData routeEvent = routeEvents[index];
+            if (routeEvent != null)
+                routeEvent.NormalizeRewards();
+        }
+    }
 }

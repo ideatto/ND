@@ -143,6 +143,26 @@ Cargo Button
 
 Overview에서 클릭하거나 편집한 캐러밴을 무역 출발 대상으로 자동 선택하지 않는다.
 
+#### Journey 및 행동 아이콘 연결
+
+`CaravanSlotView`는 아이콘 Asset이 준비되기 전에도 기존 텍스트가 유지되도록 선택적 Sprite 슬롯을 제공한다.
+
+| Inspector 구역 | 연결 필드 |
+|---|---|
+| Journey State Icons | `Journey State Icon Image`, `Prepare State Icon`, `Traveling State Icon`, `Settling State Icon`, `Completed State Icon`, `Journey State Icon Animator` |
+| Action Icons | `Setting Button Icon Image`, `Setting Button Icon`, `Cargo Button Icon Image`, `Cargo Load Button Icon`, `Cargo Sell Button Icon` |
+| Text fallback | `Setting Button Text`, `Cargo Button Text`, 기존 `Journey State Text` |
+
+- 대상 `Image`와 상태 Sprite가 모두 연결된 경우에만 아이콘을 표시하고 대응 텍스트를 숨긴다.
+- 참조가 하나라도 비어 있으면 기존 텍스트 표시를 유지한다.
+- 상태 아이콘 Animator Controller는 bool 파라미터 `IsTraveling`과 Idle/TravelingSpin 상태를 제공한다.
+- `CaravanSlotView`는 상태가 바뀔 때 `IsTraveling`만 변경하고 `Update()`에서 직접 회전시키지 않는다.
+- `TravelingSpin` AnimationClip은 회전 Loop를 담당하고 Idle 복귀 시 회전값을 0으로 되돌린다.
+- `Prepare`에서만 Setting과 Cargo 적재 버튼을 활성화한다.
+- `Traveling`, `Settling`, `Completed`에서는 현재 단계의 Setting/Cargo 편집을 비활성화한다.
+- `Cargo Sell Button Icon`은 도착 판매 전용 상태가 Framework에 추가될 때 연결할 예약 슬롯이다. 현재 `Settling`에 판매 동작을 추론해서 연결하지 않는다.
+- 아이콘 파일은 별도 Asset으로 유지하고 `CaravanSlotView`가 외부 상태를 새로 저장하거나 전환하지 않게 한다.
+
 ### 5.2 메인 무역 버튼
 
 `TradeBtn`은 캐러밴 ID 없이 TradePrepareUI 진입만 요청한다. 출발 캐러밴은 TradePrepareUI의 첫 단계에서 별도로 선택한다.
