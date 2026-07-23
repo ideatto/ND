@@ -86,11 +86,16 @@ namespace ND.Framework
     {
         private readonly Func<SaveData> getSaveData;
         private readonly ISaveService saveService;
+        private readonly Func<string, CaravanData> registerRuntimeCaravan;
 
-        public CaravanManagementService(Func<SaveData> getSaveData, ISaveService saveService)
+        public CaravanManagementService(
+            Func<SaveData> getSaveData,
+            ISaveService saveService,
+            Func<string, CaravanData> registerRuntimeCaravan = null)
         {
             this.getSaveData = getSaveData;
             this.saveService = saveService;
+            this.registerRuntimeCaravan = registerRuntimeCaravan;
         }
 
         /// <summary>
@@ -167,6 +172,16 @@ namespace ND.Framework
             }
 
             if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(snapshot, saveData);
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveFailed,
+                    saveResult);
+            }
+
+            if (registerRuntimeCaravan != null
+                && registerRuntimeCaravan(caravan.caravanId) == null)
             {
                 JsonUtility.FromJsonOverwrite(snapshot, saveData);
                 return CaravanCreationResult.Failure(
@@ -461,9 +476,14 @@ namespace ND.Framework
                 // Register every newly departed caravan so the coordinator never reuses the
                 // claimed Prepare-state caravan left by the previous trade cycle.
                 TradeProgressCoordinator.SetActiveCaravan,
-                () => SharedGameData);
+                () => SharedGameData,
+                TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
-            CaravanManagement = new CaravanManagementService(() => CurrentSaveData, SaveService);
+            TradeProgressCoordinator.RebuildRuntimeCaravans();
+            CaravanManagement = new CaravanManagementService(
+                () => CurrentSaveData,
+                SaveService,
+                TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
 
             // 실제 MinimumTradeCost는 Content/Progression 공급 전까지 0으로 두어 command가 안전하게 거부되게 한다.
             ConfigureRescueLoanDefinition(new RescueLoanDefinition());

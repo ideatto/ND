@@ -61,6 +61,7 @@ namespace ND.Framework.Editor
             RunAssetInstanceIdPersistenceChecks();
             RunMultiCaravanSaveDataChecks();
             RunProductionCaravanCreationChecks();
+            RunRuntimeCaravanRegistryChecks();
             RunCaravanSlotNormalizationChecks();
             RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
@@ -307,6 +308,87 @@ namespace ND.Framework.Editor
             }
 
             Debug.Log("[Framework M1 E2E] Production Caravan creation contract passed.");
+        }
+
+        private static void RunRuntimeCaravanRegistryChecks()
+        {
+            var context = TestContext.Create();
+            var saveData = context.SaveData;
+            var selectedId = saveData.selectedCaravanId;
+            var secondRuntimeSource = CreateSampleCaravan(context.GameTime);
+            secondRuntimeSource.caravanId = Guid.NewGuid().ToString("N");
+            var secondSave = new CaravanSaveData();
+            CaravanSaveDataMapper.CopyToSave(secondRuntimeSource, secondSave);
+            secondSave.slotIndex = 1;
+            saveData.caravans.Add(secondSave);
+            saveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = secondSave.caravanId,
+                state = TradeProgressState.None
+            });
+
+            context.Coordinator.RebuildRuntimeCaravans();
+            if (!context.Coordinator.TryGetRuntimeCaravan(selectedId, out var rebuiltSelected)
+                || !context.Coordinator.TryGetRuntimeCaravan(secondSave.caravanId, out var rebuiltSecond)
+                || ReferenceEquals(rebuiltSelected, rebuiltSecond)
+                || rebuiltSelected.caravanId != selectedId
+                || rebuiltSecond.caravanId != secondSave.caravanId
+                || !ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSelected))
+            {
+                throw new InvalidOperationException("Runtime registry did not rebuild every caravan by ID.");
+            }
+
+            saveData.selectedCaravanId = secondSave.caravanId;
+            if (!ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSecond))
+            {
+                throw new InvalidOperationException("ActiveCaravan did not follow selectedCaravanId.");
+            }
+            saveData.selectedCaravanId = selectedId;
+            if (!ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSelected))
+            {
+                throw new InvalidOperationException("Selected changes recreated or replaced runtime caravans.");
+            }
+
+            var selectedStateBeforeDepart = rebuiltSelected.state;
+            var departure = context.TradeStart.Depart(new TradeDepartureRequest
+            {
+                CaravanId = secondSave.caravanId,
+                RouteId = RouteId
+            });
+            if (!departure.DepartureSucceeded
+                || saveData.selectedCaravanId != selectedId
+                || !ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSelected)
+                || rebuiltSelected.state != selectedStateBeforeDepart
+                || rebuiltSecond.state != JourneyState.Traveling
+                || secondSave.state != JourneyState.Traveling)
+            {
+                throw new InvalidOperationException(
+                    "Non-selected departure replaced or mutated the selected runtime caravan.");
+            }
+
+            var creationSave = new ConfigurableSaveService();
+            var management = new CaravanManagementService(
+                () => saveData,
+                creationSave,
+                context.Coordinator.GetOrCreateRuntimeCaravan);
+            var created = management.CreateCaravan(2);
+            if (!created.Succeeded
+                || !context.Coordinator.TryGetRuntimeCaravan(created.CaravanId, out var createdRuntime)
+                || createdRuntime.caravanId != created.CaravanId)
+            {
+                throw new InvalidOperationException("Created caravan was not registered without reloading.");
+            }
+
+            var beforeFailure = JsonUtility.ToJson(saveData);
+            creationSave.ShouldSucceed = false;
+            var failed = management.CreateCaravan(3);
+            if (failed.Succeeded || JsonUtility.ToJson(saveData) != beforeFailure
+                || context.Coordinator.TryGetRuntimeCaravan(failed.CaravanId, out _))
+            {
+                throw new InvalidOperationException("Failed caravan creation changed save or runtime registry state.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Runtime caravan registry checks passed.");
         }
 
         private static void RunCaravanSlotNormalizationChecks()
@@ -2017,10 +2099,11 @@ namespace ND.Framework.Editor
                     // Production wiring registers the same departure reference in FrameworkRoot.
                     caravan =>
                     {
-                        StageTestCommit(saveData, sharedGameData, commitStore);
+                        StageTestCommit(saveData, sharedGameData, commitStore, caravan.caravanId);
                         coordinator.SetActiveCaravan(caravan);
                     },
-                    () => sharedGameData);
+                    () => sharedGameData,
+                    coordinator.GetOrCreateRuntimeCaravan);
 
                 return new TestContext
                 {
@@ -2037,9 +2120,14 @@ namespace ND.Framework.Editor
             private static void StageTestCommit(
                 SaveData saveData,
                 ISharedGameDataProvider sharedGameData,
-                FrameworkTradePrepareCommitStore commitStore)
+                FrameworkTradePrepareCommitStore commitStore,
+                string caravanId = null)
             {
                 var progress = saveData.tradeProgress;
+                if (!string.IsNullOrEmpty(caravanId))
+                {
+                    SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress);
+                }
                 if (progress == null || !sharedGameData.TryGetRoute(progress.activeRouteId, out var route) || route == null)
                 {
                     throw new InvalidOperationException("Test commit could not resolve the active route.");
