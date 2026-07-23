@@ -29,6 +29,7 @@
  */
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using ND.Economy;
@@ -65,6 +66,8 @@ namespace ND.Framework.Editor
             RunCaravanSlotNormalizationChecks();
             RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
+            RunMultiActiveOnlineTickChecks();
+            RunExplicitEconomyTradeIdChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
@@ -846,6 +849,218 @@ namespace ND.Framework.Editor
                 new TradeProgressRecorder(context.GameTime, context.GameTime),
                 context.ScreenRouter,
                 getSharedGameData: () => context.SharedGameData);
+        }
+
+        /// <summary>
+        /// 비선택 진행, entry별 오류 격리, 동시 완료, pending/event ID 및 Tick당 단일 저장을 검증한다.
+        /// </summary>
+        private static void RunMultiActiveOnlineTickChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var command = CreatePlayerDepartureCommand(context, save);
+            var firstId = context.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(context.SaveData, firstId, out var firstSave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), firstSave);
+
+            var secondSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), secondSave);
+            context.SaveData.caravans.Add(secondSave);
+
+            var firstDeparture = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = firstId,
+                RouteId = RouteId
+            });
+            var secondDeparture = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = secondSave.caravanId,
+                RouteId = RouteId
+            });
+            if (!firstDeparture.DepartureSucceeded || !secondDeparture.DepartureSucceeded)
+                throw new InvalidOperationException("Multi-active online setup departure failed.");
+
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, firstId, out var firstProgress);
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, secondSave.caravanId, out var secondProgress);
+            var now = context.GameTime.CurrentUtc;
+            firstProgress.tradeStartUtcTick = now.AddMinutes(-2).Ticks;
+            firstProgress.expectedTradeEndUtcTick = now.AddMinutes(-1).Ticks;
+            secondProgress.tradeStartUtcTick = now.AddMinutes(-1).Ticks;
+            secondProgress.expectedTradeEndUtcTick = now.AddMinutes(1).Ticks;
+            context.SaveData.tradeProgressEntries.Insert(1, new TradeProgressSaveData
+            {
+                caravanId = "missing-runtime",
+                activeTradeId = "missing-runtime-trade",
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = now.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = now.AddMinutes(1).Ticks
+            });
+            context.SaveData.selectedCaravanId = secondSave.caravanId;
+
+            var selectedBefore = context.SaveData.selectedCaravanId;
+            var saveCallsBeforeTick = save.SaveCalls;
+            var readyEvents = new List<string>();
+            Action<string, string, JourneyResultData> onReady =
+                (caravanId, tradeId, _) => readyEvents.Add(caravanId + ":" + tradeId);
+            FrameworkEvents.TradeSettlementReady += onReady;
+            try
+            {
+                if (!context.Coordinator.CheckProgressAndCompletion())
+                    throw new InvalidOperationException("Multi-active online tick did not report settlement.");
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onReady;
+            }
+
+            if (firstProgress.state != TradeProgressState.SettlementPending
+                || secondProgress.state != TradeProgressState.Traveling
+                || context.SaveData.selectedCaravanId != selectedBefore
+                || context.SaveData.pendingSettlements.Count != 1
+                || context.SaveData.pendingSettlements[0].caravanId != firstId
+                || context.SaveData.pendingSettlements[0].tradeId != firstDeparture.TradeId
+                || readyEvents.Count != 1
+                || readyEvents[0] != firstId + ":" + firstDeparture.TradeId
+                || save.SaveCalls != saveCallsBeforeTick + 1)
+            {
+                throw new InvalidOperationException("Multi-active mixed tick state, event, selection, or save batching failed.");
+            }
+
+            var simultaneousSave = new ConfigurableSaveService();
+            var simultaneous = TestContext.Create(simultaneousSave);
+            var simultaneousCommand = CreatePlayerDepartureCommand(simultaneous, simultaneousSave);
+            var aId = simultaneous.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(simultaneous.SaveData, aId, out var aSave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), aSave);
+            var bSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), bSave);
+            simultaneous.SaveData.caravans.Add(bSave);
+            var aDeparture = simultaneousCommand.Depart(new TradeDepartureRequest
+            {
+                CaravanId = aId,
+                RouteId = RouteId
+            });
+            var bDeparture = simultaneousCommand.Depart(new TradeDepartureRequest
+            {
+                CaravanId = bSave.caravanId,
+                RouteId = RouteId
+            });
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, aId, out var aProgress);
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, bSave.caravanId, out var bProgress);
+            var simultaneousNow = simultaneous.GameTime.CurrentUtc;
+            aProgress.expectedTradeEndUtcTick = simultaneousNow.AddSeconds(-1).Ticks;
+            bProgress.expectedTradeEndUtcTick = simultaneousNow.AddSeconds(-1).Ticks;
+            var simultaneousSavesBefore = simultaneousSave.SaveCalls;
+            var simultaneousEvents = 0;
+            Action<string, string, JourneyResultData> onSimultaneousReady =
+                (_, __, ___) => simultaneousEvents++;
+            FrameworkEvents.TradeSettlementReady += onSimultaneousReady;
+            try
+            {
+                simultaneous.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+                simultaneous.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onSimultaneousReady;
+            }
+
+            if (aProgress.state != TradeProgressState.SettlementPending
+                || bProgress.state != TradeProgressState.SettlementPending
+                || simultaneous.SaveData.pendingSettlements.Count != 2
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, aId, aDeparture.TradeId, out _)
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, bSave.caravanId, bDeparture.TradeId, out _)
+                || simultaneousEvents != 2
+                || simultaneousSave.SaveCalls != simultaneousSavesBefore + 1)
+            {
+                throw new InvalidOperationException("Multi-active simultaneous settlement or duplicate prevention failed.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Multi-active online tick checks passed.");
+        }
+
+        /// <summary>
+        /// Economy input과 pending cache가 selected가 아닌 명시 progress의 trade ID를 사용하는지 검증한다.
+        /// </summary>
+        private static void RunExplicitEconomyTradeIdChecks()
+        {
+            var context = TestContext.Create(new ConfigurableSaveService());
+            var selectedProgress = new TradeProgressSaveData
+            {
+                caravanId = context.SaveData.selectedCaravanId,
+                activeTradeId = "trade-selected",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            context.SaveData.tradeProgressEntries.Add(selectedProgress);
+
+            var explicitProgress = new TradeProgressSaveData
+            {
+                caravanId = Guid.NewGuid().ToString("N"),
+                activeTradeId = "trade-explicit",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.caravanId = explicitProgress.caravanId;
+            var result = new JourneyResultData();
+
+            var input = FrameworkEconomyM1InputBuilder.TryBuild(
+                context.SaveData, explicitProgress, caravan, result, context.SharedGameData);
+            if (input == null || input.TradeId != explicitProgress.activeTradeId)
+            {
+                throw new InvalidOperationException(
+                    "Explicit Economy input used the selected progress trade ID.");
+            }
+
+            var bridge = new EconomyM1SettlementBridge();
+            if (!bridge.TryCalculateAndFill(
+                    context.SaveData, explicitProgress, caravan, result, context.SharedGameData)
+                || bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, selectedProgress.activeTradeId)
+                || !bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, explicitProgress.activeTradeId))
+            {
+                throw new InvalidOperationException(
+                    "Explicit Economy pending trade ID did not remain aligned with its progress entry.");
+            }
+
+            var secondProgress = new TradeProgressSaveData
+            {
+                caravanId = Guid.NewGuid().ToString("N"),
+                activeTradeId = "trade-second",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            var secondInput = FrameworkEconomyM1InputBuilder.TryBuild(
+                context.SaveData, secondProgress, caravan,
+                new JourneyResultData(), context.SharedGameData);
+            if (secondInput == null || secondInput.TradeId != secondProgress.activeTradeId
+                || !bridge.TryCalculateAndFill(
+                    context.SaveData, secondProgress, caravan,
+                    new JourneyResultData(), context.SharedGameData)
+                || bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, explicitProgress.activeTradeId)
+                || !bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, secondProgress.activeTradeId))
+            {
+                throw new InvalidOperationException(
+                    "Sequential simultaneous-settlement Economy IDs were not independently aligned.");
+            }
+
+            explicitProgress.activeTradeId = string.Empty;
+            if (FrameworkEconomyM1InputBuilder.TryBuild(
+                    context.SaveData, explicitProgress, caravan,
+                    new JourneyResultData(), context.SharedGameData) != null
+                || bridge.TryCalculateAndFill(
+                    context.SaveData, explicitProgress, caravan,
+                    new JourneyResultData(), context.SharedGameData))
+            {
+                throw new InvalidOperationException(
+                    "Empty explicit Economy trade ID fell back to the selected progress.");
+            }
         }
 
         private static void RunRescueLoanIntegrationChecks()
