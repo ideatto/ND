@@ -67,6 +67,7 @@ namespace ND.Framework.Editor
             RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
             RunMultiActiveOnlineTickChecks();
+            RunMultiActiveOfflineRestoreChecks();
             RunExplicitEconomyTradeIdChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
@@ -979,6 +980,188 @@ namespace ND.Framework.Editor
             }
 
             Debug.Log("[Framework M1 E2E] Multi-active online tick checks passed.");
+        }
+
+        /// <summary>
+        /// Offline restore가 selected facade가 아닌 명시 entry 전체를 처리하고 저장·이벤트를 일괄 처리하는지 검증한다.
+        /// </summary>
+        private static void RunMultiActiveOfflineRestoreChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var command = CreatePlayerDepartureCommand(context, save);
+            var caravanAId = context.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(context.SaveData, caravanAId, out var caravanASave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), caravanASave);
+
+            var caravanBSave = new CaravanSaveData { caravanId = "caravan_B" };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), caravanBSave);
+            context.SaveData.caravans.Add(caravanBSave);
+            var caravanCSave = new CaravanSaveData { caravanId = "caravan_C" };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), caravanCSave);
+            context.SaveData.caravans.Add(caravanCSave);
+
+            var departureA = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = caravanAId,
+                RouteId = RouteId
+            });
+            var departureB = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = caravanBSave.caravanId,
+                RouteId = RouteId
+            });
+            if (!departureA.DepartureSucceeded || !departureB.DepartureSucceeded)
+                throw new InvalidOperationException("Multi-active offline setup departure failed.");
+
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanAId, out var progressA);
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanBSave.caravanId, out var progressB);
+            var now = context.GameTime.CurrentUtc;
+            progressA.activeTradeId = "trade_A";
+            progressA.tradeStartUtcTick = now.AddMinutes(-2).Ticks;
+            progressA.expectedTradeEndUtcTick = now.AddMinutes(-1).Ticks;
+            progressB.activeTradeId = "trade_B";
+            progressB.tradeStartUtcTick = now.AddMinutes(-1).Ticks;
+            progressB.expectedTradeEndUtcTick = now.AddMinutes(1).Ticks;
+            context.SaveData.tradeProgressEntries.Insert(1, new TradeProgressSaveData
+            {
+                caravanId = "missing_caravan",
+                activeTradeId = "trade_missing",
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = now.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = now.AddMinutes(1).Ticks
+            });
+            context.SaveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravanCSave.caravanId,
+                activeTradeId = string.Empty,
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = now.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = now.AddMinutes(1).Ticks
+            });
+            context.SaveData.selectedCaravanId = caravanCSave.caravanId;
+            context.SaveData.lastSavedUtcTicks = now.AddMinutes(-2).Ticks;
+
+            var selectedBefore = context.SaveData.selectedCaravanId;
+            var savesBefore = save.SaveCalls;
+            var ready = new List<string>();
+            var offline = new List<string>();
+            var restoreWarnings = new List<string>();
+            Action<string, string, JourneyResultData> onReady =
+                (caravanId, tradeId, _) => ready.Add(caravanId + ":" + tradeId);
+            Action<string> onOffline = tradeId => offline.Add(tradeId);
+            Application.LogCallback onLog = (condition, _, type) =>
+            {
+                if (type == LogType.Warning && condition.Contains("Offline trade restore skipped."))
+                {
+                    restoreWarnings.Add(condition);
+                }
+            };
+            FrameworkEvents.TradeSettlementReady += onReady;
+            FrameworkEvents.TradeOfflineCompleted += onOffline;
+            Application.logMessageReceived += onLog;
+            try
+            {
+                if (!context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData))
+                    throw new InvalidOperationException("Multi-active offline restore did not report settlement.");
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onReady;
+                FrameworkEvents.TradeOfflineCompleted -= onOffline;
+                Application.logMessageReceived -= onLog;
+            }
+
+            var runtimeB = context.Coordinator.GetOrCreateRuntimeCaravan(caravanBSave.caravanId);
+            var missingCaravanWarning = restoreWarnings.Exists(message =>
+                message.Contains("Offline")
+                && message.Contains("SaveTargetLookup")
+                && message.Contains("missing_caravan")
+                && message.Contains("trade_missing")
+                && message.Contains("Reason:"));
+            var emptyTradeWarning = restoreWarnings.Exists(message =>
+                message.Contains("Offline")
+                && message.Contains("EntryValidation")
+                && message.Contains("caravan_C")
+                && message.Contains("TradeId: <empty>")
+                && message.Contains("Reason:"));
+            if (progressA.state != TradeProgressState.SettlementPending
+                || progressB.state != TradeProgressState.Traveling
+                || runtimeB == null || runtimeB.progress01 <= 0f
+                || Mathf.Abs(runtimeB.progress01 - caravanBSave.progress01) > 0.001f
+                || context.SaveData.selectedCaravanId != selectedBefore
+                || context.SaveData.pendingSettlements.Count != 1
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    context.SaveData, caravanAId, "trade_A", out _)
+                || ready.Count != 1 || ready[0] != caravanAId + ":trade_A"
+                || offline.Count != 1 || offline[0] != "trade_A"
+                || !missingCaravanWarning || !emptyTradeWarning
+                || save.SaveCalls != savesBefore + 1)
+            {
+                throw new InvalidOperationException(
+                    "Multi-active offline mixed progress, isolation, ID, selection, event, or save batching failed.");
+            }
+
+            var savesAfterFirstRestore = save.SaveCalls;
+            var pendingAfterFirstRestore = context.SaveData.pendingSettlements.Count;
+            if (context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData)
+                || context.SaveData.pendingSettlements.Count != pendingAfterFirstRestore
+                || save.SaveCalls != savesAfterFirstRestore + 1)
+            {
+                throw new InvalidOperationException(
+                    "Multi-active offline repeated restore recreated settlement or violated progress save batching.");
+            }
+
+            var simultaneousSave = new ConfigurableSaveService();
+            var simultaneous = TestContext.Create(simultaneousSave);
+            var simultaneousCommand = CreatePlayerDepartureCommand(simultaneous, simultaneousSave);
+            var simultaneousAId = simultaneous.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(simultaneous.SaveData, simultaneousAId, out var simultaneousASave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), simultaneousASave);
+            var simultaneousBSave = new CaravanSaveData { caravanId = "caravan_B" };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), simultaneousBSave);
+            simultaneous.SaveData.caravans.Add(simultaneousBSave);
+            simultaneousCommand.Depart(new TradeDepartureRequest { CaravanId = simultaneousAId, RouteId = RouteId });
+            simultaneousCommand.Depart(new TradeDepartureRequest { CaravanId = simultaneousBSave.caravanId, RouteId = RouteId });
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, simultaneousAId, out var simultaneousAProgress);
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, simultaneousBSave.caravanId, out var simultaneousBProgress);
+            var simultaneousNow = simultaneous.GameTime.CurrentUtc;
+            simultaneousAProgress.activeTradeId = "trade_A";
+            simultaneousBProgress.activeTradeId = "trade_B";
+            simultaneousAProgress.tradeStartUtcTick = simultaneousNow.AddMinutes(-10).Ticks;
+            simultaneousAProgress.expectedTradeEndUtcTick = simultaneousNow.AddMinutes(-5).Ticks;
+            simultaneousBProgress.tradeStartUtcTick = simultaneousNow.AddMinutes(-20).Ticks;
+            simultaneousBProgress.expectedTradeEndUtcTick = simultaneousNow.AddMinutes(-10).Ticks;
+            simultaneous.SaveData.lastSavedUtcTicks = simultaneousNow.AddMinutes(-1).Ticks;
+            var simultaneousSavesBefore = simultaneousSave.SaveCalls;
+            var simultaneousReady = new List<string>();
+            Action<string, string, JourneyResultData> onSimultaneousReady =
+                (caravanId, tradeId, _) => simultaneousReady.Add(caravanId + ":" + tradeId);
+            FrameworkEvents.TradeSettlementReady += onSimultaneousReady;
+            try
+            {
+                simultaneous.Coordinator.ApplyOfflineProgressOnLoad(simultaneous.SaveData);
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onSimultaneousReady;
+            }
+
+            if (simultaneousAProgress.state != TradeProgressState.SettlementPending
+                || simultaneousBProgress.state != TradeProgressState.SettlementPending
+                || simultaneous.SaveData.pendingSettlements.Count != 2
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, simultaneousAId, "trade_A", out _)
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, simultaneousBSave.caravanId, "trade_B", out _)
+                || simultaneousReady.Count != 2
+                || simultaneousSave.SaveCalls != simultaneousSavesBefore + 1)
+            {
+                throw new InvalidOperationException(
+                    "Multi-active offline simultaneous completion, explicit trade ID, or save batching failed.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Multi-active offline restore checks passed.");
         }
 
         /// <summary>
@@ -2090,8 +2273,10 @@ namespace ND.Framework.Editor
             }
 
             context.Coordinator.SetActiveCaravan(caravan);
-            context.SaveData.tradeProgress.expectedTradeEndUtcTick = DateTime.UtcNow.AddSeconds(-5d).Ticks;
-            context.SaveData.lastSavedUtcTicks = DateTime.UtcNow.AddSeconds(-60d).Ticks;
+            var nowUtc = context.GameTime.CurrentUtc;
+            context.SaveData.tradeProgress.tradeStartUtcTick = nowUtc.AddMinutes(-10).Ticks;
+            context.SaveData.tradeProgress.expectedTradeEndUtcTick = nowUtc.AddMinutes(-5).Ticks;
+            context.SaveData.lastSavedUtcTicks = nowUtc.AddMinutes(-15).Ticks;
 
             var offlineCompletedCount = 0;
             void OnOfflineCompleted(string completedTradeId) => offlineCompletedCount++;

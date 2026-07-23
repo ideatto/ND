@@ -386,11 +386,19 @@ namespace ND.Framework
                 return;
             }
 
-            // Traveling 이어하기는 오프라인 경과·완료를 먼저 반영한 뒤 pending 복구로 이어진다.
+            // 로드 전부터 pending이던 선택 caravan만 cache 복구 대상으로 기억한다.
+            // 이번 offline restore에서 새로 완료된 entry는 이미 ready 이벤트를 발행하므로 중복 복구하지 않는다.
+            var restoreSelectedPending =
+                CurrentSaveData.tradeProgress?.state == TradeProgressState.SettlementPending;
+
+            // Traveling 이어하기는 모든 명시 entry의 오프라인 경과·완료를 먼저 반영한다.
             TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
 
-            // SettlementPending 재진입 시 세션 캐시가 비어 있으므로 pendingSettlement로 복구한 뒤 화면을 갱신한다.
-            TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+            // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
+            if (restoreSelectedPending)
+            {
+                TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+            }
 
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
