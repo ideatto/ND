@@ -135,6 +135,7 @@ public sealed class CaravanSlotView : MonoBehaviour
         currentUnlockHintText = string.Empty;
         isCreatePending = false;
 
+        SetDisplayNameVisible(true);
         SetText(displayNameText, unknownSlotLabel);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
@@ -151,6 +152,7 @@ public sealed class CaravanSlotView : MonoBehaviour
             ? $"Caravan {slotIndex + 1}"
             : data.displayName;
 
+        SetDisplayNameVisible(true);
         SetText(displayNameText, displayName);
         ApplyJourneyStatePresentation(data.state);
         ApplyActionIcons();
@@ -169,6 +171,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void ShowEmpty()
     {
+        SetDisplayNameVisible(true);
         SetText(displayNameText, emptySlotLabel);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
@@ -186,8 +189,9 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void ShowLocked(string unlockHintText)
     {
-        // Locked is an unavailable Empty slot: keep the Empty base visible beneath the filter.
-        SetText(displayNameText, emptySlotLabel);
+        // The lock icon communicates this state by itself. Hide Empty-slot labels and
+        // actions underneath the overlay so they do not compete with the icon.
+        SetDisplayNameVisible(false);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
         ApplyActionIcons();
@@ -197,11 +201,7 @@ public sealed class CaravanSlotView : MonoBehaviour
         isCreatePending = false;
         SetOccupiedControlsVisible(false);
         SetButtonsInteractable(false, false);
-        SetCreateButtonVisible(true);
-        if (createButton != null)
-        {
-            createButton.interactable = false;
-        }
+        SetCreateButtonVisible(false);
 
         SetLockOverlayVisible(true, true);
     }
@@ -418,6 +418,14 @@ public sealed class CaravanSlotView : MonoBehaviour
         if (target != null)
         {
             target.text = value ?? string.Empty;
+        }
+    }
+
+    private void SetDisplayNameVisible(bool visible)
+    {
+        if (displayNameText != null)
+        {
+            displayNameText.gameObject.SetActive(visible);
         }
     }
 
