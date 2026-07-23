@@ -245,7 +245,7 @@ namespace ND.Framework
         /// 저장 DTO의 필수 컨테이너와 영속 자산 ID를 정규화한다.
         /// </summary>
         /// <param name="data">직접 수정할 저장 데이터.</param>
-        /// <returns>자산 컨테이너 또는 자산 ID가 변경되었으면 true.</returns>
+        /// <returns>저장 컨테이너, Caravan 선택/ID 또는 자산 ID가 변경되었으면 true.</returns>
         public static bool NormalizeData(SaveData data)
         {
             var assetDataChanged = false;
@@ -293,6 +293,7 @@ namespace ND.Framework
             if (data.caravans == null)
             {
                 data.caravans = new List<CaravanSaveData>();
+                assetDataChanged = true;
             }
 
             if (data.tradeProgressEntries == null)
@@ -308,6 +309,7 @@ namespace ND.Framework
             if (data.caravans.Count == 0)
             {
                 data.caravans.Add(new CaravanSaveData());
+                assetDataChanged = true;
             }
 
             var caravanIds = new HashSet<string>();
@@ -362,20 +364,31 @@ namespace ND.Framework
                         "Mercenary",
                         mercenary.mercName);
                 }
-                if (string.IsNullOrEmpty(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
+                if (string.IsNullOrWhiteSpace(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
                 {
-                    if (!string.IsNullOrEmpty(caravan.caravanId))
+                    var duplicateId = caravan.caravanId;
+                    do
                     {
-                        FrameworkLog.Warning($"Duplicate caravan ID was replaced without relinking ambiguous child data: {caravan.caravanId}");
+                        caravan.caravanId = SaveDataLookup.NewCaravanId();
                     }
-                    caravan.caravanId = SaveDataLookup.NewCaravanId();
-                    caravanIds.Add(caravan.caravanId);
+                    while (!caravanIds.Add(caravan.caravanId));
+
+                    assetDataChanged = true;
+                    if (!string.IsNullOrWhiteSpace(duplicateId))
+                    {
+                        FrameworkLog.Warning(
+                            $"Duplicate caravan ID was found and a later Caravan received a new ID: {duplicateId}. "
+                            + "Existing TradeProgress/PendingSettlement entries remain assigned to the original ID.");
+                    }
                 }
             }
 
             CaravanSaveData selected;
             if (!SaveDataLookup.TryGetCaravan(data, data.selectedCaravanId, out selected))
+            {
                 data.selectedCaravanId = data.caravans[0].caravanId;
+                assetDataChanged = true;
+            }
 
             ValidateChildData(data, caravanIds);
 

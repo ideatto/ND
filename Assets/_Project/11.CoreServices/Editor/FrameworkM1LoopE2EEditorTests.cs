@@ -29,6 +29,7 @@
  */
 #if UNITY_EDITOR
 using System;
+using System.IO;
 using System.Reflection;
 using ND.Economy;
 using UnityEditor;
@@ -59,6 +60,7 @@ namespace ND.Framework.Editor
         {
             RunAssetInstanceIdPersistenceChecks();
             RunMultiCaravanSaveDataChecks();
+            RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
@@ -186,6 +188,101 @@ namespace ND.Framework.Editor
                 || restored.selectedCaravanId != restored.caravans[0].caravanId)
             {
                 throw new InvalidOperationException("Multi-caravan ID normalization failed.");
+            }
+        }
+
+        private static void RunCaravanIdNormalizationPersistenceChecks()
+        {
+            AssertCaravanIdRepair(string.Empty, "empty");
+            AssertCaravanIdRepair("   ", "whitespace");
+
+            var duplicateData = CreateNormalizedSaveData("duplicate");
+            duplicateData.caravans.Add(new CaravanSaveData { caravanId = "duplicate" });
+            if (!JsonSaveService.NormalizeData(duplicateData)
+                || duplicateData.caravans[0].caravanId != "duplicate"
+                || duplicateData.caravans[1].caravanId == "duplicate"
+                || duplicateData.caravans[1].caravanId.Length != 32)
+            {
+                throw new InvalidOperationException("Duplicate caravan ID normalization failed.");
+            }
+
+            var repairedDuplicateId = duplicateData.caravans[1].caravanId;
+            if (JsonSaveService.NormalizeData(duplicateData)
+                || duplicateData.caravans[1].caravanId != repairedDuplicateId)
+            {
+                throw new InvalidOperationException("Caravan ID normalization was not idempotent.");
+            }
+
+            AssertSelectedCaravanRepair(string.Empty);
+            AssertSelectedCaravanRepair("missing");
+            RunCaravanIdLoadPersistenceCheck();
+
+            Debug.Log("[Framework M1 E2E] Caravan ID normalization and load persistence passed.");
+        }
+
+        private static SaveData CreateNormalizedSaveData(string caravanId)
+        {
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            data.caravans[0].caravanId = caravanId;
+            data.selectedCaravanId = caravanId;
+            return data;
+        }
+
+        private static void AssertCaravanIdRepair(string invalidId, string caseLabel)
+        {
+            var data = CreateNormalizedSaveData(invalidId);
+            if (!JsonSaveService.NormalizeData(data)
+                || data.caravans[0].caravanId.Length != 32
+                || data.selectedCaravanId != data.caravans[0].caravanId)
+            {
+                throw new InvalidOperationException($"Caravan {caseLabel} ID normalization failed.");
+            }
+        }
+
+        private static void AssertSelectedCaravanRepair(string invalidSelectedId)
+        {
+            var data = CreateNormalizedSaveData("caravan_a");
+            data.selectedCaravanId = invalidSelectedId;
+            if (!JsonSaveService.NormalizeData(data) || data.selectedCaravanId != "caravan_a")
+            {
+                throw new InvalidOperationException("Selected caravan ID normalization failed.");
+            }
+        }
+
+        private static void RunCaravanIdLoadPersistenceCheck()
+        {
+            var testDirectory = Path.Combine(Path.GetTempPath(), "nd-caravan-id-normalization-" + Guid.NewGuid().ToString("N"));
+            var testPath = Path.Combine(testDirectory, "save_data.json");
+            Directory.CreateDirectory(testDirectory);
+
+            try
+            {
+                var service = new JsonSaveService();
+                var savePathField = typeof(JsonSaveService).GetField("savePath", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (savePathField == null)
+                {
+                    throw new InvalidOperationException("JsonSaveService save path seam was not found.");
+                }
+
+                savePathField.SetValue(service, testPath);
+                var data = CreateNormalizedSaveData(string.Empty);
+                File.WriteAllText(testPath, JsonUtility.ToJson(data, true));
+
+                var firstLoad = service.Load();
+                var firstId = firstLoad.caravans[0].caravanId;
+                var firstJson = File.ReadAllText(testPath);
+                var secondLoad = service.Load();
+                var secondJson = File.ReadAllText(testPath);
+                if (firstId.Length != 32 || secondLoad.caravans[0].caravanId != firstId || secondJson != firstJson)
+                {
+                    throw new InvalidOperationException("Caravan ID was not persisted by exactly the first load normalization.");
+                }
+            }
+            finally
+            {
+                if (File.Exists(testPath)) File.Delete(testPath);
+                if (Directory.Exists(testDirectory)) Directory.Delete(testDirectory);
             }
         }
 
