@@ -46,6 +46,7 @@
  * - Related Documentation: Docs/Guide/Framework_World_Map_API_Guide.md
  */
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ND.Framework
@@ -106,7 +107,8 @@ namespace ND.Framework
         private readonly global::ITradePrepareCommitSource tradePrepareCommitSource;
         private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
-        private CaravanData activeCaravan;
+        private readonly Dictionary<string, CaravanData> runtimeCaravans =
+            new Dictionary<string, CaravanData>(StringComparer.Ordinal);
 
         /// <summary>
         /// coordinator에 필요한 저장 데이터 접근자와 무역 진행 의존성을 주입한다.
@@ -156,27 +158,85 @@ namespace ND.Framework
         public JourneyResultData LastSettlementResult { get; private set; }
 
         /// <summary>
-        /// 현재 진행 계산과 정산에 사용할 runtime caravan 데이터이다.
+        /// 선택된 caravan ID에 대응하는 UI 호환용 runtime caravan 데이터이다.
         /// </summary>
         /// <remarks>
-        /// 명시적으로 설정된 caravan이 없으면 SaveData.caravan에서 복원한다.
+        /// 진행 계산은 이 facade가 아니라 progress의 caravan ID를 사용한다.
         /// </remarks>
         public CaravanData ActiveCaravan
         {
             get
             {
-                EnsureActiveCaravan();
-                return activeCaravan;
+                return EnsureActiveCaravan();
             }
         }
 
         /// <summary>
-        /// 진행 계산에 사용할 runtime caravan 참조를 설정한다.
+        /// 기존 호출자 호환을 위해 전달된 caravan을 ID 기반 registry에 명시적으로 교체 등록한다.
         /// </summary>
         /// <param name="caravan">현재 active trade와 연결할 runtime caravan 데이터.</param>
         public void SetActiveCaravan(CaravanData caravan)
         {
-            activeCaravan = caravan;
+            if (caravan != null
+                && !string.IsNullOrWhiteSpace(caravan.caravanId)
+                && SaveDataLookup.TryGetCaravan(GetSaveData(), caravan.caravanId, out _))
+            {
+                runtimeCaravans[caravan.caravanId] = caravan;
+            }
+        }
+
+        /// <summary>등록된 동일 ID runtime caravan을 공유 참조로 반환한다.</summary>
+        public bool TryGetRuntimeCaravan(string caravanId, out CaravanData caravan)
+        {
+            caravan = null;
+            return !string.IsNullOrWhiteSpace(caravanId)
+                && runtimeCaravans.TryGetValue(caravanId, out caravan);
+        }
+
+        /// <summary>동일 ID runtime을 반환하거나 저장 snapshot에서 생성해 등록한다.</summary>
+        public CaravanData GetOrCreateRuntimeCaravan(string caravanId)
+        {
+            if (TryGetRuntimeCaravan(caravanId, out var caravan)) return caravan;
+            if (!SaveDataLookup.TryGetCaravan(GetSaveData(), caravanId, out var caravanSave)) return null;
+            caravan = CaravanSaveDataMapper.ToRuntime(caravanSave);
+            return RegisterRuntimeCaravan(caravanId, caravan) ? caravan : null;
+        }
+
+        /// <summary>저장 데이터에 존재하며 ID가 일치하는 runtime만 중복 교체 없이 등록한다.</summary>
+        public bool RegisterRuntimeCaravan(string caravanId, CaravanData caravan)
+        {
+            if (string.IsNullOrWhiteSpace(caravanId) || caravan == null
+                || !string.Equals(caravanId, caravan.caravanId, StringComparison.Ordinal)
+                || !SaveDataLookup.TryGetCaravan(GetSaveData(), caravanId, out _))
+            {
+                return false;
+            }
+            if (runtimeCaravans.TryGetValue(caravanId, out var existing))
+            {
+                return ReferenceEquals(existing, caravan);
+            }
+            runtimeCaravans.Add(caravanId, caravan);
+            return true;
+        }
+
+        /// <summary>기존 registry를 비우고 현재 저장 데이터의 모든 caravan runtime을 다시 구성한다.</summary>
+        public void RebuildRuntimeCaravans()
+        {
+            runtimeCaravans.Clear();
+            var saveData = GetSaveData();
+            if (saveData?.caravans == null) return;
+            for (var index = 0; index < saveData.caravans.Count; index++)
+            {
+                var caravanSave = saveData.caravans[index];
+                if (caravanSave == null || string.IsNullOrWhiteSpace(caravanSave.caravanId)) continue;
+                if (!RegisterRuntimeCaravan(
+                        caravanSave.caravanId,
+                        CaravanSaveDataMapper.ToRuntime(caravanSave)))
+                {
+                    FrameworkLog.Warning(
+                        $"Runtime caravan registration skipped. CaravanId: {caravanSave.caravanId}");
+                }
+            }
         }
 
         /// <summary>
@@ -217,7 +277,7 @@ namespace ND.Framework
             }
             else if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
             {
-                var caravan = EnsureActiveCaravan();
+                var caravan = GetRuntimeForProgress(saveData);
                 progress01 = caravan != null
                     ? caravan.progress01
                     : CalculateProgress(progress, gameTimeProvider != null ? gameTimeProvider.CurrentUtc : DateTime.UtcNow);
@@ -275,7 +335,7 @@ namespace ND.Framework
             }
 
             // runtime caravan이 없으면 저장된 caravan 상태를 복원해 진행률 계산 대상으로 사용한다.
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             if (caravan == null)
             {
                 FrameworkLog.Warning("Trade progress check skipped because active caravan is missing.");
@@ -288,7 +348,7 @@ namespace ND.Framework
             // 저장된 UTC 시작/종료 tick과 현재 시간을 비교해 Core caravan 진행률을 갱신한다.
             var progress = CalculateProgress(saveData.tradeProgress, gameTimeProvider.CurrentUtc);
             JourneyRunner.SetProgress(caravan, progress);
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
 
             // 아직 도착하지 않았고 치명적 실패도 없으면 현재 진행률만 저장하고 settlement 생성은 미룬다.
             if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
@@ -336,7 +396,7 @@ namespace ND.Framework
                 return false;
             }
 
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             if (caravan == null)
             {
                 FrameworkLog.Warning("Offline progress skipped because active caravan is missing.");
@@ -346,7 +406,7 @@ namespace ND.Framework
             SyncElapsedInGameSeconds(saveData, caravan, evaluationUtc);
             var progress = CalculateProgress(saveData.tradeProgress, evaluationUtc);
             JourneyRunner.SetProgress(caravan, progress);
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
 
             if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
             {
@@ -378,7 +438,7 @@ namespace ND.Framework
         private bool ClaimSettlementAndResetLegacy()
         {
             var saveData = GetSaveData();
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             // 저장 데이터 또는 caravan이 없으면 claim 결과를 저장하거나 reset할 수 없다.
             if (saveData == null || caravan == null)
             {
@@ -452,7 +512,7 @@ namespace ND.Framework
             }
 
             // reset된 runtime caravan을 저장 데이터에 반영한 뒤 원자 저장 결과를 확인한다.
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
             var saveResult = saveService != null ? saveService.Save(saveData) : null;
             if (saveResult == null || !saveResult.Succeeded)
             {
@@ -524,9 +584,7 @@ namespace ND.Framework
             if (!PendingSettlementSaveDataMapper.TryToRuntime(pending, out var settlementResult))
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
 
-            var caravan = caravanId == saveData.selectedCaravanId
-                ? EnsureActiveCaravan()
-                : CaravanSaveDataMapper.ToRuntime(caravanSave);
+            var caravan = GetOrCreateRuntimeCaravan(caravanId);
             if (caravan == null)
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
             if (!TryResolveClaimDestination(saveData, progress, out var destinationTownId))
@@ -730,7 +788,7 @@ namespace ND.Framework
                 return false;
             }
 
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             if (caravan == null)
             {
                 FrameworkLog.Error("Pending settlement restore blocked because active caravan is missing.");
@@ -818,7 +876,7 @@ namespace ND.Framework
             }
 
             // 진행 대상 caravan이 없으면 Core 도착 처리를 수행할 수 없다.
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             if (caravan == null)
             {
                 FrameworkLog.Warning("Immediate trade completion skipped because active caravan is missing.");
@@ -830,7 +888,7 @@ namespace ND.Framework
 
             // Core progress를 도착값으로 맞춘 뒤 동일한 settlement 생성 경로를 재사용한다.
             JourneyRunner.SetProgress(caravan, JourneyRunner.ArrivalProgress);
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return;
             SettleActiveTrade(saveData, caravan);
         }
 
@@ -902,7 +960,7 @@ namespace ND.Framework
             // SettlementPending과 확정 정산 결과를 같은 저장 단위에 기록한다.
             saveData.pendingSettlement = PendingSettlementSaveDataMapper.ToSave(result, settlementTradeId, settlementRouteId);
 
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
             saveService?.Save(saveData);
             FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.caravanId, settlementTradeId, result);
             if (result.grade == JourneyResultGrade.Failed)
@@ -1053,21 +1111,44 @@ namespace ND.Framework
 
         private CaravanData EnsureActiveCaravan()
         {
-            // 이미 runtime caravan을 보유 중이면 저장 데이터에서 다시 복원하지 않는다.
-            if (activeCaravan != null)
+            // 선택된 caravan runtime이 이미 등록되어 있으면 동일한 공유 객체를 반환한다.
+            if (TryGetRuntimeCaravan(GetSaveData()?.selectedCaravanId, out var selectedCaravan))
             {
-                return activeCaravan;
+                return selectedCaravan;
             }
 
-            // runtime 참조가 없을 때는 현재 저장 데이터의 caravan snapshot으로 복원한다.
+            // 선택된 runtime이 없을 때는 동일 ID 저장 snapshot으로 생성해 registry에 등록한다.
             var saveData = GetSaveData();
             if (saveData == null || saveData.caravan == null)
             {
                 return null;
             }
 
-            activeCaravan = CaravanSaveDataMapper.ToRuntime(saveData.caravan);
-            return activeCaravan;
+            return GetOrCreateRuntimeCaravan(saveData.selectedCaravanId);
+        }
+
+        private CaravanData GetRuntimeForProgress(SaveData saveData)
+        {
+            var caravanId = saveData?.tradeProgress?.caravanId;
+            var caravan = GetOrCreateRuntimeCaravan(caravanId);
+            if (caravan == null)
+            {
+                FrameworkLog.Warning($"Runtime caravan lookup failed. CaravanId: {caravanId}");
+            }
+            return caravan;
+        }
+
+        private static bool CopyRuntimeToOwnedSave(SaveData saveData, CaravanData caravan)
+        {
+            if (caravan == null
+                || !SaveDataLookup.TryGetCaravan(saveData, caravan.caravanId, out var caravanSave))
+            {
+                FrameworkLog.Warning(
+                    $"Runtime caravan save target lookup failed. CaravanId: {caravan?.caravanId}");
+                return false;
+            }
+            CaravanSaveDataMapper.CopyToSave(caravan, caravanSave);
+            return true;
         }
 
         private SaveData GetSaveData()
