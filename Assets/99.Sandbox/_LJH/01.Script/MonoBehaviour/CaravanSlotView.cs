@@ -154,6 +154,9 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         SetDisplayNameVisible(true);
         SetText(displayNameText, displayName);
+        // Activate the display before touching its Animator. An inactive slot can
+        // otherwise ignore the initial IsTraveling value when it becomes occupied.
+        SetOccupiedControlsVisible(true);
         ApplyJourneyStatePresentation(data.state);
         ApplyActionIcons();
         currentUnlockHintText = string.Empty;
@@ -163,7 +166,6 @@ public sealed class CaravanSlotView : MonoBehaviour
         // Traveling, Settling, and Completed remain display-only to avoid mutating an active run.
         bool hasValidIdentity = !string.IsNullOrWhiteSpace(currentCaravanId);
         bool canEdit = hasValidIdentity && data.state == JourneyState.Prepare;
-        SetOccupiedControlsVisible(true);
         SetButtonsInteractable(canEdit, canEdit);
         SetCreateButtonVisible(false);
         SetLockOverlayVisible(false, false);

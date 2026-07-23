@@ -24,6 +24,8 @@ MonoBehaviour:
   baseRequiredFoodQuantity: 0
   baseRequiredMercenaryPower: 0
   baseRiskLevel: 0
+  maxEventCount: 0
+  eventCheckIntervalKm: 0.1
   routeEvents:
   - eventType: 0
     routeEventId: 
@@ -37,7 +39,6 @@ MonoBehaviour:
       minAmount: 0
       maxAmount: 0
     eventRewardItem:
-      itemId:
+      itemId: 
       minQuantity: 1
       maxQuantity: 1
-  maxEventCount: 0
