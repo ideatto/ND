@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bc5a88365ef36b24789d5d69a76119d7, type: 3}
   m_Name: Mercenary_Veteran_Duo
   m_EditorClassIdentifier: Assembly-CSharp::MercenaryData
-  mercenaryId: 
-  displayName: 
-  icon: {fileID: 0}
+  mercenaryId: VeteranDuoMercenary
+  displayName: "\uBCA0\uD14C\uB791 \uB4C0\uC624"
+  icon: {fileID: 21300000, guid: df8caf3c2b36c3743a07ce8af2e684bc, type: 3}
   description: 
   rarity: 0
-  baseBuyPrice: 0
-  combatCapability: 0
+  baseBuyPrice: 420
+  combatCapability: 40
   unlockedByDefault: 0
   affectModify: 0
   modifiers: []

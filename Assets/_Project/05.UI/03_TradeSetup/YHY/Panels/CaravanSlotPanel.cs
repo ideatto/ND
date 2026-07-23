@@ -34,11 +34,14 @@ public class CaravanSlotPanel : MonoBehaviour
     private readonly List<Button> cards = new List<Button>();
     private readonly List<GameObject> editButtons = new List<GameObject>();
     private readonly List<string> slotContents = new List<string>();   // 각 슬롯 내용(빈 문자열=빈 슬롯)
+    private readonly List<string> caravanIds = new List<string>();
     private int selectedIndex = -1;
+    private bool departureSelectionMode;
 
     /// <summary>슬롯을 만든다. contents[i]가 비면 빈 슬롯, 값이 있으면 채워진 상단 이름.</summary>
     public void Populate(IReadOnlyList<string> contents)
     {
+        departureSelectionMode = false;
         Clear();
         if (slotContainer == null || slotPrefab == null) return;
 
@@ -74,6 +77,54 @@ public class CaravanSlotPanel : MonoBehaviour
         }
     }
 
+    public void PopulateCaravanOptions(IReadOnlyList<TradePrepareCaravanOptionViewData> options)
+    {
+        Clear();
+        departureSelectionMode = true;
+        if (slotContainer == null || slotPrefab == null) return;
+
+        int count = options != null ? options.Count : 0;
+        for (int index = 0; index < count; index++)
+        {
+            TradePrepareCaravanOptionViewData option = options[index];
+            string caravanId = option?.caravanId?.Trim() ?? string.Empty;
+            bool canSelect = option != null && option.canSelect && !string.IsNullOrEmpty(caravanId);
+            slotContents.Add(option?.displayName ?? string.Empty);
+            caravanIds.Add(caravanId);
+
+            GameObject column = new GameObject("CaravanPreset", typeof(RectTransform));
+            column.transform.SetParent(slotContainer, false);
+            VerticalLayoutGroup layout = column.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 8;
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = true;
+            layout.childForceExpandWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandHeight = false;
+            column.AddComponent<LayoutElement>().preferredWidth = 220;
+
+            Button card = Instantiate(slotPrefab, column.transform);
+            card.interactable = canSelect;
+            TMP_Text label = card.GetComponentInChildren<TMP_Text>();
+            if (label != null)
+            {
+                string displayName = string.IsNullOrWhiteSpace(option?.displayName)
+                    ? caravanId
+                    : option.displayName;
+                string blockedReason = !canSelect && !string.IsNullOrWhiteSpace(option?.disabledReason)
+                    ? $"\n{option.disabledReason}"
+                    : string.Empty;
+                label.text = $"{displayName}\n{option?.state}{blockedReason}";
+            }
+
+            SetColor(card, emptyColor);
+            int capturedIndex = index;
+            card.onClick.AddListener(() => Select(capturedIndex));
+            cards.Add(card);
+            editButtons.Add(null);
+        }
+    }
+
     /// <summary>슬롯 폭만큼의 Edit 버튼을 코드로 만든다(카드 아래에 배치).</summary>
     private GameObject BuildEditButton(Transform parent, int idx)
     {
@@ -98,17 +149,27 @@ public class CaravanSlotPanel : MonoBehaviour
     /// <summary>idx 슬롯 선택(다시 누르면 해제). 색·Edit 노출 갱신 + 통지. 자동 진행 안 함.</summary>
     private void Select(int idx)
     {
+        if (idx < 0 || idx >= cards.Count || cards[idx] == null || !cards[idx].interactable)
+            return;
+
         selectedIndex = (selectedIndex == idx) ? -1 : idx;
         for (int i = 0; i < cards.Count; i++)
         {
             SetColor(cards[i], i == selectedIndex ? selectedColor : emptyColor);
-            editButtons[i].SetActive(i == selectedIndex);   // 선택된 슬롯만 Edit 노출
+            if (editButtons[i] != null)
+                editButtons[i].SetActive(!departureSelectionMode && i == selectedIndex);
         }
         OnSlotSelected?.Invoke(selectedIndex);
     }
 
     /// <summary>현재 선택 슬롯 index(없으면 -1).</summary>
     public int SelectedIndex => selectedIndex;
+
+    public string SelectedCaravanId => departureSelectionMode
+        && selectedIndex >= 0
+        && selectedIndex < caravanIds.Count
+            ? caravanIds[selectedIndex]
+            : string.Empty;
 
     /// <summary>현재 선택된 슬롯이 빈 슬롯인가(미선택이면 false).</summary>
     public bool IsSelectedEmpty()
@@ -124,7 +185,8 @@ public class CaravanSlotPanel : MonoBehaviour
         for (int i = 0; i < cards.Count; i++)
         {
             SetColor(cards[i], emptyColor);
-            editButtons[i].SetActive(false);
+            if (editButtons[i] != null)
+                editButtons[i].SetActive(false);
         }
         OnSlotSelected?.Invoke(-1);
     }
@@ -137,6 +199,7 @@ public class CaravanSlotPanel : MonoBehaviour
         cards.Clear();
         editButtons.Clear();
         slotContents.Clear();
+        caravanIds.Clear();
         selectedIndex = -1;
     }
 

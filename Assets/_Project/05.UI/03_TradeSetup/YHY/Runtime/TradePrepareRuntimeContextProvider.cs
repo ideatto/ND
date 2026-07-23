@@ -25,6 +25,13 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     private TradePrepareFlowController flowController;
     private TradePrepareStartAdapter startAdapter;
     private InGameScreenState currentScreenState;
+    // TODO(PRODUCTION): These interfaces are currently supplied by TestCaravanSettingService in the
+    // sandbox scene. Keep the interfaces, but inject Framework SaveData-backed Caravan query/command
+    // services from the production composition root instead of the in-memory test component.
+    private ICaravanSettingViewDataProvider caravanSettingProvider;
+    private ICaravanLoadSettingViewDataProvider caravanCargoPlanProvider;
+    private ITradePrepareCaravanOptionProvider caravanOptionProvider;
+    private TradePrepareBuildContext buildContext;
 
     public TradePrepareFlowController FlowController => flowController;
     public TradePrepareViewData CurrentViewData => flowController?.CurrentViewData;
@@ -39,6 +46,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         FrameworkEvents.LoadCompleted += HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
         TryInitialize(currentSaveData);
+        AttachSceneCaravanProviders();
     }
 
     private void OnDisable()
@@ -80,12 +88,138 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 
     public void SelectDestination(string townId) => flowController?.SelectDestination(townId);
     public void SelectRoute(string routeId) => flowController?.SelectRoute(routeId);
-    public void SelectWagon(string wagonId) => flowController?.SelectWagon(wagonId);
+    public void SelectWagon(string wagonId)
+    {
+        flowController?.SelectWagon(wagonId);
+        RefreshSelectedCaravanCargoPlan();
+    }
     public void SetAnimalQuantity(string animalId, int quantity) => flowController?.SetAnimalQuantity(animalId, quantity);
     public void SetBuyItemQuantity(string itemId, int quantity) => flowController?.SetBuyItemQuantity(itemId, quantity);
     public void ClearCargoDraft() => flowController?.ClearCargo();
     public void SelectMercenary(string mercenaryId) => flowController?.SelectMercenary(mercenaryId);
     public void DeselectMercenary(string mercenaryId) => flowController?.DeselectMercenary(mercenaryId);
+
+    public void SetCaravanCargoPlanProvider(ICaravanLoadSettingViewDataProvider provider)
+    {
+        caravanCargoPlanProvider = provider;
+        RefreshSelectedCaravanCargoPlan();
+    }
+
+    public void SetCaravanSettingProvider(ICaravanSettingViewDataProvider provider)
+    {
+        caravanSettingProvider = provider;
+        RefreshSelectedCaravanSetting();
+    }
+
+    public void SetCaravanOptionProvider(ITradePrepareCaravanOptionProvider provider)
+    {
+        caravanOptionProvider = provider;
+        if (flowController == null)
+            return;
+
+        buildContext.caravanOptions = GetLatestCaravanOptions();
+        flowController.UpdateBuildContext(buildContext);
+    }
+
+    public bool TrySelectOnlyAvailableDepartureCaravan()
+    {
+        return TryGetOnlyAvailableDepartureCaravanId(out string caravanId)
+            && SelectDepartureCaravan(caravanId);
+    }
+
+    public bool TryGetOnlyAvailableDepartureCaravanId(out string caravanId)
+    {
+        caravanId = string.Empty;
+        TradePrepareCaravanOptionViewData[] options = CurrentViewData?.caravanOptions;
+        if (options == null)
+            return false;
+
+        int selectableCount = 0;
+        for (int index = 0; index < options.Length; index++)
+        {
+            TradePrepareCaravanOptionViewData option = options[index];
+            if (option == null || !option.canSelect || string.IsNullOrWhiteSpace(option.caravanId))
+                continue;
+
+            caravanId = option.caravanId;
+            selectableCount++;
+        }
+
+        if (selectableCount == 1)
+            return true;
+
+        caravanId = string.Empty;
+        return false;
+    }
+
+    public bool CanSelectDepartureCaravan(string caravanId)
+    {
+        TradePrepareCaravanOptionViewData[] options = CurrentViewData?.caravanOptions;
+        if (options == null || string.IsNullOrWhiteSpace(caravanId))
+            return false;
+
+        for (int index = 0; index < options.Length; index++)
+        {
+            TradePrepareCaravanOptionViewData option = options[index];
+            if (option != null && option.canSelect
+                && string.Equals(option.caravanId, caravanId.Trim(), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool SelectDepartureCaravan(string caravanId)
+    {
+        if (flowController == null || !flowController.SelectDepartureCaravan(caravanId))
+            return false;
+
+        if (!RefreshSelectedCaravanSetting())
+            return false;
+
+        RefreshSelectedCaravanCargoPlan();
+        return true;
+    }
+
+    public bool RefreshCaravanSetting(string caravanId = null)
+    {
+        if (flowController == null || caravanSettingProvider == null)
+            return false;
+
+        string selectedCaravanId = flowController.CurrentDraft?.departureCaravanId;
+        string requestedCaravanId = string.IsNullOrWhiteSpace(caravanId)
+            ? selectedCaravanId
+            : caravanId.Trim();
+        if (string.IsNullOrWhiteSpace(selectedCaravanId)
+            || !string.Equals(selectedCaravanId, requestedCaravanId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        CaravanSettingViewData setting = caravanSettingProvider.GetSetting(selectedCaravanId);
+        return setting != null && flowController.ApplyCaravanSetting(setting);
+    }
+
+    public bool RefreshCaravanCargoPlan(string caravanId = null)
+    {
+        if (flowController == null || caravanCargoPlanProvider == null)
+            return false;
+
+        string selectedCaravanId = flowController.CurrentDraft?.departureCaravanId;
+        string requestedCaravanId = string.IsNullOrWhiteSpace(caravanId)
+            ? selectedCaravanId
+            : caravanId.Trim();
+        if (string.IsNullOrWhiteSpace(selectedCaravanId)
+            || !string.Equals(selectedCaravanId, requestedCaravanId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        CaravanLoadSettingViewData plan = caravanCargoPlanProvider.GetLoadSetting(selectedCaravanId);
+        return plan != null && flowController.ApplyCargoPlan(plan);
+    }
 
     public TradeItemData[] GetAvailableTradeItems()
     {
@@ -129,6 +263,11 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
             };
         }
 
+        // Re-read both provider-owned snapshots at the commit boundary. S3/S4 can be edited
+        // independently after entering TradePrepare, and transient panel state must never be
+        // allowed to overwrite the authoritative saved Caravan composition.
+        RefreshSelectedCaravanSetting();
+        RefreshSelectedCaravanCargoPlan();
         return flowController.TryStartTrade(startAdapter, tradeId, saveImmediately);
     }
 
@@ -139,9 +278,10 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
             return;
 
         DisposeFlow();
-        TradePrepareBuildContext context = new TradePrepareBuildContext
+        buildContext = new TradePrepareBuildContext
         {
             saveData = saveData,
+            caravanOptions = GetLatestCaravanOptions(),
             towns = towns ?? Array.Empty<TownData>(),
             routes = routes ?? Array.Empty<RouteData>(),
             tradeItems = tradeItems ?? Array.Empty<TradeItemData>(),
@@ -154,11 +294,27 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         if (commitSink == null)
             commitSink = root.TradePrepareCommitStore;
         startAdapter = new TradePrepareStartAdapter(root.TradeStart, new TradePrepareViewDataBuilder(), commitSink);
-        flowController = new TradePrepareFlowController(context);
+        flowController = new TradePrepareFlowController(buildContext);
         flowController.ViewDataChanged += HandleViewDataChanged;
         string currentTownId = saveData.player != null ? saveData.player.currentTownId : string.Empty;
         flowController.Initialize(currentTownId);
         ViewDataChanged?.Invoke(flowController.CurrentViewData);
+    }
+
+    private void RefreshSelectedCaravanCargoPlan()
+    {
+        RefreshCaravanCargoPlan();
+    }
+
+    private bool RefreshSelectedCaravanSetting()
+    {
+        return RefreshCaravanSetting();
+    }
+
+    private TradePrepareCaravanOptionViewData[] GetLatestCaravanOptions()
+    {
+        return caravanOptionProvider?.GetOptions()
+            ?? Array.Empty<TradePrepareCaravanOptionViewData>();
     }
 
     private void HandleViewDataChanged(TradePrepareViewData viewData)
@@ -174,6 +330,17 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         flowController.Dispose();
         flowController = null;
         startAdapter = null;
+        buildContext = null;
+    }
+
+    private void AttachSceneCaravanProviders()
+    {
+        // The TradePrepare feature prefab can be instantiated after the InGame scene binding's
+        // OnEnable. Register from this side as well so prefab creation order cannot omit S0/S3/S4
+        // provider injection and leave the selected Caravan without its saved composition.
+        CaravanOverviewEditBinding binding = FindFirstObjectByType<CaravanOverviewEditBinding>(
+            FindObjectsInactive.Include);
+        binding?.AttachTradePrepareRuntimeContext(this);
     }
 
 #if UNITY_EDITOR

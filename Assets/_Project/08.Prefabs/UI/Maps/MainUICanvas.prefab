@@ -10624,6 +10624,8 @@ GameObject:
   - component: {fileID: 7616029414433421779}
   - component: {fileID: 2958026496627206106}
   - component: {fileID: 9100000000000001112}
+  - component: {fileID: 9100000000000001201}
+  - component: {fileID: 9100000000000001202}
   m_Layer: 0
   m_Name: TradeBtn
   m_TagString: Untagged
@@ -10732,19 +10734,34 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 5150174214426795098}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 9051827873067408605}
-        m_TargetAssemblyTypeName: FrameworkTradeScreenPresenter, Assembly-CSharp
-        m_MethodName: OpenTradeScreen
-        m_Mode: 0
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: 
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
+--- !u!114 &9100000000000001201
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7912299616427076923}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4a4751cb45c46deab53dd36c29c6a0c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TownTradePreparationEntryController
+  tradeScreenPresenter: {fileID: 9051827873067408605}
+--- !u!114 &9100000000000001202
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7912299616427076923}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22d6ca2ff6f89434c910985e9dc56428, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TownTradePreparationButton
+  entryController: {fileID: 9100000000000001201}
+  tradeScreenPresenter: {fileID: 9051827873067408605}
 --- !u!114 &2958026496627206106
 MonoBehaviour:
   m_ObjectHideFlags: 0
