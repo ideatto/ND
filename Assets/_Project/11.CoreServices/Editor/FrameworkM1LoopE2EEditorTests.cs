@@ -60,6 +60,8 @@ namespace ND.Framework.Editor
         {
             RunAssetInstanceIdPersistenceChecks();
             RunMultiCaravanSaveDataChecks();
+            RunProductionCaravanCreationChecks();
+            RunCaravanSlotNormalizationChecks();
             RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
             RunRescueLoanIntegrationChecks();
@@ -188,6 +190,338 @@ namespace ND.Framework.Editor
                 || restored.selectedCaravanId != restored.caravans[0].caravanId)
             {
                 throw new InvalidOperationException("Multi-caravan ID normalization failed.");
+            }
+        }
+
+        private static void RunProductionCaravanCreationChecks()
+        {
+            var saveData = new SaveData();
+            JsonSaveService.NormalizeData(saveData);
+            saveData.caravans[0].slotIndex = 0;
+            var originalSelectedId = saveData.selectedCaravanId;
+            var saveService = new ConfigurableSaveService();
+            var service = new CaravanManagementService(() => saveData, saveService);
+            var eventCount = 0;
+            string eventCaravanId = null;
+            int eventSlotIndex = -1;
+            Action<string, int> onCaravanCreated = (caravanId, slotIndex) =>
+            {
+                eventCount++;
+                eventCaravanId = caravanId;
+                eventSlotIndex = slotIndex;
+            };
+            FrameworkEvents.CaravanCreated += onCaravanCreated;
+
+            try
+            {
+                var invalid = service.CreateCaravan(-1);
+                var duplicate = service.CreateCaravan(0);
+                if (invalid.Succeeded
+                    || invalid.FailureReason != CaravanCreationFailureReason.InvalidSlotIndex
+                    || duplicate.Succeeded
+                    || duplicate.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                    || saveService.SaveCalls != 0
+                    || eventCount != 0)
+                {
+                    throw new InvalidOperationException("Caravan creation validation mutated or saved state.");
+                }
+
+                var created = service.CreateCaravan(1);
+                Guid parsedId;
+                TradeProgressSaveData createdProgress;
+                if (!created.Succeeded
+                    || created.SaveResult == null || !created.SaveResult.Succeeded
+                    || created.CaravanId.Length != 32
+                    || !Guid.TryParseExact(created.CaravanId, "N", out parsedId)
+                    || created.SlotIndex != 1
+                    || saveData.caravans.Count != 2
+                    || saveData.caravans[1].slotIndex != 1
+                    || saveData.caravans[1].caravanId != created.CaravanId
+                    || !SaveDataLookup.TryGetTradeProgress(saveData, created.CaravanId, out createdProgress)
+                    || createdProgress.state != TradeProgressState.None
+                    || saveData.pendingSettlements.Count != 0
+                    || saveData.selectedCaravanId != originalSelectedId
+                    || saveService.SaveCalls != 1
+                    || eventCount != 1
+                    || eventCaravanId != created.CaravanId
+                    || eventSlotIndex != 1)
+                {
+                    throw new InvalidOperationException("Production Caravan creation did not satisfy its success contract.");
+                }
+
+                var serialized = JsonUtility.ToJson(saveData);
+                var restored = JsonUtility.FromJson<SaveData>(serialized);
+                JsonSaveService.NormalizeData(restored);
+                TradeProgressSaveData restoredProgress;
+                if (restored.caravans[1].caravanId != created.CaravanId
+                    || restored.caravans[1].slotIndex != 1
+                    || restored.selectedCaravanId != originalSelectedId
+                    || !SaveDataLookup.TryGetTradeProgress(restored, created.CaravanId, out restoredProgress)
+                    || restored.caravan == null
+                    || restored.caravan.caravanId != originalSelectedId)
+                {
+                    throw new InvalidOperationException("Created Caravan did not survive serialization with legacy access intact.");
+                }
+
+                var second = service.CreateCaravan(2);
+                if (!second.Succeeded
+                    || second.CaravanId == created.CaravanId
+                    || saveData.selectedCaravanId != originalSelectedId
+                    || saveService.SaveCalls != 2
+                    || eventCount != 2)
+                {
+                    throw new InvalidOperationException("Sequential Caravan creation did not preserve unique identity or selection.");
+                }
+
+                var beforeFailure = JsonUtility.ToJson(saveData);
+                saveService.ShouldSucceed = false;
+                var failed = service.CreateCaravan(3);
+                if (failed.Succeeded
+                    || failed.FailureReason != CaravanCreationFailureReason.SaveFailed
+                    || failed.SaveResult == null || failed.SaveResult.Succeeded
+                    || JsonUtility.ToJson(saveData) != beforeFailure
+                    || saveService.SaveCalls != 3
+                    || eventCount != 2)
+                {
+                    throw new InvalidOperationException("Caravan creation save-failure rollback was not atomic.");
+                }
+
+                var missingSelectionData = new SaveData();
+                JsonSaveService.NormalizeData(missingSelectionData);
+                missingSelectionData.caravans[0].slotIndex = 0;
+                missingSelectionData.selectedCaravanId = string.Empty;
+                var missingSelectionSave = new ConfigurableSaveService();
+                var missingSelectionService =
+                    new CaravanManagementService(() => missingSelectionData, missingSelectionSave);
+                var selectedRepair = missingSelectionService.CreateCaravan(1);
+                if (!selectedRepair.Succeeded
+                    || missingSelectionData.selectedCaravanId != selectedRepair.CaravanId
+                    || missingSelectionSave.SaveCalls != 1)
+                {
+                    throw new InvalidOperationException("Caravan creation did not repair an invalid selection.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.CaravanCreated -= onCaravanCreated;
+            }
+
+            Debug.Log("[Framework M1 E2E] Production Caravan creation contract passed.");
+        }
+
+        private static void RunCaravanSlotNormalizationChecks()
+        {
+            AssertSlotNormalization(new[] { 0, 0, 2 }, new[] { 0, 1, 2 }, true, 1, "duplicate");
+            AssertSlotNormalization(new[] { -1, 1, 1 }, new[] { 0, 1, 2 }, true, 2, "negative and duplicate");
+            AssertSlotNormalization(new[] { 0, 1, 2 }, new[] { 0, 1, 2 }, false, 0, "normal contiguous");
+            AssertSlotNormalization(new[] { 0, 3 }, new[] { 0, 3 }, false, 0, "normal sparse");
+
+            var ordered = CreateSlotNormalizationData(2, 0, 2);
+            var selectedId = ordered.caravans[1].caravanId;
+            ordered.selectedCaravanId = selectedId;
+            ordered.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = selectedId,
+                activeTradeId = "slot-normalization-trade",
+                state = TradeProgressState.Traveling
+            });
+            ordered.pendingSettlements.Add(new PendingSettlementSaveData
+            {
+                caravanId = selectedId,
+                tradeId = "slot-normalization-trade",
+                hasResult = true
+            });
+            var firstId = ordered.caravans[0].caravanId;
+            var secondId = ordered.caravans[1].caravanId;
+            var thirdId = ordered.caravans[2].caravanId;
+
+            if (!JsonSaveService.NormalizeData(ordered)
+                || ordered.caravans[0].caravanId != firstId || ordered.caravans[0].slotIndex != 2
+                || ordered.caravans[1].caravanId != secondId || ordered.caravans[1].slotIndex != 0
+                || ordered.caravans[2].caravanId != thirdId || ordered.caravans[2].slotIndex != 1
+                || ordered.selectedCaravanId != selectedId
+                || ordered.caravan == null || ordered.caravan.caravanId != selectedId
+                || ordered.tradeProgressEntries[0].caravanId != selectedId
+                || ordered.tradeProgressEntries[0].activeTradeId != "slot-normalization-trade"
+                || ordered.tradeProgressEntries[0].state != TradeProgressState.Traveling
+                || ordered.pendingSettlements[0].caravanId != selectedId
+                || ordered.pendingSettlements[0].tradeId != "slot-normalization-trade")
+            {
+                throw new InvalidOperationException(
+                    "Caravan slot normalization changed list order, selection, or ID-owned child data.");
+            }
+
+            var occupancyData = CreateSlotNormalizationData(0, 0);
+            if (!JsonSaveService.NormalizeData(occupancyData))
+            {
+                throw new InvalidOperationException("Damaged Caravan slots were not normalized before occupancy checks.");
+            }
+
+            var occupancySave = new ConfigurableSaveService();
+            var management = new CaravanManagementService(() => occupancyData, occupancySave);
+            var occupiedZero = management.CreateCaravan(0);
+            var occupiedOne = management.CreateCaravan(1);
+            var createdTwo = management.CreateCaravan(2);
+            if (occupiedZero.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                || occupiedOne.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                || !createdTwo.Succeeded
+                || createdTwo.SlotIndex != 2
+                || occupancySave.SaveCalls != 1)
+            {
+                throw new InvalidOperationException("CreateCaravan occupancy did not use normalized slots.");
+            }
+
+            RunCaravanSlotLoadPersistenceCheck(2, new[] { 0, 1 });
+            RunCaravanSlotLoadPersistenceCheck(4, new[] { 0, 1, 2, 3 });
+            Debug.Log("[Framework M1 E2E] Caravan slot normalization and load persistence passed.");
+        }
+
+        private static void AssertSlotNormalization(
+            int[] input,
+            int[] expected,
+            bool expectedChanged,
+            int expectedWarnings,
+            string caseLabel)
+        {
+            var data = CreateSlotNormalizationData(input);
+            var warningCount = 0;
+            Application.LogCallback onLog = (condition, _, type) =>
+            {
+                if (type == LogType.Warning && condition.Contains("Caravan slotIndex was normalized."))
+                {
+                    warningCount++;
+                }
+            };
+            Application.logMessageReceived += onLog;
+            bool changed;
+            try
+            {
+                changed = JsonSaveService.NormalizeData(data);
+            }
+            finally
+            {
+                Application.logMessageReceived -= onLog;
+            }
+
+            if (changed != expectedChanged || warningCount != expectedWarnings
+                || data.caravans.Count != expected.Length)
+            {
+                throw new InvalidOperationException($"Caravan slot normalization failed for {caseLabel}.");
+            }
+
+            for (var i = 0; i < expected.Length; i++)
+            {
+                if (data.caravans[i].slotIndex != expected[i])
+                {
+                    throw new InvalidOperationException(
+                        $"Caravan slot normalization produced an unexpected slot for {caseLabel} at index {i}.");
+                }
+            }
+        }
+
+        private static SaveData CreateSlotNormalizationData(params int[] slots)
+        {
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            data.caravans.Clear();
+            for (var i = 0; i < slots.Length; i++)
+            {
+                data.caravans.Add(new CaravanSaveData
+                {
+                    caravanId = "slot_caravan_" + i,
+                    slotIndex = slots[i],
+                    currentTownId = data.player.currentTownId
+                });
+            }
+
+            data.selectedCaravanId = data.caravans[0].caravanId;
+            data.tradeProgressEntries.Clear();
+            data.pendingSettlements.Clear();
+            return data;
+        }
+
+        private static void RunCaravanSlotLoadPersistenceCheck(int caravanCount, int[] expectedSlots)
+        {
+            var testDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "nd-caravan-slot-normalization-" + Guid.NewGuid().ToString("N"));
+            var testPath = Path.Combine(testDirectory, "save_data.json");
+            Directory.CreateDirectory(testDirectory);
+
+            try
+            {
+                var service = new JsonSaveService();
+                var savePathField = typeof(JsonSaveService).GetField(
+                    "savePath",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (savePathField == null)
+                {
+                    throw new InvalidOperationException("JsonSaveService save path seam was not found.");
+                }
+
+                savePathField.SetValue(service, testPath);
+                var data = CreateSlotNormalizationData(new int[caravanCount]);
+                var jsonWithoutSlots = System.Text.RegularExpressions.Regex.Replace(
+                    JsonUtility.ToJson(data, true),
+                    @"^\s*""slotIndex""\s*:\s*-?\d+,\r?\n",
+                    string.Empty,
+                    System.Text.RegularExpressions.RegexOptions.Multiline);
+                File.WriteAllText(testPath, jsonWithoutSlots);
+
+                var saveLogs = 0;
+                Application.LogCallback onLog = (condition, _, type) =>
+                {
+                    if (type == LogType.Log && condition.Contains("Save data written:"))
+                    {
+                        saveLogs++;
+                    }
+                };
+                Application.logMessageReceived += onLog;
+                SaveData firstLoad;
+                string firstJson;
+                SaveData secondLoad;
+                string secondJson;
+                try
+                {
+                    firstLoad = service.Load();
+                    firstJson = File.ReadAllText(testPath);
+                    if (saveLogs != 1)
+                    {
+                        throw new InvalidOperationException("First slot-normalizing Load did not save exactly once.");
+                    }
+
+                    saveLogs = 0;
+                    secondLoad = service.Load();
+                    secondJson = File.ReadAllText(testPath);
+                }
+                finally
+                {
+                    Application.logMessageReceived -= onLog;
+                }
+
+                if (firstLoad.caravans.Count != expectedSlots.Length
+                    || secondLoad.caravans.Count != expectedSlots.Length
+                    || saveLogs != 0
+                    || firstJson != secondJson)
+                {
+                    throw new InvalidOperationException(
+                        $"Caravan slot Load persistence was not idempotent for {caravanCount} entries.");
+                }
+
+                for (var i = 0; i < expectedSlots.Length; i++)
+                {
+                    if (firstLoad.caravans[i].slotIndex != expectedSlots[i]
+                        || secondLoad.caravans[i].slotIndex != expectedSlots[i])
+                    {
+                        throw new InvalidOperationException(
+                            $"Caravan slot Load persistence produced an unexpected slot at index {i}.");
+                    }
+                }
+            }
+            finally
+            {
+                if (File.Exists(testPath)) File.Delete(testPath);
+                if (Directory.Exists(testDirectory)) Directory.Delete(testDirectory);
             }
         }
 

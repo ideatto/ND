@@ -242,10 +242,10 @@ namespace ND.Framework
         }
 
         /// <summary>
-        /// 저장 DTO의 필수 컨테이너와 영속 자산 ID를 정규화한다.
+        /// 저장 DTO의 필수 컨테이너, Caravan 슬롯과 영속 자산 ID를 정규화한다.
         /// </summary>
         /// <param name="data">직접 수정할 저장 데이터.</param>
-        /// <returns>저장 컨테이너, Caravan 선택/ID 또는 자산 ID가 변경되었으면 true.</returns>
+        /// <returns>저장 컨테이너, Caravan 슬롯/선택/ID 또는 자산 ID가 변경되었으면 true.</returns>
         public static bool NormalizeData(SaveData data)
         {
             var assetDataChanged = false;
@@ -313,6 +313,7 @@ namespace ND.Framework
             }
 
             var caravanIds = new HashSet<string>();
+            var usedCaravanSlots = new HashSet<int>();
             var usedInstanceIds = new HashSet<string>();
             for (var caravanIndex = 0; caravanIndex < data.caravans.Count; caravanIndex++)
             {
@@ -322,6 +323,26 @@ namespace ND.Framework
                     caravan = new CaravanSaveData();
                     data.caravans[caravanIndex] = caravan;
                 }
+
+                var previousSlotIndex = caravan.slotIndex;
+                var slotWasNegative = previousSlotIndex < 0;
+                if (slotWasNegative || !usedCaravanSlots.Add(previousSlotIndex))
+                {
+                    var replacementSlotIndex = 0;
+                    while (usedCaravanSlots.Contains(replacementSlotIndex))
+                    {
+                        replacementSlotIndex++;
+                    }
+
+                    caravan.slotIndex = replacementSlotIndex;
+                    usedCaravanSlots.Add(replacementSlotIndex);
+                    assetDataChanged = true;
+                    FrameworkLog.Warning(
+                        "Caravan slotIndex was normalized. "
+                        + $"CaravanId: {caravan.caravanId}, PreviousSlot: {previousSlotIndex}, "
+                        + $"NewSlot: {replacementSlotIndex}, Reason: {(slotWasNegative ? "Negative" : "Duplicate")}");
+                }
+
                 if (caravan.wagon == null || caravan.animals == null || caravan.mercenaries == null)
                 {
                     assetDataChanged = true;
