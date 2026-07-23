@@ -52,6 +52,14 @@ namespace ND.Framework
         public static event Action<SaveData> LoadCompleted;
 
         /// <summary>
+        /// 새 Caravan이 SaveData에 추가되고 영속 저장까지 성공한 뒤 한 번 발생한다.
+        /// </summary>
+        /// <remarks>
+        /// 인자 순서는 caravanId, slotIndex이다. 저장 실패 시 발생하지 않으며 구독자는 비활성화 시 구독을 해제해야 한다.
+        /// </remarks>
+        public static event Action<string, int> CaravanCreated;
+
+        /// <summary>
         /// SceneFlowService가 scene load 완료 콜백을 받은 뒤 발생한다.
         /// </summary>
         public static event Action<string> SceneChanged;
@@ -137,6 +145,13 @@ namespace ND.Framework
             // 로드 완료 흐름은 여러 시스템 초기화의 기준점이므로 발행 시점을 로그로 남긴다.
             FrameworkLog.Info("LoadCompleted event raised.");
             LoadCompleted?.Invoke(data);
+        }
+
+        /// <summary>저장이 완료된 새 Caravan의 ID와 영속 슬롯을 구독자에게 전달한다.</summary>
+        public static void RaiseCaravanCreated(string caravanId, int slotIndex)
+        {
+            FrameworkLog.Info($"CaravanCreated event raised. CaravanId: {caravanId}, SlotIndex: {slotIndex}");
+            CaravanCreated?.Invoke(caravanId, slotIndex);
         }
 
         /// <summary>
