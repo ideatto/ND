@@ -171,16 +171,18 @@ namespace ND.Framework
         /// </remarks>
         public void MarkSettlementPending(SaveData saveData)
         {
-            // 저장 데이터가 준비되지 않았으면 상태 전환을 안전하게 생략한다.
-            if (saveData == null || saveData.tradeProgress == null)
-            {
-                return;
-            }
+            MarkSettlementPending(saveData != null ? saveData.tradeProgress : null);
+        }
 
-            // traveling이 아닌 상태를 정산 대기로 승격하면 중복 정산이 생길 수 있어 제한한다.
-            if (saveData.tradeProgress.state == TradeProgressState.Traveling)
+        /// <summary>
+        /// 명시된 traveling progress entry를 정산 대기 상태로 전환한다.
+        /// </summary>
+        /// <param name="progress">변경할 caravan 소유 progress entry.</param>
+        public void MarkSettlementPending(TradeProgressSaveData progress)
+        {
+            if (progress != null && progress.state == TradeProgressState.Traveling)
             {
-                saveData.tradeProgress.state = TradeProgressState.SettlementPending;
+                progress.state = TradeProgressState.SettlementPending;
             }
         }
 
