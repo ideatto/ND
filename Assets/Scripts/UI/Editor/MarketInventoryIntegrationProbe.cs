@@ -41,6 +41,9 @@ public static class MarketInventoryIntegrationProbe
 {
     private const string SessionKey = "ND.MarketInventoryIntegrationProbe.20260722.v27";
     private const string ResultFileName = "market-integration-test-result.json";
+    // Test-only identity used by this in-memory Editor probe. It is not a Caravan Asset ID and
+    // must never be written to or resolved from production SaveData.
+    private const string TestOnlyCaravanId = "test-only-market-probe-caravan";
 
     static MarketInventoryIntegrationProbe()
     {
@@ -183,7 +186,7 @@ public static class MarketInventoryIntegrationProbe
 
     private static FrameworkSaveData NewSave(long currency)
     {
-        const string caravanId = "market-probe-caravan";
+        const string caravanId = TestOnlyCaravanId;
         var save = new FrameworkSaveData
         {
             selectedCaravanId = caravanId,
@@ -317,6 +320,8 @@ public static class MarketInventoryIntegrationProbe
             "Market return must be rejected when the current screen is not Market.");
         Assert(TownTradePreparationEntryController.CanBeginFromScreen(InGameScreenState.Town),
             "Trade preparation entry must be allowed from the Town screen.");
+        Assert(TownTradePreparationEntryController.CanBeginFromScreen(InGameScreenState.Preparation),
+            "Trade preparation entry must reopen an existing Preparation screen without another save transition.");
         Assert(!TownTradePreparationEntryController.CanBeginFromScreen(InGameScreenState.Market),
             "Trade preparation entry must be blocked until the Market screen returns to Town.");
 
@@ -662,14 +667,22 @@ public static class MarketInventoryIntegrationProbe
         };
         var commit = createCommit.Invoke(
             null,
-            new object[] { new TradePrepareDraft(), viewData, "market-separated", "route" })
+            new object[]
+            {
+                new TradePrepareDraft(),
+                viewData,
+                "market-separated",
+                "route",
+                TestOnlyCaravanId
+            })
             as TradePrepareCommitData;
 
         Assert(commit != null
+            && commit.caravanId == TestOnlyCaravanId
             && commit.purchaseCost == 0L
             && commit.estimatedSellRevenue == 0L
             && (commit.purchasedItems == null || commit.purchasedItems.Length == 0),
-            "Departure commit must exclude already committed market purchases and automatic sale revenue.");
+            "Departure commit must preserve the selected Caravan ID and exclude already committed market purchases and automatic sale revenue.");
         Assert(commit.mercenaryCost == 50L,
             "Separating market settlement must preserve non-market departure costs.");
         checks.Add("departure_commit_excludes_market_purchase_and_sale_settlement");

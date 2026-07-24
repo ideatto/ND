@@ -49,8 +49,12 @@ public sealed class TownTradePreparationButton : MonoBehaviour
                 FindObjectsInactive.Include);
         }
 
+        TradePrepareRuntimeContextProvider runtimeContext =
+            Object.FindAnyObjectByType<TradePrepareRuntimeContextProvider>(
+                FindObjectsInactive.Include);
+
         if (entryController != null && tradeScreenPresenter != null)
-            entryController.Configure(tradeScreenPresenter);
+            entryController.Configure(tradeScreenPresenter, runtimeContext);
     }
 
     private void HandleClick()

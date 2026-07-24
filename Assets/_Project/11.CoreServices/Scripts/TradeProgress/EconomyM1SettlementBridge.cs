@@ -36,9 +36,28 @@ namespace ND.Framework
             JourneyResultData journeyResult,
             ISharedGameDataProvider sharedGameData)
         {
-            ClearPending();
+            return TryCalculateAndFill(saveData, saveData != null ? saveData.tradeProgress : null,
+                caravan, journeyResult, sharedGameData);
+        }
 
-            var input = FrameworkEconomyM1InputBuilder.TryBuild(saveData, caravan, journeyResult, sharedGameData);
+        /// <summary>명시된 progress entry를 사용해 정산 금액을 계산하고 pending cache를 갱신한다.</summary>
+        public bool TryCalculateAndFill(
+            SaveData saveData,
+            TradeProgressSaveData progress,
+            CaravanData caravan,
+            JourneyResultData journeyResult,
+            ISharedGameDataProvider sharedGameData)
+        {
+            ClearPending();
+            if (progress == null || string.IsNullOrWhiteSpace(progress.activeTradeId))
+            {
+                FrameworkLog.Warning(
+                    "Economy M1 settlement calculation skipped because the explicit trade ID is missing.");
+                return false;
+            }
+
+            var input = FrameworkEconomyM1InputBuilder.TryBuild(
+                saveData, progress, caravan, journeyResult, sharedGameData);
             if (input == null)
             {
                 return false;
@@ -57,7 +76,7 @@ namespace ND.Framework
                 return false;
             }
 
-            pendingTradeId = saveData.tradeProgress != null ? saveData.tradeProgress.activeTradeId ?? string.Empty : string.Empty;
+            pendingTradeId = progress.activeTradeId;
             pendingEconomyResult = economyResult;
             return true;
         }

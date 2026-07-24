@@ -30,6 +30,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
     private void OnEnable()
     {
         SubscribeToSlotViews();
+        SubscribeToFrameworkEvents();
         if (!hasRuntimeProviderOverride)
         {
             ResolveSerializedProvider();
@@ -40,6 +41,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
     private void OnDisable()
     {
+        UnsubscribeFromFrameworkEvents();
         UnsubscribeFromSlotViews();
     }
 
@@ -279,6 +281,40 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         {
             noticeUI.Show(unlockHintText);
         }
+    }
+
+    private void SubscribeToFrameworkEvents()
+    {
+        // The Provider is snapshot-based, so redraw only when Framework reports
+        // a lifecycle point that can change a Caravan's JourneyState.
+        ND.Framework.FrameworkEvents.LoadCompleted += HandleFrameworkLoadCompleted;
+        ND.Framework.FrameworkEvents.InGameScreenChanged += HandleInGameScreenChanged;
+        ND.Framework.FrameworkEvents.TradeSettlementReady += HandleTradeSettlementReady;
+    }
+
+    private void UnsubscribeFromFrameworkEvents()
+    {
+        ND.Framework.FrameworkEvents.LoadCompleted -= HandleFrameworkLoadCompleted;
+        ND.Framework.FrameworkEvents.InGameScreenChanged -= HandleInGameScreenChanged;
+        ND.Framework.FrameworkEvents.TradeSettlementReady -= HandleTradeSettlementReady;
+    }
+
+    private void HandleFrameworkLoadCompleted(ND.Framework.SaveData _)
+    {
+        Refresh();
+    }
+
+    private void HandleInGameScreenChanged(ND.Framework.InGameScreenState _)
+    {
+        Refresh();
+    }
+
+    private void HandleTradeSettlementReady(
+        string _,
+        string __,
+        JourneyResultData ___)
+    {
+        Refresh();
     }
 
 #if UNITY_EDITOR

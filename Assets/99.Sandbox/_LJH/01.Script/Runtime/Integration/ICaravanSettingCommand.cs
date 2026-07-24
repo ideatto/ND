@@ -47,3 +47,41 @@ public static class CaravanSettingFailureCodes
     public const string SaveFailed = "SAVE_FAILED";
     public const string ServiceUnavailable = "SERVICE_UNAVAILABLE";
 }
+
+public interface ICaravanLoadSettingCommand
+{
+    CaravanLoadSettingCommandResult Execute(CaravanLoadSettingDraft draft);
+}
+
+public sealed class CaravanLoadSettingCommandResult
+{
+    public bool succeeded;
+    public string errorCode = string.Empty;
+    public string userMessage = string.Empty;
+
+    public static CaravanLoadSettingCommandResult Success()
+    {
+        return new CaravanLoadSettingCommandResult { succeeded = true };
+    }
+
+    public static CaravanLoadSettingCommandResult Failure(string errorCode, string userMessage)
+    {
+        return new CaravanLoadSettingCommandResult
+        {
+            succeeded = false,
+            errorCode = string.IsNullOrWhiteSpace(errorCode) ? string.Empty : errorCode.Trim(),
+            userMessage = string.IsNullOrWhiteSpace(userMessage) ? string.Empty : userMessage.Trim()
+        };
+    }
+}
+
+public static class CaravanLoadSettingFailureCodes
+{
+    public const string InvalidDraft = "INVALID_DRAFT";
+    public const string CaravanNotFound = "CARAVAN_NOT_FOUND";
+    public const string CaravanNotEditable = "CARAVAN_NOT_EDITABLE";
+    public const string ItemUnavailable = "ITEM_UNAVAILABLE";
+    public const string CargoCapacityExceeded = "CARGO_CAPACITY_EXCEEDED";
+    public const string SaveFailed = "SAVE_FAILED";
+    public const string ServiceUnavailable = "SERVICE_UNAVAILABLE";
+}

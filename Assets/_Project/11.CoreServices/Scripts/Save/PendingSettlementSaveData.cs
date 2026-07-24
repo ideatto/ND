@@ -21,6 +21,7 @@
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  */
 using System;
+using System.Collections.Generic;
 
 namespace ND.Framework
 {
@@ -87,6 +88,21 @@ namespace ND.Framework
         /// 총 식량 소모량이다.
         /// </summary>
         public float foodConsumed;
+
+        /// <summary>이벤트로 소실된 여물 수량이다.</summary>
+        public float foodLost;
+
+        /// <summary>실제 결과까지 처리된 route 이벤트 수이다.</summary>
+        public int eventsOccurred;
+
+        /// <summary>실제 처리된 Combat 이벤트 수이다.</summary>
+        public int battlesFought;
+
+        public List<string> lostMercenaryInstanceIds = new List<string>();
+
+        public bool wagonDestroyed;
+
+        public string destroyedWagonInstanceId = string.Empty;
 
         /// <summary>
         /// 출발 시 적재량이다.

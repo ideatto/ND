@@ -253,6 +253,9 @@ namespace ND.Framework
         /// <summary>배열 위치와 무관하게 caravan을 식별하는 고유 ID이다.</summary>
         public string caravanId = string.Empty;
 
+        /// <summary>Caravan Overview의 고정 슬롯과 연결되는 영속 위치 값이다. 목록 인덱스로 대체하지 않는다.</summary>
+        public int slotIndex;
+
         /// <summary>
         /// 이 caravan이 현재 머무는 마을 ID이다. 이동 중에는 출발 마을을 유지하고,
         /// 정산 Claim이 성공했을 때 목적지 또는 실패 복귀 거점으로 갱신한다.
@@ -288,6 +291,11 @@ namespace ND.Framework
         /// 식량 1개당 무게이다. 0 이하 값은 저장 데이터 정규화 시 1로 보정된다.
         /// </summary>
         public float foodUnitWeight = 1f;
+
+        /// <summary>
+        /// 이 caravan의 산적 이벤트 기본 무사 통과 확률이다. 단위: percent (0~100).
+        /// </summary>
+        public float baseSafetyChancePercent;
 
         /// <summary>
         /// Core journey의 현재 상태이다.
@@ -350,6 +358,19 @@ namespace ND.Framework
         public int runBattlesFought;
 
         /// <summary>
+        /// 이번 run에서 이미 처리한 거리 기반 이벤트 판정 수이다.
+        /// 온라인 갱신과 오프라인 복원에서 같은 구간을 중복 판정하지 않게 한다.
+        /// </summary>
+        public int runEventChecksProcessed;
+
+        /// <summary>
+        /// 이번 run에서 실제 발생한 이벤트 수이다.
+        /// </summary>
+        public int runEventsOccurred;
+
+        public List<string> runLostMercenaryInstanceIds = new List<string>();
+
+        /// <summary>
         /// 이번 무역 출발 시 내구도이다.
         /// </summary>
         public int runStartDurability;
@@ -382,7 +403,6 @@ namespace ND.Framework
         /// <summary>
         /// 약탈 내구도 손실에 손실 상한을 적용할지 여부이다.
         /// </summary>
-        public bool limitRaidDurability = true;
 
         /// <summary>
         /// 출발 시 원래 무역품 개수이다.

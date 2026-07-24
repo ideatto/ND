@@ -73,11 +73,13 @@ public class JourneyRunTest : MonoBehaviour
     public int foodLossAtSecond = -1;   // 이 초에 식량 도난(ApplyFoodLoss)
     public float foodLossAmount = 5f;
     public int fatalAtSecond = -1;   // 이 초에 강제 실패
-    public int raidAtSecond = -1;    // 이 초에 약탈(전투) 발생 → 용병으로 방어 판정 [M2]
-    public int raidCount = 1;        // 이 초에 몇 번 전투가 벌어지나 (용병 수와 비교)
-    public int raidDurabilityDamage = 20;  // 방어 실패 시 마차 내구도 손실
-    public int raidCargoDamage = 1;        // 방어 실패 시 무역품 손실
-    public bool limitRaidDurability = true;  // [M2] 체크: 약탈 내구도 손실 손실상한(50%)까지만 / 해제: 전량 적용
+    public int raidAtSecond = -1;    // 이 초에 산적 이벤트 발생
+    public int raidCount = 1;        // 이 초에 몇 번 산적 이벤트를 판정할지
+    public int raidBanditCombatPower = 100;
+    [Range(0f, 1f)] public float raidCargoLootRate = 0.1f;
+    [Range(0f, 1f)] public float raidFodderLootRate = 0.1f;
+    [Range(0f, 100f)] public float baseSafetyChancePercent;
+    public int raidRandomSeed = 1234;
 
     // ── SO 연결 (이종현 더미 데이터) ──────────────────────────────
     //  더미 SO를 아래 칸에 드래그 → 우클릭 "SO에서 상단 채우기"
@@ -105,7 +107,7 @@ public class JourneyRunTest : MonoBehaviour
 
         // [M2] 손실 상한 — 정헌 GrowthCalculator에서 LossLimitRate 받아 적용 (성장 레벨은 임시 0)
         caravan.lossLimitRate = GrowthCalculator.CalculateM1RuntimeStats(0, 0).LossLimitRate;
-        caravan.limitRaidDurability = limitRaidDurability;   // 인스펙터 토글 → 약탈 내구도 상한 on/off [M2]
+        caravan.baseSafetyChancePercent = baseSafetyChancePercent;
         Debug.Log($"[손실상한] 비율 {caravan.lossLimitRate:0.##} (원래 무역품 {caravan.runOriginalCargoCount}개 → 최대 {(int)(caravan.lossLimitRate * caravan.runOriginalCargoCount)}개 손실)");
 
         int animals = caravan.animals.Count;
@@ -204,10 +206,15 @@ public class JourneyRunTest : MonoBehaviour
             {
                 for (int i = 0; i < raidCount; i++)
                 {
-                    bool defended = JourneyRunner.ResolveRaid(caravan, raidDurabilityDamage, raidCargoDamage);
-                    Debug.Log(defended
-                        ? $"[약탈] {elapsedSec}초: {i + 1}번째 전투 — 용병 방어 성공"
-                        : $"[약탈] {elapsedSec}초: {i + 1}번째 전투 — 방어 실패! 내구도 -{raidDurabilityDamage}, 무역품 -{raidCargoDamage}");
+                    BanditRaidResult raid = JourneyRunner.ResolveBanditRaid(
+                        caravan,
+                        raidBanditCombatPower,
+                        raidCargoLootRate,
+                        raidFodderLootRate,
+                        raidRandomSeed + i);
+                    Debug.Log(raid.passedSafely
+                        ? $"[산적] {elapsedSec}초: {i + 1}번째 이벤트 — 무사 통과 ({raid.safePassChancePercent:0.##}%)"
+                        : $"[산적] {elapsedSec}초: {i + 1}번째 이벤트 — 실패! 무역품 -{raid.cargoLost}, 여물 -{raid.foodLost}, 용병 소멸 ID={raid.lostMercenaryInstanceId}");
                 }
                 raidDone = true;
             }

@@ -33,11 +33,168 @@
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
+using System.Collections.Generic;
 using ND.Economy;
 using UnityEngine;
 
 namespace ND.Framework
 {
+    public enum CaravanCreationFailureReason
+    {
+        None,
+        SaveDataUnavailable,
+        InvalidSlotIndex,
+        SlotAlreadyOccupied,
+        SaveFailed
+    }
+
+    /// <summary>Caravan 생성과 영속 저장 결과를 제공한다.</summary>
+    public sealed class CaravanCreationResult
+    {
+        private CaravanCreationResult(
+            bool succeeded,
+            string caravanId,
+            int slotIndex,
+            CaravanCreationFailureReason failureReason,
+            SaveResult saveResult)
+        {
+            Succeeded = succeeded;
+            CaravanId = caravanId ?? string.Empty;
+            SlotIndex = slotIndex;
+            FailureReason = failureReason;
+            SaveResult = saveResult;
+        }
+
+        public bool Succeeded { get; }
+        public string CaravanId { get; }
+        public int SlotIndex { get; }
+        public CaravanCreationFailureReason FailureReason { get; }
+        public SaveResult SaveResult { get; }
+
+        internal static CaravanCreationResult Success(string caravanId, int slotIndex, SaveResult saveResult)
+            => new CaravanCreationResult(true, caravanId, slotIndex, CaravanCreationFailureReason.None, saveResult);
+
+        internal static CaravanCreationResult Failure(
+            int slotIndex,
+            CaravanCreationFailureReason failureReason,
+            SaveResult saveResult = null)
+            => new CaravanCreationResult(false, string.Empty, slotIndex, failureReason, saveResult);
+    }
+
+    /// <summary>Caravan 생성 검증, 상태 변경, 저장 및 실패 원복을 소유하는 Production command service이다.</summary>
+    public sealed class CaravanManagementService
+    {
+        private readonly Func<SaveData> getSaveData;
+        private readonly ISaveService saveService;
+        private readonly Func<string, CaravanData> registerRuntimeCaravan;
+
+        public CaravanManagementService(
+            Func<SaveData> getSaveData,
+            ISaveService saveService,
+            Func<string, CaravanData> registerRuntimeCaravan = null)
+        {
+            this.getSaveData = getSaveData;
+            this.saveService = saveService;
+            this.registerRuntimeCaravan = registerRuntimeCaravan;
+        }
+
+        /// <summary>
+        /// 비어 있는 영속 슬롯에 Caravan과 기본 TradeProgress를 만들고 한 번 저장한다.
+        /// </summary>
+        /// <returns>
+        /// 저장까지 완료되면 생성 ID와 성공 SaveResult를 반환한다.
+        /// 검증 실패는 메모리를 변경하거나 저장을 시도하지 않으며, 저장 실패는 전체 SaveData를 원복한다.
+        /// </returns>
+        public CaravanCreationResult CreateCaravan(int slotIndex)
+        {
+            var saveData = getSaveData != null ? getSaveData() : null;
+            if (saveData == null)
+            {
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveDataUnavailable);
+            }
+
+            if (slotIndex < 0)
+            {
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.InvalidSlotIndex);
+            }
+
+            if (saveData.caravans != null)
+            {
+                for (var i = 0; i < saveData.caravans.Count; i++)
+                {
+                    var existing = saveData.caravans[i];
+                    if (existing != null && existing.slotIndex == slotIndex)
+                    {
+                        return CaravanCreationResult.Failure(
+                            slotIndex,
+                            CaravanCreationFailureReason.SlotAlreadyOccupied);
+                    }
+                }
+            }
+
+            var snapshot = JsonUtility.ToJson(saveData);
+            var selectedWasValid = SaveDataLookup.TryGetSelectedCaravan(saveData, out _);
+            if (saveData.caravans == null) saveData.caravans = new List<CaravanSaveData>();
+            if (saveData.tradeProgressEntries == null)
+            {
+                saveData.tradeProgressEntries = new List<TradeProgressSaveData>();
+            }
+
+            var caravan = new CaravanSaveData
+            {
+                caravanId = SaveDataLookup.NewCaravanId(),
+                slotIndex = slotIndex
+            };
+            saveData.caravans.Add(caravan);
+            saveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravan.caravanId,
+                state = TradeProgressState.None
+            });
+
+            if (!selectedWasValid)
+            {
+                saveData.selectedCaravanId = caravan.caravanId;
+            }
+
+            SaveResult saveResult = null;
+            try
+            {
+                saveResult = saveService != null ? saveService.Save(saveData) : null;
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Caravan creation save threw an exception: {exception.Message}");
+            }
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(snapshot, saveData);
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveFailed,
+                    saveResult);
+            }
+
+            if (registerRuntimeCaravan != null
+                && registerRuntimeCaravan(caravan.caravanId) == null)
+            {
+                JsonUtility.FromJsonOverwrite(snapshot, saveData);
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveFailed,
+                    saveResult);
+            }
+
+            FrameworkEvents.RaiseCaravanCreated(caravan.caravanId, slotIndex);
+            return CaravanCreationResult.Success(caravan.caravanId, slotIndex, saveResult);
+        }
+    }
+
     /// <summary>
     /// Framework service를 초기화하고 전역 접근 지점을 제공하는 runtime singleton이다.
     /// </summary>
@@ -95,6 +252,9 @@ namespace ND.Framework
         /// Core caravan 출발 검증과 저장 데이터 기록을 연결하는 서비스이다.
         /// </summary>
         public TradeStartService TradeStart { get; private set; }
+
+        /// <summary>Caravan 생성, 저장 및 저장 실패 원복을 담당하는 Production command service이다.</summary>
+        public CaravanManagementService CaravanManagement { get; private set; }
 
         /// <summary>구조 대출 발급·상환 및 상태 조회 command service이다.</summary>
         public RescueLoanCommandService RescueLoan { get; private set; }
@@ -226,11 +386,19 @@ namespace ND.Framework
                 return;
             }
 
-            // Traveling 이어하기는 오프라인 경과·완료를 먼저 반영한 뒤 pending 복구로 이어진다.
+            // 로드 전부터 pending이던 선택 caravan만 cache 복구 대상으로 기억한다.
+            // 이번 offline restore에서 새로 완료된 entry는 이미 ready 이벤트를 발행하므로 중복 복구하지 않는다.
+            var restoreSelectedPending =
+                CurrentSaveData.tradeProgress?.state == TradeProgressState.SettlementPending;
+
+            // Traveling 이어하기는 모든 명시 entry의 오프라인 경과·완료를 먼저 반영한다.
             TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
 
-            // SettlementPending 재진입 시 세션 캐시가 비어 있으므로 pendingSettlement로 복구한 뒤 화면을 갱신한다.
-            TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+            // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
+            if (restoreSelectedPending)
+            {
+                TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+            }
 
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
@@ -316,8 +484,14 @@ namespace ND.Framework
                 // Register every newly departed caravan so the coordinator never reuses the
                 // claimed Prepare-state caravan left by the previous trade cycle.
                 TradeProgressCoordinator.SetActiveCaravan,
-                () => SharedGameData);
+                () => SharedGameData,
+                TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
+            TradeProgressCoordinator.RebuildRuntimeCaravans();
+            CaravanManagement = new CaravanManagementService(
+                () => CurrentSaveData,
+                SaveService,
+                TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
 
             // 실제 MinimumTradeCost는 Content/Progression 공급 전까지 0으로 두어 command가 안전하게 거부되게 한다.
             ConfigureRescueLoanDefinition(new RescueLoanDefinition());

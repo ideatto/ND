@@ -34,7 +34,10 @@ public sealed class TradePrepareDraftStore
         current.selectedDestinationTownId = string.Empty;
         current.selectedRouteId = string.Empty;
         current.selectedWagonId = string.Empty;
+        current.hasAuthoritativeCaravanComposition = false;
+        current.selectedWagonCurrentDurability = 0;
         current.selectedAnimals.Clear();
+        current.hasAuthoritativeCargoPlan = false;
         current.selectedBuyItems.Clear();
         current.ClearMercenaries();
         NotifyChanged();
@@ -67,6 +70,8 @@ public sealed class TradePrepareDraftStore
         }
 
         current.selectedWagonId = normalizedWagonId;
+        current.hasAuthoritativeCaravanComposition = false;
+        current.selectedWagonCurrentDurability = 0;
         current.selectedAnimals.Clear();
         current.selectedBuyItems.Clear();
         NotifyChanged();
@@ -131,6 +136,91 @@ public sealed class TradePrepareDraftStore
         }
 
         current.selectedBuyItems.Clear();
+        NotifyChanged();
+    }
+
+    public void ReplaceCaravanComposition(
+        string wagonId,
+        IReadOnlyList<DraftAnimalSelectionData> animals,
+        int currentWagonDurability)
+    {
+        current.selectedWagonId = NormalizeId(wagonId);
+        current.hasAuthoritativeCaravanComposition = true;
+        current.selectedWagonCurrentDurability = string.IsNullOrEmpty(current.selectedWagonId)
+            ? 0
+            : Math.Max(0, currentWagonDurability);
+        current.selectedAnimals.Clear();
+
+        if (animals != null)
+        {
+            for (int index = 0; index < animals.Count; index++)
+            {
+                DraftAnimalSelectionData selection = animals[index];
+                string animalId = selection != null
+                    ? NormalizeId(selection.draftAnimalId)
+                    : string.Empty;
+                if (string.IsNullOrEmpty(animalId) || selection.quantity <= 0)
+                    continue;
+
+                current.selectedAnimals.Add(new DraftAnimalSelectionData
+                {
+                    draftAnimalId = animalId,
+                    quantity = selection.quantity
+                });
+            }
+        }
+
+        // S3 Command already validates the new composition against planned cargo capacity, so
+        // restoring S3 here must not clear the independently saved S4 plan.
+        NotifyChanged();
+    }
+
+    // TODO(PRODUCTION): selectedBuyItems is temporarily reused as the S4 planned-cargo container.
+    // Replace it with a dedicated Caravan cargo-plan collection (or an authoritative SaveData cargo
+    // snapshot) once the Framework Caravan command owns S4 persistence. Market purchases and saved
+    // Caravan cargo must then remain separate to prevent duplicate stock/currency settlement.
+    // Replaces the departure Draft cargo with one Provider-owned Caravan plan in a single update.
+    // Invalid rows are ignored and duplicate IDs are merged so a malformed snapshot cannot leak
+    // duplicate bundles into departure validation.
+    public void ReplaceCargoPlan(CargoItemViewData[] plannedItems)
+    {
+        current.hasAuthoritativeCargoPlan = true;
+        plannedItems = plannedItems ?? Array.Empty<CargoItemViewData>();
+        var replacements = new List<TradeItemBundle>();
+        var indexesById = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        for (int index = 0; index < plannedItems.Length; index++)
+        {
+            CargoItemViewData item = plannedItems[index];
+            string itemId = item != null ? NormalizeId(item.itemId) : string.Empty;
+            int quantity = item != null ? Math.Max(0, item.quantity) : 0;
+            if (string.IsNullOrEmpty(itemId) || quantity == 0)
+                continue;
+
+            if (indexesById.TryGetValue(itemId, out int existingIndex))
+            {
+                TradeItemBundle existing = replacements[existingIndex];
+                existing.quantity = existing.quantity > int.MaxValue - quantity
+                    ? int.MaxValue
+                    : existing.quantity + quantity;
+                continue;
+            }
+
+            indexesById[itemId] = replacements.Count;
+            replacements.Add(new TradeItemBundle
+            {
+                itemId = itemId,
+                quantity = quantity,
+                purchaseUnitPrice = Math.Max(0L, item.purchaseUnitPrice),
+                sellUnitPrice = Math.Max(0L, item.estimatedSellUnitPrice)
+            });
+        }
+
+        if (AreSameCargo(current.selectedBuyItems, replacements))
+            return;
+
+        current.selectedBuyItems.Clear();
+        current.selectedBuyItems.AddRange(replacements);
         NotifyChanged();
     }
 
@@ -217,6 +307,30 @@ public sealed class TradePrepareDraftStore
             itemId = normalizedItemId,
             quantity = quantity
         });
+        return true;
+    }
+
+    private static bool AreSameCargo(
+        IReadOnlyList<TradeItemBundle> currentItems,
+        IReadOnlyList<TradeItemBundle> replacements)
+    {
+        if (currentItems == null || currentItems.Count != replacements.Count)
+            return false;
+
+        for (int index = 0; index < currentItems.Count; index++)
+        {
+            TradeItemBundle currentItem = currentItems[index];
+            TradeItemBundle replacement = replacements[index];
+            if (currentItem == null
+                || currentItem.itemId != replacement.itemId
+                || currentItem.quantity != replacement.quantity
+                || currentItem.purchaseUnitPrice != replacement.purchaseUnitPrice
+                || currentItem.sellUnitPrice != replacement.sellUnitPrice)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 

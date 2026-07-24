@@ -83,6 +83,19 @@ public sealed class TradePrepareViewDataBuilder
             out selectedMercenaryPower,
             out selectedMercenaryHireCost);
 
+        ND.Economy.TradeEventPreviewResult eventPreview =
+            ND.Economy.TradeEventPreviewCalculator.Calculate(
+                new ND.Economy.TradeEventPreviewInput
+                {
+                    DistanceKm = selectedRoute != null ? selectedRoute.Distance : 0f,
+                    CaravanBaseSafetyChancePercent = previewCaravan.baseSafetyChancePercent,
+                    MercenaryCombatPower = selectedMercenaryPower,
+                    // The current Route data already exposes the encounter power required by this path.
+                    BanditCombatPower = selectedRoute != null
+                        ? selectedRoute.BaseRequiredMercenaryPower
+                        : 0
+                });
+
         // Mercenary cost comes from the actually selected mercenaries, not the legacy route cost.
         long mercenaryCost = selectedMercenaryHireCost;
         long totalPreparationCost = AddClamped(totalPurchaseCost, mercenaryCost);
@@ -114,15 +127,20 @@ public sealed class TradePrepareViewDataBuilder
             // Treat it as satisfying ownership here just as BuildWagons allows selecting it;
             // otherwise the final departure check contradicts S3 and blocks every walk attempt.
             isSelectedWagonOwned = selectedWagon != null &&
-                (selectedWagon.WagonType == WagonType.None || IsSavedWagon(saveData, selectedWagon)),
-            currentWagonDurability = GetCurrentDurability(saveData, selectedWagon),
+                (selectedWagon.WagonType == WagonType.None
+                    || draft.hasAuthoritativeCaravanComposition
+                    || IsSavedWagon(saveData, selectedWagon)),
+            currentWagonDurability = draft.hasAuthoritativeCaravanComposition
+                ? draft.selectedWagonCurrentDurability
+                : GetCurrentDurability(saveData, selectedWagon),
             selectedWagonType = selectedWagon != null ? selectedWagon.WagonType : WagonType.None,
             selectedDraftAnimalCount = selectedAnimalTypes.Length,
             minRequiredDraftAnimalCount = selectedWagon != null ? selectedWagon.MinRequireAnimals : 0,
             maxAllowedDraftAnimalCount = selectedWagon != null ? selectedWagon.MaxPullAnimals : 0,
             selectedDraftAnimalTypes = selectedAnimalTypes,
             eligibleDraftAnimalTypes = selectedWagon != null ? selectedWagon.EligibleAnimalTypes : new DraftAnimalType[0],
-            hasInvalidDraftAnimalSelection = HasInvalidDraftAnimalSelection(saveData, draft, availableAnimals),
+            hasInvalidDraftAnimalSelection = !draft.hasAuthoritativeCaravanComposition
+                && HasInvalidDraftAnimalSelection(saveData, draft, availableAnimals),
             hasCargo = HasKnownPositiveCargo(finalCargoQuantities, availableItems),
             // Cargo is no longer purchased or edited during preparation. SaveData cargo is authoritative.
             hasInvalidCargoSelection = false,
@@ -184,6 +202,12 @@ public sealed class TradePrepareViewDataBuilder
             finalExpectedTravelTime = finalTravelTime,
             selectedMoveSpeed = selectedRoute != null && finalTravelTime > 0f
                 ? selectedRoute.Distance / finalTravelTime
+                : 0f,
+            eventCheckCount = eventPreview.IsValid ? eventPreview.EventCheckCount : 0,
+            eventOccurrenceProbability = eventPreview.IsValid ? eventPreview.AtLeastOneEventChance : 0f,
+            expectedEventCount = eventPreview.IsValid ? eventPreview.ExpectedEventCount : 0f,
+            banditSafePassChancePercent = eventPreview.IsValid
+                ? eventPreview.BanditSafePassChancePercent
                 : 0f
         };
     }
@@ -349,6 +373,19 @@ public sealed class TradePrepareViewDataBuilder
         ND.Framework.SaveData saveData)
     {
         var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (draft != null && draft.hasAuthoritativeCargoPlan)
+        {
+            if (draft.selectedBuyItems != null)
+            {
+                foreach (TradeItemBundle item in draft.selectedBuyItems)
+                {
+                    if (item != null && item.quantity > 0)
+                        AddQuantity(quantities, item.itemId, item.quantity);
+                }
+            }
+            return quantities;
+        }
+
         if (saveData != null && saveData.caravan != null && saveData.caravan.cargo != null)
         {
             foreach (ND.Framework.CargoEntrySaveData cargo in saveData.caravan.cargo)
@@ -396,19 +433,26 @@ public sealed class TradePrepareViewDataBuilder
                 continue;
             }
 
-            const int buyAmount = 0;
+            int finalCargoQuantity;
+            finalCargoQuantities.TryGetValue(item.ItemId, out finalCargoQuantity);
+
+            // An S4 plan is the complete set of goods purchased for this departure Caravan.
+            // Legacy SaveData cargo is already owned, so it must not be charged again.
+            int buyAmount = draft != null && draft.hasAuthoritativeCargoPlan
+                ? Mathf.Max(0, finalCargoQuantity)
+                : 0;
             ND.Economy.PriceCalculationResult price = CalculatePrice(item, route, saveData, 1);
             long purchasePrice = price.IsValid ? price.UnitBuyPrice : 0L;
             long sellPrice = price.IsValid ? price.UnitSellPrice : 0L;
             long linePurchaseCost = MultiplyClamped(purchasePrice, buyAmount);
             totalPurchaseCost = AddClamped(totalPurchaseCost, linePurchaseCost);
+            totalSellRevenue = AddClamped(
+                totalSellRevenue,
+                MultiplyClamped(sellPrice, Mathf.Max(0, finalCargoQuantity)));
             if (item.Category == TradeItemCategory.DraftAnimalsFood)
             {
                 draftAnimalFoodCost = AddClamped(draftAnimalFoodCost, linePurchaseCost);
             }
-            int finalCargoQuantity;
-            finalCargoQuantities.TryGetValue(item.ItemId, out finalCargoQuantity);
-
             result.Add(new TradeItemViewData
             {
                 itemId = item.ItemId,
@@ -829,6 +873,11 @@ public sealed class TradePrepareViewDataBuilder
 
     private static bool HasInvalidMercenarySelection(TradePrepareDraft draft, MercenaryData[] mercenaries)
     {
+        if (draft.SelectedMercenaryIds.Count > 1)
+        {
+            return true;
+        }
+
         for (int selectionIndex = 0; selectionIndex < draft.SelectedMercenaryIds.Count; selectionIndex++)
         {
             string selectedId = draft.SelectedMercenaryIds[selectionIndex];

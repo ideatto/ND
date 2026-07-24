@@ -56,6 +56,7 @@ namespace ND.Framework
                 wagon = ToRuntime(saveData.wagon),
                 foodAmount = saveData.foodAmount,
                 foodUnitWeight = saveData.foodUnitWeight,
+                baseSafetyChancePercent = saveData.baseSafetyChancePercent,
                 state = saveData.state,
                 currentDistanceKm = saveData.currentDistanceKm,
                 totalSeconds = saveData.totalSeconds,
@@ -68,13 +69,15 @@ namespace ND.Framework
                 currentDurability = saveData.currentDurability,
                 runDurabilityLost = saveData.runDurabilityLost,
                 runBattlesFought = saveData.runBattlesFought,
+                runEventChecksProcessed = saveData.runEventChecksProcessed,
+                runEventsOccurred = saveData.runEventsOccurred,
+                runLostMercenaryInstanceIds = new List<string>(saveData.runLostMercenaryInstanceIds),
                 runStartDurability = saveData.runStartDurability,
                 runWearRemainder = saveData.runWearRemainder,
                 runFoodDepleted = saveData.runFoodDepleted,
                 runFoodDepletedProgress = saveData.runFoodDepletedProgress,
                 starveGraceSeconds = saveData.starveGraceSeconds,
                 lossLimitRate = saveData.lossLimitRate,
-                limitRaidDurability = saveData.limitRaidDurability,
                 runOriginalCargoCount = saveData.runOriginalCargoCount,
                 runDepartureLoad = saveData.runDepartureLoad
             };
@@ -122,6 +125,9 @@ namespace ND.Framework
 
             saveData.foodAmount = runtimeData.foodAmount;
             saveData.foodUnitWeight = runtimeData.foodUnitWeight;
+            saveData.baseSafetyChancePercent = System.Math.Max(
+                0f,
+                System.Math.Min(100f, runtimeData.baseSafetyChancePercent));
             saveData.state = runtimeData.state;
             saveData.currentDistanceKm = runtimeData.currentDistanceKm;
             saveData.totalSeconds = runtimeData.totalSeconds;
@@ -134,13 +140,17 @@ namespace ND.Framework
             saveData.currentDurability = runtimeData.currentDurability;
             saveData.runDurabilityLost = runtimeData.runDurabilityLost;
             saveData.runBattlesFought = runtimeData.runBattlesFought;
+            saveData.runEventChecksProcessed = runtimeData.runEventChecksProcessed;
+            saveData.runEventsOccurred = runtimeData.runEventsOccurred;
+            saveData.runLostMercenaryInstanceIds.Clear();
+            if (runtimeData.runLostMercenaryInstanceIds != null)
+                saveData.runLostMercenaryInstanceIds.AddRange(runtimeData.runLostMercenaryInstanceIds);
             saveData.runStartDurability = runtimeData.runStartDurability;
             saveData.runWearRemainder = runtimeData.runWearRemainder;
             saveData.runFoodDepleted = runtimeData.runFoodDepleted;
             saveData.runFoodDepletedProgress = runtimeData.runFoodDepletedProgress;
             saveData.starveGraceSeconds = runtimeData.starveGraceSeconds;
-            saveData.lossLimitRate = runtimeData.lossLimitRate;
-            saveData.limitRaidDurability = runtimeData.limitRaidDurability;
+            saveData.lossLimitRate = NormalizeLossLimitRate(runtimeData.lossLimitRate);
             saveData.runOriginalCargoCount = runtimeData.runOriginalCargoCount;
             saveData.runDepartureLoad = runtimeData.runDepartureLoad;
         }
@@ -171,6 +181,24 @@ namespace ND.Framework
                 saveData.mercenaries = new List<MercenarySaveData>();
             }
 
+            if (saveData.runEventChecksProcessed < 0)
+            {
+                saveData.runEventChecksProcessed = 0;
+            }
+
+            if (saveData.runBattlesFought < 0)
+            {
+                saveData.runBattlesFought = 0;
+            }
+
+            if (saveData.runEventsOccurred < 0)
+            {
+                saveData.runEventsOccurred = 0;
+            }
+
+            if (saveData.runLostMercenaryInstanceIds == null)
+                saveData.runLostMercenaryInstanceIds = new List<string>();
+
             if (saveData.cargo == null)
             {
                 saveData.cargo = new List<CargoEntrySaveData>();
@@ -180,6 +208,10 @@ namespace ND.Framework
             {
                 saveData.foodUnitWeight = 1f;
             }
+
+            saveData.baseSafetyChancePercent = System.Math.Max(
+                0f,
+                System.Math.Min(100f, saveData.baseSafetyChancePercent));
 
             if (saveData.wagon.maxDurability <= 0)
             {
@@ -191,10 +223,7 @@ namespace ND.Framework
                 saveData.wagon.inventorySlotCount = 1;
             }
 
-            if (saveData.lossLimitRate <= 0f)
-            {
-                saveData.lossLimitRate = 1f;
-            }
+            saveData.lossLimitRate = NormalizeLossLimitRate(saveData.lossLimitRate);
 
             if (saveData.starveGraceSeconds <= 0f)
             {
@@ -219,6 +248,18 @@ namespace ND.Framework
                     cargo.item.maxCount = 1;
                 }
             }
+        }
+
+        private static float NormalizeLossLimitRate(float value)
+        {
+            // 0은 계약상 유효한 완전 손실 보호 값이다.
+            // 구버전/손상 데이터처럼 범위를 벗어나거나 유한하지 않은 값만 기본값 1로 복구한다.
+            if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f || value > 1f)
+            {
+                return 1f;
+            }
+
+            return value;
         }
 
         private static imsiWagonData ToRuntime(WagonSaveData saveData)

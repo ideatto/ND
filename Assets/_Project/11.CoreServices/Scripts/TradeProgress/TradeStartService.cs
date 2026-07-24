@@ -120,6 +120,7 @@ namespace ND.Framework
         private readonly InGameScreenStateRouter inGameScreenRouter;
         private readonly Action clearSettlementCache;
         private readonly Action<CaravanData> setActiveCaravan;
+        private readonly Func<string, CaravanData> getRuntimeCaravan;
         private readonly Func<ISharedGameDataProvider> getSharedGameData;
         private readonly HashSet<string> departureRequestsInProgress = new HashSet<string>();
 
@@ -137,6 +138,7 @@ namespace ND.Framework
         /// <param name="inGameScreenRouter">출발 성공 후 traveling 화면으로 전환할 router.</param>
         /// <param name="clearSettlementCache">새 출발 전 이전 정산 cache를 비우는 callback.</param>
         /// <param name="setActiveCaravan">Registers the newly departed runtime caravan with the progress coordinator.</param>
+        /// <param name="getRuntimeCaravan">Resolves the canonical runtime caravan for the requested caravan ID.</param>
         public TradeStartService(
             Func<SaveData> getCurrentSaveData,
             ISaveService saveService,
@@ -144,7 +146,8 @@ namespace ND.Framework
             InGameScreenStateRouter inGameScreenRouter = null,
             Action clearSettlementCache = null,
             Action<CaravanData> setActiveCaravan = null,
-            Func<ISharedGameDataProvider> getSharedGameData = null)
+            Func<ISharedGameDataProvider> getSharedGameData = null,
+            Func<string, CaravanData> getRuntimeCaravan = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
@@ -153,6 +156,7 @@ namespace ND.Framework
             this.clearSettlementCache = clearSettlementCache;
             this.setActiveCaravan = setActiveCaravan;
             this.getSharedGameData = getSharedGameData;
+            this.getRuntimeCaravan = getRuntimeCaravan;
         }
 
         /// <summary>
@@ -227,7 +231,13 @@ namespace ND.Framework
                 return TradeDepartureResult.Rejected(TradeDepartureFailureReason.RouteNotFound);
             }
 
-            var runtimeCaravan = CaravanSaveDataMapper.ToRuntime(caravanSave);
+            var runtimeCaravan = getRuntimeCaravan != null
+                ? getRuntimeCaravan(caravanId)
+                : CaravanSaveDataMapper.ToRuntime(caravanSave);
+            if (runtimeCaravan == null || runtimeCaravan.caravanId != caravanId)
+            {
+                return TradeDepartureResult.Rejected(TradeDepartureFailureReason.CaravanNotFound);
+            }
             var coreResult = CaravanValidator.Validate(runtimeCaravan);
             if (!coreResult.canDepart)
             {

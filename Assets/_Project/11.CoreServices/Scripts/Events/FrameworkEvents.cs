@@ -52,6 +52,14 @@ namespace ND.Framework
         public static event Action<SaveData> LoadCompleted;
 
         /// <summary>
+        /// 새 Caravan이 SaveData에 추가되고 영속 저장까지 성공한 뒤 한 번 발생한다.
+        /// </summary>
+        /// <remarks>
+        /// 인자 순서는 caravanId, slotIndex이다. 저장 실패 시 발생하지 않으며 구독자는 비활성화 시 구독을 해제해야 한다.
+        /// </remarks>
+        public static event Action<string, int> CaravanCreated;
+
+        /// <summary>
         /// SceneFlowService가 scene load 완료 콜백을 받은 뒤 발생한다.
         /// </summary>
         public static event Action<string> SceneChanged;
@@ -81,6 +89,11 @@ namespace ND.Framework
         /// </summary>
         public static event Action<InGameScreenState> InGameScreenChanged;
 
+        /// <summary>
+        /// SaveData에 확정 반영된 플레이어 무역 화폐가 변경되었을 때 발생한다.
+        /// </summary>
+        public static event Action<long> TradingCurrencyChanged;
+
         /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
         public static event Action<IssueRescueLoanResult> RescueLoanIssued;
 
@@ -102,7 +115,7 @@ namespace ND.Framework
         /// <remarks>
         /// 인자 순서는 tradeId, eventId이다.
         /// Core 로드/약탈 적용 API가 연결되기 전까지는 Framework stub hook이며, 구독자는 중복 처리를 방지해야 한다.
-        /// FrameworkDebugCommands.TryConsumeForcedRouteEvent로 pending hook을 1회 소모할 수 있다.
+        /// 이벤트가 실제 Core 처리와 저장까지 성공한 뒤 알림으로 발행된다.
         /// </remarks>
         public static event Action<string, string> RouteEventForced;
 
@@ -132,6 +145,13 @@ namespace ND.Framework
             // 로드 완료 흐름은 여러 시스템 초기화의 기준점이므로 발행 시점을 로그로 남긴다.
             FrameworkLog.Info("LoadCompleted event raised.");
             LoadCompleted?.Invoke(data);
+        }
+
+        /// <summary>저장이 완료된 새 Caravan의 ID와 영속 슬롯을 구독자에게 전달한다.</summary>
+        public static void RaiseCaravanCreated(string caravanId, int slotIndex)
+        {
+            FrameworkLog.Info($"CaravanCreated event raised. CaravanId: {caravanId}, SlotIndex: {slotIndex}");
+            CaravanCreated?.Invoke(caravanId, slotIndex);
         }
 
         /// <summary>
@@ -205,6 +225,13 @@ namespace ND.Framework
             InGameScreenChanged?.Invoke(screenState);
         }
 
+        /// <summary>확정된 플레이어 무역 화폐 스냅샷을 구독자에게 전달한다.</summary>
+        public static void RaiseTradingCurrencyChanged(long tradingCurrency)
+        {
+            FrameworkLog.Info($"TradingCurrencyChanged event raised. Currency: {tradingCurrency}");
+            TradingCurrencyChanged?.Invoke(tradingCurrency);
+        }
+
         public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)
         {
             FrameworkLog.Info($"RescueLoanIssued event raised. LoanId: {result?.LoanId ?? string.Empty}");
@@ -242,7 +269,7 @@ namespace ND.Framework
         /// <param name="eventId">주입할 route event ID.</param>
         /// <remarks>
         /// FrameworkDebugCommands.ForceRouteEvent가 Traveling 검증 후 호출한다.
-        /// Core 적용은 구독자 또는 TryConsumeForcedRouteEvent 경로에서 처리한다.
+        /// Core 적용과 저장은 FrameworkDebugCommands가 먼저 완료한다.
         /// </remarks>
         public static void RaiseRouteEventForced(string tradeId, string eventId)
         {

@@ -10,6 +10,10 @@ namespace ND.Economy
             {
                 return Fail("InputNull", null, null, null, null, null, null, null);
             }
+            if (input.LoanRepayment != 0L)
+            {
+                return Fail("AutomaticLoanRepaymentNotAllowed", null, null, null, null, null, null, input.CurrencyState);
+            }
 
             CurrencyState workingCurrency = input.CurrencyState == null
                 ? new CurrencyState()
