@@ -55,13 +55,15 @@ public static class CaravanAssetLock
 {
     /// <summary>
     /// 이 상단이 자산을 "묶어두는" 상태인가.
-    /// 이동 중·정산 대기면 구성을 바꿀 수 없으므로 자산이 잠긴다.
+    /// 이동 중·정산 대기·정산 중이면 구성을 바꿀 수 없으므로 자산이 잠긴다.
+    /// (Selling은 아직 수령 전이라 자산이 이 상단에 그대로 묶여 있다.)
     /// </summary>
     public static bool HoldsAssets(CaravanData caravan)
     {
         if (caravan == null) return false;
         return caravan.state == JourneyState.Traveling
-            || caravan.state == JourneyState.Settling;
+            || caravan.state == JourneyState.Settling
+            || caravan.state == JourneyState.Selling;
     }
 
     /// <summary>
