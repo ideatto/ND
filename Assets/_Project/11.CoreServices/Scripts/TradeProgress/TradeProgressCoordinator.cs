@@ -237,6 +237,7 @@ namespace ND.Framework
                         $"Runtime caravan registration skipped. CaravanId: {caravanSave.caravanId}");
                 }
             }
+
         }
 
         /// <summary>
@@ -499,7 +500,9 @@ namespace ND.Framework
                 return false;
             }
 
-            saveData.player.currentTownId = destinationTownId;
+            // The journey moves the Caravan, not the player. CopyRuntimeToOwnedSave
+            // persists this authoritative Caravan location after claim succeeds.
+            caravan.currentTownId = destinationTownId;
 
             // 대기 정산과 준비 commit 정리를 같은 저장 단위에 stage한다.
             PendingSettlementSaveDataMapper.Clear(saveData);
@@ -590,6 +593,11 @@ namespace ND.Framework
             if (!TryResolveClaimDestination(saveData, progress, out var destinationTownId))
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
 
+            // The destination market commits arrival sales directly to SaveData after the
+            // journey runtime has entered Settling. Reconcile those market-owned fields before
+            // Claim copies the runtime Caravan back, otherwise sold cargo can be restored.
+            CaravanSaveDataMapper.CopyMarketInventoryToRuntime(caravanSave, caravan);
+
             var saveDataSnapshot = JsonUtility.ToJson(saveData);
             var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
             var selectedCaravanIdBeforeClaim = saveData.selectedCaravanId;
@@ -618,7 +626,9 @@ namespace ND.Framework
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CoreClaimRejected);
             }
 
-            saveData.player.currentTownId = destinationTownId;
+            // Settlement changes only the claimed Caravan's location. The player
+            // remains at the base and must not drive later Caravan route selection.
+            caravan.currentTownId = destinationTownId;
             if (tradePrepareCommitCompletion == null || !tradePrepareCommitCompletion.TryComplete(tradeId, out _))
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);

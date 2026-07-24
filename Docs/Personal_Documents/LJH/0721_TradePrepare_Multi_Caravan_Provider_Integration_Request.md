@@ -1,6 +1,7 @@
 # TradePrepare 멀티 Caravan Provider 연결 요청
 
 작성일: 2026-07-21
+구현 정합성 갱신: 2026-07-24
 외부 요청 영역: Caravan 런타임·저장 데이터 제공자 및 Framework/Integration
 요청 목적: 최대 4개의 실제 Caravan을 조회할 데이터 계약과 `caravanId` 기반 출발 Command를 제공받는다. Provider 결과를 기존 TradePrepareUI에 표시하고 선택 이벤트를 연결하는 작업은 UI & Data가 담당한다.
 
@@ -22,6 +23,7 @@ public sealed class TradePrepareCaravanOptionViewData
 {
     public string caravanId;
     public string displayName;
+    public string currentTownId;
     public JourneyState state;
     public bool canSelect;
     public string disabledReason;
@@ -37,6 +39,7 @@ public sealed class TradePrepareCaravanOptionViewData
 - `TradePrepareDraft.departureCaravanId`: TradePrepareUI 안에서 이번 출발 대상으로 선택한 ID이다.
 
 Overview의 Caravan 정보 영역은 표시 전용이다. Overview의 표시나 편집 대상이 출발 Draft로 자동 복사되어서는 안 된다.
+S_CaravanSlot에서 옵션을 선택하면 `departureCaravanId`와 그 옵션의 `currentTownId`를 출발 Draft에 함께 반영한다. 현재 Framework의 화면 전환·정산 호환 계층이 `selectedCaravanId`를 함께 사용하므로, Provider 적용이 모두 성공한 뒤 `SaveData.selectedCaravanId`도 같은 Caravan ID로 동기화한다. 장기적으로 모든 화면·정산 소비자가 명시적 ID를 사용하게 되면 이 호환 동기화를 제거할 수 있다.
 
 ---
 
@@ -72,12 +75,14 @@ Provider 규칙:
 1. `SaveData.caravans`에서 최대 4개의 실제 Caravan을 조회한다.
 2. UI가 생성하거나 배열 위치로 추론한 ID·슬롯·현재 위치를 사용하지 않는다.
 3. 모든 항목은 Framework가 저장한 안정적인 `caravanId`와 해당 Caravan의 권위 있는 위치를 사용한다.
+   `currentTownId`는 UI가 추론하지 않고 같은 Option 스냅샷에 포함한다.
 4. 배열과 항목은 `null`이 아니어야 한다.
 5. 호출할 때마다 UI가 변경해도 원본이 오염되지 않는 새 스냅샷을 반환한다.
 6. 같은 `caravanId`를 두 번 반환하지 않는다.
 7. 출발 가능 판정과 차단 사유의 원본은 Framework/Caravan 기능이 제공하며 UI Provider는 그 결과를 투영한다.
 8. `canSelect == true`일 때 `disabledReason`은 빈 문자열이어야 한다.
 9. `canSelect == false`일 때 사용자에게 전달 가능한 차단 사유를 제공한다.
+10. `currentTownId`가 비어 있는 항목은 선택 가능 상태로 반환하지 않는다.
 
 최소 차단 대상:
 
@@ -102,17 +107,16 @@ UI는 `JourneyState`를 보고 `canSelect`를 재계산하지 않는다.
 4. UI 선택을 `TradePrepareFlowController.SelectDepartureCaravan(caravanId)`로 전달하는 public wrapper
 5. 잘못된 MonoBehaviour가 주입된 경우 `OnValidate()` 오류
 
-권장 wrapper:
+선택 wrapper의 필수 처리:
 
-```csharp
-public bool SelectDepartureCaravan(string caravanId)
-{
-    return flowController != null
-        && flowController.SelectDepartureCaravan(caravanId);
-}
-```
+- SaveData에 실제 존재하는 `caravanId`인지 먼저 검증한다.
+- Provider가 반환한 같은 Option의 `currentTownId`를 `departureCaravanId`와 함께 Draft에 반영한다.
+- Caravan별 S3 구성과 S4 Cargo 계획을 같은 ID로 조회한다.
+- Provider 적용이 실패하면 클릭 전 Draft 전체를 복원한다.
+- 현재 호환 계층을 위해 Provider 적용 성공 후 `SaveData.selectedCaravanId`도 동일 ID로 동기화한다.
 
 RuntimeContext는 Overview 블록의 `caravanId`를 출발 Draft에 자동으로 넣지 않는다. 사용자가 TradePrepareUI의 Caravan 선택 단계에서 선택했을 때만 `departureCaravanId`를 갱신한다.
+Route 위치는 S3 `CaravanSettingViewData`에서 가져오지 않는다. S3 Provider는 마차·동물 구성만 담당하며 빠지거나 교체되어도 Option의 위치 스냅샷 의미는 바뀌지 않는다.
 
 ---
 
@@ -133,6 +137,7 @@ public event Action<string> OnDepartureCaravanSelected;
 - `canSelect == false`인 항목 클릭 차단
 - 차단 항목의 `disabledReason` 전달 또는 표시
 - 선택 결과로 index가 아닌 `caravanId` 전달
+- 선택 성공 시 Option의 `currentTownId`가 Draft와 이후 Route ViewData에 반영
 - 같은 카드를 다시 눌렀을 때 UI만 해제되어 Draft와 달라지지 않도록 처리
 - Provider refresh 후 기존 선택 ID가 사라지거나 차단되면 Next 비활성화
 
@@ -203,6 +208,8 @@ Provider API가 제공된 뒤 UI/Data 측에서 다음을 수행한다.
 - Overview 블록의 표시·설정·적재 대상이 출발 대상으로 자동 사용되지 않는다.
 - Traveling/Settling Caravan을 선택할 수 없다.
 - 선택 가능한 Caravan만 Draft의 `departureCaravanId`에 들어간다.
+- 선택한 Option의 `currentTownId`가 같은 Draft에 들어가며 플레이어 위치로 대체되지 않는다.
+- S_CaravanSlot 선택 전후 `SaveData.selectedCaravanId`는 유지된다.
 - 잘못된 ID와 중복 ID가 Gateway 호출 전에 차단된다.
 - 선택한 Caravan의 구성·Cargo·내구도가 Preview와 출발 객체에 사용된다.
 - 출발·진행·정산 데이터가 동일한 `caravanId`에 기록된다.

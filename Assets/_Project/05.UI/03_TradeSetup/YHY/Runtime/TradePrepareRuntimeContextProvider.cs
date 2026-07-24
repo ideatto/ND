@@ -45,6 +45,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         currentScreenState = InGameScreenStateRouter.MapFromSaveData(currentSaveData);
         FrameworkEvents.LoadCompleted += HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
+        FrameworkEvents.CaravanCreated += HandleCaravanCreated;
         TryInitialize(currentSaveData);
         AttachSceneCaravanProviders();
     }
@@ -53,6 +54,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     {
         FrameworkEvents.LoadCompleted -= HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
+        FrameworkEvents.CaravanCreated -= HandleCaravanCreated;
         DisposeFlow();
     }
 
@@ -79,6 +81,17 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         }
 
         TryInitialize(FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null);
+    }
+
+    private void HandleCaravanCreated(string caravanId, int slotIndex)
+    {
+        if (flowController == null || buildContext == null)
+            return;
+
+        // 생성 이벤트는 현재 Draft를 초기화하지 않는다. Provider 목록만 다시 읽어 새 Caravan을
+        // 같은 TradePrepare 세션에서 즉시 선택할 수 있게 한다.
+        buildContext.caravanOptions = GetLatestCaravanOptions();
+        flowController.UpdateBuildContext(buildContext);
     }
 
     public void RefreshFromFramework()
@@ -173,14 +186,42 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 
     public bool SelectDepartureCaravan(string caravanId)
     {
-        if (flowController == null || !flowController.SelectDepartureCaravan(caravanId))
+        FrameworkSaveData saveData = FrameworkRoot.Instance != null
+            ? FrameworkRoot.Instance.CurrentSaveData
+            : null;
+        string normalizedCaravanId = string.IsNullOrWhiteSpace(caravanId)
+            ? string.Empty
+            : caravanId.Trim();
+
+        // The current Framework screen/settlement compatibility layer still resolves
+        // selectedCaravanId. Keep it synchronized with the explicit departure target
+        // until those remaining consumers are fully ID-based.
+        if (saveData == null
+            || !SaveDataLookup.TryGetCaravan(saveData, normalizedCaravanId, out _)
+            || flowController == null)
             return false;
 
+        TradePrepareDraft previousDraft = flowController.CurrentDraft;
+        if (!flowController.SelectDepartureCaravan(normalizedCaravanId))
+            return false;
+
+        // Provider 적용까지 모두 성공해야 선택을 확정한다. 실패하면 프리셋 클릭 전
+        // Draft 전체를 복원하여 Caravan별 설정이나 Cargo가 섞이지 않게 한다.
         if (!RefreshSelectedCaravanSetting())
+        {
+            flowController.RestoreDraft(previousDraft);
             return false;
+        }
 
-        RefreshSelectedCaravanCargoPlan();
-        return true;
+        if (caravanCargoPlanProvider != null && !RefreshCaravanCargoPlan())
+        {
+            flowController.RestoreDraft(previousDraft);
+            return false;
+        }
+
+        // Apply the compatibility selection only after every provider-backed Draft
+        // refresh succeeds, so a rejected preset click changes neither selection.
+        return SaveDataLookup.TrySetSelectedCaravan(saveData, normalizedCaravanId);
     }
 
     public bool RefreshCaravanSetting(string caravanId = null)
@@ -188,17 +229,17 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         if (flowController == null || caravanSettingProvider == null)
             return false;
 
-        string selectedCaravanId = flowController.CurrentDraft?.departureCaravanId;
+        string departureCaravanId = flowController.CurrentDraft?.departureCaravanId;
         string requestedCaravanId = string.IsNullOrWhiteSpace(caravanId)
-            ? selectedCaravanId
+            ? departureCaravanId
             : caravanId.Trim();
-        if (string.IsNullOrWhiteSpace(selectedCaravanId)
-            || !string.Equals(selectedCaravanId, requestedCaravanId, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(departureCaravanId)
+            || !string.Equals(departureCaravanId, requestedCaravanId, StringComparison.Ordinal))
         {
             return false;
         }
 
-        CaravanSettingViewData setting = caravanSettingProvider.GetSetting(selectedCaravanId);
+        CaravanSettingViewData setting = caravanSettingProvider.GetSetting(departureCaravanId);
         return setting != null && flowController.ApplyCaravanSetting(setting);
     }
 
@@ -207,17 +248,17 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         if (flowController == null || caravanCargoPlanProvider == null)
             return false;
 
-        string selectedCaravanId = flowController.CurrentDraft?.departureCaravanId;
+        string departureCaravanId = flowController.CurrentDraft?.departureCaravanId;
         string requestedCaravanId = string.IsNullOrWhiteSpace(caravanId)
-            ? selectedCaravanId
+            ? departureCaravanId
             : caravanId.Trim();
-        if (string.IsNullOrWhiteSpace(selectedCaravanId)
-            || !string.Equals(selectedCaravanId, requestedCaravanId, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(departureCaravanId)
+            || !string.Equals(departureCaravanId, requestedCaravanId, StringComparison.Ordinal))
         {
             return false;
         }
 
-        CaravanLoadSettingViewData plan = caravanCargoPlanProvider.GetLoadSetting(selectedCaravanId);
+        CaravanLoadSettingViewData plan = caravanCargoPlanProvider.GetLoadSetting(departureCaravanId);
         return plan != null && flowController.ApplyCargoPlan(plan);
     }
 
@@ -296,8 +337,9 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         startAdapter = new TradePrepareStartAdapter(root.TradeStart, new TradePrepareViewDataBuilder(), commitSink);
         flowController = new TradePrepareFlowController(buildContext);
         flowController.ViewDataChanged += HandleViewDataChanged;
-        string currentTownId = saveData.player != null ? saveData.player.currentTownId : string.Empty;
-        flowController.Initialize(currentTownId);
+        // TradePrepare has no location until a Caravan is selected. The immutable
+        // Caravan option supplies currentTownId; S3 settings and player location are separate.
+        flowController.Initialize(string.Empty);
         ViewDataChanged?.Invoke(flowController.CurrentViewData);
     }
 

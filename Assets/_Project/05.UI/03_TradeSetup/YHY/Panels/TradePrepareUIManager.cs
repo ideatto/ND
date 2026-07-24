@@ -346,6 +346,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             buyUnitPrices = Array.Empty<long>(),
             selectedItems = Array.Empty<TradeItemViewData>()
         };
+
+        // S4 can still be inactive on its first opening after Title/Play Mode reload. Activate it
+        // before Configure/Restore so its Awake initialization cannot clear the restored SaveData cargo.
+        SetTradeRootActive(true);
+        ShowOnly(3);
+
         float maxLoad = Mathf.Max(0f, viewData.maxLoad);
         cargoPanel.TryCommitDetachedCargoPlan = TryConfirmDetachedCargoPlan;
         cargoPanel.SetDetachedInventorySlotLimit(viewData.maxInventorySlotCount);
@@ -359,10 +365,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         cargoPanel.SetCargoEditingEnabled(viewData.canEdit);
         cargoPanel.RestoreSelectedCargo(BuildDetachedCargoSelection(viewData), false);
 
-        SetTradeRootActive(true);
-        ShowOnly(3);
-        // The S4 object can be inactive before its first opening, so Awake has not cached its UI
-        // references yet. Apply detached presentation only after ShowOnly activates the panel.
+        // Apply detached-only layout after the panel has initialized and restored its cargo.
         cargoPanel.SetDetachedPresentation(true);
         return true;
     }

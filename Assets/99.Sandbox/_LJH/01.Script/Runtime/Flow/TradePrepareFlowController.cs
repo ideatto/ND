@@ -112,10 +112,15 @@ public sealed class TradePrepareFlowController : IDisposable
         for (int index = 0; index < CurrentViewData.caravanOptions.Length; index++)
         {
             TradePrepareCaravanOptionViewData option = CurrentViewData.caravanOptions[index];
-            if (option != null && option.canSelect
+            if (option != null
+                && option.canSelect
+                && !string.IsNullOrWhiteSpace(option.currentTownId)
                 && string.Equals(option.caravanId, caravanId, StringComparison.Ordinal))
             {
                 draftStore.SelectDepartureCaravan(option.caravanId);
+                // Location is selected with the Caravan option so route calculation
+                // does not depend on the separate S3 wagon/animal setting provider.
+                draftStore.SetCurrentTown(option.currentTownId);
                 return true;
             }
         }
@@ -227,6 +232,13 @@ public sealed class TradePrepareFlowController : IDisposable
     public void DeselectMercenary(string mercenaryId) { if (!IsCommitted) draftStore.DeselectMercenary(mercenaryId); }
     public void ClearMercenaries() { if (!IsCommitted) draftStore.ClearMercenaries(); }
     public void Cancel() { if (!IsCommitted) draftStore.Cancel(); }
+
+    // Selection integration uses this only to roll back a failed provider refresh.
+    public void RestoreDraft(TradePrepareDraft snapshot)
+    {
+        if (!IsCommitted)
+            draftStore.Restore(snapshot);
+    }
 
     public void Dispose()
     {

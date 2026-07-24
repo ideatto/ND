@@ -365,20 +365,42 @@ namespace ND.Framework
             }
 
             var saveData = getCurrentSaveData != null ? getCurrentSaveData() : null;
-            if (saveData == null || saveData.caravan == null)
+            if (saveData == null)
             {
                 FrameworkLog.Warning("Trade start was blocked because required save data is missing.");
                 return CreateFrameworkBlockedResult();
             }
 
-            // debug/sample runtime은 caravanId를 비운 채 올 수 있다. 선택 저장 caravan ID로 맞춘다.
-            SyncRuntimeCaravanIdFromSave(caravan, saveData.caravan);
+            // 명시된 ID는 출발 대상을 직접 찾고, ID가 없는 legacy 호출만 전역 선택을 fallback으로 쓴다.
+            CaravanSaveData targetCaravanSave;
+            if (!string.IsNullOrWhiteSpace(caravan.caravanId))
+            {
+                // 정상 UI에서는 selectedCaravanId도 같은 값이지만, 출발 command는 요청 ID를
+                // 다시 검증하여 선택 갱신 누락이나 호출 순서 오류가 다른 Caravan을 보내지 못하게 한다.
+                if (!SaveDataLookup.TryGetCaravan(saveData, caravan.caravanId, out targetCaravanSave))
+                {
+                    FrameworkLog.Warning(
+                        $"Trade start was blocked because the requested caravan was not found. CaravanId: {caravan.caravanId}");
+                    return CreateFrameworkBlockedResult();
+                }
+            }
+            else
+            {
+                // ID를 전달하지 않는 기존 debug/sample 호출만 selected Caravan과 호환한다.
+                if (!SaveDataLookup.TryGetSelectedCaravan(saveData, out targetCaravanSave))
+                {
+                    FrameworkLog.Warning("Trade start was blocked because the selected caravan was not found.");
+                    return CreateFrameworkBlockedResult();
+                }
+                SyncRuntimeCaravanIdFromSave(caravan, targetCaravanSave);
+            }
 
-            var tradeProgressBefore = saveData.tradeProgress;
+            string targetCaravanId = targetCaravanSave.caravanId;
+            SaveDataLookup.TryGetTradeProgress(saveData, targetCaravanId, out var tradeProgressBefore);
             var tradeProgressSnapshot = tradeProgressBefore != null
                 ? JsonUtility.ToJson(tradeProgressBefore)
                 : null;
-            var caravanSaveSnapshot = JsonUtility.ToJson(saveData.caravan);
+            var caravanSaveSnapshot = JsonUtility.ToJson(targetCaravanSave);
             var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
             var restrictedPreparationBefore = saveData.rescueLoan != null
                 && saveData.rescueLoan.isRestrictedPreparation;
@@ -388,6 +410,7 @@ namespace ND.Framework
             // active trade ID와 예상 종료 시각을 저장 데이터에 먼저 기록해 이후 진행률 계산 기준을 만든다.
             LastRecordSucceeded = tradeProgressRecorder.RecordStartedTrade(
                 saveData,
+                targetCaravanId,
                 tradeId,
                 routeId,
                 expectedDuration);
@@ -397,6 +420,8 @@ namespace ND.Framework
             {
                 RestoreDepartureSnapshot(
                     saveData,
+                    targetCaravanId,
+                    targetCaravanSave,
                     caravan,
                     tradeProgressSnapshot,
                     caravanSaveSnapshot,
@@ -412,6 +437,8 @@ namespace ND.Framework
                 FrameworkLog.Warning("Trade start was recorded but Core departure failed during final validation.");
                 RestoreDepartureSnapshot(
                     saveData,
+                    targetCaravanId,
+                    targetCaravanSave,
                     caravan,
                     tradeProgressSnapshot,
                     caravanSaveSnapshot,
@@ -421,7 +448,8 @@ namespace ND.Framework
                 return result;
             }
 
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            // 출발 후 runtime 상태도 동일 ID의 영구 Caravan에만 반영한다.
+            CaravanSaveDataMapper.CopyToSave(caravan, targetCaravanSave);
 
             if (saveImmediately)
             {
@@ -430,6 +458,8 @@ namespace ND.Framework
                     FrameworkLog.Warning("Trade start time was recorded but save was skipped because save service is null.");
                     RestoreDepartureSnapshot(
                         saveData,
+                        targetCaravanId,
+                        targetCaravanSave,
                         caravan,
                         tradeProgressSnapshot,
                         caravanSaveSnapshot,
@@ -449,6 +479,8 @@ namespace ND.Framework
                 {
                     RestoreDepartureSnapshot(
                         saveData,
+                        targetCaravanId,
+                        targetCaravanSave,
                         caravan,
                         tradeProgressSnapshot,
                         caravanSaveSnapshot,
@@ -492,6 +524,8 @@ namespace ND.Framework
 
         private static void RestoreDepartureSnapshot(
             SaveData saveData,
+            string caravanId,
+            CaravanSaveData caravanSave,
             CaravanData runtimeCaravan,
             string tradeProgressSnapshot,
             string caravanSaveSnapshot,
@@ -500,13 +534,15 @@ namespace ND.Framework
         {
             if (tradeProgressSnapshot == null)
             {
-                saveData.tradeProgress = null;
+                SaveDataLookup.SetTradeProgress(saveData, caravanId, null);
             }
             else
             {
-                JsonUtility.FromJsonOverwrite(tradeProgressSnapshot, saveData.tradeProgress);
+                var restoredProgress =
+                    JsonUtility.FromJson<TradeProgressSaveData>(tradeProgressSnapshot);
+                SaveDataLookup.SetTradeProgress(saveData, caravanId, restoredProgress);
             }
-            JsonUtility.FromJsonOverwrite(caravanSaveSnapshot, saveData.caravan);
+            JsonUtility.FromJsonOverwrite(caravanSaveSnapshot, caravanSave);
             JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, runtimeCaravan);
             if (saveData.rescueLoan != null)
             {

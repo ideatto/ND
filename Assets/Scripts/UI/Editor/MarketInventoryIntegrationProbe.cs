@@ -74,6 +74,7 @@ public static class MarketInventoryIntegrationProbe
             VerifyDeterministicRefresh(catalog, checks);
             VerifyInventoryRefreshSaveFailureRollsBack(catalog, checks);
             VerifyDeltaTransactionAndRollback(catalog, checks);
+            VerifySuccessfulTransactionsRaiseFrameworkEvents(catalog, checks);
             VerifyRejectedTransactionsDoNotMutate(catalog, checks);
             VerifyPanelDraftIsolation(catalog, checks);
             VerifyCargoPanelDeltaAdapter(checks);
@@ -742,6 +743,83 @@ public static class MarketInventoryIntegrationProbe
         Assert(failingSession.View.Stocks.First(stock => stock.Item.ItemId == failingPurchase.Item.ItemId).Quantity == failingStockBefore,
             "Save failure must restore market stock.");
         checks.Add("market_transaction_save_failure_rolls_back");
+    }
+
+    private static void VerifySuccessfulTransactionsRaiseFrameworkEvents(
+        TradeItemData[] catalog,
+        List<string> checks)
+    {
+        DateTime time = new DateTime(2026, 7, 14, 2, 30, 0, DateTimeKind.Utc);
+        TradeItemData cloth = catalog.First(item => item.ItemId == "cloth");
+        FrameworkSaveData save = NewSave(1000L);
+        save.caravan.cargo.Add(CreateCargo(cloth, 2));
+        var service = new MemorySaveService(save);
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save, service, new FixedTimeProvider(time), "town-events", catalog,
+            4, 20, 3600d, 103, out MarketInventoryMutationSession session, out string error), error);
+
+        int cargoChangedCount = 0;
+        int currencyChangedCount = 0;
+        string changedCaravanId = string.Empty;
+        bool cargoWasPersistedBeforeEvent = false;
+        long raisedCurrency = -1L;
+        Action<string> cargoHandler = caravanId =>
+        {
+            cargoChangedCount++;
+            changedCaravanId = caravanId;
+            cargoWasPersistedBeforeEvent = CargoQuantity(save, "cloth") == 1;
+        };
+        Action<long> currencyHandler = currency =>
+        {
+            currencyChangedCount++;
+            raisedCurrency = currency;
+        };
+
+        FrameworkEvents.CaravanCargoChanged += cargoHandler;
+        FrameworkEvents.TradingCurrencyChanged += currencyHandler;
+        try
+        {
+            MarketTransactionResult succeeded = MarketTransactionCommand.Execute(
+                session,
+                new[] { new MarketTransactionLine { ItemId = "cloth", SellQuantity = 1 } },
+                100f);
+
+            Assert(succeeded.Success, "Successful event probe transaction failed: " + succeeded.ErrorCode);
+            Assert(cargoChangedCount == 1
+                    && changedCaravanId == TestOnlyCaravanId
+                    && cargoWasPersistedBeforeEvent,
+                "A successful transaction must raise CaravanCargoChanged once after Cargo persistence.");
+            Assert(currencyChangedCount == 1 && raisedCurrency == save.player.tradingCurrency,
+                "A successful transaction must raise TradingCurrencyChanged with the persisted value.");
+
+            FrameworkSaveData failingSave = NewSave(1000L);
+            failingSave.caravan.cargo.Add(CreateCargo(cloth, 2));
+            var failingService = new MemorySaveService(failingSave);
+            Assert(MarketInventoryMutationSession.TryOpen(
+                failingSave, failingService, new FixedTimeProvider(time), "town-events-failure", catalog,
+                4, 20, 3600d, 104,
+                out MarketInventoryMutationSession failingSession,
+                out string failingError), failingError);
+            failingService.FailSaves = true;
+
+            MarketTransactionResult failed = MarketTransactionCommand.Execute(
+                failingSession,
+                new[] { new MarketTransactionLine { ItemId = "cloth", SellQuantity = 1 } },
+                100f);
+
+            Assert(!failed.Success && failed.ErrorCode == MarketInventoryMutationSession.ErrorSaveFailed,
+                "Event probe save failure must be reported.");
+            Assert(cargoChangedCount == 1 && currencyChangedCount == 1,
+                "A failed and rolled-back transaction must not raise Framework change events.");
+        }
+        finally
+        {
+            FrameworkEvents.CaravanCargoChanged -= cargoHandler;
+            FrameworkEvents.TradingCurrencyChanged -= currencyHandler;
+        }
+
+        checks.Add("successful_market_transaction_raises_framework_change_events");
+        checks.Add("failed_market_transaction_suppresses_framework_change_events");
     }
 
         private static CargoEntrySaveData CreateCargo(TradeItemData item, int quantity)
