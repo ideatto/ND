@@ -660,7 +660,8 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             fromTown = string.IsNullOrWhiteSpace(fromTown) ? "-" : fromTown,
             toTown = string.IsNullOrWhiteSpace(toTown) ? "-" : toTown,
             viaText = "없음",
-            expectedRisk = selectedRoute != null ? Mathf.RoundToInt(selectedRoute.riskLevel) : 0,
+            expectedRisk = Mathf.RoundToInt(
+                Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f),
             mercenaryPower = Mathf.Max(0, viewData.selectedMercenaryPower),
             expectedFood = Mathf.Max(0, viewData.requiredDraftAnimalFoodQuantity),
             loadedFood = Mathf.Max(0, viewData.loadedDraftAnimalFoodQuantity),

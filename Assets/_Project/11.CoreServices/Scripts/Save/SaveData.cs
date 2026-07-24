@@ -293,6 +293,11 @@ namespace ND.Framework
         public float foodUnitWeight = 1f;
 
         /// <summary>
+        /// 이 caravan의 산적 이벤트 기본 무사 통과 확률이다. 단위: percent (0~100).
+        /// </summary>
+        public float baseSafetyChancePercent;
+
+        /// <summary>
         /// Core journey의 현재 상태이다.
         /// </summary>
         public JourneyState state = JourneyState.Prepare;
@@ -353,6 +358,19 @@ namespace ND.Framework
         public int runBattlesFought;
 
         /// <summary>
+        /// 이번 run에서 이미 처리한 거리 기반 이벤트 판정 수이다.
+        /// 온라인 갱신과 오프라인 복원에서 같은 구간을 중복 판정하지 않게 한다.
+        /// </summary>
+        public int runEventChecksProcessed;
+
+        /// <summary>
+        /// 이번 run에서 실제 발생한 이벤트 수이다.
+        /// </summary>
+        public int runEventsOccurred;
+
+        public List<string> runLostMercenaryInstanceIds = new List<string>();
+
+        /// <summary>
         /// 이번 무역 출발 시 내구도이다.
         /// </summary>
         public int runStartDurability;
@@ -385,7 +403,6 @@ namespace ND.Framework
         /// <summary>
         /// 약탈 내구도 손실에 손실 상한을 적용할지 여부이다.
         /// </summary>
-        public bool limitRaidDurability = true;
 
         /// <summary>
         /// 출발 시 원래 무역품 개수이다.

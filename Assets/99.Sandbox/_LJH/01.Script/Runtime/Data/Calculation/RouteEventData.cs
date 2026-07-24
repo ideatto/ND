@@ -3,41 +3,37 @@ using UnityEngine;
 [System.Serializable]
 public class RouteEventData
 {
-    [Header("Event_Default_Info")]
     public RouteEvent eventType;
     public string routeEventId;
     public string displayName;
-
-    [Header("Event_Description")]
     [TextArea(2, 4)]
     public string description;
 
-    [Header("Event_Combat_Info")]
-    public int eventValue; // Combat power used by Combat events.
-    public float defaultEvasionPer; // Default Combat-event evasion percentage.
-    public int lossCount; // Player loss count when a Combat event fails.
+    public int eventValue; // combat power
+    public float defaultEvasionPer; // combat event default evasion percent
+    public int lossCount; // if combat event failed. player
 
-    [Header("Event_Reward_Info")]
     public RewardType eventRewardType;
-
-    // Initialize nested rewards so newly created entries are safe to read.
-    // Older serialized assets may still deserialize either reference as null.
+    
+    // new는 보상 객체가 기본적으로 null이 되지 않게 한다.
+    // 객체의 필드는 C# 기본값 또는 필드 선언부에 지정한 초기값으로 생성된다.
     public RouteEventCurrencyReward eventRewardCurrency = new RouteEventCurrencyReward();
     public RouteEventItemReward eventRewardItem = new RouteEventItemReward();
 
     /// <summary>
-    /// Restores missing reward objects and clamps their ranges before use.
-    /// Normalize is a project-defined method, not a Unity or C# built-in.
+    /// 누락되거나 잘못 입력된 보상 설정을 실제 계산에 사용할 수 있는 범위로 정리한다.
+    /// Normalize는 C# 또는 Unity 내장 기능이 아니라 이 파일에 직접 정의한 보정 메서드다.
     /// </summary>
     public void NormalizeRewards()
     {
-        // Missing nested objects can occur after a serialized schema change.
+        // 이전 버전 에셋이나 누락된 직렬화 데이터에서는 보상 객체가 null일 수 있다.
+        // 빈 객체를 생성하여 이후 필드 접근 시 NullReferenceException이 발생하지 않게 한다.
         if (eventRewardCurrency == null)
             eventRewardCurrency = new RouteEventCurrencyReward();
         if (eventRewardItem == null)
             eventRewardItem = new RouteEventItemReward();
 
-        // Apply the validation rules owned by each reward type.
+        // 각 보상 타입에 정의된 범위 보정 규칙을 실행한다.
         eventRewardCurrency.Normalize();
         eventRewardItem.Normalize();
     }
@@ -52,7 +48,7 @@ public class RouteEventCurrencyReward
     public long maxAmount;
 
     /// <summary>
-    /// Ensures a non-negative range whose maximum is not below its minimum.
+    /// 통화 보상 범위를 음수가 아니며 최대값이 최소값 이상이 되도록 보정한다.
     /// </summary>
     public void Normalize()
     {
@@ -71,14 +67,14 @@ public class RouteEventItemReward
     public int maxQuantity = 1;
 
     /// <summary>
-    /// Ensures a safe item ID and a valid non-negative quantity range.
+    /// 아이템 ID와 수량 범위를 실제 보상 계산에 사용할 수 있는 형태로 보정한다.
     /// </summary>
     public void Normalize()
     {
-        // Empty string is safer than null for ID comparisons and lookups.
+        // ID가 누락된 경우 null 대신 안전하게 비교할 수 있는 빈 문자열을 사용한다.
         itemId = itemId != null ? itemId : string.Empty;
 
-        // Quantity cannot be negative, and max cannot be lower than min.
+        // 수량은 음수가 될 수 없고 최대 수량은 최소 수량보다 작을 수 없다.
         minQuantity = Mathf.Max(0, minQuantity);
         maxQuantity = Mathf.Max(minQuantity, maxQuantity);
     }
@@ -94,13 +90,7 @@ public enum RewardType
 
 public enum RouteEvent
 {
-    // Explicit values preserve existing serialized assets. Combat is already 0,
-    // so inserting None before it would silently reinterpret old Combat entries.
-    Combat = 0,
-    Lucky = 1,
-    Weather = 2,
-
-    // A completed event check with no gameplay effect. Runtime logic should not
-    // count this result toward RouteData.MaxEventCount.
-    None = 3
+    Combat,
+    Lucky,
+    Weather
 }

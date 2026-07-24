@@ -22,6 +22,7 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 
 /// <summary>무역 결과 등급.</summary>
 public enum JourneyResultGrade
@@ -57,6 +58,9 @@ public class JourneyResultData
     public bool wagonDestroyed;              // 이번 무역에서 마차가 파괴됐나
     public string destroyedWagonInstanceId = string.Empty;  // 파괴된 마차의 보유 개체 ID
     public float foodLost;                   // 소실된 식량(도난·파괴 전손). 정상 소모(foodConsumed)와 별개
+    public int eventsOccurred;               // 실제 결과까지 처리된 route 이벤트 수
+    public int battlesFought;                // 실제 처리된 Combat 이벤트 수
+    public List<string> lostMercenaryInstanceIds = new List<string>(); // 전투 패배로 소멸한 용병 개체 ID
 
     // ── Core가 채우는 계산값 (M2 완료기준: 정산 데이터에 포함) ──
     public float travelSeconds;        // 실제 이동한 시간(초)

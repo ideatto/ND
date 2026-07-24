@@ -48,6 +48,11 @@ public static class TradePrepareCaravanFactory
         // Preserves the Framework-assigned identity selected inside TradePrepareUI.
         // Departure validation rejects an empty ID once the Caravan option Provider is connected.
         caravan.caravanId = NormalizeId(draft.departureCaravanId);
+        ND.Framework.CaravanSaveData savedCaravan;
+        if (ND.Framework.SaveDataLookup.TryGetCaravan(saveData, caravan.caravanId, out savedCaravan))
+        {
+            caravan.baseSafetyChancePercent = savedCaravan.baseSafetyChancePercent;
+        }
         return caravan;
     }
 
