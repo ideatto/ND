@@ -30,6 +30,7 @@
  * - CurrentSaveData는 서비스들이 공유하는 runtime 저장 데이터 참조이므로 직접 수정 시 저장 시점에 주의해야 한다.
  * - SettlementUiBridge는 FrameworkRoot GameObject에 runtime component로 추가된다.
  * - Loading 완료 시 ApplyOfflineProgressOnLoad → RestorePendingSettlement 순으로 호출한다.
+ * - Online progress tick은 loading 복구와 load event 처리가 끝난 뒤에만 활성화된다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
@@ -227,6 +228,7 @@ namespace ND.Framework
         private const float TradeProgressCheckIntervalSeconds = 0.2f;
 
         private float nextTradeProgressCheckUnscaledTime;
+        private bool isOnlineProgressTickEnabled;
 
         /// <summary>
         /// 현재 활성화된 FrameworkRoot 인스턴스이다.
@@ -331,8 +333,12 @@ namespace ND.Framework
 
         private void Update()
         {
-            if (TradeProgressCoordinator == null ||
-                Time.unscaledTime < nextTradeProgressCheckUnscaledTime)
+            if (!CanRunOnlineProgressTick(
+                    isOnlineProgressTickEnabled,
+                    CurrentSaveData,
+                    SharedGameData)
+                || TradeProgressCoordinator == null
+                || Time.unscaledTime < nextTradeProgressCheckUnscaledTime)
             {
                 return;
             }
@@ -345,6 +351,17 @@ namespace ND.Framework
             TradeProgressCoordinator.CheckProgressAndCompletion(saveProgress: false);
         }
 
+        private static bool CanRunOnlineProgressTick(
+            bool isEnabled,
+            SaveData saveData,
+            ISharedGameDataProvider sharedGameData)
+        {
+            return isEnabled
+                && saveData != null
+                && sharedGameData != null
+                && sharedGameData.IsLoaded;
+        }
+
         /// <summary>
         /// 새 게임 저장 데이터를 만들고 즉시 저장한 뒤 loading scene으로 이동한다.
         /// </summary>
@@ -353,6 +370,7 @@ namespace ND.Framework
         /// </remarks>
         public void StartNewGame()
         {
+            isOnlineProgressTickEnabled = false;
             // 새 게임은 기본 저장 데이터를 먼저 디스크에 기록해 이후 loading 단계가 같은 데이터를 사용하게 한다.
             CurrentSaveData = SaveService.CreateNewGameData();
             SaveService.Save(CurrentSaveData);
@@ -379,6 +397,7 @@ namespace ND.Framework
         /// </remarks>
         public void ContinueGame()
         {
+            isOnlineProgressTickEnabled = false;
             // 이어하기는 저장 데이터를 먼저 확보한 뒤 scene flow를 loading 단계로 넘긴다.
             CurrentSaveData = SaveService.Load();
             SceneFlow.GoToLoading();
@@ -394,6 +413,9 @@ namespace ND.Framework
         /// </remarks>
         public void CompleteLoadingAndEnterGame()
         {
+            // 직접 Loading scene에 진입하거나 재호출돼도 복구가 끝나기 전 online tick을 차단한다.
+            isOnlineProgressTickEnabled = false;
+
             // loading scene에 직접 진입한 경우에도 game scene이 사용할 저장 데이터를 보장한다.
             if (CurrentSaveData == null)
             {
@@ -406,16 +428,17 @@ namespace ND.Framework
                 return;
             }
 
-            // 로드 전부터 pending이던 선택 caravan만 cache 복구 대상으로 기억한다.
+            // 로드 전부터 존재하던 canonical pending을 cache 복구 대상으로 기억한다.
             // 이번 offline restore에서 새로 완료된 entry는 이미 ready 이벤트를 발행하므로 중복 복구하지 않는다.
-            var restoreSelectedPending =
-                CurrentSaveData.tradeProgress?.state == TradeProgressState.SettlementPending;
+            var restorePending = CurrentSaveData.pendingSettlements != null
+                && CurrentSaveData.pendingSettlements.Exists(
+                    pending => pending != null && pending.hasResult && !pending.claimed);
 
             // Traveling 이어하기는 모든 명시 entry의 오프라인 경과·완료를 먼저 반영한다.
             TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
 
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
-            if (restoreSelectedPending)
+            if (restorePending)
             {
                 TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
             }
@@ -423,6 +446,8 @@ namespace ND.Framework
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
+            // SaveData·SharedData·offline/pending 복구와 load event 처리가 모두 끝난 세션만 online tick을 허용한다.
+            isOnlineProgressTickEnabled = true;
             SceneFlow.GoToInGame();
         }
 
@@ -457,6 +482,7 @@ namespace ND.Framework
         /// </remarks>
         public void ReturnToTitle()
         {
+            isOnlineProgressTickEnabled = false;
             // title 복귀 전 runtime 변경 사항이 유실되지 않도록 현재 저장 데이터를 기록한다.
             if (CurrentSaveData != null)
             {
