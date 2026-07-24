@@ -67,6 +67,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ea0e2f2e92512f4ca275ba1324fcf9c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlaceableBuilding
+  cellsX: 2
+  cellsZ: 2
 --- !u!1001 &7820827285153883280
 PrefabInstance:
   m_ObjectHideFlags: 0

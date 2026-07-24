@@ -1248,6 +1248,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SlidePanel
   panel: {fileID: 681026826}
+  rendCam: {fileID: 0}
   openPos: {x: 0, y: 175}
   closedPos: {x: 980, y: 175}
   duration: 0.3
@@ -4486,9 +4487,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingPlacementController
   view: {fileID: 0}
   villageCamera: {fileID: 0}
-  rotateStep: 15
-  buttonRotateStep: 45
   highlightTint: {r: 1, g: 0.85, b: 0.4, a: 1}
+  gridWidth: 24
+  gridHeight: 24
+  zoomStep: 1
+  zoomMin: 4
+  zoomMax: 15
+  panSpeed: 0.004
+  panRange: 12
 --- !u!1 &1978203063
 GameObject:
   m_ObjectHideFlags: 0
