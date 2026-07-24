@@ -12,9 +12,9 @@ public sealed class TradePrepareViewDataBuilder
         context = context ?? new TradePrepareBuildContext();
 
         ND.Framework.SaveData saveData = context.saveData;
-        string currentTownId = FirstNotEmpty(
-            draft.currentTownId,
-            saveData != null && saveData.player != null ? saveData.player.currentTownId : string.Empty);
+        // Routes and market contents are scoped to the selected Caravan's location.
+        // An empty Draft location stays empty instead of falling back to player data.
+        string currentTownId = draft.currentTownId ?? string.Empty;
 
         TownData currentTown = FindTown(context.towns, currentTownId);
         RouteData[] availableRoutes = MergeUnique(
@@ -231,6 +231,7 @@ public sealed class TradePrepareViewDataBuilder
             {
                 caravanId = option.caravanId ?? string.Empty,
                 displayName = option.displayName ?? string.Empty,
+                currentTownId = option.currentTownId ?? string.Empty,
                 state = option.state,
                 canSelect = option.canSelect,
                 disabledReason = option.disabledReason ?? string.Empty

@@ -31,6 +31,9 @@ public sealed class TradePrepareDraftStore
         }
 
         current.departureCaravanId = normalizedCaravanId;
+        // Location belongs to the selected Caravan. Never carry the previous
+        // Caravan's town into the new preset while its authoritative setting loads.
+        current.currentTownId = string.Empty;
         current.selectedDestinationTownId = string.Empty;
         current.selectedRouteId = string.Empty;
         current.selectedWagonId = string.Empty;
@@ -254,6 +257,32 @@ public sealed class TradePrepareDraftStore
     public void Cancel()
     {
         current = new TradePrepareDraft();
+        NotifyChanged();
+    }
+
+    // Applies the authoritative location owned by the selected Caravan.
+    // A location change invalidates route choices made for the previous town.
+    public void SetCurrentTown(string townId)
+    {
+        var normalizedTownId = NormalizeId(townId);
+        if (current.currentTownId == normalizedTownId)
+        {
+            return;
+        }
+
+        current.currentTownId = normalizedTownId;
+        current.selectedDestinationTownId = string.Empty;
+        current.selectedRouteId = string.Empty;
+        NotifyChanged();
+    }
+
+    // Restores the complete pre-selection snapshot when a provider-backed selection cannot finish.
+    // A snapshot copy prevents later callers from mutating the store through the rollback object.
+    public void Restore(TradePrepareDraft snapshot)
+    {
+        current = snapshot != null
+            ? snapshot.CreateSnapshot()
+            : new TradePrepareDraft();
         NotifyChanged();
     }
 

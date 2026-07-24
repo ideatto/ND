@@ -451,6 +451,7 @@ namespace ND.Framework.CargoLoading
                 .Where(stock => stock != null)
                 .ToDictionary(stock => stock.itemId ?? string.Empty, stock => stock.quantity, StringComparer.Ordinal);
 
+            MarketTransactionResult successfulResult;
             try
             {
                 foreach (ND.Economy.MarketTransactionItemResult itemResult in calculation.Items)
@@ -470,7 +471,7 @@ namespace ND.Framework.CargoLoading
                     return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
                 }
 
-                return new MarketTransactionResult
+                successfulResult = new MarketTransactionResult
                 {
                     Success = true,
                     TradingCurrencyAfter = calculation.TradingCurrencyAfter,
@@ -483,6 +484,12 @@ namespace ND.Framework.CargoLoading
                 RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
                 return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
             }
+
+            // Publish only after SaveData persistence succeeds. UI subscribers re-read the saved
+            // Caravan snapshot, and failed/rolled-back transactions never emit refresh signals.
+            FrameworkEvents.RaiseCaravanCargoChanged(CaravanId);
+            FrameworkEvents.RaiseTradingCurrencyChanged(calculation.TradingCurrencyAfter);
+            return successfulResult;
         }
 
         internal IReadOnlyList<CargoInventoryView> ReadSavedCargo()

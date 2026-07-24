@@ -52,6 +52,7 @@ public sealed class TestTradePrepareCaravanOptionProvider : ITradePrepareCaravan
         {
             caravanId = caravanId,
             displayName = displayName,
+            currentTownId = "test-town",
             state = state,
             canSelect = canSelect,
             disabledReason = disabledReason

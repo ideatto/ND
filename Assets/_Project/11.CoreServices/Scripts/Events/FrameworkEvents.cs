@@ -94,6 +94,12 @@ namespace ND.Framework
         /// </summary>
         public static event Action<long> TradingCurrencyChanged;
 
+        /// <summary>
+        /// Raised after one Caravan's persisted cargo changes successfully.
+        /// Subscribers must re-read SaveData instead of treating the event payload as inventory data.
+        /// </summary>
+        public static event Action<string> CaravanCargoChanged;
+
         /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
         public static event Action<IssueRescueLoanResult> RescueLoanIssued;
 
@@ -230,6 +236,13 @@ namespace ND.Framework
         {
             FrameworkLog.Info($"TradingCurrencyChanged event raised. Currency: {tradingCurrency}");
             TradingCurrencyChanged?.Invoke(tradingCurrency);
+        }
+
+        public static void RaiseCaravanCargoChanged(string caravanId)
+        {
+            string normalizedCaravanId = caravanId ?? string.Empty;
+            FrameworkLog.Info($"CaravanCargoChanged event raised. CaravanId: {normalizedCaravanId}");
+            CaravanCargoChanged?.Invoke(normalizedCaravanId);
         }
 
         public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)

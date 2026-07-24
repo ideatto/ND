@@ -156,6 +156,26 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// Copies the latest market-owned inventory fields from SaveData into an existing runtime Caravan.
+        /// Arrival sales mutate SaveData after the journey runtime has already settled, so Claim must
+        /// reconcile these fields before the runtime snapshot is copied back to SaveData.
+        /// </summary>
+        public static void CopyMarketInventoryToRuntime(
+            CaravanSaveData saveData,
+            CaravanData runtimeData)
+        {
+            if (saveData == null || runtimeData == null)
+            {
+                return;
+            }
+
+            Normalize(saveData);
+            CopyCargo(saveData.cargo, runtimeData.cargo);
+            runtimeData.foodAmount = saveData.foodAmount;
+            runtimeData.foodUnitWeight = saveData.foodUnitWeight;
+        }
+
+        /// <summary>
         /// CaravanSaveData의 필수 하위 객체와 collection을 사용할 수 있는 상태로 보정한다.
         /// </summary>
         /// <param name="saveData">정규화할 저장 caravan 데이터.</param>

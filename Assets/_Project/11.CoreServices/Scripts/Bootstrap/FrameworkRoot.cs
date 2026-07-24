@@ -45,6 +45,8 @@ namespace ND.Framework
         SaveDataUnavailable,
         InvalidSlotIndex,
         SlotAlreadyOccupied,
+        /// <summary>영구 진행 데이터에서 아직 해금되지 않은 슬롯이다.</summary>
+        SlotLocked,
         SaveFailed
     }
 
@@ -84,6 +86,12 @@ namespace ND.Framework
     /// <summary>Caravan 생성 검증, 상태 변경, 저장 및 실패 원복을 소유하는 Production command service이다.</summary>
     public sealed class CaravanManagementService
     {
+        /// <summary>현재 Caravan Overview가 제공하는 영구 슬롯의 총 개수이다.</summary>
+        public const int MaxCaravanSlotCount = 4;
+
+        /// <summary>모든 신규 Caravan이 생성되는 고정 거점 Town ID이다.</summary>
+        public const string InitialCaravanTownId = "BaseCamp";
+
         private readonly Func<SaveData> getSaveData;
         private readonly ISaveService saveService;
         private readonly Func<string, CaravanData> registerRuntimeCaravan;
@@ -115,7 +123,8 @@ namespace ND.Framework
                     CaravanCreationFailureReason.SaveDataUnavailable);
             }
 
-            if (slotIndex < 0)
+            // UI가 잘못된 인덱스를 전달해도 저장 목록에 표시 불가능한 Caravan을 만들지 않는다.
+            if (slotIndex < 0 || slotIndex >= MaxCaravanSlotCount)
             {
                 return CaravanCreationResult.Failure(
                     slotIndex,
@@ -136,6 +145,15 @@ namespace ND.Framework
                 }
             }
 
+            // 슬롯 점유와 해금은 별도 정책이다. Caravan 생성 자체가 다음 슬롯을 열지 않는다.
+            if (saveData.world?.unlockedCaravanSlotIndices == null
+                || !saveData.world.unlockedCaravanSlotIndices.Contains(slotIndex))
+            {
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SlotLocked);
+            }
+
             var snapshot = JsonUtility.ToJson(saveData);
             var selectedWasValid = SaveDataLookup.TryGetSelectedCaravan(saveData, out _);
             if (saveData.caravans == null) saveData.caravans = new List<CaravanSaveData>();
@@ -147,7 +165,9 @@ namespace ND.Framework
             var caravan = new CaravanSaveData
             {
                 caravanId = SaveDataLookup.NewCaravanId(),
-                slotIndex = slotIndex
+                slotIndex = slotIndex,
+                // 플레이어 위치와 무관하게 신규 Caravan은 항상 BaseCamp에서 시작한다.
+                currentTownId = InitialCaravanTownId
             };
             saveData.caravans.Add(caravan);
             saveData.tradeProgressEntries.Add(new TradeProgressSaveData

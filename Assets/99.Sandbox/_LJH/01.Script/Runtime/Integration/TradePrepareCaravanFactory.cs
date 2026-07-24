@@ -16,9 +16,8 @@ public static class TradePrepareCaravanFactory
         context = context ?? new TradePrepareBuildContext();
 
         ND.Framework.SaveData saveData = context.saveData;
-        string currentTownId = !string.IsNullOrEmpty(draft.currentTownId)
-            ? draft.currentTownId
-            : saveData != null && saveData.player != null ? saveData.player.currentTownId : string.Empty;
+        // Preview calculations use only the selected Caravan's location.
+        string currentTownId = draft.currentTownId ?? string.Empty;
         TownData currentTown = TradePrepareViewDataBuilder.FindTown(context.towns, currentTownId);
 
         TradeItemData[] items = TradePrepareViewDataBuilder.MergeUnique(
@@ -144,10 +143,8 @@ public static class TradePrepareCaravanFactory
             return null;
         }
 
-        ND.Framework.SaveData saveData = context.saveData;
-        string currentTownId = !string.IsNullOrEmpty(draft.currentTownId)
-            ? draft.currentTownId
-            : saveData != null && saveData.player != null ? saveData.player.currentTownId : string.Empty;
+        // Departure route validation must not substitute the player's location.
+        string currentTownId = draft.currentTownId ?? string.Empty;
         TownData currentTown = TradePrepareViewDataBuilder.FindTown(context.towns, currentTownId);
         RouteData[] routes = TradePrepareViewDataBuilder.MergeUnique(
             context.routes,
