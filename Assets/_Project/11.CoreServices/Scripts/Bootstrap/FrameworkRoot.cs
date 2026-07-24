@@ -33,10 +33,188 @@
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
+using System.Collections.Generic;
+using ND.Economy;
 using UnityEngine;
 
 namespace ND.Framework
 {
+    public enum CaravanCreationFailureReason
+    {
+        None,
+        SaveDataUnavailable,
+        InvalidSlotIndex,
+        SlotAlreadyOccupied,
+        /// <summary>영구 진행 데이터에서 아직 해금되지 않은 슬롯이다.</summary>
+        SlotLocked,
+        SaveFailed
+    }
+
+    /// <summary>Caravan 생성과 영속 저장 결과를 제공한다.</summary>
+    public sealed class CaravanCreationResult
+    {
+        private CaravanCreationResult(
+            bool succeeded,
+            string caravanId,
+            int slotIndex,
+            CaravanCreationFailureReason failureReason,
+            SaveResult saveResult)
+        {
+            Succeeded = succeeded;
+            CaravanId = caravanId ?? string.Empty;
+            SlotIndex = slotIndex;
+            FailureReason = failureReason;
+            SaveResult = saveResult;
+        }
+
+        public bool Succeeded { get; }
+        public string CaravanId { get; }
+        public int SlotIndex { get; }
+        public CaravanCreationFailureReason FailureReason { get; }
+        public SaveResult SaveResult { get; }
+
+        internal static CaravanCreationResult Success(string caravanId, int slotIndex, SaveResult saveResult)
+            => new CaravanCreationResult(true, caravanId, slotIndex, CaravanCreationFailureReason.None, saveResult);
+
+        internal static CaravanCreationResult Failure(
+            int slotIndex,
+            CaravanCreationFailureReason failureReason,
+            SaveResult saveResult = null)
+            => new CaravanCreationResult(false, string.Empty, slotIndex, failureReason, saveResult);
+    }
+
+    /// <summary>Caravan 생성 검증, 상태 변경, 저장 및 실패 원복을 소유하는 Production command service이다.</summary>
+    public sealed class CaravanManagementService
+    {
+        /// <summary>현재 Caravan Overview가 제공하는 영구 슬롯의 총 개수이다.</summary>
+        public const int MaxCaravanSlotCount = 4;
+
+        /// <summary>모든 신규 Caravan이 생성되는 고정 거점 Town ID이다.</summary>
+        public const string InitialCaravanTownId = "BaseCamp";
+
+        private readonly Func<SaveData> getSaveData;
+        private readonly ISaveService saveService;
+        private readonly Func<string, CaravanData> registerRuntimeCaravan;
+
+        public CaravanManagementService(
+            Func<SaveData> getSaveData,
+            ISaveService saveService,
+            Func<string, CaravanData> registerRuntimeCaravan = null)
+        {
+            this.getSaveData = getSaveData;
+            this.saveService = saveService;
+            this.registerRuntimeCaravan = registerRuntimeCaravan;
+        }
+
+        /// <summary>
+        /// 비어 있는 영속 슬롯에 Caravan과 기본 TradeProgress를 만들고 한 번 저장한다.
+        /// </summary>
+        /// <returns>
+        /// 저장까지 완료되면 생성 ID와 성공 SaveResult를 반환한다.
+        /// 검증 실패는 메모리를 변경하거나 저장을 시도하지 않으며, 저장 실패는 전체 SaveData를 원복한다.
+        /// </returns>
+        public CaravanCreationResult CreateCaravan(int slotIndex)
+        {
+            var saveData = getSaveData != null ? getSaveData() : null;
+            if (saveData == null)
+            {
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveDataUnavailable);
+            }
+
+            // UI가 잘못된 인덱스를 전달해도 저장 목록에 표시 불가능한 Caravan을 만들지 않는다.
+            if (slotIndex < 0 || slotIndex >= MaxCaravanSlotCount)
+            {
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.InvalidSlotIndex);
+            }
+
+            if (saveData.caravans != null)
+            {
+                for (var i = 0; i < saveData.caravans.Count; i++)
+                {
+                    var existing = saveData.caravans[i];
+                    if (existing != null && existing.slotIndex == slotIndex)
+                    {
+                        return CaravanCreationResult.Failure(
+                            slotIndex,
+                            CaravanCreationFailureReason.SlotAlreadyOccupied);
+                    }
+                }
+            }
+
+            // 슬롯 점유와 해금은 별도 정책이다. Caravan 생성 자체가 다음 슬롯을 열지 않는다.
+            if (saveData.world?.unlockedCaravanSlotIndices == null
+                || !saveData.world.unlockedCaravanSlotIndices.Contains(slotIndex))
+            {
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SlotLocked);
+            }
+
+            var snapshot = JsonUtility.ToJson(saveData);
+            var selectedWasValid = SaveDataLookup.TryGetSelectedCaravan(saveData, out _);
+            if (saveData.caravans == null) saveData.caravans = new List<CaravanSaveData>();
+            if (saveData.tradeProgressEntries == null)
+            {
+                saveData.tradeProgressEntries = new List<TradeProgressSaveData>();
+            }
+
+            var caravan = new CaravanSaveData
+            {
+                caravanId = SaveDataLookup.NewCaravanId(),
+                slotIndex = slotIndex,
+                // 플레이어 위치와 무관하게 신규 Caravan은 항상 BaseCamp에서 시작한다.
+                currentTownId = InitialCaravanTownId
+            };
+            saveData.caravans.Add(caravan);
+            saveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravan.caravanId,
+                state = TradeProgressState.None
+            });
+
+            if (!selectedWasValid)
+            {
+                saveData.selectedCaravanId = caravan.caravanId;
+            }
+
+            SaveResult saveResult = null;
+            try
+            {
+                saveResult = saveService != null ? saveService.Save(saveData) : null;
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Caravan creation save threw an exception: {exception.Message}");
+            }
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(snapshot, saveData);
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveFailed,
+                    saveResult);
+            }
+
+            if (registerRuntimeCaravan != null
+                && registerRuntimeCaravan(caravan.caravanId) == null)
+            {
+                JsonUtility.FromJsonOverwrite(snapshot, saveData);
+                return CaravanCreationResult.Failure(
+                    slotIndex,
+                    CaravanCreationFailureReason.SaveFailed,
+                    saveResult);
+            }
+
+            FrameworkEvents.RaiseCaravanCreated(caravan.caravanId, slotIndex);
+            return CaravanCreationResult.Success(caravan.caravanId, slotIndex, saveResult);
+        }
+    }
+
     /// <summary>
     /// Framework service를 초기화하고 전역 접근 지점을 제공하는 runtime singleton이다.
     /// </summary>
@@ -46,6 +224,9 @@ namespace ND.Framework
     public sealed class FrameworkRoot : MonoBehaviour
     {
         private const string RootObjectName = "FrameworkRoot";
+        private const float TradeProgressCheckIntervalSeconds = 0.2f;
+
+        private float nextTradeProgressCheckUnscaledTime;
 
         /// <summary>
         /// 현재 활성화된 FrameworkRoot 인스턴스이다.
@@ -91,6 +272,14 @@ namespace ND.Framework
         /// Core caravan 출발 검증과 저장 데이터 기록을 연결하는 서비스이다.
         /// </summary>
         public TradeStartService TradeStart { get; private set; }
+
+        /// <summary>Caravan 생성, 저장 및 저장 실패 원복을 담당하는 Production command service이다.</summary>
+        public CaravanManagementService CaravanManagement { get; private set; }
+
+        /// <summary>구조 대출 발급·상환 및 상태 조회 command service이다.</summary>
+        public RescueLoanCommandService RescueLoan { get; private set; }
+
+        public FrameworkTradePrepareCommitStore TradePrepareCommitStore { get; private set; }
 
         /// <summary>
         /// 무역 진행률 계산, 정산 생성, claim 후 초기화를 조율하는 서비스이다.
@@ -140,6 +329,22 @@ namespace ND.Framework
             InitializeServices();
         }
 
+        private void Update()
+        {
+            if (TradeProgressCoordinator == null ||
+                Time.unscaledTime < nextTradeProgressCheckUnscaledTime)
+            {
+                return;
+            }
+
+            nextTradeProgressCheckUnscaledTime =
+                Time.unscaledTime + TradeProgressCheckIntervalSeconds;
+
+            // Runtime progress is derived from the saved UTC range. Intermediate frames do
+            // not need a disk write; settlement creation saves the completed state itself.
+            TradeProgressCoordinator.CheckProgressAndCompletion(saveProgress: false);
+        }
+
         /// <summary>
         /// 새 게임 저장 데이터를 만들고 즉시 저장한 뒤 loading scene으로 이동한다.
         /// </summary>
@@ -152,6 +357,18 @@ namespace ND.Framework
             CurrentSaveData = SaveService.CreateNewGameData();
             SaveService.Save(CurrentSaveData);
             SceneFlow.GoToLoading();
+        }
+
+        /// <summary>
+        /// Leaves the post-settlement town state and starts a fresh trade-preparation cycle.
+        /// The save transition is committed before the Preparation screen is announced.
+        /// </summary>
+        public bool TryBeginTradePreparationFromTown()
+        {
+            return TradePreparationEntryCommand.TryExecute(
+                CurrentSaveData,
+                SaveService,
+                InGameScreenRouter);
         }
 
         /// <summary>
@@ -189,11 +406,19 @@ namespace ND.Framework
                 return;
             }
 
-            // Traveling 이어하기는 오프라인 경과·완료를 먼저 반영한 뒤 pending 복구로 이어진다.
+            // 로드 전부터 pending이던 선택 caravan만 cache 복구 대상으로 기억한다.
+            // 이번 offline restore에서 새로 완료된 entry는 이미 ready 이벤트를 발행하므로 중복 복구하지 않는다.
+            var restoreSelectedPending =
+                CurrentSaveData.tradeProgress?.state == TradeProgressState.SettlementPending;
+
+            // Traveling 이어하기는 모든 명시 entry의 오프라인 경과·완료를 먼저 반영한다.
             TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
 
-            // SettlementPending 재진입 시 세션 캐시가 비어 있으므로 pendingSettlement로 복구한 뒤 화면을 갱신한다.
-            TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+            // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
+            if (restoreSelectedPending)
+            {
+                TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+            }
 
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
@@ -259,6 +484,7 @@ namespace ND.Framework
             DebugCommands = new FrameworkDebugCommands(GameTime);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime, GameTime);
             InGameScreenRouter = new InGameScreenStateRouter();
+            TradePrepareCommitStore = new FrameworkTradePrepareCommitStore(() => CurrentSaveData);
             TradeProgressCoordinator = new TradeProgressCoordinator(
                 () => CurrentSaveData,
                 SaveService,
@@ -266,24 +492,53 @@ namespace ND.Framework
                 TradeProgressRecorder,
                 InGameScreenRouter,
                 GameTime,
-                () => SharedGameData);
+                () => SharedGameData,
+                TradePrepareCommitStore,
+                TradePrepareCommitStore);
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,
                 SaveService,
                 TradeProgressRecorder,
                 InGameScreenRouter,
-                ClearSettlementRuntimeCache);
+                ClearSettlementRuntimeCache,
+                // Register every newly departed caravan so the coordinator never reuses the
+                // claimed Prepare-state caravan left by the previous trade cycle.
+                TradeProgressCoordinator.SetActiveCaravan,
+                () => SharedGameData,
+                TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
+            TradeProgressCoordinator.RebuildRuntimeCaravans();
+            CaravanManagement = new CaravanManagementService(
+                () => CurrentSaveData,
+                SaveService,
+                TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
+
+            // 실제 MinimumTradeCost는 Content/Progression 공급 전까지 0으로 두어 command가 안전하게 거부되게 한다.
+            ConfigureRescueLoanDefinition(new RescueLoanDefinition());
 
             // Settlement bridge는 event 구독이 필요한 MonoBehaviour이므로 root GameObject에 component로 붙인다.
             SettlementUiBridge = gameObject.AddComponent<SettlementUiBridge>();
             SettlementUiBridge.Initialize(
                 () => CurrentSaveData,
                 TradeProgressCoordinator,
-                InGameScreenRouter);
+                InGameScreenRouter,
+                autoClaimOnArrival: false);
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
+        }
+
+        /// <summary>
+        /// Content/Progression이 제공한 구조 대출 정의를 command service에 주입한다.
+        /// </summary>
+        /// <param name="definition">안정적인 LoanId와 0보다 큰 최소 무역 비용을 가진 정의.</param>
+        public void ConfigureRescueLoanDefinition(RescueLoanDefinition definition)
+        {
+            RescueLoan = new RescueLoanCommandService(
+                SaveService,
+                () => CurrentSaveData,
+                definition,
+                () => DateTime.UtcNow.Ticks);
         }
 
         private bool EnsureSharedGameDataLoaded()
@@ -331,9 +586,13 @@ namespace ND.Framework
         private Func<SaveData> getCurrentSaveData;
         private TradeProgressCoordinator tradeProgressCoordinator;
         private InGameScreenStateRouter inGameScreenRouter;
+        private string pendingCaravanId = string.Empty;
         private string pendingTradeId = string.Empty;
         private JourneyResultData pendingResult;
+        private bool settlementPresentationRequested;
         private bool isClaimProcessing;
+        private bool autoClaimOnArrival;
+        private bool frameworkEventsSubscribed;
 
         /// <summary>
         /// 표시 가능한 pending settlement가 준비되었을 때 발생한다.
@@ -368,11 +627,14 @@ namespace ND.Framework
         public void Initialize(
             Func<SaveData> getCurrentSaveData,
             TradeProgressCoordinator tradeProgressCoordinator,
-            InGameScreenStateRouter inGameScreenRouter)
+            InGameScreenStateRouter inGameScreenRouter,
+            bool autoClaimOnArrival = false)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.tradeProgressCoordinator = tradeProgressCoordinator;
             this.inGameScreenRouter = inGameScreenRouter;
+            this.autoClaimOnArrival = autoClaimOnArrival;
+            SubscribeFrameworkEvents();
         }
 
         /// <summary>
@@ -381,11 +643,39 @@ namespace ND.Framework
         /// <param name="tradeId">캐시된 trade ID. 결과가 없으면 빈 문자열일 수 있다.</param>
         /// <param name="result">캐시된 정산 결과. 결과가 없으면 null.</param>
         /// <returns>표시할 정산 결과가 있으면 true, 없으면 false.</returns>
-        public bool TryGetPendingSettlement(out string tradeId, out JourneyResultData result)
+        public bool TryGetPendingSettlement(out string caravanId, out string tradeId, out JourneyResultData result)
         {
+            caravanId = pendingCaravanId;
             tradeId = pendingTradeId;
             result = pendingResult;
             return result != null;
+        }
+
+        public bool IsSettlementPresentationRequested => settlementPresentationRequested;
+
+        /// <summary>
+        /// 사용자가 도착한 caravan의 판매 단계를 마친 뒤 해당 정산 화면을 명시적으로 연다.
+        /// 도착 이벤트 자체는 결과를 보존하기만 하며 이 API를 호출하기 전에는 Claim하거나 UI를 열지 않는다.
+        /// </summary>
+        public bool PresentSettlement(string caravanId, string tradeId)
+        {
+            SaveData saveData = GetSaveData();
+            PendingSettlementSaveData pending;
+            JourneyResultData result;
+            if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, tradeId, out pending)
+                || !PendingSettlementSaveDataMapper.TryToRuntime(pending, out result)
+                || !IsSettlementEntryValid(caravanId, tradeId, result))
+            {
+                return false;
+            }
+
+            pendingCaravanId = caravanId ?? string.Empty;
+            pendingTradeId = tradeId ?? string.Empty;
+            pendingResult = result;
+            settlementPresentationRequested = true;
+            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+            SettlementReady?.Invoke(pendingTradeId, pendingResult);
+            return true;
         }
 
         /// <summary>
@@ -414,8 +704,10 @@ namespace ND.Framework
             try
             {
                 // 실제 저장 데이터 상태 전환과 caravan reset은 coordinator에 위임한다.
-                var claimed = tradeProgressCoordinator != null
-                    && tradeProgressCoordinator.ClaimSettlementAndReset();
+                var claimResult = tradeProgressCoordinator != null
+                    ? tradeProgressCoordinator.ClaimSettlement(pendingCaravanId, pendingTradeId)
+                    : null;
+                var claimed = claimResult != null && claimResult.Succeeded;
                 if (claimed)
                 {
                     ClearPendingSettlement();
@@ -434,38 +726,82 @@ namespace ND.Framework
         /// </summary>
         public void ClearPendingSettlement()
         {
+            pendingCaravanId = string.Empty;
             pendingTradeId = string.Empty;
             pendingResult = null;
+            settlementPresentationRequested = false;
         }
 
         private void OnEnable()
         {
             // 정산 결과 생성 이벤트를 받아 UI 표시 cache로 전환하기 위해 활성화 시 구독한다.
-            FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
+            SubscribeFrameworkEvents();
         }
 
         private void OnDisable()
         {
             // 비활성 bridge가 stale settlement 이벤트를 받지 않도록 구독을 해제한다.
-            FrameworkEvents.TradeSettlementReady -= HandleSettlementReady;
+            UnsubscribeFrameworkEvents();
         }
 
-        private void HandleSettlementReady(string tradeId, JourneyResultData result)
+        private void OnDestroy()
+        {
+            UnsubscribeFrameworkEvents();
+        }
+
+        private void SubscribeFrameworkEvents()
+        {
+            if (frameworkEventsSubscribed)
+                return;
+
+            FrameworkEvents.TradeSettlementReady += HandleSettlementReady;
+            frameworkEventsSubscribed = true;
+        }
+
+        private void UnsubscribeFrameworkEvents()
+        {
+            if (!frameworkEventsSubscribed)
+                return;
+
+            FrameworkEvents.TradeSettlementReady -= HandleSettlementReady;
+            frameworkEventsSubscribed = false;
+        }
+
+        private void HandleSettlementReady(string caravanId, string tradeId, JourneyResultData result)
         {
             // 현재 저장 데이터의 active trade와 일치하지 않는 정산 이벤트는 화면에 반영하지 않는다.
-            if (!IsSettlementEntryValid(tradeId, result))
+            if (!IsSettlementEntryValid(caravanId, tradeId, result))
             {
                 return;
             }
 
             // 검증된 정산 결과를 cache한 뒤 settlement 화면과 UI adapter에 동시에 알린다.
+            pendingCaravanId = caravanId ?? string.Empty;
             pendingTradeId = tradeId ?? string.Empty;
             pendingResult = result;
-            inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
-            SettlementReady?.Invoke(pendingTradeId, pendingResult);
+            settlementPresentationRequested = false;
+
+            // Compatibility probes may still opt into automatic Claim explicitly. Runtime
+            // initialization disables it so arrival remains pending until the sale flow calls
+            // PresentSettlement(caravanId, tradeId).
+            if (autoClaimOnArrival)
+            {
+                if (ClaimSettlementAndReset())
+                {
+                    FrameworkLog.Info($"Settlement auto-claimed on arrival. TradeId: {tradeId}");
+                    return;
+                }
+
+                FrameworkLog.Warning(
+                    $"Settlement auto-claim failed; keeping pending result for recovery UI. TradeId: {tradeId}");
+            }
+
+            // A saved ready event only marks this caravan as awaiting player action. The
+            // Caravan status UI opens the sell-only panel, and that flow explicitly presents
+            // settlement after the player confirms or skips selling.
         }
 
-        private bool IsSettlementEntryValid(string tradeId, JourneyResultData result)
+        private bool IsSettlementEntryValid(string caravanId, string tradeId, JourneyResultData result)
         {
             // result 없이 settlement 화면으로 전환되면 UI가 claim할 대상이 없어지므로 차단한다.
             if (result == null)
@@ -476,20 +812,21 @@ namespace ND.Framework
 
             // 저장 데이터가 settlement pending 상태일 때만 이벤트를 화면 상태로 승격한다.
             var saveData = GetSaveData();
-            if (saveData == null || saveData.tradeProgress == null)
+            TradeProgressSaveData progress;
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress))
             {
                 FrameworkLog.Warning("Settlement screen entry blocked because trade progress save data is missing.");
                 return false;
             }
 
-            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            if (progress.state != TradeProgressState.SettlementPending)
             {
-                FrameworkLog.Warning($"Settlement screen entry blocked because trade state is {saveData.tradeProgress.state}.");
+                FrameworkLog.Warning($"Settlement screen entry blocked because trade state is {progress.state}.");
                 return false;
             }
 
             // 다른 무역의 늦은 이벤트가 현재 active trade의 settlement를 덮어쓰지 못하도록 ID를 비교한다.
-            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            var activeTradeId = progress.activeTradeId ?? string.Empty;
             if (string.IsNullOrEmpty(tradeId) || tradeId != activeTradeId)
             {
                 FrameworkLog.Warning(
@@ -511,20 +848,21 @@ namespace ND.Framework
 
             // 저장 데이터가 아직 settlement pending 상태인지 재검증해 stale UI 클릭을 막는다.
             var saveData = GetSaveData();
-            if (saveData == null || saveData.tradeProgress == null)
+            TradeProgressSaveData progress;
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, pendingCaravanId, out progress))
             {
                 FrameworkLog.Warning("Settlement claim blocked because trade progress save data is missing.");
                 return false;
             }
 
-            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            if (progress.state != TradeProgressState.SettlementPending)
             {
-                FrameworkLog.Warning($"Settlement claim blocked because trade state is {saveData.tradeProgress.state}.");
+                FrameworkLog.Warning($"Settlement claim blocked because trade state is {progress.state}.");
                 return false;
             }
 
             // cache된 trade ID와 저장 데이터의 active trade ID가 다르면 중복 또는 지연 이벤트로 보고 거부한다.
-            var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
+            var activeTradeId = progress.activeTradeId ?? string.Empty;
             if (pendingTradeId != activeTradeId)
             {
                 FrameworkLog.Warning(

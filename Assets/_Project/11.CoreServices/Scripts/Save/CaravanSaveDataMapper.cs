@@ -9,6 +9,7 @@
  * Main Features
  * - CaravanSaveData를 runtime CaravanData로 복원한다.
  * - runtime CaravanData의 현재 상태를 CaravanSaveData에 복사한다.
+ * - caravan ID와 배치 자산의 안정적인 보유 개체 ID를 생성 없이 보존한다.
  * - 저장 DTO의 null list와 M2 기본값을 정규화한다.
  *
  * Usage for Team Members
@@ -22,6 +23,7 @@
  *
  * Important Notes
  * - runtimeData 또는 saveData가 null이면 CopyToSave는 저장 데이터를 변경하지 않는다.
+ * - CopyToSave는 runtime caravanId가 비어 있으면 저장 DTO의 기존 caravanId를 유지한다.
  * - starveGraceSeconds 기본값은 300초이며 debug harness는 별도로 덮어쓸 수 있다.
  */
 using System.Collections.Generic;
@@ -49,9 +51,12 @@ namespace ND.Framework
 
             var caravan = new CaravanData
             {
+                caravanId = saveData.caravanId,
+                currentTownId = saveData.currentTownId,
                 wagon = ToRuntime(saveData.wagon),
                 foodAmount = saveData.foodAmount,
                 foodUnitWeight = saveData.foodUnitWeight,
+                baseSafetyChancePercent = saveData.baseSafetyChancePercent,
                 state = saveData.state,
                 currentDistanceKm = saveData.currentDistanceKm,
                 totalSeconds = saveData.totalSeconds,
@@ -64,13 +69,15 @@ namespace ND.Framework
                 currentDurability = saveData.currentDurability,
                 runDurabilityLost = saveData.runDurabilityLost,
                 runBattlesFought = saveData.runBattlesFought,
+                runEventChecksProcessed = saveData.runEventChecksProcessed,
+                runEventsOccurred = saveData.runEventsOccurred,
+                runLostMercenaryInstanceIds = new List<string>(saveData.runLostMercenaryInstanceIds),
                 runStartDurability = saveData.runStartDurability,
                 runWearRemainder = saveData.runWearRemainder,
                 runFoodDepleted = saveData.runFoodDepleted,
                 runFoodDepletedProgress = saveData.runFoodDepletedProgress,
                 starveGraceSeconds = saveData.starveGraceSeconds,
                 lossLimitRate = saveData.lossLimitRate,
-                limitRaidDurability = saveData.limitRaidDurability,
                 runOriginalCargoCount = saveData.runOriginalCargoCount,
                 runDepartureLoad = saveData.runDepartureLoad
             };
@@ -87,6 +94,10 @@ namespace ND.Framework
         /// </summary>
         /// <param name="runtimeData">Core 계산에 사용된 runtime caravan 데이터.</param>
         /// <param name="saveData">값을 덮어쓸 저장 DTO.</param>
+        /// <remarks>
+        /// runtime caravanId가 null이거나 빈 문자열이면 저장 DTO의 기존 caravanId를 유지한다.
+        /// debug/sample runtime처럼 ID가 비어 있는 입력이 selectedCaravanId·자산 잠금 연동을 깨뜨리지 않게 하기 위함이다.
+        /// </remarks>
         public static void CopyToSave(CaravanData runtimeData, CaravanSaveData saveData)
         {
             if (runtimeData == null || saveData == null)
@@ -101,8 +112,22 @@ namespace ND.Framework
             CopyMercenaries(runtimeData.mercenaries, saveData.mercenaries);
             CopyCargo(runtimeData.cargo, saveData.cargo);
 
+            // 빈 runtime ID로 저장 ID를 지우면 NormalizeData가 새 ID를 발급해 child 연동이 끊긴다.
+            if (!string.IsNullOrEmpty(runtimeData.caravanId))
+            {
+                saveData.caravanId = runtimeData.caravanId;
+            }
+
+            if (!string.IsNullOrEmpty(runtimeData.currentTownId))
+            {
+                saveData.currentTownId = runtimeData.currentTownId;
+            }
+
             saveData.foodAmount = runtimeData.foodAmount;
             saveData.foodUnitWeight = runtimeData.foodUnitWeight;
+            saveData.baseSafetyChancePercent = System.Math.Max(
+                0f,
+                System.Math.Min(100f, runtimeData.baseSafetyChancePercent));
             saveData.state = runtimeData.state;
             saveData.currentDistanceKm = runtimeData.currentDistanceKm;
             saveData.totalSeconds = runtimeData.totalSeconds;
@@ -115,15 +140,39 @@ namespace ND.Framework
             saveData.currentDurability = runtimeData.currentDurability;
             saveData.runDurabilityLost = runtimeData.runDurabilityLost;
             saveData.runBattlesFought = runtimeData.runBattlesFought;
+            saveData.runEventChecksProcessed = runtimeData.runEventChecksProcessed;
+            saveData.runEventsOccurred = runtimeData.runEventsOccurred;
+            saveData.runLostMercenaryInstanceIds.Clear();
+            if (runtimeData.runLostMercenaryInstanceIds != null)
+                saveData.runLostMercenaryInstanceIds.AddRange(runtimeData.runLostMercenaryInstanceIds);
             saveData.runStartDurability = runtimeData.runStartDurability;
             saveData.runWearRemainder = runtimeData.runWearRemainder;
             saveData.runFoodDepleted = runtimeData.runFoodDepleted;
             saveData.runFoodDepletedProgress = runtimeData.runFoodDepletedProgress;
             saveData.starveGraceSeconds = runtimeData.starveGraceSeconds;
-            saveData.lossLimitRate = runtimeData.lossLimitRate;
-            saveData.limitRaidDurability = runtimeData.limitRaidDurability;
+            saveData.lossLimitRate = NormalizeLossLimitRate(runtimeData.lossLimitRate);
             saveData.runOriginalCargoCount = runtimeData.runOriginalCargoCount;
             saveData.runDepartureLoad = runtimeData.runDepartureLoad;
+        }
+
+        /// <summary>
+        /// Copies the latest market-owned inventory fields from SaveData into an existing runtime Caravan.
+        /// Arrival sales mutate SaveData after the journey runtime has already settled, so Claim must
+        /// reconcile these fields before the runtime snapshot is copied back to SaveData.
+        /// </summary>
+        public static void CopyMarketInventoryToRuntime(
+            CaravanSaveData saveData,
+            CaravanData runtimeData)
+        {
+            if (saveData == null || runtimeData == null)
+            {
+                return;
+            }
+
+            Normalize(saveData);
+            CopyCargo(saveData.cargo, runtimeData.cargo);
+            runtimeData.foodAmount = saveData.foodAmount;
+            runtimeData.foodUnitWeight = saveData.foodUnitWeight;
         }
 
         /// <summary>
@@ -152,6 +201,24 @@ namespace ND.Framework
                 saveData.mercenaries = new List<MercenarySaveData>();
             }
 
+            if (saveData.runEventChecksProcessed < 0)
+            {
+                saveData.runEventChecksProcessed = 0;
+            }
+
+            if (saveData.runBattlesFought < 0)
+            {
+                saveData.runBattlesFought = 0;
+            }
+
+            if (saveData.runEventsOccurred < 0)
+            {
+                saveData.runEventsOccurred = 0;
+            }
+
+            if (saveData.runLostMercenaryInstanceIds == null)
+                saveData.runLostMercenaryInstanceIds = new List<string>();
+
             if (saveData.cargo == null)
             {
                 saveData.cargo = new List<CargoEntrySaveData>();
@@ -161,6 +228,10 @@ namespace ND.Framework
             {
                 saveData.foodUnitWeight = 1f;
             }
+
+            saveData.baseSafetyChancePercent = System.Math.Max(
+                0f,
+                System.Math.Min(100f, saveData.baseSafetyChancePercent));
 
             if (saveData.wagon.maxDurability <= 0)
             {
@@ -172,10 +243,7 @@ namespace ND.Framework
                 saveData.wagon.inventorySlotCount = 1;
             }
 
-            if (saveData.lossLimitRate <= 0f)
-            {
-                saveData.lossLimitRate = 1f;
-            }
+            saveData.lossLimitRate = NormalizeLossLimitRate(saveData.lossLimitRate);
 
             if (saveData.starveGraceSeconds <= 0f)
             {
@@ -202,6 +270,18 @@ namespace ND.Framework
             }
         }
 
+        private static float NormalizeLossLimitRate(float value)
+        {
+            // 0은 계약상 유효한 완전 손실 보호 값이다.
+            // 구버전/손상 데이터처럼 범위를 벗어나거나 유한하지 않은 값만 기본값 1로 복구한다.
+            if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f || value > 1f)
+            {
+                return 1f;
+            }
+
+            return value;
+        }
+
         private static imsiWagonData ToRuntime(WagonSaveData saveData)
         {
             if (saveData == null || string.IsNullOrEmpty(saveData.wagonName))
@@ -211,6 +291,7 @@ namespace ND.Framework
 
             return new imsiWagonData
             {
+                instanceId = saveData.instanceId,
                 wagonName = saveData.wagonName,
                 overLoad = saveData.overLoad,
                 maxLoad = saveData.maxLoad,
@@ -226,6 +307,7 @@ namespace ND.Framework
         {
             if (runtimeData == null)
             {
+                saveData.instanceId = string.Empty;
                 saveData.wagonName = string.Empty;
                 saveData.overLoad = 0f;
                 saveData.maxLoad = 0f;
@@ -237,6 +319,7 @@ namespace ND.Framework
                 return;
             }
 
+            saveData.instanceId = runtimeData.instanceId ?? string.Empty;
             saveData.wagonName = runtimeData.wagonName ?? string.Empty;
             saveData.overLoad = runtimeData.overLoad;
             saveData.maxLoad = runtimeData.maxLoad;
@@ -264,6 +347,7 @@ namespace ND.Framework
 
                 target.Add(new imsiAnimalData
                 {
+                    instanceId = animal.instanceId,
                     animalName = animal.animalName,
                     speed = animal.speed,
                     foodPerKm = animal.foodPerKm,
@@ -291,6 +375,7 @@ namespace ND.Framework
 
                 target.Add(new AnimalSaveData
                 {
+                    instanceId = animal.instanceId ?? string.Empty,
                     animalName = animal.animalName ?? string.Empty,
                     speed = animal.speed,
                     foodPerKm = animal.foodPerKm,
@@ -318,6 +403,7 @@ namespace ND.Framework
 
                 target.Add(new imsiMercenaryData
                 {
+                    instanceId = mercenary.instanceId,
                     mercName = mercenary.mercName,
                     combatPower = mercenary.combatPower,
                     contractCount = mercenary.contractCount
@@ -342,6 +428,7 @@ namespace ND.Framework
 
                 target.Add(new MercenarySaveData
                 {
+                    instanceId = mercenary.instanceId ?? string.Empty,
                     mercName = mercenary.mercName ?? string.Empty,
                     combatPower = mercenary.combatPower,
                     contractCount = mercenary.contractCount

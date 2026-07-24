@@ -25,6 +25,14 @@ public class CargoEntry
 [Serializable]
 public class CaravanData
 {
+    // Stores the stable identifier assigned by the Caravan creation and persistence system.
+    // This data holder does not generate, replace, or derive the value from a trade ID.
+    public string caravanId = string.Empty;
+
+    // 현재 머무는 마을의 안정적인 ID. 이동 중에는 출발 마을을 유지하며,
+    // 정산 Claim이 성공한 뒤 Framework가 도착지 또는 복귀 거점으로 갱신한다.
+    public string currentTownId = string.Empty;
+
     // ── 구성 (준비 단계에서 채움) ──────────────────────────────
     public imsiWagonData wagon;                                              // 마차 (1대)
     public List<imsiAnimalData> animals = new List<imsiAnimalData>();            // 견인 동물 목록
@@ -32,6 +40,7 @@ public class CaravanData
     public List<CargoEntry> cargo = new List<CargoEntry>();             // 적재한 무역품 목록
     public int foodAmount;                                              // 실은 식량 수량
     public float foodUnitWeight = 1f;                                   // 식량 1개당 무게
+    public float baseSafetyChancePercent;                               // 산적 이벤트 기본 무사 통과 확률(0~100)
 
     // ── 런타임/저장 상태 ─────────────────────────────────────
     // [시간은 출처를 안 정한다] 진행도(progress01)만 들고 있는다.
@@ -50,9 +59,17 @@ public class CaravanData
     public JourneyFailureReason runFatalReason = JourneyFailureReason.None; // 치명 상태(실패 확정) 사유
 
     // ── 마차 내구도 & 전투 (M2) ───────────────────────────────
+    // [2차] 내구도가 0이 되면 "파손"이 아니라 "파괴"다 — 마차를 잃고 적재 화물·식량도 전손된다.
+    //   파괴 후 소유 기록·wagonId 정리는 소유·저장 시스템(Framework) 몫이고,
+    //   Core는 손실 확정과 실패 표시, 그리고 이 플래그로 파괴 사실을 알린다.
+    public bool runWagonDestroyed;    // 이번 무역에서 마차가 파괴됐나 (내구도 0 도달)
+
     public int currentDurability;     // 현재 마차 내구도 (무역 거듭하며 감소, 무역 간 유지)
     public int runDurabilityLost;     // 이번 무역 약탈 내구도 손실 누적 (손실상한 캡 기준)
-    public int runBattlesFought;      // 이번 무역 전투 횟수 (용병 방어 판정용)
+    public int runBattlesFought;      // 이번 무역에서 실제 처리한 Combat 이벤트 수
+    public int runEventChecksProcessed; // 이번 무역에서 이미 처리한 거리 기반 이벤트 판정 수
+    public int runEventsOccurred;       // 이번 무역에서 실제 발생한 이벤트 수
+    public List<string> runLostMercenaryInstanceIds = new List<string>(); // 전투 패배로 소멸한 용병 개체 ID
     public int runStartDurability;    // 이번 무역 출발 시 내구도 (정산 손실 = 출발 - 도착) [M2 거리마모]
     public float runWearRemainder;    // 거리 마모 소수점 이월(1 미만 마모 누적) [M2 거리마모]
 
@@ -63,7 +80,6 @@ public class CaravanData
 
     // ── 손실 상한 (M2, 정헌 LossLimitRate) ─────────────────────
     public float lossLimitRate = 1f;      // 손실 상한율(0~1). 1=무제한. 정헌 CoreRuntimeStatModifier.LossLimitRate로 설정
-    public bool limitRaidDurability = true;   // 약탈 내구도 손실에 손실상한 적용? false=전량 적용 [M2]
     public int runOriginalCargoCount;     // 출발 시 원래 무역품 개수 (손실 상한 계산 기준)
     public float runDepartureLoad;        // 출발 시 짐무게 (정산 데이터용) [M2]
 

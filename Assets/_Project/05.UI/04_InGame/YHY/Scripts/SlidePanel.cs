@@ -20,6 +20,7 @@ public class SlidePanel : MonoBehaviour
 {
     [Header("슬라이드 대상")]
     [SerializeField] private RectTransform panel;   // 슬라이드할 패널(자기 자신 또는 자식)
+    [SerializeField] private Camera rendCam;        // RendTexture Camera
 
     [Header("위치")]
     [SerializeField] private Vector2 openPos;       // 열렸을 때 위치
@@ -34,12 +35,25 @@ public class SlidePanel : MonoBehaviour
 
     public bool IsOpen => isOpen;
 
-    private void Awake()
+private void Awake()
     {
-        if (panel == null) panel = transform as RectTransform;
+        if (panel == null)
+        {
+            panel = transform as RectTransform;
+        }
+
         isOpen = startOpen;
-        // 시작 위치를 애니 없이 즉시 세팅
-        if (panel != null) panel.anchoredPosition = isOpen ? openPos : closedPos;
+
+        if (panel != null)
+        {
+            panel.anchoredPosition = isOpen ? openPos : closedPos;
+        }
+
+        if (rendCam != null)
+        {
+            // Keep the RenderTexture camera state consistent with the initial panel visibility.
+            rendCam.enabled = isOpen;
+        }
     }
 
     /// <summary>열림/닫힘 토글(버튼에 연결).</summary>
@@ -49,29 +63,62 @@ public class SlidePanel : MonoBehaviour
     }
 
     /// <summary>열림/닫힘 상태를 지정해 슬라이드.</summary>
-    public void SetOpen(bool open)
+public void SetOpen(bool open)
     {
         isOpen = open;
-        if (panel == null) return;
 
-        if (anim != null) StopCoroutine(anim);
+        if (open && rendCam != null)
+        {
+            // Begin rendering before the opening animation exposes the map.
+            rendCam.enabled = true;
+        }
+
+        if (panel == null)
+        {
+            return;
+        }
+
+        if (anim != null)
+        {
+            StopCoroutine(anim);
+        }
+
         if (gameObject.activeInHierarchy)
+        {
             anim = StartCoroutine(Slide(open ? openPos : closedPos));
+        }
         else
-            panel.anchoredPosition = open ? openPos : closedPos;   // 비활성 시 즉시
+        {
+            panel.anchoredPosition = open ? openPos : closedPos;
+
+            if (rendCam != null)
+            {
+                // An inactive panel cannot animate, so apply the final camera state immediately.
+                rendCam.enabled = open;
+            }
+        }
     }
 
-    private IEnumerator Slide(Vector2 target)
+private IEnumerator Slide(Vector2 target)
     {
         Vector2 start = panel.anchoredPosition;
         float t = 0f;
+
         while (t < duration)
         {
             t += Time.unscaledDeltaTime;
-            float e = 1f - Mathf.Pow(1f - Mathf.Clamp01(t / duration), 3f);   // easeOutCubic
+            float e = 1f - Mathf.Pow(1f - Mathf.Clamp01(t / duration), 3f);
             panel.anchoredPosition = Vector2.LerpUnclamped(start, target, e);
             yield return null;
         }
+
         panel.anchoredPosition = target;
+        anim = null;
+
+        if (!isOpen && rendCam != null)
+        {
+            // Stop rendering only after the closing animation is completely hidden.
+            rendCam.enabled = false;
+        }
     }
 }

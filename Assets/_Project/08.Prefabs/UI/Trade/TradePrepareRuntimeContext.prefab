@@ -44,10 +44,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a6d2f38d94fd4c92abf4e1d79a3a1071, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TradePrepareRuntimeContextProvider
-  towns: []
-  routes: []
-  tradeItems: []
-  wagons: []
-  draftAnimals: []
-  mercenaries: []
+  towns:
+  - {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
+  - {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
+  - {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  - {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
+  routes:
+  - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
+  - {fileID: 11400000, guid: f5d1adf3a0a21c84b805c7c69189b3a3, type: 2}
+  - {fileID: 11400000, guid: ee7668ff6c08c5a4dbbe18824f8f3267, type: 2}
+  - {fileID: 11400000, guid: 10113bd0c38b8394d9cc07cfc15a1443, type: 2}
+  - {fileID: 11400000, guid: 73bb5efdd4909b24ea1ec0bc440e0d93, type: 2}
+  - {fileID: 11400000, guid: 4adf786d6f18b784b92b05774d23e2d4, type: 2}
+  tradeItems:
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: d3e0661c62971554698aecafac846371, type: 2}
+  - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
+  - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
+  - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
+  wagons:
+  - {fileID: 11400000, guid: 4dbc3e3c1b693af4b83bd4db6c5e2dd9, type: 2}
+  - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
+  - {fileID: 11400000, guid: d1f29cbc4f6fb5d489d1ac675ed655df, type: 2}
+  draftAnimals:
+  - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
+  - {fileID: 11400000, guid: 76f8d2c8354dee44ba423e15d4531cf5, type: 2}
+  mercenaries:
+  - {fileID: 11400000, guid: 4dc076e7ded5b2548a13276c7ff7552d, type: 2}
+  - {fileID: 11400000, guid: 9cca2eff13208814e96689f88fa184e7, type: 2}
+  - {fileID: 11400000, guid: 77940304fe635a8489485abcf6627a23, type: 2}
+  - {fileID: 11400000, guid: 4deb2e10609bdfc42a9ae7d15d12080b, type: 2}
+  - {fileID: 11400000, guid: b855073c58c5c38408f34facd03b4897, type: 2}
   commitSinkBehaviour: {fileID: 0}

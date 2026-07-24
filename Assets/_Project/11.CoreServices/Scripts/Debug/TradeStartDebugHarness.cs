@@ -7,6 +7,7 @@
  * - FrameworkRoot의 TradeStartService와 TradeProgressCoordinator를 개발 중 빠르게 호출할 수 있게 한다.
  *
  * Main Features
+ * - Sample Wagon, Animal, and Mercenary assets receive persistent instance IDs.
  * - 샘플 caravan 생성, 무역 시작, 저장 데이터 출력, 진행률 확인, 강제 완료, 정산 claim을 제공한다.
  * - 낮은 식량 실패 케이스, 3회 연속 loop smoke test, Economy E2E smoke test, 인게임 식량 소모 smoke test를 제공한다.
  * - Pause 중 식량 elapsed 정지 smoke, Failed 정산 화면 smoke, Force* World debug smoke를 제공한다.
@@ -17,9 +18,10 @@
  * Usage for Team Members
  * - debug용 GameObject에 component로 추가한 뒤 ContextMenu 항목을 실행한다.
  * - FillSampleCaravan()으로 테스트 caravan을 채운 뒤 StartTradeAndRecordTime()을 호출하는 흐름을 권장한다.
+ * - FillSampleCaravan / 출발 직전에 선택 caravan 저장 ID를 runtime caravanId에 동기화한다.
  *
  * Main Public APIs
- * - FillSampleCaravan(): debug caravan을 기본값으로 채운다.
+ * - FillSampleCaravan(): debug caravan을 기본값으로 채우고 선택 저장 caravanId를 맞춘다.
  * - StartTradeAndRecordTime(): 무역 출발과 기록을 시도한다.
  * - CheckTradeProgressAndCompletion(): 진행률 갱신과 정산 생성을 확인한다.
  * - RunM1LoopIntegritySmoke(): 출발-정산-claim loop를 3회 검증한다.
@@ -30,11 +32,12 @@
  * - RunPendingSettlementRestoreSmoke(): pendingSettlement 저장·캐시 소실·복구·claim을 검증한다.
  * - RunOfflineProgressSmoke(): Traveling 오프라인 미완료·완료·재호출·역행을 검증한다.
  * - RunForceWorldDebugSmoke(): ForceSeason/Disaster/RouteEvent 기본 재현을 검증한다.
- * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling inject hook을 검증한다.
+ * - ForceSeason() / ForceDisaster() / ForceRouteEvent(): WorldSaveData 또는 Traveling 실제 이벤트 적용을 검증한다.
  *
  * Important Notes
  * - 이 스크립트는 개발 검증용이며 runtime gameplay flow의 필수 구성 요소가 아니다.
  * - M2 출발 검증(BrokenWagon, MixedAnimalType, SlotExceeded)을 통과하는 샘플 caravan을 구성한다.
+ * - 샘플 caravan은 ID를 생성하지 않으며, FrameworkRoot의 선택 caravan 저장 ID를 재사용한다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md
  */
 using System;
@@ -78,6 +81,7 @@ namespace ND.Framework
             {
                 wagon = new imsiWagonData
                 {
+                    instanceId = SaveDataLookup.NewInstanceId(),
                     wagonName = "Debug Wagon",
                     overLoad = 30f,
                     maxLoad = 60f,
@@ -92,6 +96,7 @@ namespace ND.Framework
 
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Debug Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
@@ -99,10 +104,19 @@ namespace ND.Framework
             });
             caravan.animals.Add(new imsiAnimalData
             {
+                instanceId = SaveDataLookup.NewInstanceId(),
                 animalName = "Debug Horse",
                 foodPerKm = SampleRawFoodConsumptionPerDay,
                 animalType = DraftAnimalType.Horse,
                 increaseOverLoad = 5f
+            });
+
+            caravan.mercenaries.Add(new imsiMercenaryData
+            {
+                instanceId = SaveDataLookup.NewInstanceId(),
+                mercName = "Debug Guard",
+                combatPower = 10,
+                contractCount = 1
             });
 
             var item = new imsiTradeItemData
@@ -117,6 +131,7 @@ namespace ND.Framework
             caravan.currentDurability = caravan.wagon.maxDurability;
 
             ApplyConsumptionRateNormalization();
+            SyncCaravanIdFromSelectedSave();
 
             FrameworkLog.Info("Sample caravan filled for trade start debug.");
         }
@@ -136,6 +151,8 @@ namespace ND.Framework
 
             var tradeStart = FrameworkRoot.Instance.TradeStart;
             ApplyConsumptionRateNormalization();
+            // FillSampleCaravan을 거치지 않은 Inspector 편집 경로도 선택 저장 ID를 맞춘다.
+            SyncCaravanIdFromSelectedSave();
             var result = tradeStart.TryStartTrade(caravan, distanceKm, tradeId, routeId);
             // Core 검증 실패 사유를 그대로 로그에 남겨 테스트 데이터 조정을 쉽게 한다.
             if (!result.canDepart)
@@ -227,7 +244,7 @@ namespace ND.Framework
                 return;
             }
 
-            var claimed = coordinator.ClaimSettlementAndReset();
+            var claimed = ClaimCurrentSettlement(coordinator);
             var activeCaravan = coordinator.ActiveCaravan;
             // reset 이후 상태를 Inspector에서 확인할 수 있도록 local caravan 참조를 최신화한다.
             if (activeCaravan != null)
@@ -299,8 +316,8 @@ namespace ND.Framework
                     return;
                 }
 
-                var firstClaim = coordinator.ClaimSettlementAndReset();
-                var duplicateClaim = coordinator.ClaimSettlementAndReset();
+                var firstClaim = ClaimCurrentSettlement(coordinator);
+                var duplicateClaim = ClaimCurrentSettlement(coordinator);
                 // 첫 claim만 성공하고 같은 settlement의 두 번째 claim은 실패해야 한다.
                 if (!firstClaim || duplicateClaim)
                 {
@@ -392,7 +409,7 @@ namespace ND.Framework
                     return;
                 }
 
-                if (!coordinator.ClaimSettlementAndReset())
+                if (!ClaimCurrentSettlement(coordinator))
                 {
                     FrameworkLog.Warning($"Economy E2E smoke failed because claim failed in cycle {cycleIndex + 1}.");
                     return;
@@ -663,6 +680,12 @@ namespace ND.Framework
                 result.durabilityLost,
                 result.travelSeconds,
                 result.foodConsumed,
+                result.foodLost,
+                result.eventsOccurred,
+                result.battlesFought,
+                result.lostMercenaryInstanceIds?.ToArray() ?? new string[0],
+                result.wagonDestroyed,
+                result.destroyedWagonInstanceId,
                 result.departureLoad,
                 result.overloadRatio,
                 true,
@@ -673,8 +696,8 @@ namespace ND.Framework
                 return;
             }
 
-            var firstClaim = coordinator.ClaimSettlementAndReset();
-            var duplicateClaim = coordinator.ClaimSettlementAndReset();
+            var firstClaim = ClaimCurrentSettlement(coordinator);
+            var duplicateClaim = ClaimCurrentSettlement(coordinator);
             if (!firstClaim || duplicateClaim)
             {
                 FrameworkLog.Warning(
@@ -781,7 +804,8 @@ namespace ND.Framework
 
             if (bridge != null)
             {
-                if (!bridge.TryGetPendingSettlement(out var bridgeTradeId, out var bridgeResult)
+                if (!bridge.TryGetPendingSettlement(out var bridgeCaravanId, out var bridgeTradeId, out var bridgeResult)
+                    || bridgeCaravanId != saveData.selectedCaravanId
                     || bridgeTradeId != smokeTradeId
                     || bridgeResult == null
                     || bridgeResult.grade != savedGrade)
@@ -791,8 +815,8 @@ namespace ND.Framework
                 }
             }
 
-            var firstClaim = coordinator.ClaimSettlementAndReset();
-            var duplicateClaim = coordinator.ClaimSettlementAndReset();
+            var firstClaim = ClaimCurrentSettlement(coordinator);
+            var duplicateClaim = ClaimCurrentSettlement(coordinator);
             if (!firstClaim || duplicateClaim)
             {
                 FrameworkLog.Warning(
@@ -914,7 +938,7 @@ namespace ND.Framework
                 }
 
                 // Case D: claim으로 pending 정리 후 새 Traveling → 역행 스킵
-                if (!coordinator.ClaimSettlementAndReset())
+                if (!ClaimCurrentSettlement(coordinator))
                 {
                     FrameworkLog.Warning("Offline progress smoke failed to claim settlement before rollback case.");
                     return;
@@ -1029,22 +1053,50 @@ namespace ND.Framework
             }
 
             FrameworkRoot.Instance.TradeProgressCoordinator?.SetActiveCaravan(caravan);
-            if (!commands.ForceRouteEvent(debugRouteEventId))
+            var provider = FrameworkRoot.Instance.SharedGameData;
+            if (provider == null || !provider.TryGetRoute(routeId, out var smokeRoute) ||
+                smokeRoute?.Events == null)
+            {
+                FrameworkLog.Warning("Force world debug smoke skipped: active route data is unavailable.");
+                return;
+            }
+
+            string combatEventId = string.Empty;
+            foreach (var routeEvent in smokeRoute.Events)
+            {
+                if (routeEvent != null && routeEvent.EventType == RouteEvent.Combat &&
+                    !string.IsNullOrWhiteSpace(routeEvent.Id))
+                {
+                    combatEventId = routeEvent.Id;
+                    break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(combatEventId))
+            {
+                FrameworkLog.Warning(
+                    $"Force world debug smoke skipped: route '{routeId}' has no Combat event test content.");
+                return;
+            }
+
+            int eventsBefore = caravan.runEventsOccurred;
+            int battlesBefore = caravan.runBattlesFought;
+            if (!commands.ForceRouteEvent(combatEventId))
             {
                 FrameworkLog.Warning("Force world debug smoke failed: ForceRouteEvent returned false while Traveling.");
                 return;
             }
 
-            if (!commands.TryConsumeForcedRouteEvent(smokeTradeId, out var consumedEventId)
-                || consumedEventId != debugRouteEventId.Trim())
+            if (caravan.runEventsOccurred != eventsBefore + 1 ||
+                caravan.runBattlesFought != battlesBefore + 1)
             {
                 FrameworkLog.Warning(
-                    $"Force world debug smoke failed: consumed event was '{consumedEventId}', expected '{debugRouteEventId}'.");
+                    "Force world debug smoke failed: forced Combat counters were not applied.");
                 return;
             }
 
             FrameworkLog.Info(
-                $"Force world debug smoke passed. Season={saveData.world.currentSeasonId}, Disaster='{saveData.world.currentDisasterId}', RouteEvent consumed.");
+                $"Force world debug smoke passed. Season={saveData.world.currentSeasonId}, Disaster='{saveData.world.currentDisasterId}', RouteEvent='{combatEventId}' applied.");
         }
 
         /// <summary>
@@ -1092,6 +1144,39 @@ namespace ND.Framework
             commands.ForceRouteEvent(debugRouteEventId);
         }
 
+        /// <summary>
+        /// debug runtime caravanId가 비어 있으면 선택 caravan 저장 ID를 복사한다.
+        /// </summary>
+        /// <remarks>
+        /// 샘플 caravan은 ID를 생성하지 않는다. FrameworkRoot 또는 선택 caravan이 없으면 변경하지 않는다.
+        /// </remarks>
+        private void SyncCaravanIdFromSelectedSave()
+        {
+            if (caravan == null || !string.IsNullOrEmpty(caravan.caravanId))
+            {
+                return;
+            }
+
+            var saveData = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null;
+            if (saveData == null)
+            {
+                return;
+            }
+
+            var savedId = saveData.caravan != null ? saveData.caravan.caravanId : null;
+            if (string.IsNullOrEmpty(savedId))
+            {
+                savedId = saveData.selectedCaravanId;
+            }
+
+            if (string.IsNullOrEmpty(savedId))
+            {
+                return;
+            }
+
+            caravan.caravanId = savedId;
+        }
+
         private void ApplyConsumptionRateNormalization()
         {
             var gameTime = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.GameTime : null;
@@ -1121,6 +1206,19 @@ namespace ND.Framework
             }
 
             return FrameworkRoot.Instance.TradeProgressCoordinator;
+        }
+
+        private static bool ClaimCurrentSettlement(TradeProgressCoordinator coordinator)
+        {
+            var saveData = FrameworkRoot.Instance?.CurrentSaveData;
+            if (coordinator == null || saveData == null || saveData.tradeProgress == null)
+            {
+                return false;
+            }
+
+            return coordinator.ClaimSettlement(
+                saveData.selectedCaravanId,
+                saveData.tradeProgress.activeTradeId).Succeeded;
         }
 
         private static bool TryGetDebugCommands(out FrameworkDebugCommands commands)

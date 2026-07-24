@@ -53,6 +53,14 @@ namespace ND.Framework
                 return;
             }
 
+            // A stale or duplicated completion callback can arrive after the first claim has
+            // already routed to Preparation. Ignore it instead of reopening S8 with
+            // "No settlement result."
+            if (!IsSettlementScreenActive())
+            {
+                return;
+            }
+
             var bridge = GetBridge();
             // bridge가 없으면 claim을 처리할 수 없으므로 사용자에게 결과 없음 상태를 표시한다.
             if (bridge == null)
@@ -134,10 +142,11 @@ namespace ND.Framework
                 return;
             }
 
+            string caravanId;
             string tradeId;
             JourneyResultData result;
             // pending settlement가 없으면 claim 버튼이 남아 있지 않도록 결과 없음 상태로 갱신한다.
-            if (!bridge.TryGetPendingSettlement(out tradeId, out result))
+            if (!bridge.TryGetPendingSettlement(out caravanId, out tradeId, out result))
             {
                 ShowNoSettlement("No settlement result.");
                 return;
@@ -180,6 +189,12 @@ namespace ND.Framework
                 result.durabilityLost,
                 result.travelSeconds,
                 result.foodConsumed,
+                result.foodLost,
+                result.eventsOccurred,
+                result.battlesFought,
+                result.lostMercenaryInstanceIds?.ToArray() ?? new string[0],
+                result.wagonDestroyed,
+                result.destroyedWagonInstanceId,
                 result.departureLoad,
                 result.overloadRatio,
                 canClaim,

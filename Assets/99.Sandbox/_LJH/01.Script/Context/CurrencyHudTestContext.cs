@@ -8,16 +8,12 @@ public sealed class CurrencyHudTestContext : MonoBehaviour
     [SerializeField]
     private long testTradingCurrency = 1_334_455L;
 
-    [SerializeField]
-    private long testDevelopmentCurrency = 123_456_789L;
-
     [ContextMenu("Raise Test Currency")]
     public void RaiseTestCurrency()
     {
+        // The HUD event contract intentionally tests trade money without development currency.
         currencyChangedChannel?.Raise(
-            new CurrencyChangedEventData(
-                testTradingCurrency,
-                testDevelopmentCurrency));
+            new CurrencyChangedEventData(testTradingCurrency));
     }
 
     [ContextMenu("Raise Current SaveData Currency")]
@@ -35,8 +31,6 @@ public sealed class CurrencyHudTestContext : MonoBehaviour
         }
 
         currencyChangedChannel?.Raise(
-            new CurrencyChangedEventData(
-                saveData.player.tradingCurrency,
-                saveData.player.developmentCurrency));
+            new CurrencyChangedEventData(saveData.player.tradingCurrency));
     }
 }

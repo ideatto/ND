@@ -10,31 +10,39 @@ namespace ND.Economy
             {
                 return Fail("InputNull", null, null, null, null, null, null, null);
             }
+            if (input.LoanRepayment != 0L)
+            {
+                return Fail("AutomaticLoanRepaymentNotAllowed", null, null, null, null, null, null, input.CurrencyState);
+            }
 
             CurrencyState workingCurrency = input.CurrencyState == null
                 ? new CurrencyState()
                 : input.CurrencyState.Clone();
 
-            PriceCalculationResult priceResult = PriceCalculator.Calculate(input.PriceInput);
-            if (!priceResult.IsValid)
+            PriceCalculationResult priceResult = null;
+            var soldItems = new List<SoldItemInput>();
+            if (input.CalculateItemTrade)
             {
-                return Fail("PriceCalculationFailed:" + priceResult.ErrorCode, priceResult, null, null, null, null, null, workingCurrency);
+                priceResult = PriceCalculator.Calculate(input.PriceInput);
+                if (!priceResult.IsValid)
+                {
+                    return Fail("PriceCalculationFailed:" + priceResult.ErrorCode, priceResult, null, null, null, null, null, workingCurrency);
+                }
+
+                soldItems.Add(new SoldItemInput
+                {
+                    TradeItemId = input.PriceInput.TradeItemId,
+                    Quantity = input.PriceInput.Quantity,
+                    TotalBuyPrice = priceResult.TotalBuyPrice,
+                    TotalSellPrice = priceResult.TotalSellPrice
+                });
             }
 
             SettlementBreakdown settlement = SettlementCalculator.Calculate(new SettlementInput
             {
                 TradeId = input.TradeId,
                 TradeMoneyBefore = workingCurrency.TradeMoney,
-                SoldItems = new List<SoldItemInput>
-                {
-                    new SoldItemInput
-                    {
-                        TradeItemId = input.PriceInput.TradeItemId,
-                        Quantity = input.PriceInput.Quantity,
-                        TotalBuyPrice = priceResult.TotalBuyPrice,
-                        TotalSellPrice = priceResult.TotalSellPrice
-                    }
-                },
+                SoldItems = soldItems,
                 FoodCost = input.FoodCost,
                 MercenaryCost = input.MercenaryCost,
                 CartRepairCost = input.CartRepairCost,

@@ -20,5 +20,7 @@ public enum TradePrepareConditionType
     InvalidCargoSelection,
     NoCargo,
     InventorySlotExceeded,
-    InvalidMercenarySelection
+    InvalidMercenarySelection,
+    // Appended to preserve the numeric values of existing validation states.
+    DepartureCaravanNotSelected
 }

@@ -23,6 +23,7 @@
 
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -34,10 +35,15 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>④ 적재(Cargo) 화면에 넘길 값 묶음. 최대 적재량은 매니저가 상단 구성에서 계산한다.</summary>
     public struct CargoConfig
     {
+        public float maxLoad;
+        public TradeItemViewData[] selectedItems;
+        public bool automaticCargoLoading;
+        public bool restoreOwnedCargo;
         public long gold;                 // 현재 소지 골드
         public int requiredFood;          // 반드시 적재해야 하는 먹이 수
         public TradeItemData[] shopItems; // 상점 판매 아이템(정헌님 Cargo 계약)
         public int[] stocks;              // 아이템별 재고(shopItems와 같은 순서)
+        public long[] buyUnitPrices;      // 현재 시장 갱신 구간의 확정 구매 단가
     }
 
     /// <summary>⑥ 요약 계산 질의 — 매니저가 아는 확정 선택값. 계산은 데이터 소스가 담당.</summary>
@@ -133,8 +139,15 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public Func<List<TransportSelectPanel.TransportEntry>> OwnedWagonProvider;
     /// <summary>④ 적재 화면 값(골드·먹이·상점) 공급자.</summary>
     public Func<CargoConfig> CargoProvider;
+    public Func<TradePrepareCaravanOptionViewData[]> CaravanOptionsProvider;
+    public Func<string, bool> DepartureCaravanSelector;
+    public Action ClearMercenarySelection;
+    public Func<MercenaryViewData[]> MercenaryOptionsProvider;
+    public Func<string, bool> MercenarySelector;
+    public Action RefreshPreparationDraft;
     /// <summary>⑥ 요약 계산(출발도시·위험도·음식·시간) 공급자 — 데모는 Core 계산기 사용.</summary>
     public Func<SummaryQuery, SummaryStats> SummaryStatsProvider;
+    public Func<TradeSummaryPanel.SummaryData> SummaryProvider;
     /// <summary>id → 표시 이름 변환(요약용). 없으면 id 그대로 표시.</summary>
     public Func<string, string> NameResolver;
 
@@ -145,7 +158,29 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>⑦ 무역 종료(도착) — 정산(⑧)으로 이어질 지점. 데모는 로그만.</summary>
     public event Action OnJourneyFinished;
 
+    /// <summary>Requests the latest setting snapshot for one Overview-selected Caravan.</summary>
+    public event Action<string> OnCaravanSettingDataRequested;
+
+    /// <summary>Requests the latest cargo and current-town market snapshot for one Overview-selected Caravan.</summary>
+    public event Action<string> OnCaravanCargoDataRequested;
+
+    /// <summary>Raised after a detached Overview edit session closes without routing back to S1.</summary>
+    public event Action OnCaravanEditClosed;
+
+    /// <summary>Forwards an S3 UI Draft for Framework validation and persistence.</summary>
+    public event Action<CaravanSettingDraft> OnCaravanSettingConfirmRequested;
+
+    /// <summary>Forwards an S4 UI Draft for Framework validation and persistence.</summary>
+    public event Action<CaravanLoadSettingDraft> OnCaravanCargoConfirmRequested;
+
     // ══ 진행 상태 ═══════════════════════════════════════════════
+
+    private enum DetachedCaravanEditMode
+    {
+        None,
+        Setting,
+        Cargo
+    }
 
     private string selTownId = "", selRouteId = "";
     private float distanceKm;
@@ -158,6 +193,17 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     private string lastFromTownName;     // ⑦ 진행 화면 타이틀용(요약에서 계산한 출발 도시)
     private float lastDuration;          // ⑦ 진행 카운트다운용(요약에서 계산한 소요 초)
     private bool wired;                  // 버튼/이벤트 중복 구독 방지
+    private string activeCaravanEditId = "";
+    private DetachedCaravanEditMode detachedCaravanEditMode;
+
+    /// <summary>Identifies the Caravan currently waiting for or displaying detached edit data.</summary>
+    public string ActiveCaravanEditId => activeCaravanEditId;
+
+    /// <summary>True only while S3 or S4 was requested directly from Caravan Overview.</summary>
+    public bool IsDetachedCaravanEditOpen => detachedCaravanEditMode != DetachedCaravanEditMode.None;
+
+    /// <summary>True only while Cargo was opened from one Caravan Overview slot.</summary>
+    public bool IsDetachedCaravanCargoEditOpen => detachedCaravanEditMode == DetachedCaravanEditMode.Cargo;
 
     /// <summary>슬롯 하나에 저장된 상단 구성(구조화).</summary>
     private class SlotComp
@@ -168,12 +214,15 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         public List<AnimalInventoryPanel.AnimalPick> animals = new List<AnimalInventoryPanel.AnimalPick>();
     }
     private readonly List<AnimalInventoryPanel.AnimalPick> pickedAnimals = new List<AnimalInventoryPanel.AnimalPick>();
+    private SettlementPaymentFlowController settlementPaymentFlow;
 
     // ══ 시작 ═══════════════════════════════════════════════════
 
     /// <summary>플로우 시작 — 프로바이더 주입 후 호출. ① 도시+루트부터 연다.</summary>
     public void Begin()
     {
+        // A normal trade-preparation entry must not inherit a previous Overview edit target.
+        ClearDetachedCaravanEditState();
         WireOnce();
 
         // 슬롯 저장소 초기화(전부 빈칸)
@@ -187,7 +236,269 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (townRoutePanel != null && TownProvider != null)
             townRoutePanel.Populate(TownProvider());
 
-        GoTownRoute();
+        GoCaravanSlot();
+    }
+
+    /// <summary>Starts a detached S3 request for the Caravan selected in Overview.</summary>
+    public void OpenCaravanSetting(string caravanId)
+    {
+        RequestDetachedCaravanEdit(
+            caravanId,
+            DetachedCaravanEditMode.Setting,
+            OnCaravanSettingDataRequested);
+    }
+
+    /// <summary>Starts a detached S4 request for the Caravan selected in Overview.</summary>
+    public void OpenCaravanCargo(string caravanId)
+    {
+        RequestDetachedCaravanEdit(
+            caravanId,
+            DetachedCaravanEditMode.Cargo,
+            OnCaravanCargoDataRequested);
+    }
+
+    /// <summary>Displays Provider-owned S3 data only when it matches the pending Overview request.</summary>
+    public bool ShowCaravanSetting(CaravanSettingViewData viewData)
+    {
+        if (detachedCaravanEditMode != DetachedCaravanEditMode.Setting
+            || viewData == null
+            || string.IsNullOrWhiteSpace(viewData.caravanId)
+            || !string.Equals(activeCaravanEditId, viewData.caravanId.Trim(), StringComparison.Ordinal))
+        {
+            // Rejecting mismatched responses prevents a delayed Provider result from opening another Caravan.
+            Debug.LogError("Rejected Caravan setting data because it does not match the pending edit request.", this);
+            return false;
+        }
+
+        if (animalPanel == null || !animalPanel.Populate(viewData))
+        {
+            Debug.LogError($"Failed to bind S3 for Caravan {activeCaravanEditId}.", this);
+            return false;
+        }
+
+        // Detached S3 does not have a previous linear trade step, so its Back action stays unavailable.
+        if (animalBack != null)
+        {
+            animalBack.interactable = false;
+            animalBack.gameObject.SetActive(false);
+        }
+        if (saveToggle != null)
+        {
+            // Detached editing persists through a Framework command, not the legacy in-memory slot toggle.
+            saveToggle.SetIsOnWithoutNotify(false);
+            saveToggle.gameObject.SetActive(false);
+        }
+        if (animalNext != null)
+        {
+            animalNext.interactable = viewData.canEdit && animalPanel.CanConfirmCaravanSetting();
+            SetButtonLabel(animalNext, "세팅 저장");
+        }
+
+        SetTradeRootActive(true);
+        ShowOnly(2);
+        return true;
+    }
+
+    /// <summary>Displays Provider-owned S4 data only when it matches the pending Overview request.</summary>
+    public bool ShowCaravanCargo(
+        CaravanLoadSettingViewData viewData,
+        CaravanCargoCatalogData detachedCatalog = null,
+        long? authoritativeTradingCurrency = null)
+    {
+        if (detachedCaravanEditMode != DetachedCaravanEditMode.Cargo
+            || viewData == null
+            || string.IsNullOrWhiteSpace(viewData.caravanId)
+            || !string.Equals(activeCaravanEditId, viewData.caravanId.Trim(), StringComparison.Ordinal))
+        {
+            Debug.LogError("Rejected Caravan cargo data because it does not match the pending edit request.", this);
+            return false;
+        }
+
+        if (cargoPanel == null)
+        {
+            Debug.LogError($"Failed to bind S4 for Caravan {activeCaravanEditId}: Cargo panel is unavailable.", this);
+            return false;
+        }
+
+        // Detached S4 is Provider-owned and must remain openable even when the normal trade-preparation
+        // runtime has not supplied its market CargoProvider. An attached provider enriches the fixture
+        // with real TradeItemData assets; without it the panel still opens with an empty catalog.
+        bool hasRuntimeConfig = CargoProvider != null;
+        CargoConfig runtimeConfig = hasRuntimeConfig ? CargoProvider() : default;
+        CargoConfig config = detachedCatalog != null ? new CargoConfig
+        {
+            // Detached S4 reads the current tradingCurrency through the normal runtime provider,
+            // but keeps its own Caravan catalog and does not commit a currency mutation here.
+            gold = authoritativeTradingCurrency.HasValue
+                ? Math.Max(0L, authoritativeTradingCurrency.Value)
+                : hasRuntimeConfig ? Math.Max(0L, runtimeConfig.gold) : 0L,
+            // Route-dependent feed demand remains zero before a route exists and follows the
+            // authoritative TradePrepare projection as soon as one is selected.
+            requiredFood = hasRuntimeConfig ? Math.Max(0, runtimeConfig.requiredFood) : 0,
+            shopItems = detachedCatalog.items ?? Array.Empty<TradeItemData>(),
+            stocks = detachedCatalog.stocks ?? Array.Empty<int>(),
+            buyUnitPrices = detachedCatalog.buyUnitPrices ?? Array.Empty<long>(),
+            selectedItems = viewData.availableItems ?? Array.Empty<TradeItemViewData>()
+        } : hasRuntimeConfig ? runtimeConfig : new CargoConfig
+        {
+            shopItems = Array.Empty<TradeItemData>(),
+            stocks = Array.Empty<int>(),
+            buyUnitPrices = Array.Empty<long>(),
+            selectedItems = Array.Empty<TradeItemViewData>()
+        };
+
+        // S4 can still be inactive on its first opening after Title/Play Mode reload. Activate it
+        // before Configure/Restore so its Awake initialization cannot clear the restored SaveData cargo.
+        SetTradeRootActive(true);
+        ShowOnly(3);
+
+        float maxLoad = Mathf.Max(0f, viewData.maxLoad);
+        cargoPanel.TryCommitDetachedCargoPlan = TryConfirmDetachedCargoPlan;
+        cargoPanel.SetDetachedInventorySlotLimit(viewData.maxInventorySlotCount);
+        cargoPanel.Configure(
+            config.gold,
+            maxLoad,
+            config.requiredFood,
+            config.shopItems,
+            config.stocks,
+            config.buyUnitPrices);
+        cargoPanel.SetCargoEditingEnabled(viewData.canEdit);
+        cargoPanel.RestoreSelectedCargo(BuildDetachedCargoSelection(viewData), false);
+
+        // Apply detached-only layout after the panel has initialized and restored its cargo.
+        cargoPanel.SetDetachedPresentation(true);
+        return true;
+    }
+
+    /// <summary>Closes only a detached Overview edit instead of restarting the trade flow at S1.</summary>
+    public void CloseCaravanEdit()
+    {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.None)
+            return;
+
+        // Detached edits own no trade route Draft, so closing them must not invoke trade cancellation.
+        ClearDetachedCaravanEditState();
+        ShowOnly(-1);
+        SetTradeRootActive(false);
+        OnCaravanEditClosed?.Invoke();
+    }
+
+    private void RequestDetachedCaravanEdit(
+        string caravanId,
+        DetachedCaravanEditMode mode,
+        Action<string> dataRequest)
+    {
+        string normalizedCaravanId = string.IsNullOrWhiteSpace(caravanId)
+            ? string.Empty
+            : caravanId.Trim();
+        if (string.IsNullOrEmpty(normalizedCaravanId))
+        {
+            // Missing identity must fail closed before an unrelated Caravan panel can become visible.
+            Debug.LogError("Cannot open a detached Caravan edit because caravanId is empty.", this);
+            return;
+        }
+
+        if (dataRequest == null)
+        {
+            // Opening stale legacy data would make the UI appear to edit the requested Caravan incorrectly.
+            Debug.LogWarning(
+                $"Cannot open detached Caravan {mode}: no data Provider is connected for {normalizedCaravanId}.",
+                this);
+            return;
+        }
+
+        WireOnce();
+        activeCaravanEditId = normalizedCaravanId;
+        detachedCaravanEditMode = mode;
+        dataRequest.Invoke(normalizedCaravanId);
+    }
+
+    private void ClearDetachedCaravanEditState()
+    {
+        activeCaravanEditId = string.Empty;
+        detachedCaravanEditMode = DetachedCaravanEditMode.None;
+        if (cargoPanel != null && cargoPanel.TryCommitDetachedCargoPlan == TryConfirmDetachedCargoPlan)
+        {
+            cargoPanel.TryCommitDetachedCargoPlan = null;
+            cargoPanel.SetDetachedPresentation(false);
+            cargoPanel.ClearDetachedInventorySlotLimit();
+        }
+        if (animalNext != null)
+            SetButtonLabel(animalNext, "다음");
+    }
+
+    private static void SetButtonLabel(Button button, string label)
+    {
+        TMP_Text text = button != null ? button.GetComponentInChildren<TMP_Text>(true) : null;
+        if (text != null)
+            text.text = label ?? string.Empty;
+    }
+
+    private bool TryConfirmDetachedCargoPlan()
+    {
+        if (detachedCaravanEditMode != DetachedCaravanEditMode.Cargo
+            || string.IsNullOrWhiteSpace(activeCaravanEditId)
+            || cargoPanel == null)
+        {
+            return false;
+        }
+
+        if (OnCaravanCargoConfirmRequested == null)
+        {
+            Debug.LogWarning(
+                $"Cannot confirm Caravan cargo edit for {activeCaravanEditId}: no command consumer is connected.",
+                this);
+            return false;
+        }
+
+        var draft = new CaravanLoadSettingDraft
+        {
+            caravanId = activeCaravanEditId
+        };
+        CargoLoadingPanelController.CargoSelection[] selections = cargoPanel.BuildCargoSelections();
+        for (int index = 0; index < selections.Length; index++)
+        {
+            draft.items.Add(new CaravanLoadItemDraft
+            {
+                itemId = selections[index].itemId,
+                quantity = selections[index].quantity
+            });
+        }
+
+        OnCaravanCargoConfirmRequested.Invoke(draft);
+
+        // The synchronous Command consumer closes S4 only after success. A failure leaves the
+        // detached identity intact and therefore returns false to keep the Cargo panel open.
+        return detachedCaravanEditMode == DetachedCaravanEditMode.None;
+    }
+
+    private static TradeItemViewData[] BuildDetachedCargoSelection(CaravanLoadSettingViewData viewData)
+    {
+        if (viewData == null || viewData.plannedItems == null || viewData.plannedItems.Length == 0)
+        {
+            return Array.Empty<TradeItemViewData>();
+        }
+
+        var result = new List<TradeItemViewData>();
+        for (int index = 0; index < viewData.plannedItems.Length; index++)
+        {
+            CargoItemViewData item = viewData.plannedItems[index];
+            if (item == null || string.IsNullOrWhiteSpace(item.itemId) || item.quantity <= 0)
+            {
+                continue;
+            }
+
+            result.Add(new TradeItemViewData
+            {
+                itemId = item.itemId.Trim(),
+                displayName = item.displayName ?? string.Empty,
+                selectedBuyAmount = item.quantity,
+                unitWeight = item.unitWeight,
+                purchasePrice = item.purchaseUnitPrice
+            });
+        }
+
+        return result.ToArray();
     }
 
     /// <summary>패널 C# 이벤트·버튼 구독(1회만). 정헌님 패널의 UnityEvent는 씬에서 연결.</summary>
@@ -214,10 +525,28 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (animalNext != null) animalNext.onClick.AddListener(FromAnimalsNext);
         if (departButton != null) departButton.onClick.AddListener(Depart);
 
-        if (slotBack != null) slotBack.onClick.AddListener(GoTownRoute);
-        if (animalBack != null) animalBack.onClick.AddListener(GoCaravanSlot);
+        if (animalBack != null) animalBack.onClick.AddListener(GoTownRoute);
         if (summaryBack != null) summaryBack.onClick.AddListener(BackFromSummary);
         if (summaryCancel != null) summaryCancel.onClick.AddListener(OnTradeCancelledByPanels);   // ⑥ 무역 취소
+
+        if (settlementPanel != null)
+        {
+            settlementPanel.enabled = true;
+            if (paymentPanel != null)
+                paymentPanel.enabled = true;
+
+            settlementPanel.ConfigurePaymentPanel(paymentPanel);
+            ND.Framework.SettlementUiDataAdapter settlementAdapter =
+                GetComponent<ND.Framework.SettlementUiDataAdapter>();
+            if (settlementAdapter != null)
+            {
+                settlementPaymentFlow = GetComponent<SettlementPaymentFlowController>();
+                if (settlementPaymentFlow == null)
+                    settlementPaymentFlow = gameObject.AddComponent<SettlementPaymentFlowController>();
+
+                settlementPaymentFlow.Configure(settlementPanel, settlementAdapter);
+            }
+        }
 
         // ⑦ 진행 화면 / ⑦-1 경고창
         if (progressPanel != null) progressPanel.OnArrived += OnJourneyArrived;
@@ -245,7 +574,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         selTownId = townId;
         selRouteId = routeId;
         distanceKm = distance;
-        GoCaravanSlot();
+        GoMercenary();
     }
 
     // ══ ② 상단 슬롯 ═════════════════════════════════════════════
@@ -267,6 +596,26 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 하단 [Next] → 빈 슬롯이면 ③(구성), 저장된 슬롯이면 ④(적재).
     private void FromSlotNext()
     {
+        if (CaravanOptionsProvider != null)
+        {
+            string caravanId = caravanSlotPanel != null
+                ? caravanSlotPanel.SelectedCaravanId
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(caravanId)
+                || DepartureCaravanSelector == null
+                || !DepartureCaravanSelector(caravanId))
+            {
+                if (slotNext != null) slotNext.interactable = false;
+                return;
+            }
+
+            GoTownRoute();
+            return;
+        }
+
+        // TODO(PRODUCTION): Remove this legacy SlotComp branch once the production composition root
+        // always provides ITradePrepareCaravanOptionProvider. S0 must then select only a Framework
+        // Caravan ID and must never rebuild wagon/animal/cargo state in this UI manager.
         bool empty = caravanSlotPanel != null && caravanSlotPanel.IsSelectedEmpty();
         if (empty)
         {
@@ -292,6 +641,9 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 웨건을 넣었을 때 — 이후 적재량 계산에 사용
     private void OnWagonPlaced(TransportSelectPanel.TransportEntry w)
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+            return;
+
         transport = w;
         hasTransport = true;
     }
@@ -299,6 +651,9 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 웨건을 뺐을 때 — 상태 동기화. 웨건 없는 구성은 저장 대상이 아니므로 저장도 해제.
     private void OnWagonRemoved()
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+            return;
+
         hasTransport = false;
         if (saveToggle != null && saveToggle.isOn)
         {
@@ -310,6 +665,14 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // 동물 편성 변경 → Next(요구량 충족 시) 활성
     private void OnAnimalsChanged(IReadOnlyList<AnimalInventoryPanel.AnimalPick> picks, bool valid)
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+        {
+            // Detached S3 keeps its own instance-based Draft and must not alter legacy slot memory.
+            if (animalNext != null)
+                animalNext.interactable = animalPanel != null && animalPanel.CanConfirmCaravanSetting();
+            return;
+        }
+
         pickedAnimals.Clear();
         pickedAnimals.AddRange(picks);
         if (animalNext != null) animalNext.interactable = valid;
@@ -320,6 +683,30 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     // ③ 하단 [Next] → ④(적재). 구성을 거쳤으므로 ④ Back은 ③으로.
     private void FromAnimalsNext()
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Setting)
+        {
+            if (animalPanel == null
+                || !animalPanel.TryCreateSettingDraft(activeCaravanEditId, out CaravanSettingDraft draft))
+            {
+                Debug.LogError(
+                    $"Cannot confirm Caravan setting edit for {activeCaravanEditId}: the instance-based Draft is invalid.",
+                    this);
+                return;
+            }
+
+            if (OnCaravanSettingConfirmRequested == null)
+            {
+                // UI keeps the edit open until a Framework command consumer can validate and persist it.
+                Debug.LogWarning(
+                    $"Cannot confirm Caravan setting edit for {activeCaravanEditId}: no command consumer is connected.",
+                    this);
+                return;
+            }
+
+            OnCaravanSettingConfirmRequested.Invoke(draft);
+            return;
+        }
+
         itemsFromSavedSlot = false;
         GoCargo();
     }
@@ -361,6 +748,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>Cargo 뒤로가기 — 저장슬롯 직행이었으면 ②, 구성을 거쳤으면 ③으로.</summary>
     public void OnCargoBackRequested()
     {
+        if (detachedCaravanEditMode == DetachedCaravanEditMode.Cargo)
+        {
+            CloseCaravanEdit();
+            return;
+        }
+
         if (itemsFromSavedSlot) GoCaravanSlot();
         else GoAnimals();
     }
@@ -369,6 +762,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>무역 취소 — 준비 데이터 초기화 후 ①로 복귀.</summary>
     public void OnTradeCancelledByPanels()
     {
+        if (detachedCaravanEditMode != DetachedCaravanEditMode.None)
+        {
+            CloseCaravanEdit();
+            return;
+        }
+
         ResetTradeState();
         ShowOnly(0);
         OnCancelled?.Invoke();
@@ -378,6 +777,13 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>용병 고용 확정 → ⑥ 요약.</summary>
     public void OnMercenaryConfirmed()
     {
+        if (MercenarySelector != null && mercenaryPanel != null
+            && !MercenarySelector(mercenaryPanel.SelectedMercenaryId))
+        {
+            Debug.LogError("Cannot confirm the selected Mercenary because it is not a valid runtime option.", this);
+            return;
+        }
+
         GoSummary();
     }
 
@@ -385,18 +791,67 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
     private void GoTownRoute() { ShowOnly(0); }
 
+    private void GoMercenary()
+    {
+        if (mercenaryPanel == null)
+        {
+            Debug.LogError("Cannot open the Mercenary step because its panel is not connected.", this);
+            return;
+        }
+
+        // Re-entering this step intentionally starts with no previous hire selection. Clear the
+        // Runtime Draft as well as the panel state so Summary cannot retain a hidden old choice.
+        ClearMercenarySelection?.Invoke();
+        if (MercenaryOptionsProvider != null)
+        {
+            mercenaryPanel.Populate(
+                MercenaryOptionsProvider() ?? Array.Empty<MercenaryViewData>());
+        }
+
+        // S0 already selected a configured Caravan, so the normal preparation route skips
+        // the legacy Animals and Cargo editors. The existing Cargo-origin route keeps its
+        // own Back behavior, while this direct route explicitly returns to Route selection.
+        ShowOnly(-1);
+        long budget = cargoPanel != null ? cargoPanel.MercenaryBudget : 0L;
+        mercenaryPanel.Show(budget, GoTownRoute);
+    }
+
     private void GoCaravanSlot()
     {
         if (caravanSlotPanel != null)
         {
-            List<string> slots = new List<string>();
-            for (int i = 0; i < caravanSlotCount; i++)
-                slots.Add((caravanSlots != null && i < caravanSlots.Length) ? (caravanSlots[i] ?? "") : "");
-            caravanSlotPanel.Populate(slots);
+            if (CaravanOptionsProvider != null)
+            {
+                caravanSlotPanel.PopulateCaravanOptions(
+                    CaravanOptionsProvider() ?? Array.Empty<TradePrepareCaravanOptionViewData>());
+            }
+            else
+            {
+                List<string> slots = new List<string>();
+                for (int i = 0; i < caravanSlotCount; i++)
+                    slots.Add((caravanSlots != null && i < caravanSlots.Length) ? (caravanSlots[i] ?? "") : "");
+                caravanSlotPanel.Populate(slots);
+            }
             caravanSlotPanel.ResetSelection();
         }
         if (slotNext != null) slotNext.interactable = false;   // 슬롯 고르기 전엔 Next 잠금
+        if (slotBack != null) slotBack.interactable = CaravanOptionsProvider == null;
         ShowOnly(1);
+    }
+
+    public void RefreshCaravanOptionsIfVisible()
+    {
+        if (caravanSlotPanel == null
+            || !caravanSlotPanel.gameObject.activeInHierarchy
+            || CaravanOptionsProvider == null)
+        {
+            return;
+        }
+
+        caravanSlotPanel.PopulateCaravanOptions(
+            CaravanOptionsProvider() ?? Array.Empty<TradePrepareCaravanOptionViewData>());
+        caravanSlotPanel.ResetSelection();
+        if (slotNext != null) slotNext.interactable = false;
     }
 
     private void GoAnimals()
@@ -404,6 +859,17 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         itemsFromSavedSlot = false;
         pickedAnimals.Clear();
         if (animalNext != null) animalNext.interactable = false;
+        if (animalBack != null)
+        {
+            // Normal trade preparation restores the S3 back route hidden by detached editing.
+            animalBack.gameObject.SetActive(true);
+            animalBack.interactable = true;
+        }
+        if (saveToggle != null)
+        {
+            // The legacy linear flow still uses this toggle for its temporary slot composition.
+            saveToggle.gameObject.SetActive(true);
+        }
 
         if (animalPanel != null)
         {
@@ -433,9 +899,28 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (cargoPanel != null && CargoProvider != null)
         {
             CargoConfig cfg = CargoProvider();
-            cargoPanel.Configure(cfg.gold, ComputeMaxLoad(), cfg.requiredFood, cfg.shopItems, cfg.stocks);
+            float maxLoad = cfg.maxLoad > 0f ? cfg.maxLoad : ComputeMaxLoad();
+            cargoPanel.Configure(
+                cfg.gold,
+                maxLoad,
+                cfg.requiredFood,
+                cfg.shopItems,
+                cfg.stocks,
+                cfg.buyUnitPrices);
+            cargoPanel.SetCargoEditingEnabled(!cfg.automaticCargoLoading);
+            cargoPanel.RestoreSelectedCargo(cfg.selectedItems, cfg.restoreOwnedCargo);
         }
         ShowOnly(3);
+    }
+
+    /// <summary>
+    /// Rebuilds S4 after Framework/SharedGameData finishes loading, but only while the Cargo
+    /// screen is currently visible. This avoids changing the user's active preparation step.
+    /// </summary>
+    public void RefreshCargoIfVisible()
+    {
+        if (cargoPanel != null && cargoPanel.gameObject.activeInHierarchy)
+            GoCargo();
     }
 
     /// <summary>현재 상단 구성의 최대 적재량 = 웨건 기본 + Σ(동물 최대적재 증가치 × 마릿수).</summary>
@@ -455,8 +940,19 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>⑥ 요약 — 선택값(질의)을 프로바이더에 넘겨 계산 결과를 받고, 패널에 바인딩한다.</summary>
     private void GoSummary()
     {
+        // Re-read Provider-owned Caravan/Cargo state immediately before rendering S6 so the
+        // values shown here are the same values that departure validation will consume.
+        RefreshPreparationDraft?.Invoke();
+
         if (summaryView != null)
         {
+            if (SummaryProvider != null)
+            {
+                summaryView.Show(SummaryProvider());
+                ShowOnly(4);
+                return;
+            }
+
             TradeItemBundle[] bundles = cargoPanel != null ? cargoPanel.BuildTradeItemBundles() : new TradeItemBundle[0];
             int loadedFood = cargoPanel != null ? cargoPanel.LoadedFood : 0;
 
@@ -505,10 +1001,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     private void BackFromSummary()
     {
         if (summaryPanel != null) summaryPanel.SetActive(false);
-        if (mercenaryPanel != null && cargoPanel != null)
-            mercenaryPanel.Show(cargoPanel.MercenaryBudget);
-        else
-            ShowOnly(3);   // 용병 패널이 없으면 ④로라도
+        GoMercenary();
     }
 
     /// <summary>⑥ 출발 — 확정 내용을 모아 이벤트로 알린다(출발 API 연결 지점).</summary>
@@ -562,6 +1055,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public void ShowTraveling(TradeProgressViewData viewData)
     {
         // A loaded traveling save can enter S7 without visiting the preparation screens first.
+        // Framework screen routing supersedes any pending detached Overview edit.
+        ClearDetachedCaravanEditState();
         SetTradeRootActive(true);
         WireOnce();
         if (cancelWarning != null) cancelWarning.Close();
@@ -574,6 +1069,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     {
         // This manager controls visibility only. Settlement calculation and claim remain in
         // Framework, preventing the UI flow from duplicating or mutating settlement results.
+        ClearDetachedCaravanEditState();
         SetTradeRootActive(true);
         WireOnce();
         ShowOnly(6);
@@ -583,6 +1079,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public void HideTradeScreens()
     {
         // Settlement UI has a separate adapter, so this manager only hides its own panels.
+        ClearDetachedCaravanEditState();
         if (progressPanel != null) progressPanel.StopTimer();
         ShowOnly(-1);
         SetTradeRootActive(false);

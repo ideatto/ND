@@ -13,7 +13,6 @@ public sealed class PaymentPanelController : MonoBehaviour
     [SerializeField] private Sprite receiptBackgroundSprite;
     [SerializeField] private Sprite stampSprite;
     [SerializeField] private TMP_FontAsset uiFont;
-    [SerializeField, Min(0.05f)] private float stampDuration = 0.48f;
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip openSound;
     [SerializeField] private AudioClip stampSound;
@@ -96,9 +95,14 @@ public sealed class PaymentPanelController : MonoBehaviour
         yield return null;
 
         PlaySound(completeSound);
-        onPaymentCompleted.Invoke();
         currentViewData = null;
+        currentCanConfirm = false;
+        animationRoutine = null;
         gameObject.SetActive(false);
+
+        // Close and clear this view before notifying Framework. Claim processing can
+        // synchronously route to another screen, so listeners must observe S9 as closed.
+        onPaymentCompleted.Invoke();
     }
 
     private void PlaySound(AudioClip clip)

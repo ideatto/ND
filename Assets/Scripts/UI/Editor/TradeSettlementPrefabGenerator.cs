@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.U2D.Sprites;
 using UnityEngine;
 
 internal static class TradeSettlementPrefabGenerator
@@ -88,16 +89,23 @@ internal static class TradeSettlementPrefabGenerator
             importer.alphaSource = TextureImporterAlphaSource.FromInput;
             importer.alphaIsTransparency = true;
             importer.mipmapEnabled = false;
-            importer.spritesheet = new[]
+            var dataProviderFactories = new SpriteDataProviderFactories();
+            dataProviderFactories.Init();
+            var dataProvider = dataProviderFactories.GetSpriteEditorDataProviderFromObject(importer);
+            dataProvider.InitSpriteEditorDataProvider();
+            var existingSprite = dataProvider.GetSpriteRects().FirstOrDefault(rect => rect.name == spriteName);
+            dataProvider.SetSpriteRects(new[]
             {
-                new SpriteMetaData
+                new SpriteRect
                 {
                     name = spriteName,
                     rect = opaqueRect,
-                    alignment = (int)SpriteAlignment.Center,
-                    pivot = new Vector2(0.5f, 0.5f)
+                    alignment = SpriteAlignment.Center,
+                    pivot = new Vector2(0.5f, 0.5f),
+                    spriteID = existingSprite != null ? existingSprite.spriteID : GUID.Generate()
                 }
-            };
+            });
+            dataProvider.Apply();
             importer.SaveAndReimport();
         }
         return AssetDatabase.LoadAllAssetsAtPath(generatedPath).OfType<Sprite>().FirstOrDefault();

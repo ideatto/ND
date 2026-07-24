@@ -4,7 +4,7 @@
  *
  * Script Purpose
  * - SettlementPending 상태에서 앱 종료·재실행 후에도 동일한 정산 결과를 복원하기 위한 영속 DTO이다.
- * - JourneyResultData의 확정 필드와 tradeId·claimed·resultVersion을 SaveData에 함께 보관한다.
+ * - JourneyResultData의 확정 필드와 caravanId·tradeId·claimed·resultVersion을 SaveData에 함께 보관한다.
  *
  * Main Features
  * - 정산 결과 존재 여부(hasResult)와 수령 여부(claimed)를 기록한다.
@@ -21,6 +21,7 @@
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
  */
 using System;
+using System.Collections.Generic;
 
 namespace ND.Framework
 {
@@ -30,6 +31,9 @@ namespace ND.Framework
     [Serializable]
     public sealed class PendingSettlementSaveData
     {
+        /// <summary>이 정산 결과를 소유한 caravan ID이다.</summary>
+        public string caravanId = string.Empty;
+
         /// <summary>
         /// 현재 코드가 지원하는 pending settlement 결과 schema version이다.
         /// </summary>
@@ -84,6 +88,21 @@ namespace ND.Framework
         /// 총 식량 소모량이다.
         /// </summary>
         public float foodConsumed;
+
+        /// <summary>이벤트로 소실된 여물 수량이다.</summary>
+        public float foodLost;
+
+        /// <summary>실제 결과까지 처리된 route 이벤트 수이다.</summary>
+        public int eventsOccurred;
+
+        /// <summary>실제 처리된 Combat 이벤트 수이다.</summary>
+        public int battlesFought;
+
+        public List<string> lostMercenaryInstanceIds = new List<string>();
+
+        public bool wagonDestroyed;
+
+        public string destroyedWagonInstanceId = string.Empty;
 
         /// <summary>
         /// 출발 시 적재량이다.

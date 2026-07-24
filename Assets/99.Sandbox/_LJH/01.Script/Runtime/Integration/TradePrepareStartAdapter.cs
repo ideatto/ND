@@ -96,7 +96,27 @@ public sealed class TradePrepareStartAdapter
                 null);
         }
 
-        TradePrepareCommitData commitData = CreateCommitData(draft, viewData, tradeId.Trim(), route.RouteId);
+        if (!TradePrepareCaravanFactory.TryCreateDeparture(
+            draft,
+            context,
+            out CaravanData caravan,
+            out string caravanErrorCode,
+            out string caravanErrorMessage))
+        {
+            return CreateFailure(
+                caravanErrorCode,
+                caravanErrorMessage,
+                tradeId,
+                viewData.startCondition,
+                null);
+        }
+
+        TradePrepareCommitData commitData = CreateCommitData(
+            draft,
+            viewData,
+            tradeId.Trim(),
+            route.RouteId,
+            caravan.caravanId);
         if ((commitData.mercenaryCost > 0L || commitData.purchasedItems.Length > 0) && commitSink == null)
         {
             return CreateFailure(
@@ -120,7 +140,6 @@ public sealed class TradePrepareStartAdapter
                 commitData);
         }
 
-        CaravanData caravan = TradePrepareCaravanFactory.Create(draft, context);
         TradePrepareGatewayResult gatewayResult;
         try
         {
@@ -141,12 +160,12 @@ public sealed class TradePrepareStartAdapter
             ? gatewayResult.departureValidation
             : null;
 
-        if (departure == null || !departure.canDepart)
+        if (departure != null && !departure.canDepart && HasDepartureBlockReasons(departure))
         {
             commitSink?.Rollback(tradeId.Trim());
             return CreateFailure(
                 ErrorCoreDepartureBlocked,
-                "Core departure validation blocked trade start.",
+                CreateCoreDepartureBlockedMessage(departure),
                 tradeId,
                 viewData.startCondition,
                 departure,
@@ -159,6 +178,18 @@ public sealed class TradePrepareStartAdapter
             return CreateFailure(
                 ErrorFrameworkRecordFailed,
                 "The start gateway failed to record the started trade.",
+                tradeId,
+                viewData.startCondition,
+                departure,
+                commitData);
+        }
+
+        if (departure == null || !departure.canDepart)
+        {
+            commitSink?.Rollback(tradeId.Trim());
+            return CreateFailure(
+                ErrorCoreDepartureBlocked,
+                CreateCoreDepartureBlockedMessage(departure),
                 tradeId,
                 viewData.startCondition,
                 departure,
@@ -205,11 +236,33 @@ public sealed class TradePrepareStartAdapter
         };
     }
 
+    private static string CreateCoreDepartureBlockedMessage(DepartureValidationResult departureValidation)
+    {
+        if (departureValidation == null
+            || departureValidation.reasons == null
+            || departureValidation.reasons.Count == 0)
+        {
+            return "Core departure validation blocked trade start without a detailed reason.";
+        }
+
+        return "Core departure validation blocked trade start: "
+            + string.Join(", ", departureValidation.reasons.ConvertAll(reason => reason.ToString()).ToArray())
+            + ".";
+    }
+
+    private static bool HasDepartureBlockReasons(DepartureValidationResult departureValidation)
+    {
+        return departureValidation != null
+            && departureValidation.reasons != null
+            && departureValidation.reasons.Count > 0;
+    }
+
     private static TradePrepareCommitData CreateCommitData(
         TradePrepareDraft draft,
         TradePrepareViewData viewData,
         string tradeId,
-        string routeId)
+        string routeId,
+        string departureCaravanId)
     {
         var mercenaryIds = new string[draft.SelectedMercenaryIds.Count];
         for (int index = 0; index < draft.SelectedMercenaryIds.Count; index++)
@@ -219,19 +272,46 @@ public sealed class TradePrepareStartAdapter
 
         return new TradePrepareCommitData
         {
+            // Keeps the departure snapshot scoped to the Caravan selected inside TradePrepareUI.
+            caravanId = departureCaravanId,
             tradeId = tradeId,
             currentTownId = draft.currentTownId,
             selectedDestinationTownId = draft.selectedDestinationTownId,
             routeId = routeId,
             selectedWagonId = draft.selectedWagonId,
             selectedAnimals = CreateSelectedAnimalSnapshots(draft),
+            // The summary projection already prices the authoritative S4 plan.
+            // Keep food separate because settlement adds purchaseCost and foodCost.
             purchaseCost = Math.Max(0L, viewData.totalPurchaseCost - viewData.draftAnimalFoodCost),
-            foodCost = viewData.draftAnimalFoodCost > 0L ? viewData.draftAnimalFoodCost : 0L,
+            foodCost = Math.Max(0L, viewData.draftAnimalFoodCost),
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
-            estimatedSellRevenue = viewData.estimatedSellRevenue > 0L ? viewData.estimatedSellRevenue : 0L,
-            purchasedItems = CreatePurchasedItemSnapshots(draft, viewData),
+            estimatedSellRevenue = Math.Max(0L, viewData.estimatedSellRevenue),
+            purchasedItems = CreatePurchasedItemSnapshots(draft),
             selectedMercenaryIds = mercenaryIds
         };
+    }
+
+    private static TradeItemBundle[] CreatePurchasedItemSnapshots(TradePrepareDraft draft)
+    {
+        if (draft == null || draft.selectedBuyItems == null)
+        {
+            return new TradeItemBundle[0];
+        }
+
+        var result = new TradeItemBundle[draft.selectedBuyItems.Count];
+        for (int index = 0; index < draft.selectedBuyItems.Count; index++)
+        {
+            TradeItemBundle item = draft.selectedBuyItems[index];
+            result[index] = item == null ? null : new TradeItemBundle
+            {
+                itemId = item.itemId ?? string.Empty,
+                quantity = Math.Max(0, item.quantity),
+                purchaseUnitPrice = Math.Max(0L, item.purchaseUnitPrice),
+                sellUnitPrice = Math.Max(0L, item.sellUnitPrice)
+            };
+        }
+
+        return result;
     }
 
     private static DraftAnimalSelectionData[] CreateSelectedAnimalSnapshots(
@@ -256,52 +336,4 @@ public sealed class TradePrepareStartAdapter
         return result;
     }
 
-    private static TradeItemBundle[] CreatePurchasedItemSnapshots(
-        TradePrepareDraft draft,
-        TradePrepareViewData viewData)
-    {
-        if (draft == null || draft.selectedBuyItems == null)
-        {
-            return new TradeItemBundle[0];
-        }
-
-        var result = new TradeItemBundle[draft.selectedBuyItems.Count];
-        for (int index = 0; index < draft.selectedBuyItems.Count; index++)
-        {
-            TradeItemBundle selected = draft.selectedBuyItems[index];
-            TradeItemViewData priced = FindTradeItemViewData(
-                viewData != null ? viewData.tradeItems : null,
-                selected != null ? selected.itemId : null);
-            result[index] = selected == null ? null : new TradeItemBundle
-            {
-                itemId = selected.itemId ?? string.Empty,
-                quantity = selected.quantity > 0 ? selected.quantity : 0,
-                purchaseUnitPrice = priced != null ? Math.Max(0L, priced.purchasePrice) : 0L,
-                sellUnitPrice = priced != null ? Math.Max(0L, priced.sellPrice) : 0L
-            };
-        }
-
-        return result;
-    }
-
-    private static TradeItemViewData FindTradeItemViewData(
-        TradeItemViewData[] items,
-        string itemId)
-    {
-        if (items == null || string.IsNullOrEmpty(itemId))
-        {
-            return null;
-        }
-
-        for (int index = 0; index < items.Length; index++)
-        {
-            TradeItemViewData item = items[index];
-            if (item != null && string.Equals(item.itemId, itemId, StringComparison.Ordinal))
-            {
-                return item;
-            }
-        }
-
-        return null;
-    }
 }

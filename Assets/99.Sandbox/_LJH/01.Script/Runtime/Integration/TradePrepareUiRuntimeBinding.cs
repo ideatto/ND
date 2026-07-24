@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ND.Framework.CargoLoading;
+using ND.UI.Market;
 using UnityEngine;
 
 /// <summary>
@@ -20,15 +23,35 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     [Header("S4 cargo view")]
     [SerializeField] private CargoLoadingPanelController cargoPanel;
+    [SerializeField] private MarketTradePanelController marketTradePanel;
+
+    [Header("Departure warning")]
+    [SerializeField] private NoticeUI departureWarning;
+
+    private string acknowledgedFoodShortageKey = string.Empty;
 
     private void OnEnable()
     {
+        ND.Framework.FrameworkEvents.SharedGameDataLoaded += HandleFrameworkDataReady;
+        ND.Framework.FrameworkEvents.LoadCompleted += HandleFrameworkDataReady;
+        EnsureMarketTradePanel();
+        if (marketTradePanel != null)
+            marketTradePanel.ErrorChanged += HandleMarketErrorChanged;
+
         if (uiManager != null)
         {
             // The existing manager asks providers for S3 data whenever that screen is entered.
             // Supplying Runtime ViewData here avoids changing the external UI navigation code.
             uiManager.AnimalProvider = BuildAnimalEntries;
             uiManager.OwnedWagonProvider = BuildOwnedWagonEntries;
+            uiManager.CargoProvider = BuildCargoConfig;
+            uiManager.SummaryProvider = BuildSummaryData;
+            uiManager.CaravanOptionsProvider = BuildCaravanOptions;
+            uiManager.DepartureCaravanSelector = SelectDepartureCaravan;
+            uiManager.ClearMercenarySelection = ClearMercenarySelection;
+            uiManager.MercenaryOptionsProvider = BuildMercenaryOptions;
+            uiManager.MercenarySelector = SelectMercenary;
+            uiManager.RefreshPreparationDraft = RefreshPreparationDraft;
 
             // The demo used to consume OnDepart, but disabling it left the production button
             // with no subscriber. Forward departure to RuntimeContext so Draft is validated
@@ -57,14 +80,22 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
         if (cargoPanel != null)
         {
-            // S4 owns presentation state, but every confirmed quantity must be forwarded
-            // through RuntimeContext so departure builds cargo from the authoritative Draft.
-            cargoPanel.LoadChanged += HandleCargoChanged;
+            cargoPanel.LoadChanged += HandleCargoLoadChanged;
+            cargoPanel.TryCommitCargoTransaction = TryCommitCargoTransaction;
+            cargoPanel.CanCommitCargoTransaction = CanCommitCargoTransaction;
+            cargoPanel.ProjectedCurrencyAfterCargoTransaction = GetProjectedCurrency;
+            cargoPanel.CancelCargoTransactionDraft = CancelCargoTransactionDraft;
         }
+
     }
 
     private void OnDisable()
     {
+        ND.Framework.FrameworkEvents.SharedGameDataLoaded -= HandleFrameworkDataReady;
+        ND.Framework.FrameworkEvents.LoadCompleted -= HandleFrameworkDataReady;
+        if (marketTradePanel != null)
+            marketTradePanel.ErrorChanged -= HandleMarketErrorChanged;
+
         if (runtimeContext != null)
             runtimeContext.ViewDataChanged -= HandleViewDataChanged;
 
@@ -78,13 +109,19 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             animalPanel.OnSelectionChanged -= HandleAnimalSelectionChanged;
         }
 
-
         if (cargoPanel != null)
         {
-            // Remove the listener when the preparation root closes to prevent duplicate
-            // Draft updates after the same UI is opened again.
-            cargoPanel.LoadChanged -= HandleCargoChanged;
+            cargoPanel.LoadChanged -= HandleCargoLoadChanged;
+            if (cargoPanel.TryCommitCargoTransaction == TryCommitCargoTransaction)
+                cargoPanel.TryCommitCargoTransaction = null;
+            if (cargoPanel.CanCommitCargoTransaction == CanCommitCargoTransaction)
+                cargoPanel.CanCommitCargoTransaction = null;
+            if (cargoPanel.ProjectedCurrencyAfterCargoTransaction == GetProjectedCurrency)
+                cargoPanel.ProjectedCurrencyAfterCargoTransaction = null;
+            if (cargoPanel.CancelCargoTransactionDraft == CancelCargoTransactionDraft)
+                cargoPanel.CancelCargoTransactionDraft = null;
         }
+
 
         if (uiManager != null)
         {
@@ -93,7 +130,66 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 uiManager.AnimalProvider = null;
             if (uiManager.OwnedWagonProvider == BuildOwnedWagonEntries)
                 uiManager.OwnedWagonProvider = null;
+            if (uiManager.CargoProvider == BuildCargoConfig)
+                uiManager.CargoProvider = null;
+            if (uiManager.SummaryProvider == BuildSummaryData)
+                uiManager.SummaryProvider = null;
+            if (uiManager.CaravanOptionsProvider == BuildCaravanOptions)
+                uiManager.CaravanOptionsProvider = null;
+            if (uiManager.DepartureCaravanSelector == SelectDepartureCaravan)
+                uiManager.DepartureCaravanSelector = null;
+            if (uiManager.ClearMercenarySelection == ClearMercenarySelection)
+                uiManager.ClearMercenarySelection = null;
+            if (uiManager.MercenaryOptionsProvider == BuildMercenaryOptions)
+                uiManager.MercenaryOptionsProvider = null;
+            if (uiManager.MercenarySelector == SelectMercenary)
+                uiManager.MercenarySelector = null;
+            if (uiManager.RefreshPreparationDraft == RefreshPreparationDraft)
+                uiManager.RefreshPreparationDraft = null;
         }
+    }
+
+    private void ClearMercenarySelection()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        MercenaryViewData[] options = viewData != null ? viewData.mercenaries : null;
+        if (options == null)
+            return;
+
+        string[] selectedIds = options
+            .Where(option => option != null && option.isSelected)
+            .Select(option => option.mercenaryId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToArray();
+        for (int index = 0; index < selectedIds.Length; index++)
+            runtimeContext.DeselectMercenary(selectedIds[index]);
+    }
+
+    private MercenaryViewData[] BuildMercenaryOptions()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        return viewData?.mercenaries ?? Array.Empty<MercenaryViewData>();
+    }
+
+    private bool SelectMercenary(string mercenaryId)
+    {
+        ClearMercenarySelection();
+
+        // An empty selection is the supported "hire nobody" choice.
+        if (string.IsNullOrWhiteSpace(mercenaryId))
+            return true;
+
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        MercenaryViewData[] options = viewData != null ? viewData.mercenaries : null;
+        MercenaryViewData match = options?.FirstOrDefault(option =>
+            option != null
+            && option.canHire
+            && string.Equals(option.mercenaryId, mercenaryId, StringComparison.Ordinal));
+        if (match == null || string.IsNullOrWhiteSpace(match.mercenaryId))
+            return false;
+
+        runtimeContext.SelectMercenary(match.mercenaryId);
+        return true;
     }
 
     private void HandleDepartRequested(TradePrepareUIManager.DepartData departure)
@@ -106,6 +202,35 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             return;
         }
 
+        // S4 can be edited independently after TradePrepare was opened. Refresh it before both
+        // the warning comparison and the authoritative start command.
+        RefreshPreparationDraft();
+
+        TradePrepareViewData viewData = runtimeContext.CurrentViewData;
+        int loadedFood = viewData != null
+            ? Mathf.Max(0, viewData.loadedDraftAnimalFoodQuantity)
+            : 0;
+        int requiredFood = viewData != null
+            ? Mathf.Max(0, viewData.requiredDraftAnimalFoodQuantity)
+            : 0;
+        string shortageKey = viewData == null
+            ? string.Empty
+            : $"{viewData.departureCaravanId}|{viewData.selectedRouteId}|{loadedFood}|{requiredFood}";
+        if (loadedFood < requiredFood
+            && !string.Equals(acknowledgedFoodShortageKey, shortageKey, StringComparison.Ordinal))
+        {
+            acknowledgedFoodShortageKey = shortageKey;
+            int shortage = requiredFood - loadedFood;
+            if (departureWarning != null)
+            {
+                departureWarning.Show(
+                    $"견인 동물 먹이가 {shortage}개 부족합니다.\n" +
+                    "그래도 출발하려면 출발 버튼을 다시 눌러주세요.");
+            }
+
+            return;
+        }
+
         // DepartData belongs to the legacy panel flow. RuntimeContext's Draft is authoritative
         // because every production selection was already sent to it through provider commands.
         // A new ID is created only at confirmation so retries cannot reuse a failed trade record.
@@ -113,20 +238,89 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         TradePrepareStartResult result = runtimeContext.TryStartTrade(tradeId);
         if (result == null || !result.succeeded)
         {
+            // Runtime validation remains authoritative; the binding only converts its result
+            // into a user-facing message and forwards it to the temporary notice view.
+            if (departureWarning != null)
+                departureWarning.Show(BuildDepartureWarning(result));
+
             Debug.LogError(
                 $"[TradePrepare] Trade start failed: {result?.errorCode ?? "NULL_RESULT"} - " +
                 $"{result?.errorMessage ?? "RuntimeContext returned no result."}",
                 this);
+
+            // A failed request must remain on S6 and must not continue into any success path.
+            return;
         }
 
         // Do not activate S7 here. A successful start changes Framework SaveData to Traveling;
         // FrameworkTradeScreenPresenter observes that state and becomes the sole screen router.
     }
 
+    private static string BuildDepartureWarning(TradePrepareStartResult result)
+    {
+        if (result == null)
+            return "출발 결과를 확인할 수 없습니다.";
+
+        DepartureValidationResult validation = result.departureValidation;
+        if (validation != null && validation.reasons != null && validation.reasons.Count > 0)
+        {
+            var messages = new List<string>();
+            for (int index = 0; index < validation.reasons.Count; index++)
+                messages.Add(GetDepartureReasonMessage(validation.reasons[index]));
+
+            return string.Join("\n", messages);
+        }
+
+        // Prepare validation and Framework recording failures do not always contain Core enums,
+        // so preserve the detailed message already produced by TradePrepareStartAdapter.
+        return string.IsNullOrWhiteSpace(result.errorMessage)
+            ? "출발 조건을 만족하지 못했습니다."
+            : result.errorMessage;
+    }
+
+    private static string GetDepartureReasonMessage(DepartureBlockReason reason)
+    {
+        // Core reasons stay language-neutral; this UI boundary owns their Korean presentation.
+        switch (reason)
+        {
+            case DepartureBlockReason.NoWagon:
+                return "이동 수단을 선택해 주세요.";
+            case DepartureBlockReason.NotEnoughAnimals:
+                return "견인 동물이 부족합니다.";
+            case DepartureBlockReason.TooManyAnimals:
+                return "견인 동물이 너무 많습니다.";
+            case DepartureBlockReason.Overloaded:
+                return "최대 적재 중량을 초과했습니다.";
+            case DepartureBlockReason.NoCargo:
+                return "적재된 무역품이 없습니다.";
+            case DepartureBlockReason.BrokenWagon:
+                return "이동 수단의 내구도가 부족합니다.";
+            case DepartureBlockReason.SlotExceeded:
+                return "사용 가능한 적재 슬롯을 초과했습니다.";
+            case DepartureBlockReason.MixedAnimalType:
+                return "서로 다른 종류의 견인 동물을 함께 사용할 수 없습니다.";
+            case DepartureBlockReason.NotInPrepare:
+                return "현재는 새로운 무역을 출발할 수 없는 상태입니다.";
+            default:
+                return "출발 조건을 만족하지 못했습니다.";
+        }
+    }
+
     private void HandleViewDataChanged(TradePrepareViewData viewData)
     {
         if (townRoutePanel != null && viewData != null)
             townRoutePanel.Populate(viewData);
+
+        uiManager?.RefreshCaravanOptionsIfVisible();
+
+        // A detached S3 panel owns a Caravan-specific instance snapshot. Replacing it with the
+        // aggregate TradePrepare inventory would turn assigned/returned instances into x0 entries.
+        if (animalPanel != null
+            && animalPanel.gameObject.activeInHierarchy
+            && (uiManager == null || !uiManager.IsDetachedCaravanEditOpen))
+        {
+            animalPanel.RefreshAnimalAvailability(BuildAnimalEntries());
+        }
     }
 
     private void HandleRouteSelected(string destinationTownId, string routeId, float distance)
@@ -174,6 +368,23 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         return result;
     }
 
+    private void RefreshPreparationDraft()
+    {
+        runtimeContext?.RefreshCaravanSetting();
+        runtimeContext?.RefreshCaravanCargoPlan();
+    }
+
+    private TradePrepareCaravanOptionViewData[] BuildCaravanOptions()
+    {
+        TradePrepareCaravanOptionViewData[] options = runtimeContext?.CurrentViewData?.caravanOptions;
+        return options ?? Array.Empty<TradePrepareCaravanOptionViewData>();
+    }
+
+    private bool SelectDepartureCaravan(string caravanId)
+    {
+        return runtimeContext != null && runtimeContext.SelectDepartureCaravan(caravanId);
+    }
+
     private List<TransportSelectPanel.TransportEntry> BuildOwnedWagonEntries()
     {
         var result = new List<TransportSelectPanel.TransportEntry>();
@@ -191,17 +402,297 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         return result;
     }
 
+    private TradePrepareUIManager.CargoConfig BuildCargoConfig()
+    {
+        if (TryOpenPreparationMarket())
+        {
+            MarketTradePanelModel marketModel = marketTradePanel.Model;
+            MarketTradeItemState[] marketItems = marketModel.Items
+                .Where(item => item != null && item.Item != null)
+                .ToArray();
+            return new TradePrepareUIManager.CargoConfig
+            {
+                automaticCargoLoading = false,
+                restoreOwnedCargo = true,
+                gold = marketModel.TradingCurrency,
+                maxLoad = marketModel.MaximumCargoWeight,
+                requiredFood = runtimeContext?.CurrentViewData?.requiredDraftAnimalFoodQuantity ?? 0,
+                shopItems = marketItems.Select(item => item.Item).ToArray(),
+                stocks = marketItems.Select(item => Math.Max(0, item.MarketStock)).ToArray(),
+                buyUnitPrices = marketItems.Select(item => Math.Max(0L, item.BuyUnitPrice)).ToArray(),
+                selectedItems = marketItems.Select(CreateCargoViewData).ToArray()
+            };
+        }
+
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        TradeItemData[] availableItems = runtimeContext != null
+            ? runtimeContext.GetAvailableTradeItems()
+            : Array.Empty<TradeItemData>();
+
+        var items = new List<TradeItemData>();
+        var stocks = new List<int>();
+        if (viewData != null && viewData.tradeItems != null)
+        {
+            foreach (TradeItemViewData itemView in viewData.tradeItems)
+            {
+                if (itemView == null)
+                    continue;
+
+                TradeItemData item = Array.Find(
+                    availableItems,
+                    candidate => candidate != null &&
+                        string.Equals(candidate.ItemId, itemView.itemId, StringComparison.Ordinal));
+                if (item == null)
+                    continue;
+
+                items.Add(item);
+                stocks.Add(Mathf.Max(0, itemView.contentQuantityLimit));
+            }
+        }
+
+        return new TradePrepareUIManager.CargoConfig
+        {
+            automaticCargoLoading = true,
+            restoreOwnedCargo = true,
+            // Currency is global player state. Detached Caravan S4 must not inherit a stale or
+            // newly-created TradePrepare Draft projection, so always read the current SaveData value.
+            gold = ReadCurrentTradingCurrency(),
+            maxLoad = viewData != null ? viewData.maxLoad : 0f,
+            requiredFood = viewData != null ? viewData.requiredDraftAnimalFoodQuantity : 0,
+            shopItems = items.ToArray(),
+            stocks = stocks.ToArray(),
+            buyUnitPrices = items.Select(item => item != null ? Math.Max(0L, item.BaseBuyPrice) : 0L).ToArray(),
+            selectedItems = viewData != null ? viewData.tradeItems : Array.Empty<TradeItemViewData>()
+        };
+    }
+
+    private void EnsureMarketTradePanel()
+    {
+        if (marketTradePanel == null)
+            marketTradePanel = GetComponentInChildren<MarketTradePanelController>(true);
+        if (marketTradePanel == null)
+            marketTradePanel = gameObject.AddComponent<MarketTradePanelController>();
+
+        if (runtimeContext != null)
+            marketTradePanel.ConfigureCatalog(runtimeContext.GetAvailableMarkets());
+    }
+
+    private bool TryOpenPreparationMarket()
+    {
+        if (marketTradePanel == null)
+            return false;
+        if (marketTradePanel.IsOpen)
+            return true;
+        if (!IsFrameworkMarketReady())
+            return false;
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData != null)
+            marketTradePanel.Configure(
+                null,
+                Mathf.Max(0f, viewData.maxLoad),
+                Math.Max(0, viewData.maxInventorySlotCount));
+        return marketTradePanel.OpenForTradePreparation();
+    }
+
+    private void HandleFrameworkDataReady(ND.Framework.ISharedGameDataProvider _)
+    {
+        RefreshCargoMarketAfterFrameworkLoad();
+    }
+
+    private void HandleFrameworkDataReady(ND.Framework.SaveData _)
+    {
+        RefreshCargoMarketAfterFrameworkLoad();
+    }
+
+    private void RefreshCargoMarketAfterFrameworkLoad()
+    {
+        EnsureMarketTradePanel();
+        if (runtimeContext != null)
+            marketTradePanel.ConfigureCatalog(runtimeContext.GetAvailableMarkets());
+        uiManager?.RefreshCargoIfVisible();
+    }
+
+    private static bool IsFrameworkMarketReady()
+    {
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        return root != null
+            && root.CurrentSaveData != null
+            && root.SaveService != null
+            && root.GameTime != null
+            && root.SharedGameData != null
+            && root.SharedGameData.IsLoaded;
+    }
+
+    private void HandleCargoLoadChanged(IReadOnlyList<CargoLoadingPanelController.CargoSelection> snapshot)
+    {
+        if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+            return;
+
+        if (!TryOpenPreparationMarket() || marketTradePanel.Model == null)
+            return;
+
+        List<MarketTransactionLine> lines = CargoMarketTransactionDeltaBuilder.Build(
+            snapshot,
+            marketTradePanel.Model.Items);
+
+        marketTradePanel.CancelDraft();
+        foreach (MarketTransactionLine line in lines)
+        {
+            marketTradePanel.SetBuyDraft(line.ItemId, line.BuyQuantity);
+            marketTradePanel.SetSellDraft(line.ItemId, line.SellQuantity);
+        }
+
+        MarketTradePanelModel model = marketTradePanel.Model;
+        cargoPanel?.SetCargoTransactionError(
+            model != null && model.HasDraft && !model.CanCommit
+                ? model.DraftValidationError
+                : string.Empty);
+    }
+
+    private bool CanCommitCargoTransaction()
+    {
+        MarketTradePanelModel model = marketTradePanel != null ? marketTradePanel.Model : null;
+        return model != null && (!model.HasDraft || model.CanCommit);
+    }
+
+    private long GetProjectedCurrency()
+    {
+        if (marketTradePanel?.Model != null)
+            return Math.Max(0L, marketTradePanel.Model.ProjectedTradingCurrency);
+
+        // S4 can be saved before the normal Market panel creates a transaction model. In that
+        // path the Runtime Draft already projects the selected Caravan plan against authoritative
+        // tradingCurrency, so Mercenary must use the same post-cargo budget instead of showing 0.
+        return Math.Max(0L, runtimeContext?.CurrentViewData?.estimatedCurrencyAfterPurchase ?? 0L);
+    }
+
+    private bool TryCommitCargoTransaction()
+    {
+        MarketTradePanelModel model = marketTradePanel != null ? marketTradePanel.Model : null;
+        if (model == null)
+        {
+            cargoPanel?.SetCargoTransactionError(MarketInventoryMutationSession.ErrorInvalidFramework);
+            return false;
+        }
+        if (!model.HasDraft)
+            return true;
+
+        MarketTransactionResult result = marketTradePanel.Commit();
+        if (!result.Success)
+        {
+            Debug.LogError(
+                $"[TradePrepare Market] Cargo transaction failed: {result.ErrorCode}",
+                this);
+            return false;
+        }
+
+        runtimeContext?.ClearCargoDraft();
+        runtimeContext?.RefreshFromCurrentSaveData();
+        Debug.Log(
+            $"[TradePrepare Market] Cargo transaction committed. " +
+            $"Cost={result.PurchaseCost}, Revenue={result.SaleRevenue}, " +
+            $"Currency={result.TradingCurrencyAfter}",
+            this);
+        return true;
+    }
+
+    private void HandleMarketErrorChanged(string errorCode)
+    {
+        cargoPanel?.SetCargoTransactionError(errorCode);
+    }
+
+    private void CancelCargoTransactionDraft()
+    {
+        if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+            return;
+
+        marketTradePanel?.CancelDraft();
+    }
+
+    private static long ReadCurrentTradingCurrency()
+    {
+        ND.Framework.SaveData saveData = ND.Framework.FrameworkRoot.Instance?.CurrentSaveData;
+        return saveData?.player != null ? Math.Max(0L, saveData.player.tradingCurrency) : 0L;
+    }
+
+    private static TradeItemViewData CreateCargoViewData(MarketTradeItemState item)
+    {
+        return new TradeItemViewData
+        {
+            itemId = item.ItemId,
+            displayName = item.Item.DisplayName,
+            icon = item.Item.Icon,
+            purchasePrice = item.BuyUnitPrice,
+            sellPrice = item.SellUnitPrice,
+            ownedAmount = Math.Max(0, item.CargoQuantity),
+            contentQuantityLimit = Math.Max(0, item.MarketStock),
+            hasAuthoritativeStock = true,
+            unitWeight = Math.Max(0f, item.Item.Weight),
+            canBuy = item.MarketStock > 0,
+            canSell = item.CargoQuantity > 0
+        };
+    }
+
+    private TradeSummaryPanel.SummaryData BuildSummaryData()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData == null)
+            return default;
+
+        RouteViewData selectedRoute = null;
+        if (viewData.routes != null)
+        {
+            selectedRoute = Array.Find(
+                viewData.routes,
+                route => route != null &&
+                    string.Equals(route.routeId, viewData.selectedRouteId, StringComparison.Ordinal));
+        }
+
+        string fromTown = !string.IsNullOrWhiteSpace(viewData.currentTownName)
+            ? viewData.currentTownName
+            : viewData.currentTownId;
+        string toTown = selectedRoute != null && !string.IsNullOrWhiteSpace(selectedRoute.toTownName)
+            ? selectedRoute.toTownName
+            : selectedRoute != null ? selectedRoute.toTownId : string.Empty;
+
+        return new TradeSummaryPanel.SummaryData
+        {
+            fromTown = string.IsNullOrWhiteSpace(fromTown) ? "-" : fromTown,
+            toTown = string.IsNullOrWhiteSpace(toTown) ? "-" : toTown,
+            viaText = "없음",
+            expectedRisk = Mathf.RoundToInt(
+                Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f),
+            mercenaryPower = Mathf.Max(0, viewData.selectedMercenaryPower),
+            expectedFood = Mathf.Max(0, viewData.requiredDraftAnimalFoodQuantity),
+            loadedFood = Mathf.Max(0, viewData.loadedDraftAnimalFoodQuantity),
+            prepareCost = Math.Max(0L, viewData.totalPreparationCost),
+            expectedProfit = viewData.estimatedNetProfit,
+            // Summary displays whole seconds. Preserve any positive sub-second test route as 1 second
+            // instead of making a valid calculation look like a missing 00:00:00 value.
+            durationSeconds = viewData.finalExpectedTravelTime > 0f
+                ? Mathf.Ceil(viewData.finalExpectedTravelTime)
+                : 0f
+        };
+    }
+
     private void HandleWagonSelected(TransportSelectPanel.TransportEntry wagon)
     {
+        if (uiManager != null && uiManager.IsDetachedCaravanEditOpen)
+            return;
+
         if (runtimeContext == null || !CanSelectWagon(runtimeContext.CurrentViewData, wagon.id))
             return;
 
         // Selecting a different wagon clears dependent animal and cargo choices in DraftStore.
         runtimeContext.SelectWagon(wagon.id);
+        animalPanel?.RefreshAnimalAvailability(BuildAnimalEntries());
     }
 
     private void HandleWagonRemoved()
     {
+        if (uiManager != null && uiManager.IsDetachedCaravanEditOpen)
+            return;
+
         if (runtimeContext != null)
             runtimeContext.SelectWagon(string.Empty);
     }
@@ -210,6 +701,9 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         IReadOnlyList<AnimalInventoryPanel.AnimalPick> picks,
         bool isValid)
     {
+        if (uiManager != null && uiManager.IsDetachedCaravanEditOpen)
+            return;
+
         if (runtimeContext == null || runtimeContext.FlowController == null)
             return;
 
@@ -248,56 +742,6 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             int current = currentQuantities.TryGetValue(animal.draftAnimalId, out int oldValue) ? oldValue : 0;
             if (desired != current)
                 runtimeContext.SetAnimalQuantity(animal.draftAnimalId, desired);
-        }
-    }
-
-    private void HandleCargoChanged(
-        IReadOnlyList<CargoLoadingPanelController.CargoSelection> selections)
-    {
-        if (runtimeContext == null || runtimeContext.FlowController == null)
-            return;
-
-        var desiredQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
-        if (selections != null)
-        {
-            foreach (CargoLoadingPanelController.CargoSelection selection in selections)
-            {
-                if (!string.IsNullOrWhiteSpace(selection.itemId))
-                    desiredQuantities[selection.itemId] = Mathf.Max(0, selection.quantity);
-            }
-        }
-
-        TradePrepareDraft draft = runtimeContext.FlowController.CurrentDraft;
-        if (draft == null)
-            return;
-
-        var currentQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
-        if (draft.selectedBuyItems != null)
-        {
-            foreach (TradeItemBundle selected in draft.selectedBuyItems)
-            {
-                if (selected != null && !string.IsNullOrWhiteSpace(selected.itemId))
-                    currentQuantities[selected.itemId] = Mathf.Max(0, selected.quantity);
-            }
-        }
-
-        // Items absent from the complete S4 snapshot were removed in the UI and must be
-        // explicitly assigned zero; otherwise an old quantity would remain in Runtime Draft.
-        foreach (KeyValuePair<string, int> current in currentQuantities)
-        {
-            if (!desiredQuantities.ContainsKey(current.Key))
-                runtimeContext.SetBuyItemQuantity(current.Key, 0);
-        }
-
-        // RuntimeContext owns Draft mutation and rebuilds ViewData after each changed quantity.
-        foreach (KeyValuePair<string, int> desired in desiredQuantities)
-        {
-            int currentQuantity;
-            if (!currentQuantities.TryGetValue(desired.Key, out currentQuantity) ||
-                currentQuantity != desired.Value)
-            {
-                runtimeContext.SetBuyItemQuantity(desired.Key, desired.Value);
-            }
         }
     }
 

@@ -11,9 +11,11 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
     [Serializable]
     public sealed class MercenaryOffer
     {
+        public string mercenaryId;
         public string displayName = "용병";
         [Min(0)] public int combatPower;
         [Min(0)] public long hireCost;
+        public bool canHire = true;
     }
 
     [SerializeField] private int expectedRisk = 75;
@@ -31,6 +33,7 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
     private RectTransform panelRect;
     private CanvasGroup canvasGroup;
     private readonly List<Button> offerButtons = new List<Button>();
+    private RectTransform cardArea;
     private TMP_Text riskSummaryText;
     private TMP_Text moneySummaryText;
     private Button confirmButton;
@@ -38,9 +41,16 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
     private long availableGold;
     private Coroutine animationRoutine;
     private bool built;
+    private Action backOverride;
 
     public int SelectedCombatPower => selectedOfferIndex < 0 ? 0 : offers[selectedOfferIndex].combatPower;
     public long SelectedHireCost => selectedOfferIndex < 0 ? 0L : offers[selectedOfferIndex].hireCost;
+    public string SelectedMercenaryId => selectedOfferIndex < 0
+        ? string.Empty
+        : offers[selectedOfferIndex].mercenaryId ?? string.Empty;
+    public string SelectedDisplayName => selectedOfferIndex < 0
+        ? string.Empty
+        : offers[selectedOfferIndex].displayName ?? string.Empty;
     public bool CanConfirm => SelectedHireCost <= availableGold;
 
     public static MercenaryHirePanelController CreateForCargo(CargoLoadingPanelController cargo)
@@ -65,7 +75,13 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
 
     public void Show(long gold)
     {
+        Show(gold, null);
+    }
+
+    public void Show(long gold, Action onBackRequested)
+    {
         BuildIfNeeded();
+        backOverride = onBackRequested;
         availableGold = Math.Max(0L, gold);
         selectedOfferIndex = -1;
         Refresh();
@@ -77,6 +93,35 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
         if (animationRoutine != null)
             StopCoroutine(animationRoutine);
         animationRoutine = StartCoroutine(AnimateVisible(true, null));
+    }
+
+    public void Populate(IReadOnlyList<MercenaryViewData> viewData)
+    {
+        BuildIfNeeded();
+        var runtimeOffers = new List<MercenaryOffer>();
+        if (viewData != null)
+        {
+            for (int index = 0; index < viewData.Count; index++)
+            {
+                MercenaryViewData item = viewData[index];
+                if (item == null)
+                    continue;
+
+                runtimeOffers.Add(new MercenaryOffer
+                {
+                    mercenaryId = item.mercenaryId ?? string.Empty,
+                    displayName = item.displayName ?? string.Empty,
+                    combatPower = Mathf.Max(0, item.combatCapability),
+                    hireCost = Math.Max(0L, item.baseBuyPrice),
+                    canHire = item.canHire && !string.IsNullOrWhiteSpace(item.mercenaryId)
+                });
+            }
+        }
+
+        offers = runtimeOffers.ToArray();
+        selectedOfferIndex = -1;
+        RebuildOfferCards();
+        Refresh();
     }
 
     private void Awake()
@@ -109,15 +154,8 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
         back.onClick.AddListener(BackToCargo);
         cancel.onClick.AddListener(CancelTrade);
 
-        RectTransform cardArea = CreatePanel(transform, "MercenaryCardArea", new Vector2(1116f, 412f), new Vector2(32f, -104f), DarkColor);
-        for (int i = 0; i < offers.Length; i++)
-        {
-            int index = i;
-            float x = 18f + i * 218f;
-            Button card = CreateOfferCard(cardArea, offers[i], new Vector2(x, -20f));
-            card.onClick.AddListener(() => ToggleOffer(index));
-            offerButtons.Add(card);
-        }
+        cardArea = CreatePanel(transform, "MercenaryCardArea", new Vector2(1116f, 412f), new Vector2(32f, -104f), DarkColor);
+        RebuildOfferCards();
 
         RectTransform summary = CreatePanel(transform, "HireSummaryArea", new Vector2(900f, 172f), new Vector2(32f, -536f), ContentColor);
         riskSummaryText = CreateText(summary, "RiskSummaryText", string.Empty, 23f, new Vector2(840f, 48f), new Vector2(450f, -48f), TextAlignmentOptions.Left, FontStyles.Bold);
@@ -131,8 +169,37 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
         Refresh();
     }
 
+    private void RebuildOfferCards()
+    {
+        for (int index = 0; index < offerButtons.Count; index++)
+        {
+            Button oldCard = offerButtons[index];
+            if (oldCard == null)
+                continue;
+            oldCard.gameObject.SetActive(false);
+            Destroy(oldCard.gameObject);
+        }
+        offerButtons.Clear();
+
+        if (cardArea == null)
+            return;
+
+        for (int i = 0; i < offers.Length; i++)
+        {
+            int index = i;
+            float x = 18f + i * 218f;
+            Button card = CreateOfferCard(cardArea, offers[i], new Vector2(x, -20f));
+            card.onClick.AddListener(() => ToggleOffer(index));
+            card.interactable = offers[i].canHire;
+            offerButtons.Add(card);
+        }
+    }
+
     private void EnsureDefaultOffers()
     {
+        // TODO(PRODUCTION): Remove this hard-coded fallback after every entry path injects
+        // MercenaryViewData built from MercenaryData SOs. Production selection must always retain
+        // the SO mercenaryId through Draft, Summary, and departure Commit.
         if (offers != null && offers.Length > 0)
             return;
 
@@ -189,7 +256,15 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
 
     private void BackToCargo()
     {
-        Hide(() => cargoPanel?.ReturnFromMercenaryHire());
+        Action requestedBack = backOverride;
+        backOverride = null;
+        Hide(() =>
+        {
+            if (requestedBack != null)
+                requestedBack();
+            else
+                cargoPanel?.ReturnFromMercenaryHire();
+        });
     }
 
     private void CancelTrade()

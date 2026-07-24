@@ -21,6 +21,18 @@
 //   ResetToPrepare : 다음 무역           완료 → 준비
 // =============================================================================
 
+/// <summary>산적 이벤트 1회 처리 결과. 저장·UI 계층이 결과를 기록할 수 있는 값만 노출한다.</summary>
+public sealed class BanditRaidResult
+{
+    public bool processed;
+    public bool passedSafely;
+    public float safePassChancePercent;
+    public float rollPercent;
+    public int cargoLost;
+    public int foodLost;
+    public string lostMercenaryInstanceId = string.Empty;
+}
+
 /// <summary>무역 진행 단계 전환. 시간은 모르고 진행도만 받는다.</summary>
 public static class JourneyRunner
 {
@@ -55,6 +67,13 @@ public static class JourneyRunner
         caravan.runFoodLost = 0f;
         caravan.runDurabilityLost = 0;
         caravan.runBattlesFought = 0;
+        caravan.runEventChecksProcessed = 0;
+        caravan.runEventsOccurred = 0;
+        if (caravan.runLostMercenaryInstanceIds == null)
+            caravan.runLostMercenaryInstanceIds = new System.Collections.Generic.List<string>();
+        else
+            caravan.runLostMercenaryInstanceIds.Clear();
+        caravan.runWagonDestroyed = false;                        // [2차] 지난 무역의 파괴 플래그 초기화
         caravan.runStartDurability = caravan.currentDurability;   // 출발 시 내구도 (정산 손실 계산 기준) [M2 거리마모]
         caravan.runWearRemainder = 0f;
         caravan.elapsedInGameSeconds = 0f;                        // [인게임시간] 누적 인게임 경과 초기화
@@ -134,16 +153,13 @@ public static class JourneyRunner
         if (caravan == null || caravan.state != JourneyState.Traveling) return;
         if (amount <= 0) return;
 
-        // [손실 상한] limitRaidDurability=true 일 때만 — 이번 무역 누적 약탈 내구도 손실을
-        //  (상한율 × 최대 내구도)로 캡. false면 캡 없이 전량 적용. [M2]
-        if (caravan.limitRaidDurability)
-        {
-            int maxDur = (caravan.wagon != null) ? caravan.wagon.maxDurability : 0;
-            int maxDurLoss = (int)(caravan.lossLimitRate * maxDur);
-            int allowedDur = maxDurLoss - caravan.runDurabilityLost;
-            if (allowedDur <= 0) return;              // 이미 상한 도달 → 더 안 잃음
-            if (amount > allowedDur) amount = allowedDur;
-        }
+        // 이번 무역의 이벤트성 내구도 손실 누계를 (손실 상한율 × 최대 내구도)로 제한한다.
+        // 산적 전용 토글은 사용하지 않으며 상품 손실과 같은 성장 보정값을 따른다. [M2]
+        int maxDur = (caravan.wagon != null) ? caravan.wagon.maxDurability : 0;
+        int maxDurLoss = (int)(caravan.lossLimitRate * maxDur);
+        int allowedDur = maxDurLoss - caravan.runDurabilityLost;
+        if (allowedDur <= 0) return;
+        if (amount > allowedDur) amount = allowedDur;
 
         caravan.currentDurability -= amount;
         if (caravan.currentDurability < 0) caravan.currentDurability = 0;   // 0 밑으론 안 감(캡 off 시 방어)
@@ -173,23 +189,134 @@ public static class JourneyRunner
         caravan.currentDurability -= actual;
     }
 
-    /// <summary>약탈(전투) 판정 — [임시 규칙] 용병 1마리당 전투 1번 방어.
-    /// 이번 무역 N번째 전투가 용병 수 이하면 방어 성공(손실 없음), 넘으면 약탈당함(내구도·무역품 손실).
-    /// 반환: true=방어 성공 / false=약탈당함.
-    /// [주의] 진짜 판정은 전투력 기반 = Progression 영역. 이건 임시 placeholder. [M2]</summary>
-    public static bool ResolveRaid(CaravanData caravan, int durabilityDamage, int cargoDamage)
+    /// <summary>
+    /// 산적 이벤트 1회를 판정한다.
+    /// 성공 확률은 캐러밴 기본 안전 보정 + (선택 용병 전투력 / 산적 전투력 × 50)이며 0~100으로 제한한다.
+    /// 실패하면 선택 용병이 즉시 사라지고, 일반 무역품과 남은 여물을 각 비율만큼 한 번 올림해 약탈한다.
+    /// randomSeed가 같고 입력 상태가 같으면 같은 판정·약탈 순서를 만든다.
+    /// </summary>
+    public static BanditRaidResult ResolveBanditRaid(
+        CaravanData caravan,
+        int banditCombatPower,
+        float cargoLootRate,
+        float fodderLootRate,
+        int randomSeed)
     {
-        if (caravan == null || caravan.state != JourneyState.Traveling) return false;
+        BanditRaidResult result = new BanditRaidResult();
+        if (caravan == null || caravan.state != JourneyState.Traveling) return result;
 
+        result.processed = true;
         caravan.runBattlesFought++;
-        int mercCount = (caravan.mercenaries != null) ? caravan.mercenaries.Count : 0;
 
-        if (caravan.runBattlesFought <= mercCount) return true;   // 용병 수 이하 전투면 방어 성공
+        imsiMercenaryData selectedMercenary =
+            caravan.mercenaries != null && caravan.mercenaries.Count > 0
+                ? caravan.mercenaries[0]
+                : null;
+        int mercenaryCombatPower = selectedMercenary != null ? selectedMercenary.combatPower : 0;
 
-        // 방어 실패 → 약탈당함
-        ApplyDurabilityLoss(caravan, durabilityDamage);
-        ApplyCargoLoss(caravan, cargoDamage);
-        return false;
+        result.safePassChancePercent =
+            ND.Economy.TradeEventPreviewCalculator.CalculateBanditSafePassChancePercent(
+                caravan.baseSafetyChancePercent,
+                mercenaryCombatPower,
+                banditCombatPower);
+
+        uint randomState = InitializeRandomState(randomSeed);
+        result.rollPercent = NextUnitFloat(ref randomState) * 100f;
+        result.passedSafely = result.rollPercent < result.safePassChancePercent;
+        if (result.passedSafely) return result;
+
+        if (selectedMercenary != null)
+        {
+            result.lostMercenaryInstanceId = selectedMercenary.instanceId ?? string.Empty;
+            if (!string.IsNullOrEmpty(result.lostMercenaryInstanceId))
+                caravan.runLostMercenaryInstanceIds.Add(result.lostMercenaryInstanceId);
+            caravan.mercenaries.RemoveAt(0);
+        }
+
+        int cargoBefore = caravan.runCargoLost;
+        int availableCargo = GetAvailableCargoCount(caravan);
+        int requestedCargoLoss = CalculateRoundedUpLoot(availableCargo, cargoLootRate);
+        ApplyRandomCargoLoss(caravan, requestedCargoLoss, ref randomState);
+        result.cargoLost = caravan.runCargoLost - cargoBefore;
+
+        int availableFood = (int)System.Math.Floor(
+            System.Math.Max(0d, CaravanCalculator.GetRemainingFood(caravan)));
+        result.foodLost = CalculateRoundedUpLoot(availableFood, fodderLootRate);
+        if (result.foodLost > 0) ApplyFoodLoss(caravan, result.foodLost);
+
+        return result;
+    }
+
+    private static int CalculateRoundedUpLoot(int availableAmount, float lootRate)
+    {
+        if (availableAmount <= 0 || float.IsNaN(lootRate) || lootRate <= 0f) return 0;
+        if (float.IsInfinity(lootRate) || lootRate > 1f) lootRate = 1f;
+        return (int)System.Math.Ceiling(availableAmount * (double)lootRate);
+    }
+
+    private static int GetAvailableCargoCount(CaravanData caravan)
+    {
+        if (caravan.cargo == null) return 0;
+        int total = 0;
+        foreach (CargoEntry entry in caravan.cargo)
+        {
+            if (entry == null || entry.quantity <= 0) continue;
+            if (total > int.MaxValue - entry.quantity) return int.MaxValue;
+            total += entry.quantity;
+        }
+        return total;
+    }
+
+    /// <summary>각 차감 단위마다 남은 전체 수량에서 무작위 위치를 골라 상품 종류 편향을 없앤다.</summary>
+    private static void ApplyRandomCargoLoss(CaravanData caravan, int requestedAmount, ref uint randomState)
+    {
+        if (requestedAmount <= 0 || caravan.cargo == null) return;
+
+        int maxCargoLoss = (int)(caravan.lossLimitRate * caravan.runOriginalCargoCount);
+        int allowed = maxCargoLoss - caravan.runCargoLost;
+        if (allowed <= 0) return;
+        int amount = requestedAmount < allowed ? requestedAmount : allowed;
+
+        for (int removed = 0; removed < amount; removed++)
+        {
+            int total = GetAvailableCargoCount(caravan);
+            if (total <= 0) break;
+
+            int target = (int)(NextUInt(ref randomState) % (uint)total);
+            foreach (CargoEntry entry in caravan.cargo)
+            {
+                if (entry == null || entry.quantity <= 0) continue;
+                if (target >= entry.quantity)
+                {
+                    target -= entry.quantity;
+                    continue;
+                }
+
+                entry.quantity--;
+                caravan.runCargoLost++;
+                break;
+            }
+        }
+    }
+
+    private static uint InitializeRandomState(int seed)
+    {
+        uint state = unchecked((uint)seed);
+        return state != 0u ? state : 0x6D2B79F5u;
+    }
+
+    private static uint NextUInt(ref uint state)
+    {
+        // xorshift32: 플랫폼과 프레임 수에 영향받지 않는 작은 결정적 PRNG.
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return state;
+    }
+
+    private static float NextUnitFloat(ref uint state)
+    {
+        return (NextUInt(ref state) >> 8) * (1f / 16777216f);
     }
 
     /// <summary>식량이 바닥(0 이하)나면 실패 확정. 소모+이벤트 반영된 잔량으로 판정.</summary>
@@ -211,11 +338,47 @@ public static class JourneyRunner
             MarkFatal(caravan, JourneyFailureReason.FoodDepleted);
     }
 
-    /// <summary>마차 내구도가 0 이하면 실패 확정(마차 파손). 이동 중 즉시 판정 — 식량 고갈과 달리 유예 없음. [M2]</summary>
+    /// <summary>
+    /// 마차 내구도가 0 이하면 <b>파괴</b> 확정. 이동 중 즉시 판정 — 식량 고갈과 달리 유예 없음. [M2]
+    /// [2차] 파괴는 단순 실패가 아니라 전손이다 — 적재 화물·식량을 전부 잃는다.
+    /// </summary>
     private static void CheckWagonBroken(CaravanData caravan)
     {
         if (caravan.runFatalReason != JourneyFailureReason.None) return;   // 이미 실패면 스킵
         if (caravan.currentDurability > 0) return;                          // 아직 멀쩡
+        DestroyWagon(caravan);
+    }
+
+    /// <summary>
+    /// 마차 파괴 처리: 적재 화물·식량 전손 + 무역 실패 확정.
+    ///
+    /// [계약] Multi_Caravan_Save_Architecture — "내구도가 0이면 마차가 파괴된다:
+    ///        …그 마차에 실린 화물과 식량을 전부 잃고, 진행 중인 무역을 Failed로 표시한다."
+    ///
+    /// [주의] 전손이므로 <b>손실 상한(lossLimitRate)을 적용하지 않는다.</b>
+    ///        상한은 약탈 같은 부분 손실에만 쓰인다.
+    ///        소유 기록·wagonId 정리와 정산 snapshot 기록은 Framework가 이어서 수행한다.
+    /// </summary>
+    private static void DestroyWagon(CaravanData caravan)
+    {
+        // 화물 전량 소실 (수량을 0으로 만들고 잃은 개수를 누적)
+        if (caravan.cargo != null)
+        {
+            int lost = 0;
+            foreach (CargoEntry entry in caravan.cargo)
+            {
+                if (entry == null || entry.quantity <= 0) continue;
+                lost += entry.quantity;
+                entry.quantity = 0;
+            }
+            caravan.runCargoLost += lost;
+        }
+
+        // 남은 식량 전량 소실 (소모가 아니라 "잃은" 것이므로 runFoodLost에 누적)
+        float remainingFood = CaravanCalculator.GetRemainingFood(caravan);
+        if (remainingFood > 0f) caravan.runFoodLost += remainingFood;
+
+        caravan.runWagonDestroyed = true;
         MarkFatal(caravan, JourneyFailureReason.WagonBroken);
     }
 
@@ -259,11 +422,25 @@ public static class JourneyRunner
         int durLost = caravan.runStartDurability - caravan.currentDurability;
         result.durabilityLost = (durLost > 0) ? durLost : 0;
 
+        // [2차] 마차 파괴 정보 — 저장 snapshot이 파괴 여부·마차 ID·소실 식량을 요구한다.
+        result.wagonDestroyed = caravan.runWagonDestroyed;
+        result.destroyedWagonInstanceId =
+            (caravan.runWagonDestroyed && caravan.wagon != null) ? caravan.wagon.instanceId : string.Empty;
+        result.foodLost = caravan.runFoodLost;
+        result.eventsOccurred = caravan.runEventsOccurred;
+        result.battlesFought = caravan.runBattlesFought;
+        result.lostMercenaryInstanceIds.AddRange(caravan.runLostMercenaryInstanceIds);
+
         // [M2] 정산 데이터에 계산값 포함 (완료기준: 실제이동시간·총식량소모·출발적재량·최종적정적재량·과적비율)
         result.travelSeconds      = caravan.progress01 * caravan.totalSeconds;         // 실제 이동한 시간(초)
+        int departureFoodAmount   = caravan.foodAmount;
         float remainingFood       = CaravanCalculator.GetRemainingFood(caravan);
         if (remainingFood < 0f) remainingFood = 0f;                                    // 음수 방어
-        result.foodConsumed       = caravan.foodAmount - remainingFood;                // 총 식량 소모
+        // 정산 결과만 기록하고 foodAmount를 출발값으로 남겨 두면, 도착 마켓에서
+        // 남은 먹이를 Cargo로 되돌릴 때 출발 시 적재한 먹이가 전부 복원된다.
+        // Cargo 수량은 정수이므로 사용할 수 있는 완전한 단위만 잔량으로 확정한다.
+        caravan.foodAmount        = (int)remainingFood;
+        result.foodConsumed       = departureFoodAmount - caravan.foodAmount;          // 실제 정수 재고 소모량
         result.departureLoad      = caravan.runDepartureLoad;                          // 출발 시 짐무게
         result.finalEfficientLoad = CaravanCalculator.GetFinalEfficientLoad(caravan);  // 최종 적정 적재량
         result.overloadRatio      = (result.finalEfficientLoad > 0f && result.departureLoad > result.finalEfficientLoad)
@@ -274,10 +451,46 @@ public static class JourneyRunner
         return result;
     }
 
-    /// <summary>정산 수령: 정산대기 → 완료. 이미 받았으면 false(중복 방지).</summary>
+    /// <summary>
+    /// 정산 시작: 정산대기(Settling) → 정산중(Selling).
+    /// UI가 판매/정산 화면을 "열 때" 부른다. 아직 수령 확정은 아니다(자산은 계속 묶임).
+    /// 이미 정산중이면 true로 간주(중복 열기 허용), 정산대기가 아니면 false.
+    /// [주의] 이 단계는 선택적이다 — 부르지 않고 Settling에서 바로 ClaimSettlement해도 된다
+    ///        (Framework의 한방 정산 흐름 호환).
+    /// </summary>
+    public static bool BeginSettlement(CaravanData caravan)
+    {
+        if (caravan == null) return false;
+        if (caravan.state == JourneyState.Selling) return true;        // 이미 정산중
+        if (caravan.state != JourneyState.Settling) return false;      // 정산대기에서만 시작
+
+        caravan.state = JourneyState.Selling;
+        return true;
+    }
+
+    /// <summary>
+    /// 정산 화면 취소: 정산중(Selling) → 정산대기(Settling).
+    /// 판매/정산 화면을 수령 없이 닫을 때 되돌린다. 수령 확정 전에만 가능.
+    /// </summary>
+    public static bool CancelSettlement(CaravanData caravan)
+    {
+        if (caravan == null || caravan.state != JourneyState.Selling) return false;
+        if (caravan.settlementClaimed) return false;   // 이미 받았으면 되돌릴 것 없음(방어)
+
+        caravan.state = JourneyState.Settling;
+        return true;
+    }
+
+    /// <summary>
+    /// 정산 수령: 정산대기(Settling) 또는 정산중(Selling) → 완료. 이미 받았으면 false(중복 방지).
+    /// 두 진입을 모두 허용한다:
+    ///   · Settling → Completed : Framework의 한방 정산(BeginSettlement 생략) 호환
+    ///   · Selling  → Completed : UI가 정산 화면을 거친 두 단계 흐름
+    /// </summary>
     public static bool ClaimSettlement(CaravanData caravan)
     {
-        if (caravan == null || caravan.state != JourneyState.Settling) return false;
+        if (caravan == null) return false;
+        if (caravan.state != JourneyState.Settling && caravan.state != JourneyState.Selling) return false;
         if (caravan.settlementClaimed) return false;
 
         caravan.settlementClaimed = true;

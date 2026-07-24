@@ -4,14 +4,16 @@
  *
  * Script Purpose
  * - CoreServices가 JSON으로 저장하는 runtime 저장 데이터 schema를 정의한다.
- * - 플레이어, caravan, 무역 진행, 월드, 튜토리얼 상태를 하나의 SaveData 객체 그래프로 묶는다.
+ * - 플레이어, ID 기반 다중 caravan, 무역 진행, 월드, 튜토리얼 상태를 하나의 SaveData 객체 그래프로 묶는다.
  *
  * Main Features
  * - 현재 저장 schema version을 제공한다.
  * - Core caravan runtime data(M2 포함)를 직렬화 가능한 DTO 형태로 보관한다.
+ * - caravan에 배치된 마차·동물·용병의 보유 개체 식별자를 저장한다.
  * - 무역 진행 상태와 UTC tick 기반 시작/종료 예정 시간을 저장한다.
  * - Economy M1 연동을 위한 long 화폐·growth level·월드 unlock 목록을 저장한다.
- * - SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
+ * - caravan별 SettlementPending 대기 정산 결과(PendingSettlementSaveData)를 저장한다.
+ * - 구조 대출 원금, 잔액, 활성 여부와 출발 전 제한 상태를 저장한다.
  * - 상점 재고(marketInventories)와 구매 준비(marketPurchasePreparation)를 WorldSaveData에 저장한다.
  * - 거점 창고(homeInventory)와 마을 건물 진행(villageBuildings)을 PlayerSaveData에 저장한다.
  *
@@ -32,7 +34,7 @@
  * - Unity JsonUtility 직렬화를 위해 DTO는 public field 중심으로 구성되어 있다.
  * - 시간 값은 UTC DateTime.Ticks 기준으로 저장된다.
  * - version 4부터 Core M2 caravan 필드와 long 화폐를 포함한다.
- * - version 5부터 pendingSettlement(대기 정산 결과)를 포함한다.
+ * - version 6부터 caravans, tradeProgressEntries, pendingSettlements와 selectedCaravanId를 사용한다.
  * - 상점 재고·구매 준비 필드는 version 5를 유지한 채 추가되며, 구 세이브의 null은 JsonSaveService.NormalizeData가 보정한다.
  * - 거점 창고·마을 건물 필드도 version 5를 유지한 채 추가되며, 구 세이브의 null은 NormalizeData가 보정한다.
  * - Related Documentation: Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md
@@ -53,10 +55,17 @@ namespace ND.Framework
     [Serializable]
     public sealed class SaveData
     {
+        public SaveData()
+        {
+            var defaultCaravan = new CaravanSaveData { caravanId = SaveDataLookup.NewCaravanId() };
+            caravans.Add(defaultCaravan);
+            selectedCaravanId = defaultCaravan.caravanId;
+        }
+
         /// <summary>
         /// 현재 코드가 지원하는 저장 데이터 schema version이다.
         /// </summary>
-        public const int CurrentVersion = 5;
+        public const int CurrentVersion = 6;
 
         /// <summary>
         /// 저장 데이터 schema version이다.
@@ -76,17 +85,72 @@ namespace ND.Framework
         /// <summary>
         /// caravan 구성과 현재 여정 상태를 저장하는 데이터이다.
         /// </summary>
-        public CaravanSaveData caravan = new CaravanSaveData();
+        public List<CaravanSaveData> caravans = new List<CaravanSaveData>();
 
         /// <summary>
         /// active trade ID, route ID, 진행 상태, 시간 정보를 저장하는 데이터이다.
         /// </summary>
-        public TradeProgressSaveData tradeProgress = new TradeProgressSaveData();
+        public List<TradeProgressSaveData> tradeProgressEntries = new List<TradeProgressSaveData>();
 
         /// <summary>
         /// SettlementPending 대기 정산 결과이다. 수령 전 재실행 복구에 사용한다.
         /// </summary>
-        public PendingSettlementSaveData pendingSettlement = new PendingSettlementSaveData();
+        public List<PendingSettlementSaveData> pendingSettlements = new List<PendingSettlementSaveData>();
+
+        /// <summary>
+        /// 마지막으로 선택한 caravan ID이다. 기존 단일 runtime은 이 caravan을 active caravan으로 사용한다.
+        /// </summary>
+        public string selectedCaravanId = string.Empty;
+
+        /// <summary>기존 단일 runtime 호출부에 선택 caravan을 제공하는 비직렬화 호환 접근자이다.</summary>
+        public CaravanSaveData caravan
+        {
+            get
+            {
+                CaravanSaveData value;
+                return SaveDataLookup.TryGetSelectedCaravan(this, out value) ? value : null;
+            }
+            set
+            {
+                SaveDataLookup.SetSelectedCaravan(this, value);
+            }
+        }
+
+        /// <summary>기존 단일 runtime 호출부에 선택 caravan의 progress를 제공하는 비직렬화 호환 접근자이다.</summary>
+        public TradeProgressSaveData tradeProgress
+        {
+            get
+            {
+                TradeProgressSaveData value;
+                return SaveDataLookup.TryGetTradeProgress(this, selectedCaravanId, out value) ? value : null;
+            }
+            set
+            {
+                SaveDataLookup.SetTradeProgress(this, selectedCaravanId, value);
+            }
+        }
+
+        /// <summary>기존 단일 runtime 호출부에 선택 caravan의 pending settlement를 제공하는 비직렬화 호환 접근자이다.</summary>
+        public PendingSettlementSaveData pendingSettlement
+        {
+            get
+            {
+                PendingSettlementSaveData value;
+                return SaveDataLookup.TryGetPendingSettlement(this, selectedCaravanId, null, out value) ? value : null;
+            }
+            set
+            {
+                SaveDataLookup.SetPendingSettlement(this, selectedCaravanId, value);
+            }
+        }
+
+        /// <summary>
+        /// 구조 대출의 발급·상환 및 출발 전 제한 상태이다.
+        /// </summary>
+        public RescueLoanSaveData rescueLoan = new RescueLoanSaveData();
+
+        /// <summary>Active trade departure-time preparation snapshot.</summary>
+        public TradePreparationCommitSaveData tradePreparationCommit = new TradePreparationCommitSaveData();
 
         /// <summary>
         /// 월드 계절, 재난, unlock 목록, 상점 재고·구매 준비를 저장하는 데이터이다.
@@ -97,6 +161,20 @@ namespace ND.Framework
         /// 튜토리얼 진행 상태를 저장하는 데이터이다.
         /// </summary>
         public TutorialSaveData tutorial = new TutorialSaveData();
+    }
+
+    /// <summary>
+    /// 구조 대출의 영속 상태를 보관하는 DTO이다.
+    /// </summary>
+    [Serializable]
+    public sealed class RescueLoanSaveData
+    {
+        public string loanId = string.Empty;
+        public long originalPrincipal;
+        public long remainingPrincipal;
+        public bool isActive;
+        public long issuedUtcTicks;
+        public bool isRestrictedPreparation;
     }
 
     /// <summary>
@@ -172,6 +250,18 @@ namespace ND.Framework
     [Serializable]
     public sealed class CaravanSaveData
     {
+        /// <summary>배열 위치와 무관하게 caravan을 식별하는 고유 ID이다.</summary>
+        public string caravanId = string.Empty;
+
+        /// <summary>Caravan Overview의 고정 슬롯과 연결되는 영속 위치 값이다. 목록 인덱스로 대체하지 않는다.</summary>
+        public int slotIndex;
+
+        /// <summary>
+        /// 이 caravan이 현재 머무는 마을 ID이다. 이동 중에는 출발 마을을 유지하고,
+        /// 정산 Claim이 성공했을 때 목적지 또는 실패 복귀 거점으로 갱신한다.
+        /// </summary>
+        public string currentTownId = string.Empty;
+
         /// <summary>
         /// 선택된 wagon 정보이다.
         /// </summary>
@@ -201,6 +291,11 @@ namespace ND.Framework
         /// 식량 1개당 무게이다. 0 이하 값은 저장 데이터 정규화 시 1로 보정된다.
         /// </summary>
         public float foodUnitWeight = 1f;
+
+        /// <summary>
+        /// 이 caravan의 산적 이벤트 기본 무사 통과 확률이다. 단위: percent (0~100).
+        /// </summary>
+        public float baseSafetyChancePercent;
 
         /// <summary>
         /// Core journey의 현재 상태이다.
@@ -263,6 +358,19 @@ namespace ND.Framework
         public int runBattlesFought;
 
         /// <summary>
+        /// 이번 run에서 이미 처리한 거리 기반 이벤트 판정 수이다.
+        /// 온라인 갱신과 오프라인 복원에서 같은 구간을 중복 판정하지 않게 한다.
+        /// </summary>
+        public int runEventChecksProcessed;
+
+        /// <summary>
+        /// 이번 run에서 실제 발생한 이벤트 수이다.
+        /// </summary>
+        public int runEventsOccurred;
+
+        public List<string> runLostMercenaryInstanceIds = new List<string>();
+
+        /// <summary>
         /// 이번 무역 출발 시 내구도이다.
         /// </summary>
         public int runStartDurability;
@@ -295,7 +403,6 @@ namespace ND.Framework
         /// <summary>
         /// 약탈 내구도 손실에 손실 상한을 적용할지 여부이다.
         /// </summary>
-        public bool limitRaidDurability = true;
 
         /// <summary>
         /// 출발 시 원래 무역품 개수이다.
@@ -314,6 +421,8 @@ namespace ND.Framework
     [Serializable]
     public sealed class WagonSaveData
     {
+        /// <summary>마차 종류와 별개로 플레이어가 보유한 한 대를 식별하는 안정 ID이다.</summary>
+        public string instanceId = string.Empty;
         public string wagonName = string.Empty;
         public float overLoad;
         public float maxLoad;
@@ -330,6 +439,8 @@ namespace ND.Framework
     [Serializable]
     public sealed class AnimalSaveData
     {
+        /// <summary>동물 종류와 별개로 플레이어가 보유한 한 개체를 식별하는 안정 ID이다.</summary>
+        public string instanceId = string.Empty;
         public string animalName = string.Empty;
         public float speed = 1f;
         public float foodPerKm;
@@ -344,6 +455,8 @@ namespace ND.Framework
     [Serializable]
     public sealed class MercenarySaveData
     {
+        /// <summary>용병 종류와 별개로 플레이어가 보유한 한 명을 식별하는 안정 ID이다.</summary>
+        public string instanceId = string.Empty;
         public string mercName = string.Empty;
         public int combatPower;
         public int contractCount;
@@ -378,6 +491,9 @@ namespace ND.Framework
     [Serializable]
     public sealed class TradeProgressSaveData
     {
+        /// <summary>이 progress를 소유한 caravan ID이다.</summary>
+        public string caravanId = string.Empty;
+
         /// <summary>
         /// 현재 진행 또는 정산 중인 무역 ID이다.
         /// </summary>
@@ -415,6 +531,14 @@ namespace ND.Framework
     [Serializable]
     public sealed class WorldSaveData
     {
+        /// <summary>
+        /// Caravan creation is permitted only for these persistent slot indices.
+        /// Occupying a slot does not unlock another slot.
+        /// Slot 2 is unlocked temporarily for creation testing. In the final new-game policy,
+        /// only the first, initially provided Caravan slot is expected to be available.
+        /// </summary>
+        public List<int> unlockedCaravanSlotIndices = new List<int> { 1 };
+
         /// <summary>
         /// 현재 계절 ID이다. Economy PriceCalculationInput.SeasonId와 연결된다.
         /// </summary>

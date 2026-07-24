@@ -31,7 +31,8 @@ public enum DepartureBlockReason
     BrokenWagon,      // 마차 내구도 0 → 수리 전 출발 불가 [M2]
     SlotExceeded,     // 짐칸(슬롯) 부족 → 출발 불가 [M2]
     MixedAnimalType,  // 견인 동물 종류가 섞임(단일종류 위반) → 출발 불가 [M2]
-    NotInPrepare      // 준비 단계가 아님(이동/정산 중) → 중복 출발 차단 [M5]
+    NotInPrepare,     // 준비 단계가 아님(이동/정산 중) → 중복 출발 차단 [M5]
+    RouteNotFromCurrentTown   // 지금 있는 도시에서 출발하는 경로가 아님 → 출발 불가 [2차]
 }
 
 /// <summary>출발 검증 결과 = 가능 여부 + 막힌 사유 목록</summary>
@@ -102,6 +103,36 @@ public static class CaravanValidator
         // 막힌 사유가 하나도 없으면 출발 가능
         result.canDepart = (result.reasons.Count == 0);
 
+        return result;
+    }
+
+    /// <summary>
+    /// 상단 구성 검증 + <b>경로 출발지 검증</b>.
+    /// 플레이어가 지금 있는 도시에서 출발하는 경로만 고를 수 있게 막는다. [2차]
+    ///
+    /// [배경] 도착한 도시에 머물며 다음 무역을 시작하는 구조가 되면서 현재 위치가 계속 바뀐다.
+    ///        (Progression 요청: "현재 도시에서 출발하는 route만 선택할 수 있도록 검증한다")
+    ///        예) 무역마을A에 있는데 "본기지 → 무역마을B" 경로를 고르면 출발 불가.
+    ///
+    /// [판정] 두 도시 ID가 다르면 차단한다. 한쪽이 비어 있어도(위치·경로를 알 수 없음)
+    ///        "다름"이 되어 차단된다 — 확인 못 하면 막는 쪽이 안전하기 때문이다.
+    ///        도시 정보를 넘길 수 없는 호출부는 기존 Validate(caravan) 오버로드를 쓴다.
+    /// </summary>
+    /// <param name="caravan">검증할 상단.</param>
+    /// <param name="currentTownId">플레이어가 지금 있는 도시(SaveData.player.currentTownId).</param>
+    /// <param name="routeFromTownId">고른 경로의 출발 도시(route.FromTownId).</param>
+    public static DepartureValidationResult Validate(
+        CaravanData caravan, string currentTownId, string routeFromTownId)
+    {
+        DepartureValidationResult result = Validate(caravan);
+
+        // 상단 자체가 없으면 기존 규약대로 사유 없이 불가 — 경로 사유를 덧붙이지 않는다.
+        if (caravan == null) return result;
+
+        if (!string.Equals(currentTownId, routeFromTownId, System.StringComparison.Ordinal))
+            result.reasons.Add(DepartureBlockReason.RouteNotFromCurrentTown);
+
+        result.canDepart = (result.reasons.Count == 0);
         return result;
     }
 }

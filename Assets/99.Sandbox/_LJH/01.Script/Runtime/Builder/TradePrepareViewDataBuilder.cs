@@ -12,9 +12,9 @@ public sealed class TradePrepareViewDataBuilder
         context = context ?? new TradePrepareBuildContext();
 
         ND.Framework.SaveData saveData = context.saveData;
-        string currentTownId = FirstNotEmpty(
-            draft.currentTownId,
-            saveData != null && saveData.player != null ? saveData.player.currentTownId : string.Empty);
+        // Routes and market contents are scoped to the selected Caravan's location.
+        // An empty Draft location stays empty instead of falling back to player data.
+        string currentTownId = draft.currentTownId ?? string.Empty;
 
         TownData currentTown = FindTown(context.towns, currentTownId);
         RouteData[] availableRoutes = MergeUnique(
@@ -41,8 +41,9 @@ public sealed class TradePrepareViewDataBuilder
             currentTown != null && currentTown.Market != null ? currentTown.Market.DraftAnimalItems : null,
             animal => animal != null ? animal.DraftAnimalId : string.Empty);
 
-        Dictionary<string, int> finalCargoQuantities = TradePrepareCaravanFactory.CreateFinalCargoQuantities(draft);
-        CaravanData previewCaravan = TradePrepareCaravanFactory.Create(draft, context);
+        Dictionary<string, int> finalCargoQuantities =
+            TradePrepareCaravanFactory.CreateFinalCargoQuantities(draft, saveData);
+        CaravanData previewCaravan = TradePrepareCaravanFactory.CreatePreview(draft, context);
 
         float currentLoad = CaravanCalculator.GetCurrentLoad(previewCaravan);
         float overloadLimit = CaravanCalculator.GetFinalEfficientLoad(previewCaravan);
@@ -82,6 +83,19 @@ public sealed class TradePrepareViewDataBuilder
             out selectedMercenaryPower,
             out selectedMercenaryHireCost);
 
+        ND.Economy.TradeEventPreviewResult eventPreview =
+            ND.Economy.TradeEventPreviewCalculator.Calculate(
+                new ND.Economy.TradeEventPreviewInput
+                {
+                    DistanceKm = selectedRoute != null ? selectedRoute.Distance : 0f,
+                    CaravanBaseSafetyChancePercent = previewCaravan.baseSafetyChancePercent,
+                    MercenaryCombatPower = selectedMercenaryPower,
+                    // The current Route data already exposes the encounter power required by this path.
+                    BanditCombatPower = selectedRoute != null
+                        ? selectedRoute.BaseRequiredMercenaryPower
+                        : 0
+                });
+
         // Mercenary cost comes from the actually selected mercenaries, not the legacy route cost.
         long mercenaryCost = selectedMercenaryHireCost;
         long totalPreparationCost = AddClamped(totalPurchaseCost, mercenaryCost);
@@ -101,6 +115,10 @@ public sealed class TradePrepareViewDataBuilder
         TradePrepareConditionInput conditionInput = new TradePrepareConditionInput
         {
             isTradeAlreadyActive = IsTradeAlreadyActive(saveData),
+            // Do not break the existing single-Caravan scene before its multi-Caravan Provider is connected.
+            // Once options exist, TradePrepareUI must choose one before departure can be requested.
+            isDepartureCaravanSelectionRequired = context.caravanOptions != null && context.caravanOptions.Length > 0,
+            isDepartureCaravanSelected = !string.IsNullOrEmpty(draft.departureCaravanId),
             isRouteSelected = selectedRoute != null,
             isRouteUnlocked = routeUnlocked,
             isWagonRequired = true,
@@ -109,17 +127,23 @@ public sealed class TradePrepareViewDataBuilder
             // Treat it as satisfying ownership here just as BuildWagons allows selecting it;
             // otherwise the final departure check contradicts S3 and blocks every walk attempt.
             isSelectedWagonOwned = selectedWagon != null &&
-                (selectedWagon.WagonType == WagonType.None || IsSavedWagon(saveData, selectedWagon)),
-            currentWagonDurability = GetCurrentDurability(saveData, selectedWagon),
+                (selectedWagon.WagonType == WagonType.None
+                    || draft.hasAuthoritativeCaravanComposition
+                    || IsSavedWagon(saveData, selectedWagon)),
+            currentWagonDurability = draft.hasAuthoritativeCaravanComposition
+                ? draft.selectedWagonCurrentDurability
+                : GetCurrentDurability(saveData, selectedWagon),
             selectedWagonType = selectedWagon != null ? selectedWagon.WagonType : WagonType.None,
             selectedDraftAnimalCount = selectedAnimalTypes.Length,
             minRequiredDraftAnimalCount = selectedWagon != null ? selectedWagon.MinRequireAnimals : 0,
             maxAllowedDraftAnimalCount = selectedWagon != null ? selectedWagon.MaxPullAnimals : 0,
             selectedDraftAnimalTypes = selectedAnimalTypes,
             eligibleDraftAnimalTypes = selectedWagon != null ? selectedWagon.EligibleAnimalTypes : new DraftAnimalType[0],
-            hasInvalidDraftAnimalSelection = HasInvalidDraftAnimalSelection(saveData, draft, availableAnimals),
+            hasInvalidDraftAnimalSelection = !draft.hasAuthoritativeCaravanComposition
+                && HasInvalidDraftAnimalSelection(saveData, draft, availableAnimals),
             hasCargo = HasKnownPositiveCargo(finalCargoQuantities, availableItems),
-            hasInvalidCargoSelection = HasInvalidCargoSelection(draft, availableItems),
+            // Cargo is no longer purchased or edited during preparation. SaveData cargo is authoritative.
+            hasInvalidCargoSelection = false,
             usedInventorySlotCount = usedSlots,
             maxInventorySlotCount = maxSlots,
             currentTradingCurrency = currentTradingCurrency,
@@ -137,6 +161,10 @@ public sealed class TradePrepareViewDataBuilder
 
         return new TradePrepareViewData
         {
+            // Departure choices come from the preparation Provider and remain separate from Overview focus.
+            caravanOptions = BuildCaravanOptions(context.caravanOptions),
+            // The Draft identity survives projection so later preparation requests stay on the selected preset.
+            departureCaravanId = draft.departureCaravanId ?? string.Empty,
             currentTownId = currentTownId,
             currentTownName = currentTown != null ? currentTown.DisplayName : string.Empty,
             currentTradingCurrency = currentTradingCurrency,
@@ -174,8 +202,43 @@ public sealed class TradePrepareViewDataBuilder
             finalExpectedTravelTime = finalTravelTime,
             selectedMoveSpeed = selectedRoute != null && finalTravelTime > 0f
                 ? selectedRoute.Distance / finalTravelTime
+                : 0f,
+            eventCheckCount = eventPreview.IsValid ? eventPreview.EventCheckCount : 0,
+            eventOccurrenceProbability = eventPreview.IsValid ? eventPreview.AtLeastOneEventChance : 0f,
+            expectedEventCount = eventPreview.IsValid ? eventPreview.ExpectedEventCount : 0f,
+            banditSafePassChancePercent = eventPreview.IsValid
+                ? eventPreview.BanditSafePassChancePercent
                 : 0f
         };
+    }
+
+    private static TradePrepareCaravanOptionViewData[] BuildCaravanOptions(
+        TradePrepareCaravanOptionViewData[] source)
+    {
+        source = source ?? new TradePrepareCaravanOptionViewData[0];
+        var result = new List<TradePrepareCaravanOptionViewData>();
+
+        for (int index = 0; index < source.Length; index++)
+        {
+            TradePrepareCaravanOptionViewData option = source[index];
+            if (option == null)
+            {
+                continue;
+            }
+
+            // A deep copy prevents UI changes from mutating Provider-owned option data.
+            result.Add(new TradePrepareCaravanOptionViewData
+            {
+                caravanId = option.caravanId ?? string.Empty,
+                displayName = option.displayName ?? string.Empty,
+                currentTownId = option.currentTownId ?? string.Empty,
+                state = option.state,
+                canSelect = option.canSelect,
+                disabledReason = option.disabledReason ?? string.Empty
+            });
+        }
+
+        return result.ToArray();
     }
 
     internal static CaravanData CreatePreviewCaravan(
@@ -215,6 +278,23 @@ public sealed class TradePrepareViewDataBuilder
             TradeItemData item = FindItem(items, pair.Key);
             if (item == null)
             {
+                ND.Framework.TradeItemSaveData savedItem = FindSavedCargoItem(saveData, pair.Key);
+                if (savedItem != null)
+                {
+                    caravan.cargo.Add(new CargoEntry
+                    {
+                        item = new imsiTradeItemData
+                        {
+                            id = pair.Key,
+                            itemName = savedItem.itemName,
+                            weight = savedItem.weight,
+                            basePrice = savedItem.basePrice,
+                            maxCount = savedItem.maxCount
+                        },
+                        quantity = pair.Value
+                    });
+                }
+
                 continue;
             }
 
@@ -286,26 +366,37 @@ public sealed class TradePrepareViewDataBuilder
 
     internal static Dictionary<string, int> CreateFinalCargoQuantities(TradePrepareDraft draft)
     {
-        var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
-        ApplySelections(quantities, draft != null ? draft.selectedBuyItems : null);
-        return quantities;
+        return CreateFinalCargoQuantities(draft, null);
     }
 
-    private static void ApplySelections(Dictionary<string, int> quantities, List<TradeItemBundle> selections)
+    internal static Dictionary<string, int> CreateFinalCargoQuantities(
+        TradePrepareDraft draft,
+        ND.Framework.SaveData saveData)
     {
-        if (selections == null)
+        var quantities = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (draft != null && draft.hasAuthoritativeCargoPlan)
         {
-            return;
+            if (draft.selectedBuyItems != null)
+            {
+                foreach (TradeItemBundle item in draft.selectedBuyItems)
+                {
+                    if (item != null && item.quantity > 0)
+                        AddQuantity(quantities, item.itemId, item.quantity);
+                }
+            }
+            return quantities;
         }
 
-        for (int index = 0; index < selections.Count; index++)
+        if (saveData != null && saveData.caravan != null && saveData.caravan.cargo != null)
         {
-            TradeItemBundle selection = selections[index];
-            if (selection != null)
+            foreach (ND.Framework.CargoEntrySaveData cargo in saveData.caravan.cargo)
             {
-                AddQuantity(quantities, selection.itemId, Mathf.Max(0, selection.quantity));
+                if (cargo != null && cargo.item != null && cargo.quantity > 0)
+                    AddQuantity(quantities, cargo.item.itemId, cargo.quantity);
             }
         }
+
+        return quantities;
     }
 
     private static void AddQuantity(Dictionary<string, int> quantities, string itemId, int amount)
@@ -343,20 +434,26 @@ public sealed class TradePrepareViewDataBuilder
                 continue;
             }
 
-            int buyAmount = GetSelectedQuantity(draft.selectedBuyItems, item.ItemId);
+            int finalCargoQuantity;
+            finalCargoQuantities.TryGetValue(item.ItemId, out finalCargoQuantity);
+
+            // An S4 plan is the complete set of goods purchased for this departure Caravan.
+            // Legacy SaveData cargo is already owned, so it must not be charged again.
+            int buyAmount = draft != null && draft.hasAuthoritativeCargoPlan
+                ? Mathf.Max(0, finalCargoQuantity)
+                : 0;
             ND.Economy.PriceCalculationResult price = CalculatePrice(item, route, saveData, 1);
             long purchasePrice = price.IsValid ? price.UnitBuyPrice : 0L;
             long sellPrice = price.IsValid ? price.UnitSellPrice : 0L;
             long linePurchaseCost = MultiplyClamped(purchasePrice, buyAmount);
             totalPurchaseCost = AddClamped(totalPurchaseCost, linePurchaseCost);
+            totalSellRevenue = AddClamped(
+                totalSellRevenue,
+                MultiplyClamped(sellPrice, Mathf.Max(0, finalCargoQuantity)));
             if (item.Category == TradeItemCategory.DraftAnimalsFood)
             {
                 draftAnimalFoodCost = AddClamped(draftAnimalFoodCost, linePurchaseCost);
             }
-            int finalCargoQuantity;
-            finalCargoQuantities.TryGetValue(item.ItemId, out finalCargoQuantity);
-            totalSellRevenue = AddClamped(totalSellRevenue, MultiplyClamped(sellPrice, Mathf.Max(0, finalCargoQuantity)));
-
             result.Add(new TradeItemViewData
             {
                 itemId = item.ItemId,
@@ -367,17 +464,17 @@ public sealed class TradePrepareViewDataBuilder
                 category = item.Category,
                 purchasePrice = purchasePrice,
                 sellPrice = sellPrice,
-                ownedAmount = 0,
-                selectedBuyAmount = buyAmount,
+                ownedAmount = Mathf.Max(0, finalCargoQuantity),
+                selectedBuyAmount = 0,
                 selectedSellAmount = 0,
                 // TradeItemData.MaxCount is only a temporary ceiling until market stock is provided.
                 contentQuantityLimit = item.MaxCount,
                 hasAuthoritativeStock = false,
                 unitWeight = item.Weight,
-                selectedWeight = item.Weight * Mathf.Max(0, buyAmount),
-                canBuy = price.IsValid,
+                selectedWeight = item.Weight * Mathf.Max(0, finalCargoQuantity),
+                canBuy = false,
                 canSell = false,
-                buyDisabledReason = price.IsValid ? string.Empty : price.ErrorCode,
+                buyDisabledReason = "Cargo purchases are handled by the town market.",
                 sellDisabledReason = string.Empty
             });
         }
@@ -689,33 +786,10 @@ public sealed class TradePrepareViewDataBuilder
 
         foreach (KeyValuePair<string, int> pair in quantities)
         {
-            if (pair.Value > 0 && FindItem(items, pair.Key) != null)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool HasInvalidCargoSelection(
-        TradePrepareDraft draft,
-        TradeItemData[] items)
-    {
-        if (draft == null || draft.selectedBuyItems == null)
-        {
-            return false;
-        }
-
-        for (int index = 0; index < draft.selectedBuyItems.Count; index++)
-        {
-            TradeItemBundle selection = draft.selectedBuyItems[index];
-            TradeItemData item = selection != null ? FindItem(items, selection.itemId) : null;
-            if (selection == null || selection.quantity <= 0
-                || string.IsNullOrEmpty(selection.itemId)
-                || item == null
-                // Market runtime stock will replace this SO ceiling when its service becomes available.
-                || selection.quantity > item.MaxCount)
+            TradeItemData item = FindItem(items, pair.Key);
+            if (pair.Value > 0
+                && item != null
+                && item.Category != TradeItemCategory.DraftAnimalsFood)
             {
                 return true;
             }
@@ -800,6 +874,11 @@ public sealed class TradePrepareViewDataBuilder
 
     private static bool HasInvalidMercenarySelection(TradePrepareDraft draft, MercenaryData[] mercenaries)
     {
+        if (draft.SelectedMercenaryIds.Count > 1)
+        {
+            return true;
+        }
+
         for (int selectionIndex = 0; selectionIndex < draft.SelectedMercenaryIds.Count; selectionIndex++)
         {
             string selectedId = draft.SelectedMercenaryIds[selectionIndex];
@@ -988,6 +1067,25 @@ public sealed class TradePrepareViewDataBuilder
                 if (items[index] != null && string.Equals(items[index].ItemId, id, StringComparison.Ordinal)) return items[index];
             }
         }
+        return null;
+    }
+
+    private static ND.Framework.TradeItemSaveData FindSavedCargoItem(
+        ND.Framework.SaveData saveData,
+        string itemId)
+    {
+        if (saveData == null || saveData.caravan == null || saveData.caravan.cargo == null)
+            return null;
+
+        foreach (ND.Framework.CargoEntrySaveData cargo in saveData.caravan.cargo)
+        {
+            if (cargo != null && cargo.item != null
+                && string.Equals(cargo.item.itemId, itemId, StringComparison.Ordinal))
+            {
+                return cargo.item;
+            }
+        }
+
         return null;
     }
 

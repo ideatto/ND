@@ -198,7 +198,23 @@ namespace ND.Framework
         public int BaseRequiredMercenaryPower;
         public float BaseRiskLevel;
         public int MaxEventCount;
+        public SharedRouteEventDefinition[] Events = new SharedRouteEventDefinition[0];
         public long BaseFoodCost;
         public long BaseMercenaryCost;
+    }
+
+    public sealed class SharedRouteEventDefinition
+    {
+        public string Id;
+        public RouteEvent EventType;
+        public string DisplayName;
+        public string Description;
+        public int BanditCombatPower;
+        public float CargoLootRate;
+        public float FodderLootRate;
+        public RewardType RewardType;
+        public long Reward;
+        public long MinReward;
+        public long MaxReward;
     }
 }

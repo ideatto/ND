@@ -1,16 +1,18 @@
 using TMPro;
 using UnityEngine;
 
+/// <summary>
+/// Presents the player's trading currency in the persistent in-game HUD.
+/// Development currency remains part of Framework data but is intentionally not displayed here.
+/// </summary>
 public class CurrencyHudPresenter : MonoBehaviour
 {
     [SerializeField] private TMP_Text tradingCurrencyText;
-    [SerializeField] private TMP_Text developmentCurrencyText;
 
     [Header("EventChannel")]
     [SerializeField] private CurrencyChangedEventChannel currencyChangedChannel;
 
     private long lastTradingCurrency = long.MinValue;
-    private long lastDevelopmentCurrency = long.MinValue;
 
     private void OnEnable()
     {
@@ -33,7 +35,6 @@ public class CurrencyHudPresenter : MonoBehaviour
     public void RefreshImmediately()
     {
         lastTradingCurrency = long.MinValue;
-        lastDevelopmentCurrency = long.MinValue;
 
         RefreshIfChanged();
     }
@@ -48,43 +49,36 @@ public class CurrencyHudPresenter : MonoBehaviour
 
         if(saveData?.player == null)
         {
-            ApplyIfChanged(0, 0);
+            ApplyIfChanged(0);
             return;
         }
 
-        ApplyIfChanged(saveData.player.tradingCurrency, saveData.player.developmentCurrency);
+        ApplyIfChanged(saveData.player.tradingCurrency);
     }
 
     private void HandleCurrencyChanged(CurrencyChangedEventData eventData)
     {
-        ApplyIfChanged(eventData.tradingCurrency, eventData.developmentCurrency);
+        // The HUD-owned event contract carries only the trade money rendered by this presenter.
+        ApplyIfChanged(eventData.tradingCurrency);
     }
 
-    private void ApplyIfChanged(long tradingCurrency, long developmentCurrency)
+    private void ApplyIfChanged(long tradingCurrency)
     {
-        if(tradingCurrency == lastTradingCurrency && developmentCurrency == lastDevelopmentCurrency)
+        if(tradingCurrency == lastTradingCurrency)
         {
             return;
         }
 
         lastTradingCurrency = tradingCurrency;
-        lastDevelopmentCurrency = developmentCurrency;
 
-        Render(tradingCurrency, developmentCurrency);
+        Render(tradingCurrency);
     }
 
-    private void Render(long tradingCurrency, long developmentCurrency)
+    private void Render(long tradingCurrency)
     {
         if (tradingCurrencyText != null)
         {
             tradingCurrencyText.text = CurrencyTextFormatter.Format(tradingCurrency);
         }
-
-        if (developmentCurrencyText != null)
-        {
-            developmentCurrencyText.text = CurrencyTextFormatter.Format(developmentCurrency);
-        }
     }
-
-    
 }

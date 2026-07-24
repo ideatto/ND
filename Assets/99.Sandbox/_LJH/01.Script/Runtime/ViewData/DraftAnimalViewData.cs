@@ -3,7 +3,13 @@ using UnityEngine;
 [System.Serializable]
 public class DraftAnimalViewData
 {
+    // Identifies the shared DraftAnimalData definition used for content lookup and display.
     public string draftAnimalId;
+
+    // Identifies one owned animal instance so asset locks do not confuse animals of the same type.
+    // Legacy aggregate views may leave this empty, but Caravan setting providers must populate it.
+    public string draftAnimalInstanceId;
+
     public string displayName;
     public Sprite icon;
     public string description;

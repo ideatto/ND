@@ -50,6 +50,8 @@ namespace ND.UI.WorldMap
 
         private string selectedTownId = string.Empty;
         private bool lookupsBuilt;
+        private bool isBuildingLookups;
+
 
         /// <summary>
         /// 마을이 클릭되었을 때 발생한다. 인자는 townId이다.
@@ -64,12 +66,13 @@ namespace ND.UI.WorldMap
         /// </summary>
         public event Action<string> RouteClicked;
 
-        private void OnEnable()
+private void OnEnable()
         {
             FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
             FrameworkEvents.LoadCompleted += HandleLoadCompleted;
-            BuildLookups();
             SubscribeTownClicks(true);
+
+            // RefreshAll already rebuilds the lookup tables, so avoid collecting the same hierarchy twice on enable.
             RefreshAll();
         }
 
@@ -133,6 +136,18 @@ namespace ND.UI.WorldMap
             BuildLookups();
         }
 
+        /// <summary>
+        /// Replaces only the screen-space overlay labels while preserving the world-map bindings.
+        /// </summary>
+        public void BindOverlayLabels(TMP_Text progressLabel, TMP_Text riskText)
+        {
+            // The labels live outside WorldMapRoot so the RenderTexture camera never captures them.
+            progressPercentLabel = progressLabel;
+            riskLabel = riskText;
+            RefreshProgressFromCoordinator();
+        }
+
+
         private void HandleScreenChanged(InGameScreenState _)
         {
             RefreshAll();
@@ -143,64 +158,88 @@ namespace ND.UI.WorldMap
             RefreshAll();
         }
 
-        private void BuildLookups()
+private void BuildLookups()
         {
-            if (autoCollectChildren)
+            if (isBuildingLookups)
             {
-                townViews = GetComponentsInChildren<TownWorldView>(true);
-                routeVisuals = GetComponentsInChildren<RouteVisual>(true);
-                if (caravanMarker == null)
-                {
-                    caravanMarker = GetComponentInChildren<CaravanMapMarker>(true);
-                }
+                // Ignore nested refresh requests until the current lookup rebuild has completed.
+                return;
             }
 
-            townsById.Clear();
-            routesById.Clear();
+            isBuildingLookups = true;
 
-            if (townViews != null)
+            try
             {
-                for (var i = 0; i < townViews.Length; i++)
+                if (autoCollectChildren)
                 {
-                    var view = townViews[i];
-                    if (view == null || string.IsNullOrEmpty(view.TownId))
+                    townViews = GetComponentsInChildren<TownWorldView>(true);
+                    routeVisuals = GetComponentsInChildren<RouteVisual>(true);
+                    if (caravanMarker == null)
                     {
-                        continue;
+                        caravanMarker = GetComponentInChildren<CaravanMapMarker>(true);
                     }
-
-                    if (townsById.ContainsKey(view.TownId))
-                    {
-                        Debug.LogError($"[WorldMap] Duplicate townId '{view.TownId}' on '{view.name}'.", view);
-                        continue;
-                    }
-
-                    townsById.Add(view.TownId, view);
                 }
-            }
 
-            if (routeVisuals != null)
+                townsById.Clear();
+                routesById.Clear();
+
+                // Repeated component references are ignored, but different objects sharing a data ID remain an error.
+                var collectedTownInstances = new HashSet<EntityId>();
+                var collectedRouteInstances = new HashSet<EntityId>();
+
+                if (townViews != null)
+                {
+                    for (var i = 0; i < townViews.Length; i++)
+                    {
+                        var view = townViews[i];
+                        if (view == null
+                            || string.IsNullOrEmpty(view.TownId)
+                            || !collectedTownInstances.Add(view.GetEntityId()))
+                        {
+                            continue;
+                        }
+
+                        if (townsById.ContainsKey(view.TownId))
+                        {
+                            Debug.LogError($"[WorldMap] Duplicate townId '{view.TownId}' on '{view.name}'.", view);
+                            continue;
+                        }
+
+                        townsById.Add(view.TownId, view);
+                    }
+                }
+
+                if (routeVisuals != null)
+                {
+                    for (var i = 0; i < routeVisuals.Length; i++)
+                    {
+                        var visual = routeVisuals[i];
+                        if (visual == null
+                            || string.IsNullOrEmpty(visual.RouteId)
+                            || !collectedRouteInstances.Add(visual.GetEntityId()))
+                        {
+                            continue;
+                        }
+
+                        if (routesById.ContainsKey(visual.RouteId))
+                        {
+                            Debug.LogError($"[WorldMap] Duplicate routeId '{visual.RouteId}' on '{visual.name}'.", visual);
+                            continue;
+                        }
+
+                        routesById.Add(visual.RouteId, visual);
+                        visual.RebuildLineIfNeeded(force: true);
+                    }
+                }
+
+                ValidateAgainstSharedData();
+                lookupsBuilt = true;
+            }
+            finally
             {
-                for (var i = 0; i < routeVisuals.Length; i++)
-                {
-                    var visual = routeVisuals[i];
-                    if (visual == null || string.IsNullOrEmpty(visual.RouteId))
-                    {
-                        continue;
-                    }
-
-                    if (routesById.ContainsKey(visual.RouteId))
-                    {
-                        Debug.LogError($"[WorldMap] Duplicate routeId '{visual.RouteId}' on '{visual.name}'.", visual);
-                        continue;
-                    }
-
-                    routesById.Add(visual.RouteId, visual);
-                    visual.RebuildLineIfNeeded(force: true);
-                }
+                // Always release the guard so later framework refresh events can rebuild normally.
+                isBuildingLookups = false;
             }
-
-            ValidateAgainstSharedData();
-            lookupsBuilt = true;
         }
 
         private void ValidateAgainstSharedData()

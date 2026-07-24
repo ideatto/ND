@@ -1,0 +1,18 @@
+{
+    "name": "ND.DebugTools.Editor",
+    "rootNamespace": "ND.DebugTools.Editor",
+    "references": [
+        "ND.DebugTools.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

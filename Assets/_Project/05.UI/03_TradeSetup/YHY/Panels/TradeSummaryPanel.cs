@@ -54,7 +54,18 @@ public class TradeSummaryPanel : MonoBehaviour
         if (titleText != null) titleText.text = $"{d.fromTown} → {d.toTown}";
         if (viaText != null) viaText.text = $"경유 도시 : {d.viaText}";
         if (riskText != null) riskText.text = $"예상 위험도 {d.expectedRisk} / 고용 용병 {d.mercenaryPower}";
-        if (foodText != null) foodText.text = $"예상 음식 소모 {d.expectedFood:0.#} / 적재 {d.loadedFood}";
+        if (foodText != null)
+        {
+            int requiredFood = Mathf.Max(0, Mathf.CeilToInt(d.expectedFood));
+            int loadedFood = Mathf.Max(0, d.loadedFood);
+            int shortage = Mathf.Max(0, requiredFood - loadedFood);
+            foodText.text = shortage > 0
+                ? $"먹이 요구량 {requiredFood} / 적재 먹이량 {loadedFood}  (부족 {shortage})"
+                : $"먹이 요구량 {requiredFood} / 적재 먹이량 {loadedFood}";
+            foodText.color = shortage > 0
+                ? new Color32(214, 92, 72, 255)
+                : new Color32(45, 40, 39, 255);
+        }
         if (costText != null) costText.text = $"무역 준비 코스트 {d.prepareCost:N0} G";
         if (profitText != null) profitText.text = $"예상 이익 {d.expectedProfit:N0} G";
         if (timeText != null) timeText.text = $"예상 종료 시간 {FormatHms(d.durationSeconds)}";

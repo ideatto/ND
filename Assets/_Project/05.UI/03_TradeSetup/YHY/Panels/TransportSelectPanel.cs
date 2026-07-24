@@ -44,11 +44,19 @@ public class TransportSelectPanel : MonoBehaviour
     private readonly List<Button> spawned = new List<Button>();
     private readonly List<bool> selectable = new List<bool>();   // 소지(선택 가능) 여부
     private int selectedIndex = -1;
+    private bool allowSelection = true;
 
     /// <summary>이동수단 목록으로 카드를 만든다(미선택 상태). 소지 안 한 슬롯은 빈 칸·비활성.</summary>
     public void Populate(IReadOnlyList<TransportEntry> source)
     {
+        Populate(source, true);
+    }
+
+    /// <summary>Builds cards while allowing a detached Caravan setting view to be read-only.</summary>
+    public void Populate(IReadOnlyList<TransportEntry> source, bool canEdit)
+    {
         Clear();
+        allowSelection = canEdit;
         if (source != null) items.AddRange(source);
         if (cardContainer == null || cardPrefab == null) return;
 
@@ -63,7 +71,7 @@ public class TransportSelectPanel : MonoBehaviour
             if (canPick)
             {
                 SetColor(card, normalColor);
-                card.interactable = true;
+                card.interactable = allowSelection;
                 int idx = i;   // for 캡처 방지
                 card.onClick.AddListener(() => Select(idx));
             }
@@ -86,6 +94,41 @@ public class TransportSelectPanel : MonoBehaviour
         Populate(entries);
     }
 
+    /// <summary>Builds a wagon-instance list for one detached Caravan setting session.</summary>
+    public bool Populate(CaravanSettingViewData viewData)
+    {
+        if (viewData == null || string.IsNullOrWhiteSpace(viewData.caravanId))
+        {
+            // A detached setting view must never fall back to an unrelated aggregate wagon list.
+            Debug.LogError("Cannot populate Caravan wagon settings without a valid caravanId.", this);
+            Clear();
+            return false;
+        }
+
+        var entries = new List<TransportEntry>();
+        if (viewData.wagons != null)
+        {
+            foreach (WagonViewData wagon in viewData.wagons)
+            {
+                if (wagon != null)
+                    entries.Add(new TransportEntry(wagon));
+            }
+        }
+
+        Populate(entries, viewData.canEdit);
+        if (string.IsNullOrWhiteSpace(viewData.selectedWagonInstanceId))
+            return true;
+
+        if (RestoreSelectionByInstanceId(viewData.selectedWagonInstanceId))
+            return true;
+
+        // Failing closed exposes a Provider snapshot that references an unavailable owned asset.
+        Debug.LogError(
+            $"Caravan {viewData.caravanId} references missing wagon instance {viewData.selectedWagonInstanceId}.",
+            this);
+        return false;
+    }
+
     /// <summary>도보(None)는 항상 선택 가능, 그 외(마차/자동차)는 소지 개수>0일 때만.</summary>
     private static bool IsOwned(TransportEntry e)
     {
@@ -95,15 +138,38 @@ public class TransportSelectPanel : MonoBehaviour
     /// <summary>idx 카드를 선택(같은 걸 다시 누르면 해제). 색 갱신 + 통지.</summary>
     private void Select(int idx)
     {
+        if (!allowSelection || idx < 0 || idx >= selectable.Count || !selectable[idx])
+            return;
+
         selectedIndex = (selectedIndex == idx) ? -1 : idx;
+        RefreshSelectionColors();
+
+        if (selectedIndex >= 0) OnSelectionChanged?.Invoke(items[selectedIndex]);
+        else OnSelectionChanged?.Invoke(null);
+    }
+
+    /// <summary>Restores one owned wagon without treating Provider data as a new player selection.</summary>
+    public bool RestoreSelectionByInstanceId(string wagonInstanceId)
+    {
+        string normalizedId = string.IsNullOrWhiteSpace(wagonInstanceId)
+            ? string.Empty
+            : wagonInstanceId.Trim();
+        if (string.IsNullOrEmpty(normalizedId))
+            return false;
+
+        selectedIndex = items.FindIndex(item =>
+            string.Equals(item.instanceId, normalizedId, StringComparison.Ordinal));
+        RefreshSelectionColors();
+        return selectedIndex >= 0;
+    }
+
+    private void RefreshSelectionColors()
+    {
         for (int i = 0; i < spawned.Count; i++)
         {
             if (!selectable[i]) { SetColor(spawned[i], emptyColor); continue; }   // 빈 슬롯은 그대로
             SetColor(spawned[i], i == selectedIndex ? selectedColor : normalColor);
         }
-
-        if (selectedIndex >= 0) OnSelectionChanged?.Invoke(items[selectedIndex]);
-        else OnSelectionChanged?.Invoke(null);
     }
 
     /// <summary>현재 선택된 이동수단(없으면 null).</summary>
@@ -113,8 +179,7 @@ public class TransportSelectPanel : MonoBehaviour
     public void ResetSelection()
     {
         selectedIndex = -1;
-        for (int i = 0; i < spawned.Count; i++)
-            SetColor(spawned[i], selectable[i] ? normalColor : emptyColor);
+        RefreshSelectionColors();
         OnSelectionChanged?.Invoke(null);
     }
 
@@ -152,7 +217,12 @@ public class TransportSelectPanel : MonoBehaviour
     [Serializable]
     public struct TransportEntry
     {
+        // Shared content ID used to resolve WagonData and presentation assets.
         public string id;
+
+        // Stable owned-instance ID used by multi-Caravan persistence and asset locking.
+        public string instanceId;
+
         public string name;
         public TransportType type;
         public int slotCount;     // 아이템 슬롯 수
@@ -171,6 +241,7 @@ public class TransportSelectPanel : MonoBehaviour
                               int minAnimals, int maxAnimals, float baseMoveSpeed, int owned)
         {
             this.id = id;
+            instanceId = "";
             this.name = name;
             this.type = type;
             this.slotCount = slotCount;
@@ -189,6 +260,7 @@ public class TransportSelectPanel : MonoBehaviour
         public TransportEntry(WagonViewData viewData)
         {
             id = viewData.wagonId;
+            instanceId = viewData.wagonInstanceId;
             name = viewData.displayName;
             type = viewData.wagonType == WagonType.None ? TransportType.None :
                    viewData.wagonType == WagonType.Mount ? TransportType.Mount : TransportType.Wagon;
@@ -197,7 +269,8 @@ public class TransportSelectPanel : MonoBehaviour
             minAnimals = viewData.minRequireAnimals;
             maxAnimals = viewData.maxPullAnimals;
             baseMoveSpeed = viewData.baseMoveSpeed;
-            owned = viewData.ownedAmount;
+            // Detached setting options describe one owned instance per entry.
+            owned = string.IsNullOrEmpty(viewData.wagonInstanceId) ? viewData.ownedAmount : 1;
             overLoad = viewData.overLoad;
             currentDurability = viewData.currentDurability;
             maxDurability = viewData.maxDurability;

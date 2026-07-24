@@ -38,6 +38,12 @@ namespace ND.Framework
             float durabilityLost,
             float travelSeconds,
             float foodConsumed,
+            float foodLost,
+            int eventsOccurred,
+            int battlesFought,
+            string[] lostMercenaryInstanceIds,
+            bool wagonDestroyed,
+            string destroyedWagonInstanceId,
             float departureLoad,
             float overloadRatio,
             bool canClaim,
@@ -53,6 +59,12 @@ namespace ND.Framework
             DurabilityLost = durabilityLost;
             TravelSeconds = travelSeconds;
             FoodConsumed = foodConsumed;
+            FoodLost = foodLost;
+            EventsOccurred = eventsOccurred;
+            BattlesFought = battlesFought;
+            LostMercenaryInstanceIds = lostMercenaryInstanceIds ?? new string[0];
+            WagonDestroyed = wagonDestroyed;
+            DestroyedWagonInstanceId = destroyedWagonInstanceId ?? string.Empty;
             DepartureLoad = departureLoad;
             OverloadRatio = overloadRatio;
             IsFailed = grade == JourneyResultGrade.Failed;
@@ -79,6 +91,18 @@ namespace ND.Framework
         public float TravelSeconds { get; private set; }
 
         public float FoodConsumed { get; private set; }
+
+        public float FoodLost { get; private set; }
+
+        public int EventsOccurred { get; private set; }
+
+        public int BattlesFought { get; private set; }
+
+        public string[] LostMercenaryInstanceIds { get; private set; }
+
+        public bool WagonDestroyed { get; private set; }
+
+        public string DestroyedWagonInstanceId { get; private set; }
 
         public float DepartureLoad { get; private set; }
 

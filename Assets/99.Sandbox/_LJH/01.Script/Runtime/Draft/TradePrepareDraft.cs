@@ -4,14 +4,23 @@ using UnityEngine;
 [System.Serializable]
 public class TradePrepareDraft
 {
+    // Identifies the Caravan selected inside this departure Draft before later choices are made.
+    // Overview focus is separate and never preselects this value automatically.
+    public string departureCaravanId;
+
     public string currentTownId;
 
     public string selectedDestinationTownId;
     public string selectedRouteId;
 
     public string selectedWagonId;
+    // True when S3 supplied and validated this Caravan-specific owned-instance composition.
+    public bool hasAuthoritativeCaravanComposition;
+    public int selectedWagonCurrentDurability;
     public List<DraftAnimalSelectionData> selectedAnimals = new List<DraftAnimalSelectionData>();
 
+    // True when S4 supplied the complete cargo plan; it replaces legacy single-Caravan SaveData cargo.
+    public bool hasAuthoritativeCargoPlan;
     public List<TradeItemBundle> selectedBuyItems = new List<TradeItemBundle>();
 
     [SerializeField]
@@ -26,6 +35,8 @@ public class TradePrepareDraft
             return false;
         }
 
+        // A Caravan may hire at most one mercenary for a trade.
+        selectedMercenaryIds.Clear();
         selectedMercenaryIds.Add(mercenaryId);
         return true;
     }
@@ -49,10 +60,14 @@ public class TradePrepareDraft
     {
         var snapshot = new TradePrepareDraft
         {
+            departureCaravanId = departureCaravanId,
             currentTownId = currentTownId,
             selectedDestinationTownId = selectedDestinationTownId,
             selectedRouteId = selectedRouteId,
-            selectedWagonId = selectedWagonId
+            selectedWagonId = selectedWagonId,
+            hasAuthoritativeCaravanComposition = hasAuthoritativeCaravanComposition,
+            selectedWagonCurrentDurability = selectedWagonCurrentDurability,
+            hasAuthoritativeCargoPlan = hasAuthoritativeCargoPlan
         };
 
         if (selectedAnimals != null)
