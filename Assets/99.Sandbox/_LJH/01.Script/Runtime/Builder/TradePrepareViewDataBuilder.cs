@@ -83,6 +83,19 @@ public sealed class TradePrepareViewDataBuilder
             out selectedMercenaryPower,
             out selectedMercenaryHireCost);
 
+        ND.Economy.TradeEventPreviewResult eventPreview =
+            ND.Economy.TradeEventPreviewCalculator.Calculate(
+                new ND.Economy.TradeEventPreviewInput
+                {
+                    DistanceKm = selectedRoute != null ? selectedRoute.Distance : 0f,
+                    CaravanBaseSafetyChancePercent = previewCaravan.baseSafetyChancePercent,
+                    MercenaryCombatPower = selectedMercenaryPower,
+                    // The current Route data already exposes the encounter power required by this path.
+                    BanditCombatPower = selectedRoute != null
+                        ? selectedRoute.BaseRequiredMercenaryPower
+                        : 0
+                });
+
         // Mercenary cost comes from the actually selected mercenaries, not the legacy route cost.
         long mercenaryCost = selectedMercenaryHireCost;
         long totalPreparationCost = AddClamped(totalPurchaseCost, mercenaryCost);
@@ -189,6 +202,12 @@ public sealed class TradePrepareViewDataBuilder
             finalExpectedTravelTime = finalTravelTime,
             selectedMoveSpeed = selectedRoute != null && finalTravelTime > 0f
                 ? selectedRoute.Distance / finalTravelTime
+                : 0f,
+            eventCheckCount = eventPreview.IsValid ? eventPreview.EventCheckCount : 0,
+            eventOccurrenceProbability = eventPreview.IsValid ? eventPreview.AtLeastOneEventChance : 0f,
+            expectedEventCount = eventPreview.IsValid ? eventPreview.ExpectedEventCount : 0f,
+            banditSafePassChancePercent = eventPreview.IsValid
+                ? eventPreview.BanditSafePassChancePercent
                 : 0f
         };
     }
@@ -854,6 +873,11 @@ public sealed class TradePrepareViewDataBuilder
 
     private static bool HasInvalidMercenarySelection(TradePrepareDraft draft, MercenaryData[] mercenaries)
     {
+        if (draft.SelectedMercenaryIds.Count > 1)
+        {
+            return true;
+        }
+
         for (int selectionIndex = 0; selectionIndex < draft.SelectedMercenaryIds.Count; selectionIndex++)
         {
             string selectedId = draft.SelectedMercenaryIds[selectionIndex];

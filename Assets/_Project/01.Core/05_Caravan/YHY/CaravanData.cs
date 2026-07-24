@@ -40,6 +40,7 @@ public class CaravanData
     public List<CargoEntry> cargo = new List<CargoEntry>();             // 적재한 무역품 목록
     public int foodAmount;                                              // 실은 식량 수량
     public float foodUnitWeight = 1f;                                   // 식량 1개당 무게
+    public float baseSafetyChancePercent;                               // 산적 이벤트 기본 무사 통과 확률(0~100)
 
     // ── 런타임/저장 상태 ─────────────────────────────────────
     // [시간은 출처를 안 정한다] 진행도(progress01)만 들고 있는다.
@@ -65,7 +66,10 @@ public class CaravanData
 
     public int currentDurability;     // 현재 마차 내구도 (무역 거듭하며 감소, 무역 간 유지)
     public int runDurabilityLost;     // 이번 무역 약탈 내구도 손실 누적 (손실상한 캡 기준)
-    public int runBattlesFought;      // 이번 무역 전투 횟수 (용병 방어 판정용)
+    public int runBattlesFought;      // 이번 무역에서 실제 처리한 Combat 이벤트 수
+    public int runEventChecksProcessed; // 이번 무역에서 이미 처리한 거리 기반 이벤트 판정 수
+    public int runEventsOccurred;       // 이번 무역에서 실제 발생한 이벤트 수
+    public List<string> runLostMercenaryInstanceIds = new List<string>(); // 전투 패배로 소멸한 용병 개체 ID
     public int runStartDurability;    // 이번 무역 출발 시 내구도 (정산 손실 = 출발 - 도착) [M2 거리마모]
     public float runWearRemainder;    // 거리 마모 소수점 이월(1 미만 마모 누적) [M2 거리마모]
 
@@ -76,7 +80,6 @@ public class CaravanData
 
     // ── 손실 상한 (M2, 정헌 LossLimitRate) ─────────────────────
     public float lossLimitRate = 1f;      // 손실 상한율(0~1). 1=무제한. 정헌 CoreRuntimeStatModifier.LossLimitRate로 설정
-    public bool limitRaidDurability = true;   // 약탈 내구도 손실에 손실상한 적용? false=전량 적용 [M2]
     public int runOriginalCargoCount;     // 출발 시 원래 무역품 개수 (손실 상한 계산 기준)
     public float runDepartureLoad;        // 출발 시 짐무게 (정산 데이터용) [M2]
 

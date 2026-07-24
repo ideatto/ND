@@ -35,6 +35,8 @@ public class TradePrepareDraft
             return false;
         }
 
+        // A Caravan may hire at most one mercenary for a trade.
+        selectedMercenaryIds.Clear();
         selectedMercenaryIds.Add(mercenaryId);
         return true;
     }
