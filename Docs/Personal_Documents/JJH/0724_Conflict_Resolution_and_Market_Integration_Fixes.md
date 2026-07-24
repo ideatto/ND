@@ -1,147 +1,94 @@
-# 2026-07-24 충돌 교정 및 Market Integration 수정 기록
+# 2026-07-24 충돌 교정 및 무역 화면 복구 기록
 
-## 작업 정보
+## Purpose
+
+- 병합 과정에서 손실된 무역 프리팹의 데이터 참조를 다시 연결한다.
+- `TradeProgressCoordinator`의 데이터 조회 경로를 무역 진행 및 정산 연결이 동작하는 구성으로 교정한다.
+- 나머지 파일은 현재 작업 브랜치에 반영된 상태를 유지한다.
+
+## 기준
 
 - 작업 브랜치: `featuel/conflictresolution/part2/jjh`
 - 기준 브랜치: `dev2`
 - 기준 커밋: `be4efe9`
-- 작업 목적:
-  - 구버전 병합 과정에서 원복된 데이터 구조와 다중 상단 진행 연결을 최신 구조로 복구한다.
-  - 시장 구매가 출발 및 정산 과정에서 중복 반영되는 Market Inventory Integration Probe 실패를 수정한다.
 
-## 변경 파일
+## Changes
 
-### 1. `RouteEventData.cs`
+### TradeProgressCoordinator
 
-- 경로:
-  - `Assets/99.Sandbox/_LJH/01.Script/Runtime/Data/Calculation/RouteEventData.cs`
-- 원천 소유자:
-  - `ljh-ccc`
-- 원천 소유 근거:
-  - Git 최초 작성 커밋 `26fb3b7`
+- 파일: `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressCoordinator.cs`
+- `TradeRouteEventProcessor`와 `TryProcessForcedRouteEvent(...)`가 포함되지 않은 Coordinator 구현을 적용했다.
+- 다중 `tradeProgressEntries` 순회 처리 대신 선택 캐러밴 호환 접근 경로를 사용한다.
 
-#### 수정 이유
+### 무역 UI 프리팹
 
-구버전 파일에는 최신 전투 이벤트에서 사용하는 산적 전투력, 일반 화물 약탈 비율, 여물 약탈 비율이 없었다. 또한 효과가 없는 경로 이벤트 결과를 표현하는 `RouteEvent.None`과 기존 Unity 직렬화 데이터를 보호하는 명시적 enum 값이 필요했다.
+다음 무역 UI 프리팹의 직렬화 데이터와 참조를 수정했다.
 
-#### 변경 내용
+#### `TradePrepareRuntimeContext.prefab`
 
-- `banditCombatPower`를 추가했다.
-- `cargoLootRate`와 `fodderLootRate`를 추가했다.
-- 신규 산적 전투력이 설정되지 않은 기존 에셋은 `eventValue`를 사용하는 `BanditCombatPower` 호환 접근자를 추가했다.
-- 약탈 비율을 `0~1` 범위로 제한하는 `CargoLootRate`, `FodderLootRate` 접근자를 추가했다.
-- Inspector 구성을 위한 `Header`, `Tooltip`, `Min`, `Range` 속성을 추가했다.
-- 기존 직렬화 값을 유지하도록 enum 값을 명시했다.
-  - `Combat = 0`
-  - `Lucky = 1`
-  - `Weather = 2`
-  - `None = 3`
+- 비어 있던 마을 4개 참조를 복구했다.
+- 비어 있던 경로 6개 참조를 복구했다.
+- 비어 있던 무역 상품 6개 참조를 복구했다.
+- 비어 있던 마차 3개 참조를 복구했다.
+- 비어 있던 짐 동물 2개 참조를 복구했다.
+- 비어 있던 용병 5개 참조를 복구했다.
 
-#### 호환성
+#### `MercenarySelectionPanel.prefab`
 
-- 기존 에셋의 `Combat`, `Lucky`, `Weather` 값은 바뀌지 않는다.
-- 기존 에셋에 `banditCombatPower`가 없으면 `eventValue`가 호환 값으로 사용된다.
-- 신규 약탈 비율은 기존 에셋에서 기본값 0으로 시작하므로 이전 동작을 강제로 변경하지 않는다.
+- 용병 선택 패널의 UI 계층과 레이아웃을 변경했다.
+- 확인 버튼 문구와 높이를 변경하고 TextMeshPro 폰트 참조를 연결했다.
 
-### 2. `TradeProgressCoordinator.cs`
+#### `TradeTravelingPanel.prefab`
 
-- 경로:
-  - `Assets/_Project/11.CoreServices/Scripts/TradeProgress/TradeProgressCoordinator.cs`
-- 원천 소유자:
-  - `csu1222`
-- 원천 소유 근거:
-  - Git 최초 작성 커밋 `97b753c`
+- 진행 화면의 TextMeshPro 폰트 및 공유 머티리얼 참조 4개를 변경했다.
 
-#### 수정 이유
+## 요청 사항
 
-구버전 흐름은 `SaveData.caravan`, `SaveData.tradeProgress`, `SaveData.pendingSettlement` 호환 접근자를 중심으로 선택된 상단 하나만 처리했다. 현재 SaveData version 6은 `caravans`, `tradeProgressEntries`, `pendingSettlements`를 원본 데이터로 사용하는 다중 상단 구조이므로, 구버전 흐름에서는 선택되지 않은 상단의 온라인 진행, 오프라인 복구 및 정산 연결이 누락될 수 있었다.
+현재 적용한 Coordinator에는 경로 이벤트 기능이 포함되어 있지 않다. 다음 기능은 최신 다중 캐러밴 데이터 구조에 맞춰 별도 교정 후 다시 반영해야 한다.
 
-#### 변경 내용
+### Route Event Processor
 
-- `tradeProgressEntries` snapshot을 순회해 모든 Traveling 상단을 처리하도록 변경했다.
-- 온라인 및 오프라인 진행 처리를 `TryProcessTravelingEntry`로 통합했다.
-- `progress.caravanId`로 runtime caravan과 저장 대상 `CaravanSaveData`를 조회하도록 변경했다.
-- 상단별 정산 로직을 `SettleTrade`로 분리했다.
-- 정산 결과에 `caravanId`를 기록하고 `pendingSettlements`에 추가하도록 변경했다.
-- 동일한 `caravanId + tradeId`의 중복 정산 생성을 차단했다.
-- 같은 갱신 주기에 여러 상단이 도착할 수 있도록 `SettlementNotification`을 모은 뒤 저장 후 이벤트를 발행하도록 변경했다.
-- 잘못된 오프라인 시간 범위를 검증하고 항목별 실패가 다른 상단의 복구를 중단하지 않도록 처리했다.
-- runtime caravan을 동일 ID의 저장 데이터에 복사하도록 연결했다.
-- 경로 이벤트 자동 처리와 강제 처리 흐름을 `TradeRouteEventProcessor`로 복원했다.
+- 거리 기반 경로 이벤트를 처리하는 `TradeRouteEventProcessor`를 복구한다.
+- 동일한 `tradeId`와 진행 거리에서 호출 횟수와 관계없이 같은 결과가 나오도록 결정적 처리를 유지한다.
+- 처리 대상 캐러밴은 `selectedCaravanId`가 아니라 해당 무역 진행 데이터의 `caravanId`로 조회한다.
+- 자동 이벤트 처리 시 이미 처리한 체크 인덱스를 저장하여 중복 발생을 막는다.
 
-#### 영향 범위
+### Forced Route Event API 호출 메서드
 
-- 다중 상단 온라인 진행
-- Continue/Load 오프라인 진행 복구
-- 경로 이벤트 처리
-- 도착 정산 생성
-- pending settlement 저장
-- runtime caravan과 save caravan 매핑
-- 정산 준비 및 화면 전환 이벤트
+다음 공개 호출 메서드 또는 동등한 API를 Coordinator에 추가한다.
 
-### 3. `TradePrepareStartAdapter.cs`
-
-- 경로:
-  - `Assets/99.Sandbox/_LJH/01.Script/Runtime/Integration/TradePrepareStartAdapter.cs`
-
-#### 수정 이유
-
-`MarketInventoryIntegrationProbe`의 `VerifyDepartureCommitExcludesMarketSettlement` 검사가 실패했다.
-
-실패 메시지:
-
-```text
-Departure commit must preserve the selected Caravan ID and exclude already
-committed market purchases and automatic sale revenue.
+```csharp
+public bool TryProcessForcedRouteEvent(string tradeId, string eventId)
 ```
 
-시장 거래는 출발 전에 이미 SaveData의 화폐, 시장 재고, caravan cargo에 확정된다. 그러나 출발 커밋이 `totalPurchaseCost`, `estimatedSellRevenue`, `selectedBuyItems`를 다시 저장해 정산 단계에서 같은 구매 또는 판매 금액이 중복 반영될 가능성이 있었다.
+요구 동작:
 
-#### 변경 내용
+- `tradeId`로 실제 Traveling 상태의 `TradeProgressSaveData`를 찾는다.
+- 해당 진행 데이터의 `caravanId`로 runtime caravan과 저장 caravan을 찾는다.
+- `activeRouteId`로 경로 정의를 조회한다.
+- `TradeRouteEventProcessor.ProcessForced(...)`를 호출한다.
+- 성공 시 runtime caravan 결과를 같은 `caravanId`의 저장 데이터에 반영한다.
+- 저장 성공 여부를 반환하고, ID 누락이나 상태 불일치 시 다른 캐러밴 데이터는 변경하지 않는다.
 
-- 출발 커밋의 `purchaseCost`를 `0L`로 설정했다.
-- 출발 커밋의 `estimatedSellRevenue`를 `0L`로 설정했다.
-- 출발 커밋의 `purchasedItems`를 빈 배열로 설정했다.
-- 선택된 `caravanId`는 그대로 유지했다.
-- 시장 거래와 무관한 `foodCost`, `mercenaryCost`는 그대로 유지했다.
+## Check
 
-#### 변경 후 책임 분리
+- `TradePrepareRuntimeContext.prefab`의 데이터 참조를 연결한 뒤 무역 선택 화면이 다시 표시됨을 확인했다.
+- Coordinator를 넣고 빼는 비교로 선택 화면 미표시의 직접 원인이 프리팹 참조 손실임을 확인했다.
+- `Assembly-CSharp.csproj` 빌드 결과:
+  - 오류: 0
+  - 경고: 14
 
-- 시장 구매:
-  - Market transaction이 즉시 SaveData와 화폐에 반영한다.
-- 출발 커밋:
-  - 선택한 상단, 경로, 마차, 동물, 용병 및 비시장 출발 비용만 보관한다.
-- 도착 판매:
-  - 실제 도착 시점의 확정 cargo를 기준으로 정산한다.
+추가 확인 항목:
 
-## 검증 결과
+- 무역 준비 화면에서 마을, 경로, 상품, 마차, 동물, 용병 목록 확인
+- 출발 후 Traveling 화면 전환 확인
+- 저장 및 재로드 후 진행 데이터 복구 확인
+- 도착 및 정산 화면 전환 확인
+- Route Event Processor와 Forced Route Event API 재반영 후 자동·강제 이벤트 각각 검증
 
-- `Assembly-CSharp.csproj` 빌드:
-  - 오류 0개
-  - 기존 경고 35개
-- `git diff --check`:
-  - 통과
-- 충돌 마커:
-  - 없음
-- 변경 범위:
-  - 위 C# 파일 3개와 이 변경 기록 문서
+## Risk
 
-## 추가 확인 방법
-
-Unity Editor에서 다음 메뉴를 실행해 Market Inventory Integration Probe를 다시 검증한다.
-
-```text
-Tools > ND > Validation > Run Market Inventory Integration Probe
-```
-
-성공 시 다음 결과 파일의 `success` 값이 `true`로 갱신된다.
-
-```text
-Temp/market-integration-test-result.json
-```
-
-## 남은 확인 사항
-
-- Unity Test Runner 환경에서 관련 EditMode 테스트를 실행한다.
-- 원천 소유자 또는 현재 유지보수자에게 변경 내용을 리뷰받는다.
-- 동시 이동 중인 여러 상단의 온라인 진행과 오프라인 복구를 PlayMode에서 확인한다.
+- Scene 변경: No
+- Prefab 변경: Yes
+- Meta 변경: No
+- Package 변경: No
