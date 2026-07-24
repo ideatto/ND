@@ -147,8 +147,10 @@ public class MultiCaravanJourneyTest : MonoBehaviour
         }
         if (GUILayout.Button("약탈!", GUILayout.Width(60)))
         {
-            bool defended = JourneyRunner.ResolveRaid(c, durabilityDamage: 8, cargoDamage: 3);
-            Log(c.caravanId + " 약탈 → " + (defended ? "용병이 방어함" : "약탈당함(내구-8, 화물-3)"));
+            // [2026-07-24] dev2가 산적 판정을 ResolveBanditRaid(신규 시그니처)로 교체함.
+            // 이 임시 테스트 HUD는 폐기 예정이라 새 API 연동 대신 버튼만 비활성 처리.
+            // 약탈 흐름 확인은 정식 산적 시스템 테스트(BanditRaid 관련)에서 한다.
+            Log(c.caravanId + " 약탈 버튼: ResolveBanditRaid로 교체됨 — 이 임시 HUD에선 미지원");
         }
         if (GUILayout.Button("정산", GUILayout.Width(60)))
         {
