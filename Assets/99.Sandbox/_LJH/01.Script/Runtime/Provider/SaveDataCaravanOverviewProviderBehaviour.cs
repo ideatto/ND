@@ -29,25 +29,52 @@ public sealed class SaveDataCaravanOverviewProviderBehaviour :
             return CreateUnknownOverview();
 
         var slots = new CaravanBlockViewData[SlotCount];
-        int occupiedCount = Mathf.Min(saveData.caravans.Count, slots.Length);
-        for (int index = 0; index < occupiedCount; index++)
+        var claimedSlots = new bool[SlotCount];
+        for (int index = 0; index < saveData.caravans.Count; index++)
         {
             FrameworkCaravanSaveData caravan = saveData.caravans[index];
-            slots[index] = caravan != null
-                ? CreateOccupiedBlock(caravan, index)
-                : CreateUnknownBlock(index);
+            if (caravan == null)
+                continue;
+
+            // slotIndex is persistent identity. SaveData list order is storage detail and must not
+            // be allowed to reroute an existing caravan to another visible slot.
+            int slotIndex = caravan.slotIndex;
+            if (slotIndex < 0 || slotIndex >= SlotCount)
+            {
+                Debug.LogWarning(
+                    $"Caravan '{caravan.caravanId}' has an unsupported slotIndex ({slotIndex}).",
+                    this);
+                continue;
+            }
+
+            if (claimedSlots[slotIndex])
+            {
+                // Normalization should prevent duplicates. If damaged data reaches the UI anyway,
+                // fail this slot closed instead of choosing one caravan by list order.
+                slots[slotIndex] = CreateUnknownBlock(slotIndex);
+                continue;
+            }
+
+            claimedSlots[slotIndex] = true;
+            slots[slotIndex] = CreateOccupiedBlock(caravan, slotIndex);
         }
 
-        // SaveData does not own a slot-unlock field yet. Preserve the current UI policy in this
-        // adapter: the first unoccupied slot is available and later slots remain locked.
-        for (int index = occupiedCount; index < slots.Length; index++)
+        // Unlock ownership remains in persistent progression data. Creating a Caravan changes only
+        // occupancy and must never unlock the next slot by itself.
+        for (int index = 0; index < slots.Length; index++)
         {
-            bool firstAvailable = index == occupiedCount;
+            if (slots[index] != null)
+                continue;
+
+            bool isUnlocked =
+                saveData.world?.unlockedCaravanSlotIndices?.Contains(index) == true;
             slots[index] = new CaravanBlockViewData
             {
                 slotIndex = index,
-                slotState = firstAvailable ? CaravanSlotState.Empty : CaravanSlotState.Locked,
-                unlockHintText = firstAvailable
+                slotState = isUnlocked
+                    ? CaravanSlotState.Empty
+                    : CaravanSlotState.Locked,
+                unlockHintText = isUnlocked
                     ? string.Empty
                     : "Complete the required quest to unlock this Caravan slot."
             };

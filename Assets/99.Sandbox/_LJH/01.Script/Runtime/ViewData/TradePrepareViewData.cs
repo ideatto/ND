@@ -80,6 +80,10 @@ public sealed class TradePrepareCaravanOptionViewData
     // Provides the user-facing preset name displayed by the selection UI.
     public string displayName = string.Empty;
 
+    // Provides the authoritative location saved for this Caravan. Selecting the
+    // option copies this immutable snapshot into the departure Draft.
+    public string currentTownId = string.Empty;
+
     // Describes the current journey state without exposing mutable runtime data.
     public JourneyState state = JourneyState.Prepare;
 

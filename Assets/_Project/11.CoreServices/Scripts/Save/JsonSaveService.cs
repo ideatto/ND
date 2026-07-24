@@ -422,6 +422,30 @@ namespace ND.Framework
                 data.world = new WorldSaveData();
             }
 
+            if (data.world.unlockedCaravanSlotIndices == null)
+            {
+                // Backward-compatible additive field for version 6 saves. Slot 2 is unlocked only
+                // for the current creation test; final new games should expose only the provided
+                // first Caravan slot until progression explicitly unlocks another slot.
+                data.world.unlockedCaravanSlotIndices = new List<int> { 1 };
+                assetDataChanged = true;
+            }
+            else
+            {
+                var uniqueUnlockedSlots = new HashSet<int>();
+                for (var index = data.world.unlockedCaravanSlotIndices.Count - 1; index >= 0; index--)
+                {
+                    var unlockedSlotIndex = data.world.unlockedCaravanSlotIndices[index];
+                    if (unlockedSlotIndex < 0
+                        || unlockedSlotIndex >= CaravanManagementService.MaxCaravanSlotCount
+                        || !uniqueUnlockedSlots.Add(unlockedSlotIndex))
+                    {
+                        data.world.unlockedCaravanSlotIndices.RemoveAt(index);
+                        assetDataChanged = true;
+                    }
+                }
+            }
+
             if (data.world.unlockedTownIds == null)
             {
                 data.world.unlockedTownIds = new System.Collections.Generic.List<string>();

@@ -515,6 +515,14 @@ namespace ND.Framework
     public sealed class WorldSaveData
     {
         /// <summary>
+        /// Caravan creation is permitted only for these persistent slot indices.
+        /// Occupying a slot does not unlock another slot.
+        /// Slot 2 is unlocked temporarily for creation testing. In the final new-game policy,
+        /// only the first, initially provided Caravan slot is expected to be available.
+        /// </summary>
+        public List<int> unlockedCaravanSlotIndices = new List<int> { 1 };
+
+        /// <summary>
         /// 현재 계절 ID이다. Economy PriceCalculationInput.SeasonId와 연결된다.
         /// </summary>
         public string currentSeasonId = "summer";

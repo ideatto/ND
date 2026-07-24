@@ -66,6 +66,7 @@ namespace ND.Framework.Editor
             RunCaravanSlotNormalizationChecks();
             RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
+            RunTradePrepareDepartureIdChecks();
             RunMultiActiveOnlineTickChecks();
             RunMultiActiveOfflineRestoreChecks();
             RunExplicitEconomyTradeIdChecks();
@@ -221,10 +222,13 @@ namespace ND.Framework.Editor
             {
                 var invalid = service.CreateCaravan(-1);
                 var duplicate = service.CreateCaravan(0);
+                var locked = service.CreateCaravan(2);
                 if (invalid.Succeeded
                     || invalid.FailureReason != CaravanCreationFailureReason.InvalidSlotIndex
                     || duplicate.Succeeded
                     || duplicate.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                    || locked.Succeeded
+                    || locked.FailureReason != CaravanCreationFailureReason.SlotLocked
                     || saveService.SaveCalls != 0
                     || eventCount != 0)
                 {
@@ -242,6 +246,8 @@ namespace ND.Framework.Editor
                     || saveData.caravans.Count != 2
                     || saveData.caravans[1].slotIndex != 1
                     || saveData.caravans[1].caravanId != created.CaravanId
+                    // 신규 Caravan의 위치는 플레이어 선택 화면과 무관하게 BaseCamp로 고정한다.
+                    || saveData.caravans[1].currentTownId != CaravanManagementService.InitialCaravanTownId
                     || !SaveDataLookup.TryGetTradeProgress(saveData, created.CaravanId, out createdProgress)
                     || createdProgress.state != TradeProgressState.None
                     || saveData.pendingSettlements.Count != 0
@@ -268,6 +274,8 @@ namespace ND.Framework.Editor
                     throw new InvalidOperationException("Created Caravan did not survive serialization with legacy access intact.");
                 }
 
+                // 생성 command 검증은 진행 시스템 대신 필요한 슬롯만 명시적으로 해금한다.
+                saveData.world.unlockedCaravanSlotIndices.Add(2);
                 var second = service.CreateCaravan(2);
                 if (!second.Succeeded
                     || second.CaravanId == created.CaravanId
@@ -278,6 +286,8 @@ namespace ND.Framework.Editor
                     throw new InvalidOperationException("Sequential Caravan creation did not preserve unique identity or selection.");
                 }
 
+                // 저장 실패 원복도 잠금 검증을 통과한 뒤 실행되도록 마지막 슬롯을 연다.
+                saveData.world.unlockedCaravanSlotIndices.Add(3);
                 var beforeFailure = JsonUtility.ToJson(saveData);
                 saveService.ShouldSucceed = false;
                 var failed = service.CreateCaravan(3);
@@ -375,6 +385,8 @@ namespace ND.Framework.Editor
                 () => saveData,
                 creationSave,
                 context.Coordinator.GetOrCreateRuntimeCaravan);
+            // runtime 등록 검증 대상 슬롯만 테스트 준비 상태로 해금한다.
+            saveData.world.unlockedCaravanSlotIndices.Add(2);
             var created = management.CreateCaravan(2);
             if (!created.Succeeded
                 || !context.Coordinator.TryGetRuntimeCaravan(created.CaravanId, out var createdRuntime)
@@ -383,6 +395,8 @@ namespace ND.Framework.Editor
                 throw new InvalidOperationException("Created caravan was not registered without reloading.");
             }
 
+            // 저장 실패가 runtime 등록 이전 상태까지 되돌리는지 확인할 슬롯이다.
+            saveData.world.unlockedCaravanSlotIndices.Add(3);
             var beforeFailure = JsonUtility.ToJson(saveData);
             creationSave.ShouldSucceed = false;
             var failed = management.CreateCaravan(3);
@@ -445,6 +459,8 @@ namespace ND.Framework.Editor
 
             var occupancySave = new ConfigurableSaveService();
             var management = new CaravanManagementService(() => occupancyData, occupancySave);
+            // 점유 정규화 검증이 잠금 정책에 의해 먼저 차단되지 않도록 대상 슬롯을 연다.
+            occupancyData.world.unlockedCaravanSlotIndices.Add(2);
             var occupiedZero = management.CreateCaravan(0);
             var occupiedOne = management.CreateCaravan(1);
             var createdTwo = management.CreateCaravan(2);
@@ -839,6 +855,57 @@ namespace ND.Framework.Editor
                 || reentrySave.SaveCalls != 1)
             {
                 throw new InvalidOperationException("Same-caravan departure reentry was not blocked.");
+            }
+        }
+
+        /// <summary>
+        /// TradePrepare의 runtime Caravan ID가 selectedCaravanId와 달라도 지정 대상만 출발하는지 검증한다.
+        /// </summary>
+        private static void RunTradePrepareDepartureIdChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            string selectedCaravanId = context.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(
+                context.SaveData,
+                selectedCaravanId,
+                out CaravanSaveData selectedCaravan);
+
+            // 전역 선택은 첫 Caravan에 둔 채 두 번째 Caravan을 TradePrepare 출발 대상으로 만든다.
+            var departureRuntime = CreateSampleCaravan(context.GameTime);
+            var departureSave = new CaravanSaveData
+            {
+                caravanId = Guid.NewGuid().ToString("N"),
+                currentTownId = CaravanManagementService.InitialCaravanTownId
+            };
+            CaravanSaveDataMapper.CopyToSave(departureRuntime, departureSave);
+            departureRuntime.caravanId = departureSave.caravanId;
+            context.SaveData.caravans.Add(departureSave);
+
+            var tradeStart = new TradeStartService(
+                () => context.SaveData,
+                save,
+                new TradeProgressRecorder(context.GameTime, context.GameTime));
+            DepartureValidationResult result = tradeStart.TryStartTrade(
+                departureRuntime,
+                DistanceKm,
+                "trade_prepare_second_caravan",
+                RouteId);
+
+            TradeProgressSaveData departureProgress;
+            if (!result.canDepart
+                || !tradeStart.LastRecordSucceeded
+                || context.SaveData.selectedCaravanId != selectedCaravanId
+                || selectedCaravan.state == JourneyState.Traveling
+                || departureSave.state != JourneyState.Traveling
+                || !SaveDataLookup.TryGetTradeProgress(
+                    context.SaveData,
+                    departureSave.caravanId,
+                    out departureProgress)
+                || departureProgress.activeTradeId != "trade_prepare_second_caravan")
+            {
+                throw new InvalidOperationException(
+                    "TradePrepare departure did not preserve the selected Caravan while departing the requested Caravan ID.");
             }
         }
 
@@ -2553,6 +2620,9 @@ namespace ND.Framework.Editor
         {
             var saveService = new ConfigurableSaveService();
             var context = TestContext.Create(saveService);
+            // The player remains at the base throughout a Caravan journey. Give the
+            // fixture a stable base location so screen restoration is tested independently.
+            context.SaveData.player.currentTownId = "BaseTown";
             var caravan = CreateSampleCaravan(context.GameTime);
             if (!context.TradeStart.TryStartTrade(
                     caravan, DistanceKm, "editor_atomic_claim", RouteId).canDepart)
@@ -2571,6 +2641,7 @@ namespace ND.Framework.Editor
 
             var currencyBefore = context.SaveData.player.tradingCurrency;
             var townBefore = context.SaveData.player.currentTownId;
+            var caravanTownBefore = context.SaveData.caravan.currentTownId;
             var caravanBefore = JsonUtility.ToJson(context.SaveData.caravan);
             var expectedDestination = context.SaveData.tradePreparationCommit.destinationTownId;
 
@@ -2596,6 +2667,8 @@ namespace ND.Framework.Editor
             Debug.Log("[Framework M1 E2E] Atomic claim: save-failure rollback restored staged values.");
 
             // 정상 Claim → currentTownId → Town 이벤트
+            // A successful claim moves only the departure Caravan. Player location
+            // remains unchanged because it is not part of the Caravan journey.
             saveService.ShouldSucceed = true;
             InGameScreenState? townEventState = null;
             Action<InGameScreenState> onScreenChanged = state => townEventState = state;
@@ -2617,20 +2690,21 @@ namespace ND.Framework.Editor
             }
 
             if (context.ScreenRouter.CurrentScreenState != InGameScreenState.Town
-                || context.SaveData.player.currentTownId != expectedDestination
-                || string.IsNullOrWhiteSpace(context.SaveData.player.currentTownId)
-                || context.SaveData.player.currentTownId == townBefore
+                || context.SaveData.player.currentTownId != townBefore
+                || context.SaveData.caravan.currentTownId != expectedDestination
+                || string.IsNullOrWhiteSpace(context.SaveData.caravan.currentTownId)
+                || context.SaveData.caravan.currentTownId == caravanTownBefore
                 || (context.SaveData.pendingSettlement != null
                     && context.SaveData.pendingSettlement.hasResult)
                 || context.SaveData.tradePreparationCommit.hasCommit
                 || townEventState != InGameScreenState.Town)
             {
                 throw new InvalidOperationException(
-                    $"Atomic claim E2E normal claim town routing failed. TownId: {context.SaveData.player.currentTownId}, Expected: {expectedDestination}, Screen: {context.ScreenRouter.CurrentScreenState}, Event: {townEventState}");
+                    $"Atomic claim E2E Caravan routing failed. PlayerTown: {context.SaveData.player.currentTownId}, CaravanTown: {context.SaveData.caravan.currentTownId}, Expected: {expectedDestination}, Screen: {context.ScreenRouter.CurrentScreenState}, Event: {townEventState}");
             }
 
             Debug.Log(
-                $"[Framework M1 E2E] Atomic claim: normal claim succeeded. currentTownId={context.SaveData.player.currentTownId}, Town event raised.");
+                $"[Framework M1 E2E] Atomic claim: Caravan moved to {context.SaveData.caravan.currentTownId}; player remained at {context.SaveData.player.currentTownId}.");
 
             // 중복 Claim 확인
             if (ClaimCurrentSettlement(context))

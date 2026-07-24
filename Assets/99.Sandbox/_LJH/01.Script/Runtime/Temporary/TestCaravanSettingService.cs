@@ -51,10 +51,16 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         FirstAnimalInstanceId,
         SecondAnimalInstanceId
     };
-    private readonly List<CaravanLoadItemDraft> plannedCargo = new List<CaravanLoadItemDraft>();
-    private string plannedCargoCaravanId = string.Empty;
-    private string plannedCargoSaveBaseline = string.Empty;
-    private bool hasPlannedCargoDraft;
+    private sealed class CargoDraftState
+    {
+        public readonly List<CaravanLoadItemDraft> items = new List<CaravanLoadItemDraft>();
+        public string saveBaseline = string.Empty;
+    }
+
+    // Detached S4 edits are independent per persistent caravanId. Switching slots must not replace
+    // another Caravan's uncommitted load plan.
+    private readonly Dictionary<string, CargoDraftState> cargoDraftsByCaravanId =
+        new Dictionary<string, CargoDraftState>(StringComparer.Ordinal);
     private FrameworkSaveData saveDataOverrideForTests;
 
     public CaravanSettingViewData GetSetting(string caravanId)
@@ -142,7 +148,9 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
 
 
         GetCapacity(wagonInstanceId, out float nextMaxLoad, out int nextMaxSlots);
-        if (GetPlannedCargoLoad() > nextMaxLoad || plannedCargo.Count > nextMaxSlots)
+        TryGetCargoDraft(caravanId, out CargoDraftState cargoDraft);
+        if (GetPlannedCargoLoad(cargoDraft?.items) > nextMaxLoad
+            || (cargoDraft?.items.Count ?? 0) > nextMaxSlots)
         {
             return CaravanSettingCommandResult.Failure(
                 CaravanSettingFailureCodes.CargoCapacityExceeded,
@@ -171,16 +179,15 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
             {
                 string savedCargoSignature = CreateCargoSignature(savedCaravan);
-                bool useDraft = hasPlannedCargoDraft
-                    && string.Equals(plannedCargoCaravanId, normalizedCaravanId, StringComparison.Ordinal)
-                    && string.Equals(plannedCargoSaveBaseline, savedCargoSignature, StringComparison.Ordinal);
+                bool useDraft = TryGetCargoDraft(normalizedCaravanId, out CargoDraftState cargoDraft)
+                    && string.Equals(cargoDraft.saveBaseline, savedCargoSignature, StringComparison.Ordinal);
                 if (useDraft)
                 {
-                    plannedItems = CreatePlannedCargoSnapshot();
+                    plannedItems = CreatePlannedCargoSnapshot(cargoDraft.items);
                 }
                 else
                 {
-                    ClearPlannedCargoDraft();
+                    ClearPlannedCargoDraft(normalizedCaravanId);
                     plannedItems = CreateSavedCargoSnapshot(savedCaravan);
                 }
             }
@@ -188,7 +195,9 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             {
                 // Standalone smoke fixtures have no FrameworkRoot and intentionally keep their
                 // temporary in-memory plan.
-                plannedItems = CreatePlannedCargoSnapshot();
+                plannedItems = TryGetCargoDraft(normalizedCaravanId, out CargoDraftState cargoDraft)
+                    ? CreatePlannedCargoSnapshot(cargoDraft.items)
+                    : Array.Empty<CargoItemViewData>();
             }
         }
         int usedSlots = plannedItems.Length;
@@ -202,7 +211,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             caravanId = normalizedCaravanId,
             caravanDisplayName = displayName,
-            currentTownId = ResolveCurrentTownId(),
+            currentTownId = ResolveCurrentTownId(normalizedCaravanId),
             state = state,
             canEdit = canEdit,
             editBlockedReason = canEdit
@@ -286,14 +295,13 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                 "The Caravan cargo plan exceeds the temporary S4 capacity.");
         }
 
-        plannedCargo.Clear();
-        plannedCargo.AddRange(validatedItems);
+        var nextDraft = new CargoDraftState();
+        nextDraft.items.AddRange(validatedItems);
         if (TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData savedCaravan))
         {
-            plannedCargoCaravanId = caravanId;
-            plannedCargoSaveBaseline = CreateCargoSignature(savedCaravan);
-            hasPlannedCargoDraft = true;
+            nextDraft.saveBaseline = CreateCargoSignature(savedCaravan);
         }
+        cargoDraftsByCaravanId[caravanId] = nextDraft;
         return CaravanLoadSettingCommandResult.Success();
     }
 
@@ -341,16 +349,20 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                 if (caravan == null || string.IsNullOrWhiteSpace(caravan.caravanId))
                     continue;
 
-                bool canSelect = caravan.state == JourneyState.Prepare;
+                bool hasCurrentTown = !string.IsNullOrWhiteSpace(caravan.currentTownId);
+                bool canSelect = caravan.state == JourneyState.Prepare && hasCurrentTown;
                 options.Add(new TradePrepareCaravanOptionViewData
                 {
                     caravanId = caravan.caravanId,
                     displayName = $"Caravan {index + 1}",
+                    currentTownId = caravan.currentTownId ?? string.Empty,
                     state = caravan.state,
                     canSelect = canSelect,
                     disabledReason = canSelect
                         ? string.Empty
-                        : "This Caravan is already traveling or awaiting settlement."
+                        : !hasCurrentTown
+                            ? "This Caravan has no valid departure town."
+                            : "This Caravan is already traveling or awaiting settlement."
                 });
             }
             return options.ToArray();
@@ -363,6 +375,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             {
                 caravanId = PrepareCaravanId,
                 displayName = "Preparation Caravan",
+                currentTownId = "test-town",
                 state = JourneyState.Prepare,
                 canSelect = true,
                 disabledReason = string.Empty
@@ -371,6 +384,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             {
                 caravanId = TravelingCaravanId,
                 displayName = "Traveling Caravan",
+                currentTownId = "test-town",
                 state = JourneyState.Traveling,
                 canSelect = false,
                 disabledReason = "A traveling Caravan cannot start another trade."
@@ -386,7 +400,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
     internal void SetSaveDataForTests(FrameworkSaveData saveData)
     {
         saveDataOverrideForTests = saveData;
-        ClearPlannedCargoDraft();
+        cargoDraftsByCaravanId.Clear();
     }
 
     private CargoItemViewData[] CreateSavedCargoSnapshot(FrameworkCaravanSaveData caravan)
@@ -437,7 +451,8 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         return result.ToArray();
     }
 
-    private CargoItemViewData[] CreatePlannedCargoSnapshot()
+    private CargoItemViewData[] CreatePlannedCargoSnapshot(
+        IReadOnlyList<CaravanLoadItemDraft> plannedCargo)
     {
         var result = new CargoItemViewData[plannedCargo.Count];
         for (int index = 0; index < plannedCargo.Count; index++)
@@ -503,12 +518,14 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         return signature.ToString();
     }
 
-    private void ClearPlannedCargoDraft()
+    private bool TryGetCargoDraft(string caravanId, out CargoDraftState cargoDraft)
     {
-        plannedCargo.Clear();
-        plannedCargoCaravanId = string.Empty;
-        plannedCargoSaveBaseline = string.Empty;
-        hasPlannedCargoDraft = false;
+        return cargoDraftsByCaravanId.TryGetValue(NormalizeId(caravanId), out cargoDraft);
+    }
+
+    private void ClearPlannedCargoDraft(string caravanId)
+    {
+        cargoDraftsByCaravanId.Remove(NormalizeId(caravanId));
     }
 
     private CaravanSettingViewData CreateSettingSnapshot(
@@ -680,12 +697,29 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         return false;
     }
 
-    private string ResolveCurrentTownId()
+    private string ResolveCurrentTownId(string caravanId)
     {
         FrameworkSaveData saveData = ResolveSaveData();
-        return saveData?.player != null && !string.IsNullOrWhiteSpace(saveData.player.currentTownId)
-            ? saveData.player.currentTownId
-            : "test-town";
+        if (saveData?.caravans != null)
+        {
+            string normalizedCaravanId = NormalizeId(caravanId);
+            for (int index = 0; index < saveData.caravans.Count; index++)
+            {
+                FrameworkCaravanSaveData caravan = saveData.caravans[index];
+                if (caravan != null
+                    && string.Equals(caravan.caravanId, normalizedCaravanId, StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(caravan.currentTownId))
+                {
+                    // S3/S4의 위치 표시는 플레이어 전역 위치가 아니라 선택 Caravan의 위치를 따른다.
+                    return caravan.currentTownId;
+                }
+            }
+        }
+
+        // Framework가 없는 단독 Smoke fixture만 기존 임시 위치 fallback을 사용한다.
+        // Framework runtime requires a Caravan-owned location. Only isolated smoke
+        // fixtures without Framework SaveData retain a deterministic test location.
+        return saveData == null ? "test-town" : string.Empty;
     }
 
     private TradeItemData FindCatalogItem(string itemId)
@@ -708,9 +742,12 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         maxSlots = hasWagon ? WagonInventorySlotCount : 0;
     }
 
-    private float GetPlannedCargoLoad()
+    private float GetPlannedCargoLoad(IReadOnlyList<CaravanLoadItemDraft> plannedCargo)
     {
         float load = 0f;
+        if (plannedCargo == null)
+            return load;
+
         for (int index = 0; index < plannedCargo.Count; index++)
         {
             TradeItemData item = FindCatalogItem(plannedCargo[index].itemId);

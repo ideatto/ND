@@ -237,6 +237,7 @@ namespace ND.Framework
                         $"Runtime caravan registration skipped. CaravanId: {caravanSave.caravanId}");
                 }
             }
+
         }
 
         /// <summary>
@@ -643,7 +644,9 @@ namespace ND.Framework
                 return false;
             }
 
-            saveData.player.currentTownId = destinationTownId;
+            // The journey moves the Caravan, not the player. CopyRuntimeToOwnedSave
+            // persists this authoritative Caravan location after claim succeeds.
+            caravan.currentTownId = destinationTownId;
 
             // 대기 정산과 준비 commit 정리를 같은 저장 단위에 stage한다.
             PendingSettlementSaveDataMapper.Clear(saveData);
@@ -768,7 +771,9 @@ namespace ND.Framework
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CoreClaimRejected);
             }
 
-            saveData.player.currentTownId = destinationTownId;
+            // Settlement changes only the claimed Caravan's location. The player
+            // remains at the base and must not drive later Caravan route selection.
+            caravan.currentTownId = destinationTownId;
             if (tradePrepareCommitCompletion == null || !tradePrepareCommitCompletion.TryComplete(tradeId, out _))
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
