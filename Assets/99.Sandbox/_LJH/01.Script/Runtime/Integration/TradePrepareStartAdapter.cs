@@ -280,13 +280,14 @@ public sealed class TradePrepareStartAdapter
             routeId = routeId,
             selectedWagonId = draft.selectedWagonId,
             selectedAnimals = CreateSelectedAnimalSnapshots(draft),
-            // The summary projection already prices the authoritative S4 plan.
-            // Keep food separate because settlement adds purchaseCost and foodCost.
-            purchaseCost = Math.Max(0L, viewData.totalPurchaseCost - viewData.draftAnimalFoodCost),
+            // Market purchases are committed to SaveData before departure.
+            // Do not stage them again or settlement will charge the same transaction twice.
+            purchaseCost = 0L,
             foodCost = Math.Max(0L, viewData.draftAnimalFoodCost),
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
-            estimatedSellRevenue = Math.Max(0L, viewData.estimatedSellRevenue),
-            purchasedItems = CreatePurchasedItemSnapshots(draft),
+            // Arrival sales are calculated from the committed cargo at settlement time.
+            estimatedSellRevenue = 0L,
+            purchasedItems = new TradeItemBundle[0],
             selectedMercenaryIds = mercenaryIds
         };
     }
