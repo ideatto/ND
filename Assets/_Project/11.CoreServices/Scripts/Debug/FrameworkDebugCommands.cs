@@ -28,6 +28,7 @@
  * - ForceSeason(...): WorldSaveData.currentSeasonId를 강제 변경하고 저장한다.
  * - ForceDisaster(...): WorldSaveData.currentDisasterId를 강제 변경하고 저장한다.
  * - ForceRouteEvent(...): Traveling trade에 route event 1회 주입 hook을 등록한다.
+ * - TryConsumeForcedRouteEvent(...): 등록된 route event hook을 1회 소모한다.
  *
  * Important Notes
  * - 실제 상태 변경은 각 이벤트 구독자 또는 GameTimeService가 수행한다.
@@ -42,6 +43,9 @@ namespace ND.Framework
     public sealed class FrameworkDebugCommands
     {
         private readonly GameTimeService gameTimeService;
+
+        private string pendingForcedRouteEventId = string.Empty;
+        private string pendingForcedRouteEventTradeId = string.Empty;
 
         /// <summary>
         /// debug command service를 생성한다.
@@ -190,7 +194,7 @@ namespace ND.Framework
         /// <returns>
         /// Traveling trade에 hook이 등록되고 RouteEventForced 이벤트가 발행되면 true를 반환한다.
         /// eventId가 비어 있거나 active trade가 Traveling이 아니면 false를 반환한다.
-        /// 실제 적용과 저장에 성공한 경우에만 true를 반환하고 RouteEventForced 알림을 발행한다.
+        /// Core 로드/약탈 적용은 이 메서드가 수행하지 않으며, 구독자 또는 TryConsumeForcedRouteEvent가 후속 처리한다.
         /// </returns>
         public bool ForceRouteEvent(string eventId)
         {
@@ -206,18 +210,12 @@ namespace ND.Framework
             }
 
             var normalizedEventId = eventId.Trim();
-            var root = FrameworkRoot.Instance;
-            if (root?.TradeProgressCoordinator == null ||
-                !root.TradeProgressCoordinator.TryProcessForcedRouteEvent(tradeId, normalizedEventId))
-            {
-                FrameworkLog.Warning(
-                    $"ForceRouteEvent could not apply event. TradeId: {tradeId}, RouteId: {routeId}, EventId: {normalizedEventId}");
-                return false;
-            }
+            pendingForcedRouteEventId = normalizedEventId;
+            pendingForcedRouteEventTradeId = tradeId;
 
             FrameworkEvents.RaiseRouteEventForced(tradeId, normalizedEventId);
             FrameworkLog.Info(
-                $"ForceRouteEvent applied and saved. TradeId: {tradeId}, RouteId: {routeId}, EventId: {normalizedEventId}");
+                $"ForceRouteEvent inject hook registered. TradeId: {tradeId}, RouteId: {routeId}, EventId: {normalizedEventId}");
             return true;
         }
 
@@ -230,6 +228,26 @@ namespace ND.Framework
         /// pending hook이 있고 tradeId 조건이 일치하면 true를 반환하고 pending을 비운다.
         /// pending이 없거나 tradeId가 일치하지 않으면 false를 반환한다.
         /// </returns>
+        public bool TryConsumeForcedRouteEvent(string tradeId, out string eventId)
+        {
+            eventId = string.Empty;
+            if (string.IsNullOrEmpty(pendingForcedRouteEventId))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(tradeId)
+                && pendingForcedRouteEventTradeId != tradeId.Trim())
+            {
+                return false;
+            }
+
+            eventId = pendingForcedRouteEventId;
+            pendingForcedRouteEventId = string.Empty;
+            pendingForcedRouteEventTradeId = string.Empty;
+            return true;
+        }
+
         private static bool TryGetWritableWorld(
             out FrameworkRoot root,
             out WorldSaveData world,
