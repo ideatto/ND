@@ -451,10 +451,46 @@ public static class JourneyRunner
         return result;
     }
 
-    /// <summary>정산 수령: 정산대기 → 완료. 이미 받았으면 false(중복 방지).</summary>
+    /// <summary>
+    /// 정산 시작: 정산대기(Settling) → 정산중(Selling).
+    /// UI가 판매/정산 화면을 "열 때" 부른다. 아직 수령 확정은 아니다(자산은 계속 묶임).
+    /// 이미 정산중이면 true로 간주(중복 열기 허용), 정산대기가 아니면 false.
+    /// [주의] 이 단계는 선택적이다 — 부르지 않고 Settling에서 바로 ClaimSettlement해도 된다
+    ///        (Framework의 한방 정산 흐름 호환).
+    /// </summary>
+    public static bool BeginSettlement(CaravanData caravan)
+    {
+        if (caravan == null) return false;
+        if (caravan.state == JourneyState.Selling) return true;        // 이미 정산중
+        if (caravan.state != JourneyState.Settling) return false;      // 정산대기에서만 시작
+
+        caravan.state = JourneyState.Selling;
+        return true;
+    }
+
+    /// <summary>
+    /// 정산 화면 취소: 정산중(Selling) → 정산대기(Settling).
+    /// 판매/정산 화면을 수령 없이 닫을 때 되돌린다. 수령 확정 전에만 가능.
+    /// </summary>
+    public static bool CancelSettlement(CaravanData caravan)
+    {
+        if (caravan == null || caravan.state != JourneyState.Selling) return false;
+        if (caravan.settlementClaimed) return false;   // 이미 받았으면 되돌릴 것 없음(방어)
+
+        caravan.state = JourneyState.Settling;
+        return true;
+    }
+
+    /// <summary>
+    /// 정산 수령: 정산대기(Settling) 또는 정산중(Selling) → 완료. 이미 받았으면 false(중복 방지).
+    /// 두 진입을 모두 허용한다:
+    ///   · Settling → Completed : Framework의 한방 정산(BeginSettlement 생략) 호환
+    ///   · Selling  → Completed : UI가 정산 화면을 거친 두 단계 흐름
+    /// </summary>
     public static bool ClaimSettlement(CaravanData caravan)
     {
-        if (caravan == null || caravan.state != JourneyState.Settling) return false;
+        if (caravan == null) return false;
+        if (caravan.state != JourneyState.Settling && caravan.state != JourneyState.Selling) return false;
         if (caravan.settlementClaimed) return false;
 
         caravan.settlementClaimed = true;
