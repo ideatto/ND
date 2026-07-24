@@ -7,6 +7,8 @@
  * - Core JourneyRunner 결과를 SaveData, FrameworkEvents, Economy M1 bridge, 인게임 화면 상태에 반영한다.
  * - SettlementPending 대기 정산을 PendingSettlementSaveData로 영속화하고 재실행 시 runtime cache를 복구한다.
  * - Continue/Load 시 Traveling 무역의 오프라인 경과·식량·완료를 ApplyOfflineProgressOnLoad로 복구한다.
+ * - Online/Offline 진행에서 거리 기반 route event를 처리하고 저장 성공 후 발생 로그를 발행한다.
+ * - 명시적 caravan/trade/event 대상 forced route event와 저장 실패 rollback을 제공한다.
  *
  * Main Features
  * - 저장된 UTC tick을 기준으로 traveling caravan의 progress01을 갱신한다.
@@ -33,6 +35,7 @@
  * - ForceCompleteActiveTrade(): 현재 active trade를 즉시 도착 처리한다.
  * - ClearPendingSettlementSave(...): SaveData의 pendingSettlement DTO를 비운다.
  * - TryGetMapProgress(...): 월드맵 등 읽기 전용 소비자를 위한 진행 스냅샷을 반환한다.
+ * - TryProcessForcedRouteEvent(...): 명시된 traveling caravan에 route event를 transaction으로 적용한다.
  *
  * Important Notes
  * - 생성자에서 FrameworkEvents.CompleteTradeRequested를 구독한다.
@@ -89,6 +92,64 @@ namespace ND.Framework
 
         public static ClaimSettlementResult Failure(ClaimSettlementFailureReason reason, SaveResult saveResult = null)
             => new ClaimSettlementResult(false, reason, saveResult);
+    }
+
+    public enum ForcedRouteEventFailureReason
+    {
+        None,
+        InvalidCaravanId,
+        InvalidTradeId,
+        InvalidEventId,
+        ProgressNotFound,
+        CaravanNotFound,
+        RuntimeCaravanNotFound,
+        NotTraveling,
+        TradeMismatch,
+        RouteNotFound,
+        EventNotFound,
+        AlreadyFatal,
+        EventApplicationFailed,
+        SaveFailed,
+        RollbackFailed
+    }
+
+    public readonly struct ForcedRouteEventResult
+    {
+        private ForcedRouteEventResult(
+            bool succeeded,
+            ForcedRouteEventFailureReason failureReason,
+            string caravanId,
+            string tradeId,
+            string eventId,
+            SaveResult saveResult)
+        {
+            Succeeded = succeeded;
+            FailureReason = failureReason;
+            CaravanId = caravanId ?? string.Empty;
+            TradeId = tradeId ?? string.Empty;
+            EventId = eventId ?? string.Empty;
+            SaveResult = saveResult;
+        }
+
+        public bool Succeeded { get; }
+        public ForcedRouteEventFailureReason FailureReason { get; }
+        public string CaravanId { get; }
+        public string TradeId { get; }
+        public string EventId { get; }
+        public SaveResult SaveResult { get; }
+
+        public static ForcedRouteEventResult Success(
+            string caravanId, string tradeId, string eventId, SaveResult saveResult)
+            => new ForcedRouteEventResult(
+                true, ForcedRouteEventFailureReason.None, caravanId, tradeId, eventId, saveResult);
+
+        public static ForcedRouteEventResult Failure(
+            ForcedRouteEventFailureReason reason,
+            string caravanId,
+            string tradeId,
+            string eventId,
+            SaveResult saveResult = null)
+            => new ForcedRouteEventResult(false, reason, caravanId, tradeId, eventId, saveResult);
     }
 
     /// <summary>
@@ -342,7 +403,9 @@ namespace ND.Framework
             var currentUtc = gameTimeProvider.CurrentUtc;
             var dirty = false;
             var settled = false;
+            var routeEventStateChanged = false;
             var deferredEvents = new List<SettlementNotification>();
+            var deferredRouteEvents = new List<RouteEventNotification>();
 
             for (var index = 0; index < entries.Count; index++)
             {
@@ -372,14 +435,17 @@ namespace ND.Framework
                             currentUtc,
                             isOfflineRestore: false,
                             deferredEvents,
+                            deferredRouteEvents,
                             out var entryDirty,
-                            out var entrySettled))
+                            out var entrySettled,
+                            out var entryRouteEventStateChanged))
                     {
                         continue;
                     }
 
                     dirty |= entryDirty;
                     settled |= entrySettled;
+                    routeEventStateChanged |= entryRouteEventStateChanged;
                 }
                 catch (Exception exception)
                 {
@@ -388,7 +454,7 @@ namespace ND.Framework
                 }
             }
 
-            var shouldSave = dirty && (saveProgress || settled);
+            var shouldSave = dirty && (saveProgress || settled || routeEventStateChanged);
             var saveSucceeded = !shouldSave;
             if (shouldSave)
             {
@@ -401,6 +467,7 @@ namespace ND.Framework
             if (saveSucceeded)
             {
                 PublishSettlementNotifications(saveData, deferredEvents, isOfflineRestore: false);
+                PublishRouteEventNotifications(deferredRouteEvents);
             }
 
             return settled;
@@ -412,11 +479,14 @@ namespace ND.Framework
             DateTime evaluationUtc,
             bool isOfflineRestore,
             List<SettlementNotification> deferredEvents,
+            List<RouteEventNotification> deferredRouteEvents,
             out bool dirty,
-            out bool settled)
+            out bool settled,
+            out bool routeEventStateChanged)
         {
             dirty = false;
             settled = false;
+            routeEventStateChanged = false;
             if (!SaveDataLookup.TryGetCaravan(saveData, progress.caravanId, out var caravanSave))
             {
                 FrameworkLog.Warning(
@@ -436,6 +506,11 @@ namespace ND.Framework
 
             dirty |= SyncElapsedInGameSeconds(progress, caravanSave, runtimeCaravan, evaluationUtc);
             JourneyRunner.SetProgress(runtimeCaravan, CalculateProgress(progress, evaluationUtc));
+            routeEventStateChanged = ProcessRouteEvents(
+                progress,
+                runtimeCaravan,
+                isOfflineRestore,
+                deferredRouteEvents);
             CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
             dirty = true;
 
@@ -495,6 +570,7 @@ namespace ND.Framework
             var dirty = false;
             var settled = false;
             var deferredEvents = new List<SettlementNotification>();
+            var deferredRouteEvents = new List<RouteEventNotification>();
 
             for (var index = 0; index < entries.Count; index++)
             {
@@ -528,8 +604,10 @@ namespace ND.Framework
                             evaluationUtc,
                             isOfflineRestore: true,
                             deferredEvents,
+                            deferredRouteEvents,
                             out var entryDirty,
-                            out var entrySettled))
+                            out var entrySettled,
+                            out _))
                     {
                         continue;
                     }
@@ -556,9 +634,188 @@ namespace ND.Framework
             if (saveSucceeded)
             {
                 PublishSettlementNotifications(saveData, deferredEvents, isOfflineRestore: true);
+                PublishRouteEventNotifications(deferredRouteEvents);
             }
 
             return settled;
+        }
+
+        /// <summary>
+        /// 명시된 caravan의 traveling trade에 route event를 적용하고 저장한다.
+        /// </summary>
+        /// <returns>
+        /// 검증, runtime 적용, DTO 복사와 저장이 모두 성공한 경우에만 성공한다.
+        /// 저장 실패 시 대상 runtime과 CaravanSaveData를 명령 직전 상태로 복구한다.
+        /// </returns>
+        public ForcedRouteEventResult TryProcessForcedRouteEvent(
+            string caravanId,
+            string tradeId,
+            string eventId)
+        {
+            var normalizedCaravanId = caravanId?.Trim() ?? string.Empty;
+            var normalizedTradeId = tradeId?.Trim() ?? string.Empty;
+            var normalizedEventId = eventId?.Trim() ?? string.Empty;
+            if (normalizedCaravanId.Length == 0)
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.InvalidCaravanId,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (normalizedTradeId.Length == 0)
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.InvalidTradeId,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (normalizedEventId.Length == 0)
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.InvalidEventId,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+
+            var saveData = GetSaveData();
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, normalizedCaravanId, out var progress))
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.ProgressNotFound,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (progress.state != TradeProgressState.Traveling)
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.NotTraveling,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (!string.Equals(progress.activeTradeId, normalizedTradeId, StringComparison.Ordinal))
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.TradeMismatch,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (!SaveDataLookup.TryGetCaravan(saveData, normalizedCaravanId, out var caravanSave))
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.CaravanNotFound,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (!TryGetRuntimeCaravan(normalizedCaravanId, out var runtimeCaravan)
+                || runtimeCaravan == null
+                || !string.Equals(runtimeCaravan.caravanId, normalizedCaravanId, StringComparison.Ordinal)
+                || !string.Equals(caravanSave.caravanId, normalizedCaravanId, StringComparison.Ordinal))
+            {
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.RuntimeCaravanNotFound,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            }
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded
+                || string.IsNullOrWhiteSpace(progress.activeRouteId)
+                || !sharedGameData.TryGetRoute(progress.activeRouteId, out var route)
+                || route == null)
+            {
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.RouteNotFound,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            }
+            if (!RouteContainsEvent(route, normalizedEventId))
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.EventNotFound,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            if (runtimeCaravan.runFatalReason != JourneyFailureReason.None)
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.AlreadyFatal,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+
+            var runtimeSnapshot = JsonUtility.ToJson(runtimeCaravan);
+            var saveSnapshot = JsonUtility.ToJson(caravanSave);
+            var processResult = TradeRouteEventProcessor.ProcessForced(
+                runtimeCaravan, route, normalizedTradeId, normalizedEventId);
+            if (!processResult.Succeeded)
+            {
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.EventApplicationFailed,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId);
+            }
+
+            CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
+            var saveResult = saveService?.Save(saveData)
+                ?? SaveResult.Failure(
+                    SaveFailureReason.InvalidData,
+                    "Save service is missing.",
+                    nameof(CaravanSaveData));
+            if (!saveResult.Succeeded)
+            {
+                try
+                {
+                    JsonUtility.FromJsonOverwrite(runtimeSnapshot, runtimeCaravan);
+                    JsonUtility.FromJsonOverwrite(saveSnapshot, caravanSave);
+                }
+                catch (Exception exception)
+                {
+                    FrameworkLog.Error(
+                        $"Forced route event rollback failed. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, EventId: {normalizedEventId}, Error: {exception.Message}");
+                    return ForcedRouteEventResult.Failure(
+                        ForcedRouteEventFailureReason.RollbackFailed,
+                        normalizedCaravanId, normalizedTradeId, normalizedEventId, saveResult);
+                }
+
+                FrameworkLog.Warning(
+                    $"Forced route event rolled back because save failed. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, EventId: {normalizedEventId}");
+                return ForcedRouteEventResult.Failure(
+                    ForcedRouteEventFailureReason.SaveFailed,
+                    normalizedCaravanId, normalizedTradeId, normalizedEventId, saveResult);
+            }
+
+            FrameworkLog.Info(
+                $"Route event occurred after save. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, RouteId: {route.Id}, EventId: {normalizedEventId}, CheckIndex: -1, Forced: True, Offline: False, Fatal: {processResult.BecameFatal}");
+            return ForcedRouteEventResult.Success(
+                normalizedCaravanId, normalizedTradeId, normalizedEventId, saveResult);
+        }
+
+        private bool ProcessRouteEvents(
+            TradeProgressSaveData progress,
+            CaravanData runtimeCaravan,
+            bool isOfflineRestore,
+            List<RouteEventNotification> deferredNotifications)
+        {
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            if (sharedGameData == null || !sharedGameData.IsLoaded
+                || string.IsNullOrWhiteSpace(progress.activeRouteId)
+                || !sharedGameData.TryGetRoute(progress.activeRouteId, out var route)
+                || route?.Events == null || route.Events.Length == 0
+                || route.MaxEventCount <= 0 || route.Distance <= 0f)
+            {
+                return false;
+            }
+
+            var intervalKm = route.Distance / route.MaxEventCount;
+            var result = TradeRouteEventProcessor.Process(
+                runtimeCaravan,
+                route,
+                progress.activeTradeId,
+                intervalKm,
+                route.BaseRiskLevel);
+            if (!result.Succeeded)
+            {
+                FrameworkLog.Warning(
+                    $"Route event processing failed. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}, RouteId: {progress.activeRouteId}, Stage: Process, Reason: {result.FailureReason}");
+                return false;
+            }
+
+            for (var index = 0; index < result.Occurrences.Count; index++)
+            {
+                var occurrence = result.Occurrences[index];
+                deferredNotifications.Add(new RouteEventNotification(
+                    progress.caravanId,
+                    progress.activeTradeId,
+                    progress.activeRouteId,
+                    occurrence.EventId,
+                    occurrence.CheckIndex,
+                    isOfflineRestore,
+                    occurrence.IsFatal));
+            }
+            return result.Changed;
+        }
+
+        private static bool RouteContainsEvent(SharedRouteDefinition route, string eventId)
+        {
+            if (route?.Events == null) return false;
+            for (var index = 0; index < route.Events.Length; index++)
+            {
+                var candidate = route.Events[index];
+                if (candidate != null
+                    && string.Equals(candidate.Id, eventId, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
         }
 
         private static string FormatCaravanIdForLog(string caravanId)
@@ -1296,6 +1553,16 @@ namespace ND.Framework
             }
         }
 
+        private static void PublishRouteEventNotifications(List<RouteEventNotification> notifications)
+        {
+            for (var index = 0; index < notifications.Count; index++)
+            {
+                var notification = notifications[index];
+                FrameworkLog.Info(
+                    $"Route event occurred after save. CaravanId: {notification.CaravanId}, TradeId: {notification.TradeId}, RouteId: {notification.RouteId}, EventId: {notification.EventId}, CheckIndex: {notification.CheckIndex}, Forced: False, Offline: {notification.IsOffline}, Fatal: {notification.IsFatal}");
+            }
+        }
+
         private bool CanClaimCachedSettlement(SaveData saveData)
         {
             // claim은 coordinator가 직전에 생성한 settlement result가 남아 있을 때만 허용한다.
@@ -1544,6 +1811,35 @@ namespace ND.Framework
             public string CaravanId { get; }
             public string TradeId { get; }
             public JourneyResultData Result { get; }
+        }
+
+        private readonly struct RouteEventNotification
+        {
+            public RouteEventNotification(
+                string caravanId,
+                string tradeId,
+                string routeId,
+                string eventId,
+                int checkIndex,
+                bool isOffline,
+                bool isFatal)
+            {
+                CaravanId = caravanId;
+                TradeId = tradeId;
+                RouteId = routeId;
+                EventId = eventId;
+                CheckIndex = checkIndex;
+                IsOffline = isOffline;
+                IsFatal = isFatal;
+            }
+
+            public string CaravanId { get; }
+            public string TradeId { get; }
+            public string RouteId { get; }
+            public string EventId { get; }
+            public int CheckIndex { get; }
+            public bool IsOffline { get; }
+            public bool IsFatal { get; }
         }
     }
 }
