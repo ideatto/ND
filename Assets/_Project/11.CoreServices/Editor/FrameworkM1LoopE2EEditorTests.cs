@@ -29,6 +29,8 @@
  */
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using ND.Economy;
 using UnityEditor;
@@ -59,7 +61,14 @@ namespace ND.Framework.Editor
         {
             RunAssetInstanceIdPersistenceChecks();
             RunMultiCaravanSaveDataChecks();
+            RunProductionCaravanCreationChecks();
+            RunRuntimeCaravanRegistryChecks();
+            RunCaravanSlotNormalizationChecks();
+            RunCaravanIdNormalizationPersistenceChecks();
             RunMultiCaravanDepartureCommandChecks();
+            RunMultiActiveOnlineTickChecks();
+            RunMultiActiveOfflineRestoreChecks();
+            RunExplicitEconomyTradeIdChecks();
             RunRescueLoanIntegrationChecks();
             RunTradePreparationCommitStoreE2E();
             RunAtomicSettlementClaimE2E();
@@ -186,6 +195,514 @@ namespace ND.Framework.Editor
                 || restored.selectedCaravanId != restored.caravans[0].caravanId)
             {
                 throw new InvalidOperationException("Multi-caravan ID normalization failed.");
+            }
+        }
+
+        private static void RunProductionCaravanCreationChecks()
+        {
+            var saveData = new SaveData();
+            JsonSaveService.NormalizeData(saveData);
+            saveData.caravans[0].slotIndex = 0;
+            var originalSelectedId = saveData.selectedCaravanId;
+            var saveService = new ConfigurableSaveService();
+            var service = new CaravanManagementService(() => saveData, saveService);
+            var eventCount = 0;
+            string eventCaravanId = null;
+            int eventSlotIndex = -1;
+            Action<string, int> onCaravanCreated = (caravanId, slotIndex) =>
+            {
+                eventCount++;
+                eventCaravanId = caravanId;
+                eventSlotIndex = slotIndex;
+            };
+            FrameworkEvents.CaravanCreated += onCaravanCreated;
+
+            try
+            {
+                var invalid = service.CreateCaravan(-1);
+                var duplicate = service.CreateCaravan(0);
+                if (invalid.Succeeded
+                    || invalid.FailureReason != CaravanCreationFailureReason.InvalidSlotIndex
+                    || duplicate.Succeeded
+                    || duplicate.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                    || saveService.SaveCalls != 0
+                    || eventCount != 0)
+                {
+                    throw new InvalidOperationException("Caravan creation validation mutated or saved state.");
+                }
+
+                var created = service.CreateCaravan(1);
+                Guid parsedId;
+                TradeProgressSaveData createdProgress;
+                if (!created.Succeeded
+                    || created.SaveResult == null || !created.SaveResult.Succeeded
+                    || created.CaravanId.Length != 32
+                    || !Guid.TryParseExact(created.CaravanId, "N", out parsedId)
+                    || created.SlotIndex != 1
+                    || saveData.caravans.Count != 2
+                    || saveData.caravans[1].slotIndex != 1
+                    || saveData.caravans[1].caravanId != created.CaravanId
+                    || !SaveDataLookup.TryGetTradeProgress(saveData, created.CaravanId, out createdProgress)
+                    || createdProgress.state != TradeProgressState.None
+                    || saveData.pendingSettlements.Count != 0
+                    || saveData.selectedCaravanId != originalSelectedId
+                    || saveService.SaveCalls != 1
+                    || eventCount != 1
+                    || eventCaravanId != created.CaravanId
+                    || eventSlotIndex != 1)
+                {
+                    throw new InvalidOperationException("Production Caravan creation did not satisfy its success contract.");
+                }
+
+                var serialized = JsonUtility.ToJson(saveData);
+                var restored = JsonUtility.FromJson<SaveData>(serialized);
+                JsonSaveService.NormalizeData(restored);
+                TradeProgressSaveData restoredProgress;
+                if (restored.caravans[1].caravanId != created.CaravanId
+                    || restored.caravans[1].slotIndex != 1
+                    || restored.selectedCaravanId != originalSelectedId
+                    || !SaveDataLookup.TryGetTradeProgress(restored, created.CaravanId, out restoredProgress)
+                    || restored.caravan == null
+                    || restored.caravan.caravanId != originalSelectedId)
+                {
+                    throw new InvalidOperationException("Created Caravan did not survive serialization with legacy access intact.");
+                }
+
+                var second = service.CreateCaravan(2);
+                if (!second.Succeeded
+                    || second.CaravanId == created.CaravanId
+                    || saveData.selectedCaravanId != originalSelectedId
+                    || saveService.SaveCalls != 2
+                    || eventCount != 2)
+                {
+                    throw new InvalidOperationException("Sequential Caravan creation did not preserve unique identity or selection.");
+                }
+
+                var beforeFailure = JsonUtility.ToJson(saveData);
+                saveService.ShouldSucceed = false;
+                var failed = service.CreateCaravan(3);
+                if (failed.Succeeded
+                    || failed.FailureReason != CaravanCreationFailureReason.SaveFailed
+                    || failed.SaveResult == null || failed.SaveResult.Succeeded
+                    || JsonUtility.ToJson(saveData) != beforeFailure
+                    || saveService.SaveCalls != 3
+                    || eventCount != 2)
+                {
+                    throw new InvalidOperationException("Caravan creation save-failure rollback was not atomic.");
+                }
+
+                var missingSelectionData = new SaveData();
+                JsonSaveService.NormalizeData(missingSelectionData);
+                missingSelectionData.caravans[0].slotIndex = 0;
+                missingSelectionData.selectedCaravanId = string.Empty;
+                var missingSelectionSave = new ConfigurableSaveService();
+                var missingSelectionService =
+                    new CaravanManagementService(() => missingSelectionData, missingSelectionSave);
+                var selectedRepair = missingSelectionService.CreateCaravan(1);
+                if (!selectedRepair.Succeeded
+                    || missingSelectionData.selectedCaravanId != selectedRepair.CaravanId
+                    || missingSelectionSave.SaveCalls != 1)
+                {
+                    throw new InvalidOperationException("Caravan creation did not repair an invalid selection.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.CaravanCreated -= onCaravanCreated;
+            }
+
+            Debug.Log("[Framework M1 E2E] Production Caravan creation contract passed.");
+        }
+
+        private static void RunRuntimeCaravanRegistryChecks()
+        {
+            var context = TestContext.Create();
+            var saveData = context.SaveData;
+            var selectedId = saveData.selectedCaravanId;
+            var secondRuntimeSource = CreateSampleCaravan(context.GameTime);
+            secondRuntimeSource.caravanId = Guid.NewGuid().ToString("N");
+            var secondSave = new CaravanSaveData();
+            CaravanSaveDataMapper.CopyToSave(secondRuntimeSource, secondSave);
+            secondSave.slotIndex = 1;
+            saveData.caravans.Add(secondSave);
+            saveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = secondSave.caravanId,
+                state = TradeProgressState.None
+            });
+
+            context.Coordinator.RebuildRuntimeCaravans();
+            if (!context.Coordinator.TryGetRuntimeCaravan(selectedId, out var rebuiltSelected)
+                || !context.Coordinator.TryGetRuntimeCaravan(secondSave.caravanId, out var rebuiltSecond)
+                || ReferenceEquals(rebuiltSelected, rebuiltSecond)
+                || rebuiltSelected.caravanId != selectedId
+                || rebuiltSecond.caravanId != secondSave.caravanId
+                || !ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSelected))
+            {
+                throw new InvalidOperationException("Runtime registry did not rebuild every caravan by ID.");
+            }
+
+            saveData.selectedCaravanId = secondSave.caravanId;
+            if (!ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSecond))
+            {
+                throw new InvalidOperationException("ActiveCaravan did not follow selectedCaravanId.");
+            }
+            saveData.selectedCaravanId = selectedId;
+            if (!ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSelected))
+            {
+                throw new InvalidOperationException("Selected changes recreated or replaced runtime caravans.");
+            }
+
+            var selectedStateBeforeDepart = rebuiltSelected.state;
+            var departure = context.TradeStart.Depart(new TradeDepartureRequest
+            {
+                CaravanId = secondSave.caravanId,
+                RouteId = RouteId
+            });
+            if (!departure.DepartureSucceeded
+                || saveData.selectedCaravanId != selectedId
+                || !ReferenceEquals(context.Coordinator.ActiveCaravan, rebuiltSelected)
+                || rebuiltSelected.state != selectedStateBeforeDepart
+                || rebuiltSecond.state != JourneyState.Traveling
+                || secondSave.state != JourneyState.Traveling)
+            {
+                throw new InvalidOperationException(
+                    "Non-selected departure replaced or mutated the selected runtime caravan.");
+            }
+
+            var creationSave = new ConfigurableSaveService();
+            var management = new CaravanManagementService(
+                () => saveData,
+                creationSave,
+                context.Coordinator.GetOrCreateRuntimeCaravan);
+            var created = management.CreateCaravan(2);
+            if (!created.Succeeded
+                || !context.Coordinator.TryGetRuntimeCaravan(created.CaravanId, out var createdRuntime)
+                || createdRuntime.caravanId != created.CaravanId)
+            {
+                throw new InvalidOperationException("Created caravan was not registered without reloading.");
+            }
+
+            var beforeFailure = JsonUtility.ToJson(saveData);
+            creationSave.ShouldSucceed = false;
+            var failed = management.CreateCaravan(3);
+            if (failed.Succeeded || JsonUtility.ToJson(saveData) != beforeFailure
+                || context.Coordinator.TryGetRuntimeCaravan(failed.CaravanId, out _))
+            {
+                throw new InvalidOperationException("Failed caravan creation changed save or runtime registry state.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Runtime caravan registry checks passed.");
+        }
+
+        private static void RunCaravanSlotNormalizationChecks()
+        {
+            AssertSlotNormalization(new[] { 0, 0, 2 }, new[] { 0, 1, 2 }, true, 1, "duplicate");
+            AssertSlotNormalization(new[] { -1, 1, 1 }, new[] { 0, 1, 2 }, true, 2, "negative and duplicate");
+            AssertSlotNormalization(new[] { 0, 1, 2 }, new[] { 0, 1, 2 }, false, 0, "normal contiguous");
+            AssertSlotNormalization(new[] { 0, 3 }, new[] { 0, 3 }, false, 0, "normal sparse");
+
+            var ordered = CreateSlotNormalizationData(2, 0, 2);
+            var selectedId = ordered.caravans[1].caravanId;
+            ordered.selectedCaravanId = selectedId;
+            ordered.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = selectedId,
+                activeTradeId = "slot-normalization-trade",
+                state = TradeProgressState.Traveling
+            });
+            ordered.pendingSettlements.Add(new PendingSettlementSaveData
+            {
+                caravanId = selectedId,
+                tradeId = "slot-normalization-trade",
+                hasResult = true
+            });
+            var firstId = ordered.caravans[0].caravanId;
+            var secondId = ordered.caravans[1].caravanId;
+            var thirdId = ordered.caravans[2].caravanId;
+
+            if (!JsonSaveService.NormalizeData(ordered)
+                || ordered.caravans[0].caravanId != firstId || ordered.caravans[0].slotIndex != 2
+                || ordered.caravans[1].caravanId != secondId || ordered.caravans[1].slotIndex != 0
+                || ordered.caravans[2].caravanId != thirdId || ordered.caravans[2].slotIndex != 1
+                || ordered.selectedCaravanId != selectedId
+                || ordered.caravan == null || ordered.caravan.caravanId != selectedId
+                || ordered.tradeProgressEntries[0].caravanId != selectedId
+                || ordered.tradeProgressEntries[0].activeTradeId != "slot-normalization-trade"
+                || ordered.tradeProgressEntries[0].state != TradeProgressState.Traveling
+                || ordered.pendingSettlements[0].caravanId != selectedId
+                || ordered.pendingSettlements[0].tradeId != "slot-normalization-trade")
+            {
+                throw new InvalidOperationException(
+                    "Caravan slot normalization changed list order, selection, or ID-owned child data.");
+            }
+
+            var occupancyData = CreateSlotNormalizationData(0, 0);
+            if (!JsonSaveService.NormalizeData(occupancyData))
+            {
+                throw new InvalidOperationException("Damaged Caravan slots were not normalized before occupancy checks.");
+            }
+
+            var occupancySave = new ConfigurableSaveService();
+            var management = new CaravanManagementService(() => occupancyData, occupancySave);
+            var occupiedZero = management.CreateCaravan(0);
+            var occupiedOne = management.CreateCaravan(1);
+            var createdTwo = management.CreateCaravan(2);
+            if (occupiedZero.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                || occupiedOne.FailureReason != CaravanCreationFailureReason.SlotAlreadyOccupied
+                || !createdTwo.Succeeded
+                || createdTwo.SlotIndex != 2
+                || occupancySave.SaveCalls != 1)
+            {
+                throw new InvalidOperationException("CreateCaravan occupancy did not use normalized slots.");
+            }
+
+            RunCaravanSlotLoadPersistenceCheck(2, new[] { 0, 1 });
+            RunCaravanSlotLoadPersistenceCheck(4, new[] { 0, 1, 2, 3 });
+            Debug.Log("[Framework M1 E2E] Caravan slot normalization and load persistence passed.");
+        }
+
+        private static void AssertSlotNormalization(
+            int[] input,
+            int[] expected,
+            bool expectedChanged,
+            int expectedWarnings,
+            string caseLabel)
+        {
+            var data = CreateSlotNormalizationData(input);
+            var warningCount = 0;
+            Application.LogCallback onLog = (condition, _, type) =>
+            {
+                if (type == LogType.Warning && condition.Contains("Caravan slotIndex was normalized."))
+                {
+                    warningCount++;
+                }
+            };
+            Application.logMessageReceived += onLog;
+            bool changed;
+            try
+            {
+                changed = JsonSaveService.NormalizeData(data);
+            }
+            finally
+            {
+                Application.logMessageReceived -= onLog;
+            }
+
+            if (changed != expectedChanged || warningCount != expectedWarnings
+                || data.caravans.Count != expected.Length)
+            {
+                throw new InvalidOperationException($"Caravan slot normalization failed for {caseLabel}.");
+            }
+
+            for (var i = 0; i < expected.Length; i++)
+            {
+                if (data.caravans[i].slotIndex != expected[i])
+                {
+                    throw new InvalidOperationException(
+                        $"Caravan slot normalization produced an unexpected slot for {caseLabel} at index {i}.");
+                }
+            }
+        }
+
+        private static SaveData CreateSlotNormalizationData(params int[] slots)
+        {
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            data.caravans.Clear();
+            for (var i = 0; i < slots.Length; i++)
+            {
+                data.caravans.Add(new CaravanSaveData
+                {
+                    caravanId = "slot_caravan_" + i,
+                    slotIndex = slots[i],
+                    currentTownId = data.player.currentTownId
+                });
+            }
+
+            data.selectedCaravanId = data.caravans[0].caravanId;
+            data.tradeProgressEntries.Clear();
+            data.pendingSettlements.Clear();
+            return data;
+        }
+
+        private static void RunCaravanSlotLoadPersistenceCheck(int caravanCount, int[] expectedSlots)
+        {
+            var testDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "nd-caravan-slot-normalization-" + Guid.NewGuid().ToString("N"));
+            var testPath = Path.Combine(testDirectory, "save_data.json");
+            Directory.CreateDirectory(testDirectory);
+
+            try
+            {
+                var service = new JsonSaveService();
+                var savePathField = typeof(JsonSaveService).GetField(
+                    "savePath",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (savePathField == null)
+                {
+                    throw new InvalidOperationException("JsonSaveService save path seam was not found.");
+                }
+
+                savePathField.SetValue(service, testPath);
+                var data = CreateSlotNormalizationData(new int[caravanCount]);
+                var jsonWithoutSlots = System.Text.RegularExpressions.Regex.Replace(
+                    JsonUtility.ToJson(data, true),
+                    @"^\s*""slotIndex""\s*:\s*-?\d+,\r?\n",
+                    string.Empty,
+                    System.Text.RegularExpressions.RegexOptions.Multiline);
+                File.WriteAllText(testPath, jsonWithoutSlots);
+
+                var saveLogs = 0;
+                Application.LogCallback onLog = (condition, _, type) =>
+                {
+                    if (type == LogType.Log && condition.Contains("Save data written:"))
+                    {
+                        saveLogs++;
+                    }
+                };
+                Application.logMessageReceived += onLog;
+                SaveData firstLoad;
+                string firstJson;
+                SaveData secondLoad;
+                string secondJson;
+                try
+                {
+                    firstLoad = service.Load();
+                    firstJson = File.ReadAllText(testPath);
+                    if (saveLogs != 1)
+                    {
+                        throw new InvalidOperationException("First slot-normalizing Load did not save exactly once.");
+                    }
+
+                    saveLogs = 0;
+                    secondLoad = service.Load();
+                    secondJson = File.ReadAllText(testPath);
+                }
+                finally
+                {
+                    Application.logMessageReceived -= onLog;
+                }
+
+                if (firstLoad.caravans.Count != expectedSlots.Length
+                    || secondLoad.caravans.Count != expectedSlots.Length
+                    || saveLogs != 0
+                    || firstJson != secondJson)
+                {
+                    throw new InvalidOperationException(
+                        $"Caravan slot Load persistence was not idempotent for {caravanCount} entries.");
+                }
+
+                for (var i = 0; i < expectedSlots.Length; i++)
+                {
+                    if (firstLoad.caravans[i].slotIndex != expectedSlots[i]
+                        || secondLoad.caravans[i].slotIndex != expectedSlots[i])
+                    {
+                        throw new InvalidOperationException(
+                            $"Caravan slot Load persistence produced an unexpected slot at index {i}.");
+                    }
+                }
+            }
+            finally
+            {
+                if (File.Exists(testPath)) File.Delete(testPath);
+                if (Directory.Exists(testDirectory)) Directory.Delete(testDirectory);
+            }
+        }
+
+        private static void RunCaravanIdNormalizationPersistenceChecks()
+        {
+            AssertCaravanIdRepair(string.Empty, "empty");
+            AssertCaravanIdRepair("   ", "whitespace");
+
+            var duplicateData = CreateNormalizedSaveData("duplicate");
+            duplicateData.caravans.Add(new CaravanSaveData { caravanId = "duplicate" });
+            if (!JsonSaveService.NormalizeData(duplicateData)
+                || duplicateData.caravans[0].caravanId != "duplicate"
+                || duplicateData.caravans[1].caravanId == "duplicate"
+                || duplicateData.caravans[1].caravanId.Length != 32)
+            {
+                throw new InvalidOperationException("Duplicate caravan ID normalization failed.");
+            }
+
+            var repairedDuplicateId = duplicateData.caravans[1].caravanId;
+            if (JsonSaveService.NormalizeData(duplicateData)
+                || duplicateData.caravans[1].caravanId != repairedDuplicateId)
+            {
+                throw new InvalidOperationException("Caravan ID normalization was not idempotent.");
+            }
+
+            AssertSelectedCaravanRepair(string.Empty);
+            AssertSelectedCaravanRepair("missing");
+            RunCaravanIdLoadPersistenceCheck();
+
+            Debug.Log("[Framework M1 E2E] Caravan ID normalization and load persistence passed.");
+        }
+
+        private static SaveData CreateNormalizedSaveData(string caravanId)
+        {
+            var data = new SaveData();
+            JsonSaveService.NormalizeData(data);
+            data.caravans[0].caravanId = caravanId;
+            data.selectedCaravanId = caravanId;
+            return data;
+        }
+
+        private static void AssertCaravanIdRepair(string invalidId, string caseLabel)
+        {
+            var data = CreateNormalizedSaveData(invalidId);
+            if (!JsonSaveService.NormalizeData(data)
+                || data.caravans[0].caravanId.Length != 32
+                || data.selectedCaravanId != data.caravans[0].caravanId)
+            {
+                throw new InvalidOperationException($"Caravan {caseLabel} ID normalization failed.");
+            }
+        }
+
+        private static void AssertSelectedCaravanRepair(string invalidSelectedId)
+        {
+            var data = CreateNormalizedSaveData("caravan_a");
+            data.selectedCaravanId = invalidSelectedId;
+            if (!JsonSaveService.NormalizeData(data) || data.selectedCaravanId != "caravan_a")
+            {
+                throw new InvalidOperationException("Selected caravan ID normalization failed.");
+            }
+        }
+
+        private static void RunCaravanIdLoadPersistenceCheck()
+        {
+            var testDirectory = Path.Combine(Path.GetTempPath(), "nd-caravan-id-normalization-" + Guid.NewGuid().ToString("N"));
+            var testPath = Path.Combine(testDirectory, "save_data.json");
+            Directory.CreateDirectory(testDirectory);
+
+            try
+            {
+                var service = new JsonSaveService();
+                var savePathField = typeof(JsonSaveService).GetField("savePath", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (savePathField == null)
+                {
+                    throw new InvalidOperationException("JsonSaveService save path seam was not found.");
+                }
+
+                savePathField.SetValue(service, testPath);
+                var data = CreateNormalizedSaveData(string.Empty);
+                File.WriteAllText(testPath, JsonUtility.ToJson(data, true));
+
+                var firstLoad = service.Load();
+                var firstId = firstLoad.caravans[0].caravanId;
+                var firstJson = File.ReadAllText(testPath);
+                var secondLoad = service.Load();
+                var secondJson = File.ReadAllText(testPath);
+                if (firstId.Length != 32 || secondLoad.caravans[0].caravanId != firstId || secondJson != firstJson)
+                {
+                    throw new InvalidOperationException("Caravan ID was not persisted by exactly the first load normalization.");
+                }
+            }
+            finally
+            {
+                if (File.Exists(testPath)) File.Delete(testPath);
+                if (Directory.Exists(testDirectory)) Directory.Delete(testDirectory);
             }
         }
 
@@ -333,6 +850,400 @@ namespace ND.Framework.Editor
                 new TradeProgressRecorder(context.GameTime, context.GameTime),
                 context.ScreenRouter,
                 getSharedGameData: () => context.SharedGameData);
+        }
+
+        /// <summary>
+        /// 비선택 진행, entry별 오류 격리, 동시 완료, pending/event ID 및 Tick당 단일 저장을 검증한다.
+        /// </summary>
+        private static void RunMultiActiveOnlineTickChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var command = CreatePlayerDepartureCommand(context, save);
+            var firstId = context.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(context.SaveData, firstId, out var firstSave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), firstSave);
+
+            var secondSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), secondSave);
+            context.SaveData.caravans.Add(secondSave);
+
+            var firstDeparture = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = firstId,
+                RouteId = RouteId
+            });
+            var secondDeparture = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = secondSave.caravanId,
+                RouteId = RouteId
+            });
+            if (!firstDeparture.DepartureSucceeded || !secondDeparture.DepartureSucceeded)
+                throw new InvalidOperationException("Multi-active online setup departure failed.");
+
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, firstId, out var firstProgress);
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, secondSave.caravanId, out var secondProgress);
+            var now = context.GameTime.CurrentUtc;
+            firstProgress.tradeStartUtcTick = now.AddMinutes(-2).Ticks;
+            firstProgress.expectedTradeEndUtcTick = now.AddMinutes(-1).Ticks;
+            secondProgress.tradeStartUtcTick = now.AddMinutes(-1).Ticks;
+            secondProgress.expectedTradeEndUtcTick = now.AddMinutes(1).Ticks;
+            context.SaveData.tradeProgressEntries.Insert(1, new TradeProgressSaveData
+            {
+                caravanId = "missing-runtime",
+                activeTradeId = "missing-runtime-trade",
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = now.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = now.AddMinutes(1).Ticks
+            });
+            context.SaveData.selectedCaravanId = secondSave.caravanId;
+
+            var selectedBefore = context.SaveData.selectedCaravanId;
+            var saveCallsBeforeTick = save.SaveCalls;
+            var readyEvents = new List<string>();
+            Action<string, string, JourneyResultData> onReady =
+                (caravanId, tradeId, _) => readyEvents.Add(caravanId + ":" + tradeId);
+            FrameworkEvents.TradeSettlementReady += onReady;
+            try
+            {
+                if (!context.Coordinator.CheckProgressAndCompletion())
+                    throw new InvalidOperationException("Multi-active online tick did not report settlement.");
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onReady;
+            }
+
+            if (firstProgress.state != TradeProgressState.SettlementPending
+                || secondProgress.state != TradeProgressState.Traveling
+                || context.SaveData.selectedCaravanId != selectedBefore
+                || context.SaveData.pendingSettlements.Count != 1
+                || context.SaveData.pendingSettlements[0].caravanId != firstId
+                || context.SaveData.pendingSettlements[0].tradeId != firstDeparture.TradeId
+                || readyEvents.Count != 1
+                || readyEvents[0] != firstId + ":" + firstDeparture.TradeId
+                || save.SaveCalls != saveCallsBeforeTick + 1)
+            {
+                throw new InvalidOperationException("Multi-active mixed tick state, event, selection, or save batching failed.");
+            }
+
+            var simultaneousSave = new ConfigurableSaveService();
+            var simultaneous = TestContext.Create(simultaneousSave);
+            var simultaneousCommand = CreatePlayerDepartureCommand(simultaneous, simultaneousSave);
+            var aId = simultaneous.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(simultaneous.SaveData, aId, out var aSave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), aSave);
+            var bSave = new CaravanSaveData { caravanId = Guid.NewGuid().ToString("N") };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), bSave);
+            simultaneous.SaveData.caravans.Add(bSave);
+            var aDeparture = simultaneousCommand.Depart(new TradeDepartureRequest
+            {
+                CaravanId = aId,
+                RouteId = RouteId
+            });
+            var bDeparture = simultaneousCommand.Depart(new TradeDepartureRequest
+            {
+                CaravanId = bSave.caravanId,
+                RouteId = RouteId
+            });
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, aId, out var aProgress);
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, bSave.caravanId, out var bProgress);
+            var simultaneousNow = simultaneous.GameTime.CurrentUtc;
+            aProgress.expectedTradeEndUtcTick = simultaneousNow.AddSeconds(-1).Ticks;
+            bProgress.expectedTradeEndUtcTick = simultaneousNow.AddSeconds(-1).Ticks;
+            var simultaneousSavesBefore = simultaneousSave.SaveCalls;
+            var simultaneousEvents = 0;
+            Action<string, string, JourneyResultData> onSimultaneousReady =
+                (_, __, ___) => simultaneousEvents++;
+            FrameworkEvents.TradeSettlementReady += onSimultaneousReady;
+            try
+            {
+                simultaneous.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+                simultaneous.Coordinator.CheckProgressAndCompletion(saveProgress: false);
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onSimultaneousReady;
+            }
+
+            if (aProgress.state != TradeProgressState.SettlementPending
+                || bProgress.state != TradeProgressState.SettlementPending
+                || simultaneous.SaveData.pendingSettlements.Count != 2
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, aId, aDeparture.TradeId, out _)
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, bSave.caravanId, bDeparture.TradeId, out _)
+                || simultaneousEvents != 2
+                || simultaneousSave.SaveCalls != simultaneousSavesBefore + 1)
+            {
+                throw new InvalidOperationException("Multi-active simultaneous settlement or duplicate prevention failed.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Multi-active online tick checks passed.");
+        }
+
+        /// <summary>
+        /// Offline restore가 selected facade가 아닌 명시 entry 전체를 처리하고 저장·이벤트를 일괄 처리하는지 검증한다.
+        /// </summary>
+        private static void RunMultiActiveOfflineRestoreChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var command = CreatePlayerDepartureCommand(context, save);
+            var caravanAId = context.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(context.SaveData, caravanAId, out var caravanASave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), caravanASave);
+
+            var caravanBSave = new CaravanSaveData { caravanId = "caravan_B" };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), caravanBSave);
+            context.SaveData.caravans.Add(caravanBSave);
+            var caravanCSave = new CaravanSaveData { caravanId = "caravan_C" };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(context.GameTime), caravanCSave);
+            context.SaveData.caravans.Add(caravanCSave);
+
+            var departureA = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = caravanAId,
+                RouteId = RouteId
+            });
+            var departureB = command.Depart(new TradeDepartureRequest
+            {
+                CaravanId = caravanBSave.caravanId,
+                RouteId = RouteId
+            });
+            if (!departureA.DepartureSucceeded || !departureB.DepartureSucceeded)
+                throw new InvalidOperationException("Multi-active offline setup departure failed.");
+
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanAId, out var progressA);
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanBSave.caravanId, out var progressB);
+            var now = context.GameTime.CurrentUtc;
+            progressA.activeTradeId = "trade_A";
+            progressA.tradeStartUtcTick = now.AddMinutes(-2).Ticks;
+            progressA.expectedTradeEndUtcTick = now.AddMinutes(-1).Ticks;
+            progressB.activeTradeId = "trade_B";
+            progressB.tradeStartUtcTick = now.AddMinutes(-1).Ticks;
+            progressB.expectedTradeEndUtcTick = now.AddMinutes(1).Ticks;
+            context.SaveData.tradeProgressEntries.Insert(1, new TradeProgressSaveData
+            {
+                caravanId = "missing_caravan",
+                activeTradeId = "trade_missing",
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = now.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = now.AddMinutes(1).Ticks
+            });
+            context.SaveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravanCSave.caravanId,
+                activeTradeId = string.Empty,
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = now.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = now.AddMinutes(1).Ticks
+            });
+            context.SaveData.selectedCaravanId = caravanCSave.caravanId;
+            context.SaveData.lastSavedUtcTicks = now.AddMinutes(-2).Ticks;
+
+            var selectedBefore = context.SaveData.selectedCaravanId;
+            var savesBefore = save.SaveCalls;
+            var ready = new List<string>();
+            var offline = new List<string>();
+            var restoreWarnings = new List<string>();
+            Action<string, string, JourneyResultData> onReady =
+                (caravanId, tradeId, _) => ready.Add(caravanId + ":" + tradeId);
+            Action<string> onOffline = tradeId => offline.Add(tradeId);
+            Application.LogCallback onLog = (condition, _, type) =>
+            {
+                if (type == LogType.Warning && condition.Contains("Offline trade restore skipped."))
+                {
+                    restoreWarnings.Add(condition);
+                }
+            };
+            FrameworkEvents.TradeSettlementReady += onReady;
+            FrameworkEvents.TradeOfflineCompleted += onOffline;
+            Application.logMessageReceived += onLog;
+            try
+            {
+                if (!context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData))
+                    throw new InvalidOperationException("Multi-active offline restore did not report settlement.");
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onReady;
+                FrameworkEvents.TradeOfflineCompleted -= onOffline;
+                Application.logMessageReceived -= onLog;
+            }
+
+            var runtimeB = context.Coordinator.GetOrCreateRuntimeCaravan(caravanBSave.caravanId);
+            var missingCaravanWarning = restoreWarnings.Exists(message =>
+                message.Contains("Offline")
+                && message.Contains("SaveTargetLookup")
+                && message.Contains("missing_caravan")
+                && message.Contains("trade_missing")
+                && message.Contains("Reason:"));
+            var emptyTradeWarning = restoreWarnings.Exists(message =>
+                message.Contains("Offline")
+                && message.Contains("EntryValidation")
+                && message.Contains("caravan_C")
+                && message.Contains("TradeId: <empty>")
+                && message.Contains("Reason:"));
+            if (progressA.state != TradeProgressState.SettlementPending
+                || progressB.state != TradeProgressState.Traveling
+                || runtimeB == null || runtimeB.progress01 <= 0f
+                || Mathf.Abs(runtimeB.progress01 - caravanBSave.progress01) > 0.001f
+                || context.SaveData.selectedCaravanId != selectedBefore
+                || context.SaveData.pendingSettlements.Count != 1
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    context.SaveData, caravanAId, "trade_A", out _)
+                || ready.Count != 1 || ready[0] != caravanAId + ":trade_A"
+                || offline.Count != 1 || offline[0] != "trade_A"
+                || !missingCaravanWarning || !emptyTradeWarning
+                || save.SaveCalls != savesBefore + 1)
+            {
+                throw new InvalidOperationException(
+                    "Multi-active offline mixed progress, isolation, ID, selection, event, or save batching failed.");
+            }
+
+            var savesAfterFirstRestore = save.SaveCalls;
+            var pendingAfterFirstRestore = context.SaveData.pendingSettlements.Count;
+            if (context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData)
+                || context.SaveData.pendingSettlements.Count != pendingAfterFirstRestore
+                || save.SaveCalls != savesAfterFirstRestore + 1)
+            {
+                throw new InvalidOperationException(
+                    "Multi-active offline repeated restore recreated settlement or violated progress save batching.");
+            }
+
+            var simultaneousSave = new ConfigurableSaveService();
+            var simultaneous = TestContext.Create(simultaneousSave);
+            var simultaneousCommand = CreatePlayerDepartureCommand(simultaneous, simultaneousSave);
+            var simultaneousAId = simultaneous.SaveData.selectedCaravanId;
+            SaveDataLookup.TryGetCaravan(simultaneous.SaveData, simultaneousAId, out var simultaneousASave);
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), simultaneousASave);
+            var simultaneousBSave = new CaravanSaveData { caravanId = "caravan_B" };
+            CaravanSaveDataMapper.CopyToSave(CreateSampleCaravan(simultaneous.GameTime), simultaneousBSave);
+            simultaneous.SaveData.caravans.Add(simultaneousBSave);
+            simultaneousCommand.Depart(new TradeDepartureRequest { CaravanId = simultaneousAId, RouteId = RouteId });
+            simultaneousCommand.Depart(new TradeDepartureRequest { CaravanId = simultaneousBSave.caravanId, RouteId = RouteId });
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, simultaneousAId, out var simultaneousAProgress);
+            SaveDataLookup.TryGetTradeProgress(simultaneous.SaveData, simultaneousBSave.caravanId, out var simultaneousBProgress);
+            var simultaneousNow = simultaneous.GameTime.CurrentUtc;
+            simultaneousAProgress.activeTradeId = "trade_A";
+            simultaneousBProgress.activeTradeId = "trade_B";
+            simultaneousAProgress.tradeStartUtcTick = simultaneousNow.AddMinutes(-10).Ticks;
+            simultaneousAProgress.expectedTradeEndUtcTick = simultaneousNow.AddMinutes(-5).Ticks;
+            simultaneousBProgress.tradeStartUtcTick = simultaneousNow.AddMinutes(-20).Ticks;
+            simultaneousBProgress.expectedTradeEndUtcTick = simultaneousNow.AddMinutes(-10).Ticks;
+            simultaneous.SaveData.lastSavedUtcTicks = simultaneousNow.AddMinutes(-1).Ticks;
+            var simultaneousSavesBefore = simultaneousSave.SaveCalls;
+            var simultaneousReady = new List<string>();
+            Action<string, string, JourneyResultData> onSimultaneousReady =
+                (caravanId, tradeId, _) => simultaneousReady.Add(caravanId + ":" + tradeId);
+            FrameworkEvents.TradeSettlementReady += onSimultaneousReady;
+            try
+            {
+                simultaneous.Coordinator.ApplyOfflineProgressOnLoad(simultaneous.SaveData);
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onSimultaneousReady;
+            }
+
+            if (simultaneousAProgress.state != TradeProgressState.SettlementPending
+                || simultaneousBProgress.state != TradeProgressState.SettlementPending
+                || simultaneous.SaveData.pendingSettlements.Count != 2
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, simultaneousAId, "trade_A", out _)
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    simultaneous.SaveData, simultaneousBSave.caravanId, "trade_B", out _)
+                || simultaneousReady.Count != 2
+                || simultaneousSave.SaveCalls != simultaneousSavesBefore + 1)
+            {
+                throw new InvalidOperationException(
+                    "Multi-active offline simultaneous completion, explicit trade ID, or save batching failed.");
+            }
+
+            Debug.Log("[Framework M1 E2E] Multi-active offline restore checks passed.");
+        }
+
+        /// <summary>
+        /// Economy input과 pending cache가 selected가 아닌 명시 progress의 trade ID를 사용하는지 검증한다.
+        /// </summary>
+        private static void RunExplicitEconomyTradeIdChecks()
+        {
+            var context = TestContext.Create(new ConfigurableSaveService());
+            var selectedProgress = new TradeProgressSaveData
+            {
+                caravanId = context.SaveData.selectedCaravanId,
+                activeTradeId = "trade-selected",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            context.SaveData.tradeProgressEntries.Add(selectedProgress);
+
+            var explicitProgress = new TradeProgressSaveData
+            {
+                caravanId = Guid.NewGuid().ToString("N"),
+                activeTradeId = "trade-explicit",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            var caravan = CreateSampleCaravan(context.GameTime);
+            caravan.caravanId = explicitProgress.caravanId;
+            var result = new JourneyResultData();
+
+            var input = FrameworkEconomyM1InputBuilder.TryBuild(
+                context.SaveData, explicitProgress, caravan, result, context.SharedGameData);
+            if (input == null || input.TradeId != explicitProgress.activeTradeId)
+            {
+                throw new InvalidOperationException(
+                    "Explicit Economy input used the selected progress trade ID.");
+            }
+
+            var bridge = new EconomyM1SettlementBridge();
+            if (!bridge.TryCalculateAndFill(
+                    context.SaveData, explicitProgress, caravan, result, context.SharedGameData)
+                || bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, selectedProgress.activeTradeId)
+                || !bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, explicitProgress.activeTradeId))
+            {
+                throw new InvalidOperationException(
+                    "Explicit Economy pending trade ID did not remain aligned with its progress entry.");
+            }
+
+            var secondProgress = new TradeProgressSaveData
+            {
+                caravanId = Guid.NewGuid().ToString("N"),
+                activeTradeId = "trade-second",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            var secondInput = FrameworkEconomyM1InputBuilder.TryBuild(
+                context.SaveData, secondProgress, caravan,
+                new JourneyResultData(), context.SharedGameData);
+            if (secondInput == null || secondInput.TradeId != secondProgress.activeTradeId
+                || !bridge.TryCalculateAndFill(
+                    context.SaveData, secondProgress, caravan,
+                    new JourneyResultData(), context.SharedGameData)
+                || bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, explicitProgress.activeTradeId)
+                || !bridge.TryApplyPendingEconomy(
+                    context.SaveData, caravan, secondProgress.activeTradeId))
+            {
+                throw new InvalidOperationException(
+                    "Sequential simultaneous-settlement Economy IDs were not independently aligned.");
+            }
+
+            explicitProgress.activeTradeId = string.Empty;
+            if (FrameworkEconomyM1InputBuilder.TryBuild(
+                    context.SaveData, explicitProgress, caravan,
+                    new JourneyResultData(), context.SharedGameData) != null
+                || bridge.TryCalculateAndFill(
+                    context.SaveData, explicitProgress, caravan,
+                    new JourneyResultData(), context.SharedGameData))
+            {
+                throw new InvalidOperationException(
+                    "Empty explicit Economy trade ID fell back to the selected progress.");
+            }
         }
 
         private static void RunRescueLoanIntegrationChecks()
@@ -1362,8 +2273,10 @@ namespace ND.Framework.Editor
             }
 
             context.Coordinator.SetActiveCaravan(caravan);
-            context.SaveData.tradeProgress.expectedTradeEndUtcTick = DateTime.UtcNow.AddSeconds(-5d).Ticks;
-            context.SaveData.lastSavedUtcTicks = DateTime.UtcNow.AddSeconds(-60d).Ticks;
+            var nowUtc = context.GameTime.CurrentUtc;
+            context.SaveData.tradeProgress.tradeStartUtcTick = nowUtc.AddMinutes(-10).Ticks;
+            context.SaveData.tradeProgress.expectedTradeEndUtcTick = nowUtc.AddMinutes(-5).Ticks;
+            context.SaveData.lastSavedUtcTicks = nowUtc.AddMinutes(-15).Ticks;
 
             var offlineCompletedCount = 0;
             void OnOfflineCompleted(string completedTradeId) => offlineCompletedCount++;
@@ -1586,10 +2499,11 @@ namespace ND.Framework.Editor
                     // Production wiring registers the same departure reference in FrameworkRoot.
                     caravan =>
                     {
-                        StageTestCommit(saveData, sharedGameData, commitStore);
+                        StageTestCommit(saveData, sharedGameData, commitStore, caravan.caravanId);
                         coordinator.SetActiveCaravan(caravan);
                     },
-                    () => sharedGameData);
+                    () => sharedGameData,
+                    coordinator.GetOrCreateRuntimeCaravan);
 
                 return new TestContext
                 {
@@ -1606,9 +2520,14 @@ namespace ND.Framework.Editor
             private static void StageTestCommit(
                 SaveData saveData,
                 ISharedGameDataProvider sharedGameData,
-                FrameworkTradePrepareCommitStore commitStore)
+                FrameworkTradePrepareCommitStore commitStore,
+                string caravanId = null)
             {
                 var progress = saveData.tradeProgress;
+                if (!string.IsNullOrEmpty(caravanId))
+                {
+                    SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out progress);
+                }
                 if (progress == null || !sharedGameData.TryGetRoute(progress.activeRouteId, out var route) || route == null)
                 {
                     throw new InvalidOperationException("Test commit could not resolve the active route.");

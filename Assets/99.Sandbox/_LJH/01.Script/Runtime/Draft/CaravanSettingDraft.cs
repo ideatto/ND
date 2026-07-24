@@ -68,3 +68,48 @@ public sealed class CaravanSettingDraft
         return string.IsNullOrWhiteSpace(id) ? string.Empty : id.Trim();
     }
 }
+
+/// <summary>Stores one detached S4 cargo plan without mutating saved Caravan cargo.</summary>
+[Serializable]
+public sealed class CaravanLoadSettingDraft
+{
+    public string caravanId = string.Empty;
+    public List<CaravanLoadItemDraft> items = new List<CaravanLoadItemDraft>();
+
+    public CaravanLoadSettingDraft CreateSnapshot()
+    {
+        var snapshot = new CaravanLoadSettingDraft
+        {
+            caravanId = CaravanSettingDraft.NormalizeId(caravanId)
+        };
+
+        if (items == null)
+        {
+            return snapshot;
+        }
+
+        for (int index = 0; index < items.Count; index++)
+        {
+            CaravanLoadItemDraft item = items[index];
+            if (item == null)
+            {
+                continue;
+            }
+
+            snapshot.items.Add(new CaravanLoadItemDraft
+            {
+                itemId = CaravanSettingDraft.NormalizeId(item.itemId),
+                quantity = Math.Max(0, item.quantity)
+            });
+        }
+
+        return snapshot;
+    }
+}
+
+[Serializable]
+public sealed class CaravanLoadItemDraft
+{
+    public string itemId = string.Empty;
+    public int quantity;
+}

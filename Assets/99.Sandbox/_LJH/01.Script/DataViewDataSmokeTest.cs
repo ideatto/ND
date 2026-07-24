@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class DataViewDataSmokeTest : MonoBehaviour
@@ -20,7 +21,7 @@ public class DataViewDataSmokeTest : MonoBehaviour
         AssertTradeResultData();
         AssertCurrencyProjectionScenarios();
         AssertCaravanOverviewViewData();
-        AssertCaravanSettingServices();
+        AssertCaravanSettingServices(item);
 
         Debug.Log("ViewData Smoke Test PASSED.");
     }
@@ -1249,12 +1250,13 @@ public class DataViewDataSmokeTest : MonoBehaviour
     }
 
     // Verifies the replaceable S3 Provider and Command boundary without touching Framework SaveData.
-    private static void AssertCaravanSettingServices()
+    private static void AssertCaravanSettingServices(TradeItemData catalogItem)
     {
         var serviceObject = new GameObject("CaravanSettingServiceSmokeTest");
         try
         {
             TestCaravanSettingService service = serviceObject.AddComponent<TestCaravanSettingService>();
+            service.SetCargoCatalogForTests(catalogItem);
             ICaravanSettingViewDataProvider provider = service;
             ICaravanSettingCommand command = service;
 
@@ -1314,6 +1316,136 @@ public class DataViewDataSmokeTest : MonoBehaviour
             Debug.Assert(
                 provider.GetSetting("missing-caravan") == null,
                 "Caravan Setting Service Smoke Test failed: an unknown caravanId must not produce S3 data.");
+
+            ICaravanLoadSettingViewDataProvider loadProvider = service;
+            ICaravanLoadSettingCommand loadCommand = service;
+            CaravanLoadSettingViewData initialLoad = loadProvider.GetLoadSetting(
+                TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                initialLoad != null
+                    && initialLoad.canEdit
+                    && initialLoad.plannedItems.Length == 0
+                    && initialLoad.maxLoad == 0f
+                    && initialLoad.maxInventorySlotCount == 0,
+                "Caravan Load Setting Smoke Test failed: S4 capacity did not follow the walking S3 setting.");
+
+            var wagonDraft = new CaravanSettingDraft
+            {
+                caravanId = TestCaravanSettingService.PrepareCaravanId,
+                selectedWagonInstanceId = TestCaravanSettingService.WagonInstanceId
+            };
+            wagonDraft.SelectAnimal(TestCaravanSettingService.FirstAnimalInstanceId);
+            CaravanSettingCommandResult wagonResult = command.Execute(wagonDraft);
+            CaravanLoadSettingViewData wagonLoad = loadProvider.GetLoadSetting(
+                TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                wagonResult != null
+                    && wagonResult.succeeded
+                    && wagonLoad.maxLoad == TestCaravanSettingService.WagonMaxLoad
+                    && wagonLoad.maxInventorySlotCount == TestCaravanSettingService.WagonInventorySlotCount,
+                "Caravan Load Setting Smoke Test failed: S4 capacity did not follow the committed S3 wagon.");
+
+            var loadDraft = new CaravanLoadSettingDraft
+            {
+                caravanId = TestCaravanSettingService.PrepareCaravanId,
+                items = new List<CaravanLoadItemDraft>
+                {
+                    new CaravanLoadItemDraft { itemId = catalogItem.ItemId, quantity = 3 }
+                }
+            };
+            CaravanLoadSettingCommandResult loadResult = loadCommand.Execute(loadDraft);
+            CaravanLoadSettingViewData committedLoad = loadProvider.GetLoadSetting(
+                TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                loadResult != null
+                    && loadResult.succeeded
+                    && committedLoad.plannedItems.Length == 1
+                    && committedLoad.plannedItems[0].itemId == catalogItem.ItemId
+                    && committedLoad.plannedItems[0].quantity == 3
+                    && committedLoad.plannedItems[0].purchaseUnitPrice == catalogItem.BaseBuyPrice,
+                "Caravan Load Setting Smoke Test failed: a valid S4 Draft was not committed in memory.");
+
+            var planContext = new TradePrepareBuildContext
+            {
+                tradeItems = new[] { catalogItem },
+                caravanOptions = new[]
+                {
+                    new TradePrepareCaravanOptionViewData
+                    {
+                        caravanId = TestCaravanSettingService.PrepareCaravanId,
+                        state = JourneyState.Prepare,
+                        canSelect = true
+                    }
+                }
+            };
+            using (var planController = new TradePrepareFlowController(planContext))
+            {
+                planController.Initialize("test-town");
+                bool caravanSelected = planController.SelectDepartureCaravan(
+                    TestCaravanSettingService.PrepareCaravanId);
+                bool settingApplied = planController.ApplyCaravanSetting(
+                    provider.GetSetting(TestCaravanSettingService.PrepareCaravanId));
+                bool planApplied = planController.ApplyCargoPlan(committedLoad);
+                TradePrepareDraft departureDraft = planController.CurrentDraft;
+                bool mismatchedPlanRejected = !planController.ApplyCargoPlan(
+                    new CaravanLoadSettingViewData
+                    {
+                        caravanId = TestCaravanSettingService.TravelingCaravanId,
+                        plannedItems = System.Array.Empty<CargoItemViewData>()
+                    });
+                Debug.Assert(
+                    caravanSelected
+                        && settingApplied
+                        && planApplied
+                        && mismatchedPlanRejected
+                        && departureDraft.hasAuthoritativeCaravanComposition
+                        && departureDraft.selectedWagonCurrentDurability > 0
+                        && departureDraft.hasAuthoritativeCargoPlan
+                        && departureDraft.selectedWagonId == TestCaravanSettingService.WagonContentId
+                        && departureDraft.selectedAnimals.Count == 1
+                        && departureDraft.selectedAnimals[0].draftAnimalId == TestCaravanSettingService.AnimalContentId
+                        && departureDraft.selectedAnimals[0].quantity == 2
+                        && departureDraft.selectedBuyItems.Count == 1
+                        && departureDraft.selectedBuyItems[0].itemId == catalogItem.ItemId
+                        && departureDraft.selectedBuyItems[0].quantity == 3,
+                    "Caravan Setting Smoke Test failed: S3/S4 plans did not hydrate the matching departure Draft.");
+            }
+
+            CaravanSettingCommandResult occupiedWalkingResult = command.Execute(walkingDraft);
+            CaravanSettingViewData retainedWagon = provider.GetSetting(TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                occupiedWalkingResult != null
+                    && !occupiedWalkingResult.succeeded
+                    && occupiedWalkingResult.errorCode == CaravanSettingFailureCodes.CargoCapacityExceeded
+                    && retainedWagon.selectedWagonInstanceId == TestCaravanSettingService.WagonInstanceId,
+                "Caravan Setting Service Smoke Test failed: S3 allowed a capacity reduction below planned cargo.");
+
+            // Mutating one S4 snapshot must not leak into the next Provider result.
+            committedLoad.plannedItems[0].quantity = 99;
+            CaravanLoadSettingViewData isolatedLoad = loadProvider.GetLoadSetting(
+                TestCaravanSettingService.PrepareCaravanId);
+            Debug.Assert(
+                isolatedLoad.plannedItems[0].quantity == 3,
+                "Caravan Load Setting Smoke Test failed: Provider snapshots are not isolated.");
+
+            var travelingLoadDraft = new CaravanLoadSettingDraft
+            {
+                caravanId = TestCaravanSettingService.TravelingCaravanId,
+                items = new List<CaravanLoadItemDraft>
+                {
+                    new CaravanLoadItemDraft { itemId = catalogItem.ItemId, quantity = 1 }
+                }
+            };
+            CaravanLoadSettingCommandResult travelingLoadResult = loadCommand.Execute(travelingLoadDraft);
+            Debug.Assert(
+                travelingLoadResult != null
+                    && !travelingLoadResult.succeeded
+                    && travelingLoadResult.errorCode == CaravanLoadSettingFailureCodes.CaravanNotEditable,
+                "Caravan Load Setting Smoke Test failed: a Traveling Caravan S4 edit was not rejected.");
+
+            Debug.Assert(
+                loadProvider.GetLoadSetting("missing-caravan") == null,
+                "Caravan Load Setting Smoke Test failed: an unknown caravanId must not produce S4 data.");
         }
         finally
         {

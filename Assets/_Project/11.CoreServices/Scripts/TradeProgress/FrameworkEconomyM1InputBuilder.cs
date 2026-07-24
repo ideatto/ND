@@ -38,17 +38,30 @@ namespace ND.Framework
             JourneyResultData journeyResult,
             ISharedGameDataProvider sharedGameData)
         {
+            return TryBuild(saveData, saveData != null ? saveData.tradeProgress : null,
+                caravan, journeyResult, sharedGameData);
+        }
+
+        /// <summary>명시된 progress entry를 사용해 Economy M1 입력을 조립한다.</summary>
+        public static EconomyM1LoopInput TryBuild(
+            SaveData saveData,
+            TradeProgressSaveData progress,
+            CaravanData caravan,
+            JourneyResultData journeyResult,
+            ISharedGameDataProvider sharedGameData)
+        {
             if (saveData == null || caravan == null || journeyResult == null || sharedGameData == null || !sharedGameData.IsLoaded)
             {
                 return null;
             }
 
-            if (saveData.tradeProgress == null || saveData.player == null)
+            if (progress == null || string.IsNullOrWhiteSpace(progress.activeTradeId)
+                || saveData.player == null)
             {
                 return null;
             }
 
-            var routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
+            var routeId = progress.activeRouteId ?? string.Empty;
             SharedRouteDefinition routeDefinition;
             if (string.IsNullOrEmpty(routeId) || !sharedGameData.TryGetRoute(routeId, out routeDefinition))
             {
@@ -68,7 +81,7 @@ namespace ND.Framework
                     TradeMoney = saveData.player.tradingCurrency,
                     DevelopmentCurrency = saveData.player.developmentCurrency
                 },
-                TradeId = saveData.tradeProgress.activeTradeId ?? string.Empty,
+                TradeId = progress.activeTradeId,
                 // 먹이는 출발 마켓에서 일반 상품처럼 구매되어 이미 tradingCurrency에 반영된다.
                 // 경로 기본 식량비까지 정산에서 다시 차감하면 같은 먹이를 이중 결제하게 된다.
                 FoodCost = 0L,

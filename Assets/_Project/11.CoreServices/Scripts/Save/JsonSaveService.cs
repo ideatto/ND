@@ -242,10 +242,10 @@ namespace ND.Framework
         }
 
         /// <summary>
-        /// 저장 DTO의 필수 컨테이너와 영속 자산 ID를 정규화한다.
+        /// 저장 DTO의 필수 컨테이너, Caravan 슬롯과 영속 자산 ID를 정규화한다.
         /// </summary>
         /// <param name="data">직접 수정할 저장 데이터.</param>
-        /// <returns>자산 컨테이너 또는 자산 ID가 변경되었으면 true.</returns>
+        /// <returns>저장 컨테이너, Caravan 슬롯/선택/ID 또는 자산 ID가 변경되었으면 true.</returns>
         public static bool NormalizeData(SaveData data)
         {
             var assetDataChanged = false;
@@ -293,6 +293,7 @@ namespace ND.Framework
             if (data.caravans == null)
             {
                 data.caravans = new List<CaravanSaveData>();
+                assetDataChanged = true;
             }
 
             if (data.tradeProgressEntries == null)
@@ -308,9 +309,11 @@ namespace ND.Framework
             if (data.caravans.Count == 0)
             {
                 data.caravans.Add(new CaravanSaveData());
+                assetDataChanged = true;
             }
 
             var caravanIds = new HashSet<string>();
+            var usedCaravanSlots = new HashSet<int>();
             var usedInstanceIds = new HashSet<string>();
             for (var caravanIndex = 0; caravanIndex < data.caravans.Count; caravanIndex++)
             {
@@ -320,6 +323,26 @@ namespace ND.Framework
                     caravan = new CaravanSaveData();
                     data.caravans[caravanIndex] = caravan;
                 }
+
+                var previousSlotIndex = caravan.slotIndex;
+                var slotWasNegative = previousSlotIndex < 0;
+                if (slotWasNegative || !usedCaravanSlots.Add(previousSlotIndex))
+                {
+                    var replacementSlotIndex = 0;
+                    while (usedCaravanSlots.Contains(replacementSlotIndex))
+                    {
+                        replacementSlotIndex++;
+                    }
+
+                    caravan.slotIndex = replacementSlotIndex;
+                    usedCaravanSlots.Add(replacementSlotIndex);
+                    assetDataChanged = true;
+                    FrameworkLog.Warning(
+                        "Caravan slotIndex was normalized. "
+                        + $"CaravanId: {caravan.caravanId}, PreviousSlot: {previousSlotIndex}, "
+                        + $"NewSlot: {replacementSlotIndex}, Reason: {(slotWasNegative ? "Negative" : "Duplicate")}");
+                }
+
                 if (caravan.wagon == null || caravan.animals == null || caravan.mercenaries == null)
                 {
                     assetDataChanged = true;
@@ -362,20 +385,31 @@ namespace ND.Framework
                         "Mercenary",
                         mercenary.mercName);
                 }
-                if (string.IsNullOrEmpty(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
+                if (string.IsNullOrWhiteSpace(caravan.caravanId) || !caravanIds.Add(caravan.caravanId))
                 {
-                    if (!string.IsNullOrEmpty(caravan.caravanId))
+                    var duplicateId = caravan.caravanId;
+                    do
                     {
-                        FrameworkLog.Warning($"Duplicate caravan ID was replaced without relinking ambiguous child data: {caravan.caravanId}");
+                        caravan.caravanId = SaveDataLookup.NewCaravanId();
                     }
-                    caravan.caravanId = SaveDataLookup.NewCaravanId();
-                    caravanIds.Add(caravan.caravanId);
+                    while (!caravanIds.Add(caravan.caravanId));
+
+                    assetDataChanged = true;
+                    if (!string.IsNullOrWhiteSpace(duplicateId))
+                    {
+                        FrameworkLog.Warning(
+                            $"Duplicate caravan ID was found and a later Caravan received a new ID: {duplicateId}. "
+                            + "Existing TradeProgress/PendingSettlement entries remain assigned to the original ID.");
+                    }
                 }
             }
 
             CaravanSaveData selected;
             if (!SaveDataLookup.TryGetCaravan(data, data.selectedCaravanId, out selected))
+            {
                 data.selectedCaravanId = data.caravans[0].caravanId;
+                assetDataChanged = true;
+            }
 
             ValidateChildData(data, caravanIds);
 

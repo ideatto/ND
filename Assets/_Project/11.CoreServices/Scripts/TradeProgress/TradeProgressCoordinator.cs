@@ -46,6 +46,7 @@
  * - Related Documentation: Docs/Guide/Framework_World_Map_API_Guide.md
  */
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ND.Framework
@@ -106,7 +107,8 @@ namespace ND.Framework
         private readonly global::ITradePrepareCommitSource tradePrepareCommitSource;
         private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
-        private CaravanData activeCaravan;
+        private readonly Dictionary<string, CaravanData> runtimeCaravans =
+            new Dictionary<string, CaravanData>(StringComparer.Ordinal);
 
         /// <summary>
         /// coordinator에 필요한 저장 데이터 접근자와 무역 진행 의존성을 주입한다.
@@ -156,27 +158,85 @@ namespace ND.Framework
         public JourneyResultData LastSettlementResult { get; private set; }
 
         /// <summary>
-        /// 현재 진행 계산과 정산에 사용할 runtime caravan 데이터이다.
+        /// 선택된 caravan ID에 대응하는 UI 호환용 runtime caravan 데이터이다.
         /// </summary>
         /// <remarks>
-        /// 명시적으로 설정된 caravan이 없으면 SaveData.caravan에서 복원한다.
+        /// 진행 계산은 이 facade가 아니라 progress의 caravan ID를 사용한다.
         /// </remarks>
         public CaravanData ActiveCaravan
         {
             get
             {
-                EnsureActiveCaravan();
-                return activeCaravan;
+                return EnsureActiveCaravan();
             }
         }
 
         /// <summary>
-        /// 진행 계산에 사용할 runtime caravan 참조를 설정한다.
+        /// 기존 호출자 호환을 위해 전달된 caravan을 ID 기반 registry에 명시적으로 교체 등록한다.
         /// </summary>
         /// <param name="caravan">현재 active trade와 연결할 runtime caravan 데이터.</param>
         public void SetActiveCaravan(CaravanData caravan)
         {
-            activeCaravan = caravan;
+            if (caravan != null
+                && !string.IsNullOrWhiteSpace(caravan.caravanId)
+                && SaveDataLookup.TryGetCaravan(GetSaveData(), caravan.caravanId, out _))
+            {
+                runtimeCaravans[caravan.caravanId] = caravan;
+            }
+        }
+
+        /// <summary>등록된 동일 ID runtime caravan을 공유 참조로 반환한다.</summary>
+        public bool TryGetRuntimeCaravan(string caravanId, out CaravanData caravan)
+        {
+            caravan = null;
+            return !string.IsNullOrWhiteSpace(caravanId)
+                && runtimeCaravans.TryGetValue(caravanId, out caravan);
+        }
+
+        /// <summary>동일 ID runtime을 반환하거나 저장 snapshot에서 생성해 등록한다.</summary>
+        public CaravanData GetOrCreateRuntimeCaravan(string caravanId)
+        {
+            if (TryGetRuntimeCaravan(caravanId, out var caravan)) return caravan;
+            if (!SaveDataLookup.TryGetCaravan(GetSaveData(), caravanId, out var caravanSave)) return null;
+            caravan = CaravanSaveDataMapper.ToRuntime(caravanSave);
+            return RegisterRuntimeCaravan(caravanId, caravan) ? caravan : null;
+        }
+
+        /// <summary>저장 데이터에 존재하며 ID가 일치하는 runtime만 중복 교체 없이 등록한다.</summary>
+        public bool RegisterRuntimeCaravan(string caravanId, CaravanData caravan)
+        {
+            if (string.IsNullOrWhiteSpace(caravanId) || caravan == null
+                || !string.Equals(caravanId, caravan.caravanId, StringComparison.Ordinal)
+                || !SaveDataLookup.TryGetCaravan(GetSaveData(), caravanId, out _))
+            {
+                return false;
+            }
+            if (runtimeCaravans.TryGetValue(caravanId, out var existing))
+            {
+                return ReferenceEquals(existing, caravan);
+            }
+            runtimeCaravans.Add(caravanId, caravan);
+            return true;
+        }
+
+        /// <summary>기존 registry를 비우고 현재 저장 데이터의 모든 caravan runtime을 다시 구성한다.</summary>
+        public void RebuildRuntimeCaravans()
+        {
+            runtimeCaravans.Clear();
+            var saveData = GetSaveData();
+            if (saveData?.caravans == null) return;
+            for (var index = 0; index < saveData.caravans.Count; index++)
+            {
+                var caravanSave = saveData.caravans[index];
+                if (caravanSave == null || string.IsNullOrWhiteSpace(caravanSave.caravanId)) continue;
+                if (!RegisterRuntimeCaravan(
+                        caravanSave.caravanId,
+                        CaravanSaveDataMapper.ToRuntime(caravanSave)))
+                {
+                    FrameworkLog.Warning(
+                        $"Runtime caravan registration skipped. CaravanId: {caravanSave.caravanId}");
+                }
+            }
         }
 
         /// <summary>
@@ -217,7 +277,7 @@ namespace ND.Framework
             }
             else if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
             {
-                var caravan = EnsureActiveCaravan();
+                var caravan = GetRuntimeForProgress(saveData);
                 progress01 = caravan != null
                     ? caravan.progress01
                     : CalculateProgress(progress, gameTimeProvider != null ? gameTimeProvider.CurrentUtc : DateTime.UtcNow);
@@ -252,77 +312,150 @@ namespace ND.Framework
         }
 
         /// <summary>
-        /// 저장된 무역 시간 정보를 기준으로 진행률을 갱신하고 필요하면 settlement를 생성한다.
+        /// 모든 traveling progress entry의 저장 시간 정보를 기준으로 진행률을 갱신하고 필요하면 settlement를 생성한다.
         /// </summary>
         /// <param name="saveProgress">도착 전 진행률만 갱신된 경우 즉시 저장할지 여부.</param>
-        /// <returns>이번 호출에서 settlement가 생성되었으면 true, 아직 이동 중이거나 갱신할 수 없으면 false.</returns>
+        /// <returns>이번 호출에서 하나 이상의 settlement가 생성되었으면 true.</returns>
         /// <remarks>
         /// 성공적인 settlement 생성 시 saveData, LastSettlementResult, 화면 상태가 변경되고 TradeSettlementReady 이벤트가 발행된다.
         /// </remarks>
         public bool CheckProgressAndCompletion(bool saveProgress = true)
         {
             var saveData = GetSaveData();
-            // traveling 상태가 아니면 진행률 계산이나 settlement 생성을 수행하지 않는다.
-            if (!CanUpdateTravelingTrade(saveData))
+            if (saveData?.tradeProgressEntries == null || gameTimeProvider == null)
             {
+                if (gameTimeProvider == null)
+                    FrameworkLog.Warning("Trade progress check skipped because game time provider is missing.");
                 return false;
             }
 
-            // pause 중에는 현실 진행률과 인게임 경과 시간을 모두 갱신하지 않는다.
             if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
             {
                 return false;
             }
 
-            // runtime caravan이 없으면 저장된 caravan 상태를 복원해 진행률 계산 대상으로 사용한다.
-            var caravan = EnsureActiveCaravan();
-            if (caravan == null)
+            var entries = new List<TradeProgressSaveData>(saveData.tradeProgressEntries);
+            var processed = new HashSet<TradeProgressSaveData>();
+            var nowUtc = gameTimeProvider.CurrentUtc;
+            var dirty = false;
+            var settled = false;
+            var settlementEvents = new List<SettlementNotification>();
+
+            for (var index = 0; index < entries.Count; index++)
             {
-                FrameworkLog.Warning("Trade progress check skipped because active caravan is missing.");
-                return false;
-            }
+                var progress = entries[index];
+                if (progress == null || progress.state != TradeProgressState.Traveling
+                    || !processed.Add(progress))
+                    continue;
 
-            // 식량 소모는 인게임 경과 초를 사용하므로 SetProgress 전에 runtime caravan에 반영한다.
-            SyncElapsedInGameSeconds(saveData, caravan, gameTimeProvider.CurrentUtc);
-
-            // 저장된 UTC 시작/종료 tick과 현재 시간을 비교해 Core caravan 진행률을 갱신한다.
-            var progress = CalculateProgress(saveData.tradeProgress, gameTimeProvider.CurrentUtc);
-            JourneyRunner.SetProgress(caravan, progress);
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-
-            // 아직 도착하지 않았고 치명적 실패도 없으면 현재 진행률만 저장하고 settlement 생성은 미룬다.
-            if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
-            {
-                if (saveProgress)
+                if (string.IsNullOrWhiteSpace(progress.caravanId)
+                    || string.IsNullOrWhiteSpace(progress.activeTradeId))
                 {
-                    saveService?.Save(saveData);
+                    FrameworkLog.Warning(
+                        $"Online trade progress skipped because an ID is missing. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}");
+                    continue;
                 }
 
+                try
+                {
+                    if (!TryProcessTravelingEntry(
+                            saveData, progress, nowUtc, settlementEvents, false,
+                            out var entryDirty, out var entrySettled))
+                        continue;
+
+                    dirty |= entryDirty;
+                    settled |= entrySettled;
+                }
+                catch (Exception exception)
+                {
+                    FrameworkLog.Warning(
+                        $"Online trade progress entry failed. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}, Stage: Tick, Error: {exception.Message}");
+                }
+            }
+
+            if (dirty && (saveProgress || settled))
+            {
+                saveService?.Save(saveData);
+            }
+
+            for (var index = 0; index < settlementEvents.Count; index++)
+            {
+                var notification = settlementEvents[index];
+                FrameworkEvents.RaiseTradeSettlementReady(
+                    notification.CaravanId, notification.TradeId, notification.Result);
+                if (notification.Result.grade == JourneyResultGrade.Failed
+                    && notification.CaravanId == saveData.selectedCaravanId)
+                {
+                    inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+                }
+            }
+
+            return settled;
+        }
+
+        private bool TryProcessTravelingEntry(
+            SaveData saveData,
+            TradeProgressSaveData progress,
+            DateTime nowUtc,
+            List<SettlementNotification> settlementEvents,
+            bool isOfflineRestore,
+            out bool dirty,
+            out bool settled)
+        {
+            dirty = false;
+            settled = false;
+            if (!SaveDataLookup.TryGetCaravan(saveData, progress.caravanId, out var caravanSave))
+            {
+                FrameworkLog.Warning(isOfflineRestore
+                    ? $"Offline trade restore skipped. Stage: SaveTargetLookup, CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}, Reason: CaravanSaveData was not found."
+                    : $"Online trade save target lookup failed. CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}");
                 return false;
             }
 
-            return SettleActiveTrade(saveData, caravan);
+            var caravan = GetOrCreateRuntimeCaravan(progress.caravanId);
+            if (caravan == null || caravan.caravanId != progress.caravanId
+                || caravanSave.caravanId != progress.caravanId)
+            {
+                FrameworkLog.Warning(isOfflineRestore
+                    ? $"Offline trade restore skipped. Stage: RuntimeLookup, CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}, Reason: Matching runtime caravan was not found."
+                    : $"Online trade runtime lookup failed. CaravanId: {progress.caravanId}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}");
+                return false;
+            }
+
+            SyncElapsedInGameSeconds(progress, caravan, caravanSave, nowUtc);
+            JourneyRunner.SetProgress(caravan, CalculateProgress(progress, nowUtc));
+            CaravanSaveDataMapper.CopyToSave(caravan, caravanSave);
+            dirty = true;
+
+            if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
+                return true;
+
+            settled = SettleTrade(saveData, progress, caravan, caravanSave, settlementEvents);
+            return true;
         }
 
         /// <summary>
-        /// Continue/Load 시 Traveling 무역에 오프라인 경과·진행도·식량을 적용하고 필요하면 정산을 생성한다.
+        /// Continue/Load 시 모든 Traveling 무역에 오프라인 경과·진행도·식량을 적용하고 필요하면 정산을 생성한다.
         /// </summary>
         /// <param name="saveData">로드된 SaveData. null이면 CurrentSaveData를 사용한다.</param>
         /// <returns>
-        /// 이번 호출에서 오프라인 완료로 settlement가 생성되면 true.
-        /// Traveling이 아니거나 역행으로 스킵하거나 아직 이동 중이면 false.
+        /// 이번 호출에서 하나 이상의 오프라인 완료 settlement가 생성되면 true.
+        /// Traveling entry가 없거나 역행으로 스킵하거나 모두 이동 중이면 false.
         /// </returns>
         /// <remarks>
         /// lastSavedUtcTicks 대비 시간 역행이면 TimeRollbackDetected를 발행하고 상태를 변경하지 않는다.
         /// evaluationUtc는 lastSaved + maxOfflineRealSeconds로 상한한다.
-        /// 오프라인 settle 성공 시 TradeOfflineCompleted를 한 번 발행한다.
+        /// 각 오프라인 settle 성공 시 해당 entry의 trade ID로 TradeOfflineCompleted를 한 번 발행한다.
         /// SettlementPending 복구는 RestorePendingSettlement가 담당하므로 이 메서드는 Traveling만 처리한다.
+        /// entry 하나의 실패는 caravan 또는 trade ID와 함께 경고하고 나머지 entry 처리를 계속한다.
         /// </remarks>
         public bool ApplyOfflineProgressOnLoad(SaveData saveData = null)
         {
             saveData = saveData ?? GetSaveData();
-            if (!CanUpdateTravelingTrade(saveData))
+            if (saveData?.tradeProgressEntries == null || gameTimeProvider == null)
             {
+                if (gameTimeProvider == null)
+                    FrameworkLog.Warning("Offline progress skipped because game time provider is missing.");
                 return false;
             }
 
@@ -336,35 +469,106 @@ namespace ND.Framework
                 return false;
             }
 
-            var caravan = EnsureActiveCaravan();
-            if (caravan == null)
+            var entries = new List<TradeProgressSaveData>(saveData.tradeProgressEntries);
+            var processed = new HashSet<TradeProgressSaveData>();
+            var dirty = false;
+            var settled = false;
+            var settlementEvents = new List<SettlementNotification>();
+
+            for (var index = 0; index < entries.Count; index++)
             {
-                FrameworkLog.Warning("Offline progress skipped because active caravan is missing.");
-                return false;
+                var progress = entries[index];
+                if (progress == null || progress.state != TradeProgressState.Traveling
+                    || !processed.Add(progress))
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(progress.caravanId)
+                    || string.IsNullOrWhiteSpace(progress.activeTradeId))
+                {
+                    var reason = string.IsNullOrWhiteSpace(progress.caravanId)
+                        ? "Caravan ID is missing."
+                        : "Active trade ID is missing.";
+                    FrameworkLog.Warning(
+                        $"Offline trade restore skipped. Stage: EntryValidation, CaravanId: {FormatCaravanIdForLog(progress.caravanId)}, TradeId: {FormatTradeIdForLog(progress.activeTradeId)}, Reason: {reason}");
+                    continue;
+                }
+
+                if (!HasValidOfflineTimeRange(progress))
+                {
+                    FrameworkLog.Warning(
+                        $"Offline trade progress skipped because UTC ticks are invalid. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}");
+                    continue;
+                }
+
+                try
+                {
+                    if (!TryProcessTravelingEntry(
+                            saveData, progress, evaluationUtc, settlementEvents, true,
+                            out var entryDirty, out var entrySettled))
+                        continue;
+
+                    dirty |= entryDirty;
+                    settled |= entrySettled;
+                }
+                catch (Exception exception)
+                {
+                    FrameworkLog.Warning(
+                        $"Offline trade progress entry failed. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}, Stage: Restore, Error: {exception.Message}");
+                }
             }
 
-            SyncElapsedInGameSeconds(saveData, caravan, evaluationUtc);
-            var progress = CalculateProgress(saveData.tradeProgress, evaluationUtc);
-            JourneyRunner.SetProgress(caravan, progress);
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-
-            if (!JourneyRunner.IsArrived(caravan) && caravan.runFatalReason == JourneyFailureReason.None)
+            if (dirty)
             {
                 saveService?.Save(saveData);
-                FrameworkLog.Info(
-                    $"Offline progress applied while still traveling. EvaluationUtc: {evaluationUtc:o}, ElapsedInGameSeconds: {caravan.elapsedInGameSeconds}");
-                return false;
             }
 
-            var tradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
-            var settled = SettleActiveTrade(saveData, caravan);
-            if (settled)
+            for (var index = 0; index < settlementEvents.Count; index++)
             {
-                FrameworkEvents.RaiseTradeOfflineCompleted(tradeId);
-                FrameworkLog.Info($"Offline trade completed and settled. TradeId: {tradeId}");
+                var notification = settlementEvents[index];
+                FrameworkEvents.RaiseTradeSettlementReady(
+                    notification.CaravanId, notification.TradeId, notification.Result);
+                FrameworkEvents.RaiseTradeOfflineCompleted(notification.TradeId);
+                if (notification.Result.grade == JourneyResultGrade.Failed
+                    && notification.CaravanId == saveData.selectedCaravanId)
+                {
+                    inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+                }
             }
 
             return settled;
+        }
+
+        private static string FormatCaravanIdForLog(string caravanId)
+        {
+            return string.IsNullOrWhiteSpace(caravanId) ? "<empty>" : caravanId;
+        }
+
+        private static string FormatTradeIdForLog(string tradeId)
+        {
+            return string.IsNullOrWhiteSpace(tradeId) ? "<empty>" : tradeId;
+        }
+
+        private static bool HasValidOfflineTimeRange(TradeProgressSaveData progress)
+        {
+            if (progress == null || progress.tradeStartUtcTick <= 0
+                || progress.expectedTradeEndUtcTick <= progress.tradeStartUtcTick)
+            {
+                return false;
+            }
+
+            try
+            {
+                var startUtc = new DateTime(progress.tradeStartUtcTick, DateTimeKind.Utc);
+                var endUtc = new DateTime(progress.expectedTradeEndUtcTick, DateTimeKind.Utc);
+                var durationSeconds = (endUtc - startUtc).TotalSeconds;
+                return durationSeconds > 0d
+                    && !double.IsNaN(durationSeconds)
+                    && !double.IsInfinity(durationSeconds);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -378,7 +582,7 @@ namespace ND.Framework
         private bool ClaimSettlementAndResetLegacy()
         {
             var saveData = GetSaveData();
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             // 저장 데이터 또는 caravan이 없으면 claim 결과를 저장하거나 reset할 수 없다.
             if (saveData == null || caravan == null)
             {
@@ -452,7 +656,7 @@ namespace ND.Framework
             }
 
             // reset된 runtime caravan을 저장 데이터에 반영한 뒤 원자 저장 결과를 확인한다.
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
             var saveResult = saveService != null ? saveService.Save(saveData) : null;
             if (saveResult == null || !saveResult.Succeeded)
             {
@@ -462,6 +666,7 @@ namespace ND.Framework
             }
 
             ClearSettlementCache();
+            FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
 
             return true;
@@ -523,9 +728,7 @@ namespace ND.Framework
             if (!PendingSettlementSaveDataMapper.TryToRuntime(pending, out var settlementResult))
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
 
-            var caravan = caravanId == saveData.selectedCaravanId
-                ? EnsureActiveCaravan()
-                : CaravanSaveDataMapper.ToRuntime(caravanSave);
+            var caravan = GetOrCreateRuntimeCaravan(caravanId);
             if (caravan == null)
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
             if (!TryResolveClaimDestination(saveData, progress, out var destinationTownId))
@@ -543,7 +746,8 @@ namespace ND.Framework
 
             var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
             if (sharedGameData == null || !sharedGameData.IsLoaded
-                || !economySettlementBridge.TryCalculateAndFill(saveData, caravan, settlementResult, sharedGameData)
+                || !economySettlementBridge.TryCalculateAndFill(
+                    saveData, progress, caravan, settlementResult, sharedGameData)
                 || !economySettlementBridge.TryApplyPendingEconomy(saveData, caravan, tradeId))
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
@@ -577,6 +781,7 @@ namespace ND.Framework
             }
 
             if (LastSettlementTradeId == tradeId) ClearSettlementCache();
+            FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
             return ClaimSettlementResult.Success(saveResult);
         }
@@ -728,7 +933,7 @@ namespace ND.Framework
                 return false;
             }
 
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             if (caravan == null)
             {
                 FrameworkLog.Error("Pending settlement restore blocked because active caravan is missing.");
@@ -816,7 +1021,7 @@ namespace ND.Framework
             }
 
             // 진행 대상 caravan이 없으면 Core 도착 처리를 수행할 수 없다.
-            var caravan = EnsureActiveCaravan();
+            var caravan = GetRuntimeForProgress(saveData);
             if (caravan == null)
             {
                 FrameworkLog.Warning("Immediate trade completion skipped because active caravan is missing.");
@@ -828,7 +1033,7 @@ namespace ND.Framework
 
             // Core progress를 도착값으로 맞춘 뒤 동일한 settlement 생성 경로를 재사용한다.
             JourneyRunner.SetProgress(caravan, JourneyRunner.ArrivalProgress);
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return;
             SettleActiveTrade(saveData, caravan);
         }
 
@@ -851,9 +1056,46 @@ namespace ND.Framework
 
         private bool SettleActiveTrade(SaveData saveData, CaravanData caravan)
         {
-            // settlement는 traveling 상태의 active trade에서 한 번만 생성되어야 한다.
-            if (!CanCreateSettlement(saveData))
+            var progress = saveData != null ? saveData.tradeProgress : null;
+            if (progress == null
+                || !SaveDataLookup.TryGetCaravan(saveData, progress.caravanId, out var caravanSave))
+                return false;
+            var notifications = new List<SettlementNotification>();
+            var settled = SettleTrade(saveData, progress, caravan, caravanSave, notifications);
+            if (settled)
             {
+                saveService?.Save(saveData);
+                var notification = notifications[0];
+                FrameworkEvents.RaiseTradeSettlementReady(
+                    notification.CaravanId, notification.TradeId, notification.Result);
+                if (notification.Result.grade == JourneyResultGrade.Failed
+                    && notification.CaravanId == saveData.selectedCaravanId)
+                {
+                    inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
+                }
+            }
+            return settled;
+        }
+
+        private bool SettleTrade(
+            SaveData saveData,
+            TradeProgressSaveData progress,
+            CaravanData caravan,
+            CaravanSaveData caravanSave,
+            List<SettlementNotification> settlementEvents)
+        {
+            if (progress == null || progress.state != TradeProgressState.Traveling
+                || caravan == null || caravanSave == null)
+            {
+                return false;
+            }
+
+            var settlementTradeId = progress.activeTradeId ?? string.Empty;
+            if (SaveDataLookup.TryGetPendingSettlement(
+                    saveData, progress.caravanId, settlementTradeId, out _))
+            {
+                FrameworkLog.Warning(
+                    $"Duplicate pending settlement blocked. CaravanId: {progress.caravanId}, TradeId: {settlementTradeId}");
                 return false;
             }
 
@@ -873,59 +1115,54 @@ namespace ND.Framework
             }
 
             // 저장 데이터를 settlement pending으로 전환한 뒤 실제 상태가 바뀌었는지 검증한다.
-            tradeProgressRecorder.MarkSettlementPending(saveData);
-            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            tradeProgressRecorder.MarkSettlementPending(progress);
+            if (progress.state != TradeProgressState.SettlementPending)
             {
-                FrameworkLog.Warning($"Trade settlement was not published because trade state is {saveData.tradeProgress.state}.");
+                FrameworkLog.Warning($"Trade settlement was not published because trade state is {progress.state}.");
                 return false;
             }
 
             // 생성된 결과를 runtime cache와 저장 데이터에 반영하고 UI 계층에 settlement 준비를 알린다.
-            var settlementTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
-            var settlementRouteId = saveData.tradeProgress.activeRouteId ?? string.Empty;
+            var settlementRouteId = progress.activeRouteId ?? string.Empty;
             LastSettlementTradeId = settlementTradeId;
             LastSettlementResult = result;
 
             var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
-            ApplyRouteMinimumFoodConsumption(saveData, caravan, result, sharedGameData);
+            ApplyRouteMinimumFoodConsumption(progress, caravan, result, sharedGameData);
             if (sharedGameData == null || !sharedGameData.IsLoaded)
             {
                 FrameworkLog.Warning("Economy M1 settlement preview skipped because shared game data is not loaded.");
             }
-            else if (!economySettlementBridge.TryCalculateAndFill(saveData, caravan, result, sharedGameData))
+            else if (!economySettlementBridge.TryCalculateAndFill(
+                         saveData, progress, caravan, result, sharedGameData))
             {
                 FrameworkLog.Warning("Economy M1 settlement preview failed. Core settlement grade is still available.");
             }
 
             // SettlementPending과 확정 정산 결과를 같은 저장 단위에 기록한다.
-            saveData.pendingSettlement = PendingSettlementSaveDataMapper.ToSave(result, settlementTradeId, settlementRouteId);
-
-            CaravanSaveDataMapper.CopyToSave(caravan, saveData.caravan);
-            saveService?.Save(saveData);
-            FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.caravanId, settlementTradeId, result);
-            if (result.grade == JourneyResultGrade.Failed)
-            {
-                // Successful arrivals wait for the caravan status UI and sell-only flow.
-                // Failed journeys have no destination market and show settlement immediately.
-                inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
-            }
-
+            var pending = PendingSettlementSaveDataMapper.ToSave(
+                result, settlementTradeId, settlementRouteId);
+            pending.caravanId = progress.caravanId;
+            saveData.pendingSettlements.Add(pending);
+            CaravanSaveDataMapper.CopyToSave(caravan, caravanSave);
+            settlementEvents.Add(new SettlementNotification(
+                progress.caravanId, settlementTradeId, result));
             return true;
         }
 
         private static void ApplyRouteMinimumFoodConsumption(
-            SaveData saveData,
+            TradeProgressSaveData progress,
             CaravanData caravan,
             JourneyResultData result,
             ISharedGameDataProvider sharedGameData)
         {
-            if (saveData?.tradeProgress == null || caravan == null || result == null
+            if (progress == null || caravan == null || result == null
                 || sharedGameData == null || !sharedGameData.IsLoaded)
             {
                 return;
             }
 
-            string routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
+            string routeId = progress.activeRouteId ?? string.Empty;
             if (string.IsNullOrEmpty(routeId)
                 || !sharedGameData.TryGetRoute(routeId, out SharedRouteDefinition route))
             {
@@ -1051,21 +1288,44 @@ namespace ND.Framework
 
         private CaravanData EnsureActiveCaravan()
         {
-            // 이미 runtime caravan을 보유 중이면 저장 데이터에서 다시 복원하지 않는다.
-            if (activeCaravan != null)
+            // 선택된 caravan runtime이 이미 등록되어 있으면 동일한 공유 객체를 반환한다.
+            if (TryGetRuntimeCaravan(GetSaveData()?.selectedCaravanId, out var selectedCaravan))
             {
-                return activeCaravan;
+                return selectedCaravan;
             }
 
-            // runtime 참조가 없을 때는 현재 저장 데이터의 caravan snapshot으로 복원한다.
+            // 선택된 runtime이 없을 때는 동일 ID 저장 snapshot으로 생성해 registry에 등록한다.
             var saveData = GetSaveData();
             if (saveData == null || saveData.caravan == null)
             {
                 return null;
             }
 
-            activeCaravan = CaravanSaveDataMapper.ToRuntime(saveData.caravan);
-            return activeCaravan;
+            return GetOrCreateRuntimeCaravan(saveData.selectedCaravanId);
+        }
+
+        private CaravanData GetRuntimeForProgress(SaveData saveData)
+        {
+            var caravanId = saveData?.tradeProgress?.caravanId;
+            var caravan = GetOrCreateRuntimeCaravan(caravanId);
+            if (caravan == null)
+            {
+                FrameworkLog.Warning($"Runtime caravan lookup failed. CaravanId: {caravanId}");
+            }
+            return caravan;
+        }
+
+        private static bool CopyRuntimeToOwnedSave(SaveData saveData, CaravanData caravan)
+        {
+            if (caravan == null
+                || !SaveDataLookup.TryGetCaravan(saveData, caravan.caravanId, out var caravanSave))
+            {
+                FrameworkLog.Warning(
+                    $"Runtime caravan save target lookup failed. CaravanId: {caravan?.caravanId}");
+                return false;
+            }
+            CaravanSaveDataMapper.CopyToSave(caravan, caravanSave);
+            return true;
         }
 
         private SaveData GetSaveData()
@@ -1129,17 +1389,41 @@ namespace ND.Framework
         /// </remarks>
         private void SyncElapsedInGameSeconds(SaveData saveData, CaravanData caravan, DateTime evaluationUtc)
         {
-            if (saveData?.caravan == null || saveData.tradeProgress == null || caravan == null
-                || inGameTimeProvider == null)
+            if (saveData?.tradeProgress == null || saveData.caravan == null)
             {
                 return;
             }
+            SyncElapsedInGameSeconds(
+                saveData.tradeProgress, caravan, saveData.caravan, evaluationUtc);
+        }
 
+        private void SyncElapsedInGameSeconds(
+            TradeProgressSaveData progress,
+            CaravanData caravan,
+            CaravanSaveData caravanSave,
+            DateTime evaluationUtc)
+        {
+            if (progress == null || caravan == null || caravanSave == null
+                || inGameTimeProvider == null) return;
             var elapsedInGameSeconds = (float)inGameTimeProvider.GetElapsedInGameSecondsForActiveTrade(
-                saveData.tradeProgress,
+                progress,
                 evaluationUtc);
             caravan.elapsedInGameSeconds = elapsedInGameSeconds;
-            saveData.caravan.elapsedInGameSeconds = elapsedInGameSeconds;
+            caravanSave.elapsedInGameSeconds = elapsedInGameSeconds;
+        }
+
+        private readonly struct SettlementNotification
+        {
+            public SettlementNotification(string caravanId, string tradeId, JourneyResultData result)
+            {
+                CaravanId = caravanId;
+                TradeId = tradeId;
+                Result = result;
+            }
+
+            public string CaravanId { get; }
+            public string TradeId { get; }
+            public JourneyResultData Result { get; }
         }
     }
 }

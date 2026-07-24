@@ -27,11 +27,17 @@ public class RouteData : ScriptableObject, IIdentifiableData
     [SerializeField] private int baseRequiredMercenaryPower;
 
     [Header("Route_Risk_Info")]
+    [Tooltip("Automatically calculated from the highest Combat event value.")]
     [SerializeField] private float baseRiskLevel;
 
     [Header("Route_EventTable_Info")]
-    [SerializeField] private RouteEventData[] routeEvents;
+    [Tooltip("Maximum number of non-None events that may occur during one journey.")]
+    [Min(0)]
     [SerializeField] private int maxEventCount;
+    [Tooltip("Distance in kilometers between route-event checks.")]
+    [Min(0.1f)]
+    [SerializeField] private float eventCheckIntervalKm = 10f;
+    [SerializeField] private RouteEventData[] routeEvents;
 
     #region Public Properties
     public string Id => routeId;
@@ -55,7 +61,62 @@ public class RouteData : ScriptableObject, IIdentifiableData
     public int BaseRequiredFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
     public int BaseRequiredMercenaryPower => Mathf.Max(0, baseRequiredMercenaryPower);
     public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);
-    public RouteEventData[] RouteEvents => routeEvents != null ? (RouteEventData[])routeEvents.Clone() : new RouteEventData[0];
     public int MaxEventCount => Mathf.Max(0, maxEventCount);
+    public float EventCheckIntervalKm => Mathf.Max(0.1f, eventCheckIntervalKm);
+    // A check may resolve to RouteEvent.None. None must not increase the
+    // number of events counted against MaxEventCount.
+    public bool HasRouteEvents => routeEvents != null
+        && routeEvents.Length > 0
+        && MaxEventCount > 0;
+    public RouteEventData[] RouteEvents => routeEvents != null ? (RouteEventData[])routeEvents.Clone() : new RouteEventData[0];
+
     #endregion
+
+    private void OnEnable()
+    {
+        NormalizeRouteEvents();
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        NormalizeRouteEvents();
+    }
+#endif
+
+    private void NormalizeRouteEvents()
+    {
+        // Keep serialized configuration safe when an older asset has no value
+        // for a newly introduced field or an invalid value is entered.
+        maxEventCount = Mathf.Max(0, maxEventCount);
+        eventCheckIntervalKm = Mathf.Max(0.1f, eventCheckIntervalKm);
+
+        if (routeEvents == null || routeEvents.Length == 0)
+        {
+            // Risk is derived data. An empty event table has no Combat risk.
+            baseRiskLevel = 0f;
+            return;
+        }
+
+        int highestCombatPower = 0;
+
+        for (int index = 0; index < routeEvents.Length; index++)
+        {
+            RouteEventData routeEvent = routeEvents[index];
+            if (routeEvent == null)
+                continue;
+
+            routeEvent.NormalizeRewards();
+
+            if (routeEvent.eventType == RouteEvent.Combat)
+            {
+                // Cache the strongest Combat candidate for UI and shared-data views.
+                highestCombatPower = Mathf.Max(
+                    highestCombatPower,
+                    routeEvent.eventValue);
+            }
+        }
+
+        baseRiskLevel = highestCombatPower;
+    }
 }

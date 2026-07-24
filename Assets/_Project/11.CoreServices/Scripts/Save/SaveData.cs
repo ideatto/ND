@@ -253,6 +253,9 @@ namespace ND.Framework
         /// <summary>배열 위치와 무관하게 caravan을 식별하는 고유 ID이다.</summary>
         public string caravanId = string.Empty;
 
+        /// <summary>Caravan Overview의 고정 슬롯과 연결되는 영속 위치 값이다. 목록 인덱스로 대체하지 않는다.</summary>
+        public int slotIndex;
+
         /// <summary>
         /// 이 caravan이 현재 머무는 마을 ID이다. 이동 중에는 출발 마을을 유지하고,
         /// 정산 Claim이 성공했을 때 목적지 또는 실패 복귀 거점으로 갱신한다.
