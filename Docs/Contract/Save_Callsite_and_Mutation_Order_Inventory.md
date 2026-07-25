@@ -1,6 +1,6 @@
 # Save 호출부 및 상태 변경 순서 인벤토리
 
-> Historical snapshot warning: this inventory records production behavior at the investigated 2026-07-19 commit/SHA. Values such as `SaveData.CurrentVersion = 5`, the root-level `lastSavedUtcTicks`, and the `void Save` call flow describe that snapshot only. The active policy baseline is production numeric version 6, with version 7 approved as the next contract version; later contract documents override this snapshot for target behavior.
+> Historical snapshot warning: this inventory records production behavior at the investigated 2026-07-19 commit/SHA. Values such as `SaveData.CurrentVersion = 5`, the root-level `lastSavedUtcTicks`, and the `void Save` call flow describe that snapshot only. Its settlement/Claim observations are superseded for current-product policy by `Arrival_Sale_Settlement_Claim_Policy.md` and later atomic Claim contracts. The active policy baseline is production numeric version 6, with version 7 approved as the next contract version; later contract documents override this snapshot for target behavior.
 
 ## 1. 문서 목적
 

@@ -1,5 +1,9 @@
 # Framework API and Event Inventory
 
+## Arrival-sale active-path classification
+
+See `Arrival_Sale_Settlement_Claim_Policy.md`. Active concepts are `MarketTransactionCommand.Execute`, `CaravanArrivalSaleController.ConfirmSaleAndOpenSettlement`, `SettlementUiBridge.PresentSettlement`, and `TradeProgressCoordinator.ClaimSettlement(caravanId, tradeId)`. Post-save sale events are `CaravanCargoChanged` and `TradingCurrencyChanged`. `JourneyRunner.BeginSettlement`, `JourneyRunner.CancelSettlement`, and `JourneyState.Selling` exist but are unused by the product path; no selling command/event should be invented.
+
 ## 기준
 
 - 현재 구현 기준: `../Research/0721_Framework_Runtime_Save_Contract_Research.md`의 commit `045042f81c2e06f91f83670c0e6a03f38577d30f` 조사 결과

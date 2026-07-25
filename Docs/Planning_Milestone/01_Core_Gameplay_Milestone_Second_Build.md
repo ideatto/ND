@@ -1,5 +1,9 @@
 # Core Gameplay 담당자 — 2차 빌드 개인 마일스톤
 
+## Arrival-sale lifecycle boundary
+
+Current product flow stays in Core `JourneyState.Settling` during Framework `SettlementPending`. `JourneyState.Selling`, `JourneyRunner.BeginSettlement`, and `JourneyRunner.CancelSettlement` are unused extension points, not current milestone integration work. See `Docs/Contract/Arrival_Sale_Settlement_Claim_Policy.md`.
+
 - **담당자:** 윤호영
 
 ## 1. 역할
