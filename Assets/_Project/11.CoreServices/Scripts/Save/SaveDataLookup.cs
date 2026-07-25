@@ -55,7 +55,8 @@ namespace ND.Framework
         public static bool TryGetPendingSettlement(SaveData data, string caravanId, string tradeId, out PendingSettlementSaveData settlement)
         {
             settlement = null;
-            if (!HasCaravan(data, caravanId) || data.pendingSettlements == null) return false;
+            if (string.IsNullOrWhiteSpace(caravanId)
+                || !HasCaravan(data, caravanId) || data.pendingSettlements == null) return false;
             for (var i = 0; i < data.pendingSettlements.Count; i++)
             {
                 var candidate = data.pendingSettlements[i];

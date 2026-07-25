@@ -119,6 +119,40 @@ namespace ND.Framework
             return true;
         }
 
+        /// <summary>권위 저장 DTO와 컬렉션 필드를 공유하지 않는 복사본을 만든다.</summary>
+        public static PendingSettlementSaveData Copy(PendingSettlementSaveData source)
+        {
+            if (source == null) return null;
+            return new PendingSettlementSaveData
+            {
+                caravanId = source.caravanId ?? string.Empty,
+                hasResult = source.hasResult,
+                tradeId = source.tradeId ?? string.Empty,
+                routeId = source.routeId ?? string.Empty,
+                resultVersion = source.resultVersion,
+                grade = source.grade,
+                failureReason = source.failureReason,
+                cargoLost = source.cargoLost,
+                durabilityLost = source.durabilityLost,
+                travelSeconds = source.travelSeconds,
+                foodConsumed = source.foodConsumed,
+                foodLost = source.foodLost,
+                eventsOccurred = source.eventsOccurred,
+                battlesFought = source.battlesFought,
+                lostMercenaryInstanceIds = new System.Collections.Generic.List<string>(
+                    source.lostMercenaryInstanceIds ?? new System.Collections.Generic.List<string>()),
+                wagonDestroyed = source.wagonDestroyed,
+                destroyedWagonInstanceId = source.destroyedWagonInstanceId ?? string.Empty,
+                departureLoad = source.departureLoad,
+                finalEfficientLoad = source.finalEfficientLoad,
+                overloadRatio = source.overloadRatio,
+                revenue = source.revenue,
+                cost = source.cost,
+                netProfit = source.netProfit,
+                claimed = source.claimed
+            };
+        }
+
         /// <summary>
         /// 빈 pending settlement DTO를 생성한다.
         /// </summary>

@@ -440,7 +440,7 @@ namespace ND.Framework
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
             if (restorePending)
             {
-                TradeProgressCoordinator?.RestorePendingSettlement(CurrentSaveData);
+                TradeProgressCoordinator?.RestorePendingSettlements(CurrentSaveData);
             }
 
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
