@@ -1,5 +1,9 @@
 # UI & Data / Scene Owner 담당자 — 2차 빌드 개인 마일스톤
 
+## Arrival-sale UI boundary
+
+Arrival cargo sale is the current `SettlementPending` overlay/sub-flow and supports partial, full, or empty sale before `PresentSettlement`. It does not add `InGameScreenState.Selling`; its draft is runtime-only. See `Docs/Contract/Arrival_Sale_Settlement_Claim_Policy.md`.
+
 - **담당자:** 박준서
 
 ## 1. 역할

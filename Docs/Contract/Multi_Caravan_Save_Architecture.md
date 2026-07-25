@@ -1,5 +1,9 @@
 # Multi-active TradeProgressCoordinator Plan
 
+## Current arrival-sale limitation
+
+`Arrival_Sale_Settlement_Claim_Policy.md` is canonical for the current product flow. Sale uses explicit `caravanId`; presentation and Claim use `caravanId + full tradeId`; `selectedCaravanId` remains a UI facade. Multiple pending entries may coexist, but global `LastSettlementResult`, legacy singular pending restore, and shared arrival-sale button resolution remain compatibility risks. This plan must not be read as claiming complete Multi-Caravan sale/settlement restore.
+
 ## 목적과 범위
 
 이 문서는 numeric version 7 목표의 multi-active runtime orchestration 계약을 정의한다. Framework는 persistence, stable-key lookup, UTC progress input, SaveResult, integration Event를 담당한다. Core/Economy 계산, UI 직접 제어, 출발·적재·식량·보상·Building·Investment 비용 계산은 담당하지 않는다.

@@ -1,5 +1,11 @@
 # Framework Command and Event Contract
 
+## Arrival-sale command and event boundary
+
+`Arrival_Sale_Settlement_Claim_Policy.md` is canonical. `MarketTransactionCommand.Execute` owns sale calculation, Cargo/market-stock/`tradingCurrency` mutation, Save, rollback, and post-save `CaravanCargoChanged`/`TradingCurrencyChanged` events. `CaravanArrivalSaleController.ConfirmSaleAndOpenSettlement` gates `SettlementUiBridge.PresentSettlement`.
+
+Sale confirmation is separate from `ClaimSettlement(caravanId, tradeId)`: sale proceeds are already durable before Claim, which applies only travel settlement economy. `JourneyRunner.BeginSettlement`, `JourneyRunner.CancelSettlement`, and `JourneyState.Selling` are unused by the current product path.
+
 ## Status
 
 - Command/Event policy: **Approved**

@@ -1,5 +1,9 @@
 # InGame Scene State Routing
 
+## Current arrival-sale routing
+
+See `Docs/Contract/Arrival_Sale_Settlement_Claim_Policy.md`. Framework remains in `TradeProgressState.SettlementPending` while arrival cargo sale is an overlay/sub-flow. `SettlementUiBridge.PresentSettlement(caravanId, tradeId)` opens presentation afterward. There is no current `InGameScreenState.Selling`; Core `JourneyState.Selling` is unused by this product flow.
+
 ## Purpose
 
 Connect the trade state managed by Core and Framework to the actual InGame UI.
