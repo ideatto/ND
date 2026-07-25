@@ -38,6 +38,7 @@ namespace ND.Framework.Editor
             RunMultiActiveOnlineTickChecks();
             RunMultiActiveOfflineRestoreChecks();
             RunExplicitEconomyTradeIdChecks();
+            RunTradePreparationCommitChecks();
             RunClaimRegressionChecks();
             Debug.Log("[Framework Multi-active E2E] All checks passed.");
         }
@@ -45,6 +46,108 @@ namespace ND.Framework.Editor
         public static void RunAllFromBatchMode()
         {
             RunAll();
+        }
+
+        private static void RunTradePreparationCommitChecks()
+        {
+            var saveData = new SaveData();
+            string caravanA = saveData.selectedCaravanId;
+            // NewCaravanId() is internal to the runtime assembly; Editor tests use the public GUID helper.
+            string caravanB = SaveDataLookup.NewInstanceId();
+            saveData.caravans.Add(new CaravanSaveData { caravanId = caravanB });
+            string caravanC = SaveDataLookup.NewInstanceId();
+            saveData.caravans.Add(new CaravanSaveData { caravanId = caravanC });
+            var store = new FrameworkTradePrepareCommitStore(() => saveData);
+            var commitA = CreateCommit(caravanA, "trade-a", "town-a");
+            var commitB = CreateCommit(caravanB, "trade-b", "town-b");
+
+            if (!store.TryStage(commitA)
+                || !store.TryStage(commitB)
+                || saveData.tradePreparationCommits.Count != 2
+                || !store.TryGet(caravanA, "trade-a", out var storedA)
+                || storedA.selectedDestinationTownId != "town-a"
+                || !store.TryGet(caravanB, "trade-b", out var storedB)
+                || storedB.selectedDestinationTownId != "town-b")
+            {
+                throw new InvalidOperationException("Exact multi-commit coexistence check failed.");
+            }
+
+            if (!store.TryStage(CreateCommit(caravanA, "trade-a", "changed"))
+                || saveData.tradePreparationCommits.Count != 2
+                || !store.TryGet(caravanA, "trade-a", out storedA)
+                || storedA.selectedDestinationTownId != "town-a")
+            {
+                throw new InvalidOperationException("Exact duplicate commit stage was not idempotent.");
+            }
+
+            if (store.TryStage(CreateCommit(caravanA, "trade-a2", "town-a2"))
+                || !store.TryGet(caravanA, "trade-a", out _))
+            {
+                throw new InvalidOperationException("Same-Caravan conflicting commit was not rejected.");
+            }
+
+            if (store.TryStage(CreateCommit(caravanB, "trade-a", "town-b"))
+                || saveData.tradePreparationCommits.Count != 2)
+            {
+                throw new InvalidOperationException("Cross-Caravan duplicate trade identity was not rejected.");
+            }
+
+            if (!store.TryStage(CreateCommit(caravanC, "trade-c", "town-c")))
+                throw new InvalidOperationException("Rollback isolation setup failed.");
+            store.Rollback(caravanC, "trade-c");
+            if (store.TryGet(caravanC, "trade-c", out _)
+                || !store.TryGet(caravanA, "trade-a", out _)
+                || !store.TryGet(caravanB, "trade-b", out _))
+            {
+                throw new InvalidOperationException("Exact rollback changed an unrelated Caravan commit.");
+            }
+
+            if (!store.TryComplete(caravanA, "trade-a", out _)
+                || store.TryGet(caravanA, "trade-a", out _)
+                || !store.TryGet(caravanB, "trade-b", out storedB)
+                || storedB.selectedDestinationTownId != "town-b")
+            {
+                throw new InvalidOperationException("Completing one commit changed another Caravan commit.");
+            }
+
+            var legacyData = new SaveData();
+            string legacyCaravanId = legacyData.selectedCaravanId;
+            legacyData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = legacyCaravanId,
+                activeTradeId = "legacy-trade"
+            });
+            legacyData.tradePreparationCommits = null;
+            legacyData.tradePreparationCommit = new TradePreparationCommitSaveData
+            {
+                hasCommit = true,
+                tradeId = "legacy-trade",
+                destinationTownId = "legacy-town"
+            };
+
+            if (!FrameworkTradePrepareCommitStore.Normalize(legacyData)
+                || legacyData.tradePreparationCommits.Count != 1
+                || legacyData.tradePreparationCommits[0].caravanId != legacyCaravanId
+                || legacyData.tradePreparationCommit.hasCommit
+                || FrameworkTradePrepareCommitStore.Normalize(legacyData))
+            {
+                throw new InvalidOperationException("Legacy commit migration was not exact and idempotent.");
+            }
+        }
+
+        private static global::TradePrepareCommitData CreateCommit(
+            string caravanId,
+            string tradeId,
+            string destinationTownId)
+        {
+            return new global::TradePrepareCommitData
+            {
+                caravanId = caravanId,
+                tradeId = tradeId,
+                currentTownId = "BaseCamp",
+                selectedDestinationTownId = destinationTownId,
+                routeId = RouteId
+            };
         }
 
         private static void RunOnlineTickLifecycleGateChecks()
@@ -645,6 +748,7 @@ namespace ND.Framework.Editor
                     || route == null
                     || !commitStore.TryStage(new global::TradePrepareCommitData
                     {
+                        caravanId = caravanId,
                         tradeId = progress.activeTradeId,
                         currentTownId = saveData.player.currentTownId,
                         selectedDestinationTownId = route.ToTownId,

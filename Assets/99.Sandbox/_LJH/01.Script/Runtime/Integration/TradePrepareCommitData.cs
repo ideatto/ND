@@ -127,3 +127,13 @@ public interface ITradePrepareCommitCompletion
 {
     bool TryComplete(string tradeId, out TradePrepareCommitData commitData);
 }
+
+// Framework uses the exact Caravan and trade identity for durable multi-Caravan
+// lifecycle operations. The legacy trade-only contracts remain for temporary callers.
+public interface IExactTradePrepareCommitStore
+{
+    void Rollback(string caravanId, string tradeId);
+    bool TryGet(string caravanId, string tradeId, out TradePrepareCommitData commitData);
+    bool TryComplete(string caravanId, string tradeId, out TradePrepareCommitData commitData);
+    bool TryRemove(string caravanId, string tradeId);
+}
