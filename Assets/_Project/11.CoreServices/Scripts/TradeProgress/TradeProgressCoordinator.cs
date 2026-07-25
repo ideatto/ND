@@ -166,6 +166,7 @@ namespace ND.Framework
         private readonly Func<ISharedGameDataProvider> getSharedGameData;
         private readonly global::ITradePrepareCommitCompletion tradePrepareCommitCompletion;
         private readonly global::ITradePrepareCommitSource tradePrepareCommitSource;
+        private readonly global::IExactTradePrepareCommitStore exactTradePrepareCommitStore;
         private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
         private readonly Dictionary<string, CaravanData> runtimeCaravans =
@@ -204,6 +205,8 @@ namespace ND.Framework
             this.getSharedGameData = getSharedGameData;
             this.tradePrepareCommitCompletion = tradePrepareCommitCompletion;
             this.tradePrepareCommitSource = tradePrepareCommitSource;
+            this.exactTradePrepareCommitStore = tradePrepareCommitSource as global::IExactTradePrepareCommitStore
+                ?? tradePrepareCommitCompletion as global::IExactTradePrepareCommitStore;
 
             FrameworkEvents.CompleteTradeRequested += ForceCompleteActiveTrade;
         }
@@ -1008,7 +1011,7 @@ namespace ND.Framework
             var caravan = GetOrCreateRuntimeCaravan(caravanId);
             if (caravan == null)
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
-            if (!TryResolveClaimDestination(saveData, progress, out var destinationTownId))
+            if (!TryResolveClaimDestination(saveData, caravanId, tradeId, progress, out var destinationTownId))
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
 
             // The destination market commits arrival sales directly to SaveData after the
@@ -1047,7 +1050,8 @@ namespace ND.Framework
             // Settlement changes only the claimed Caravan's location. The player
             // remains at the base and must not drive later Caravan route selection.
             caravan.currentTownId = destinationTownId;
-            if (tradePrepareCommitCompletion == null || !tradePrepareCommitCompletion.TryComplete(tradeId, out _))
+            if (exactTradePrepareCommitStore == null
+                || !exactTradePrepareCommitStore.TryComplete(caravanId, tradeId, out _))
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
@@ -1071,15 +1075,29 @@ namespace ND.Framework
 
         private bool TryResolveClaimDestination(
             SaveData saveData,
+            string caravanId,
+            string tradeId,
             TradeProgressSaveData progress,
             out string destinationTownId)
         {
             destinationTownId = string.Empty;
             if (saveData.player == null) return false;
 
-            var activeTradeId = progress.activeTradeId ?? string.Empty;
-            if (tradePrepareCommitSource == null
-                || !tradePrepareCommitSource.TryGet(activeTradeId, out var commit) || commit == null) return false;
+            if (progress == null
+                || !string.Equals(progress.caravanId, caravanId, StringComparison.Ordinal)
+                || !string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal))
+                return false;
+
+            if (exactTradePrepareCommitStore == null
+                || !exactTradePrepareCommitStore.TryGet(caravanId, tradeId, out var commit)
+                || commit == null
+                || !string.Equals(commit.caravanId, caravanId, StringComparison.Ordinal)
+                || !string.Equals(commit.tradeId, tradeId, StringComparison.Ordinal))
+            {
+                FrameworkLog.Warning(
+                    $"Settlement claim destination lookup failed. CaravanId: {caravanId}, TradeId: {tradeId}");
+                return false;
+            }
 
             destinationTownId = commit.selectedDestinationTownId ?? string.Empty;
             var activeRouteId = progress.activeRouteId ?? string.Empty;
