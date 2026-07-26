@@ -1073,6 +1073,54 @@ namespace ND.Framework
             return ClaimSettlementResult.Success(saveResult);
         }
 
+        /// <summary>모든 durable pending settlement를 저장 데이터와 분리된 읽기 전용 목록으로 반환한다.</summary>
+        public IReadOnlyList<PendingSettlementSaveData> GetPendingSettlements()
+        {
+            var copies = new List<PendingSettlementSaveData>();
+            var entries = GetSaveData()?.pendingSettlements;
+            if (entries != null)
+            {
+                for (var i = 0; i < entries.Count; i++)
+                {
+                    var copy = PendingSettlementSaveDataMapper.Copy(entries[i]);
+                    if (copy != null) copies.Add(copy);
+                }
+            }
+            return copies.AsReadOnly();
+        }
+
+        /// <summary>정확한 Caravan과 Trade 복합 ID로 durable pending settlement 복사본을 조회한다.</summary>
+        public bool TryGetPendingSettlement(
+            string caravanId,
+            string tradeId,
+            out PendingSettlementSaveData pending)
+        {
+            pending = null;
+            if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId)
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    GetSaveData(), caravanId, tradeId, out var authoritative))
+            {
+                return false;
+            }
+
+            pending = PendingSettlementSaveDataMapper.Copy(authoritative);
+            return pending != null;
+        }
+
+        /// <summary>정확한 durable pending 결과를 Core 상태 변경 없이 runtime 결과로 재구성한다.</summary>
+        public bool TryGetPendingSettlementResult(
+            string caravanId,
+            string tradeId,
+            out JourneyResultData result)
+        {
+            result = null;
+            return !string.IsNullOrWhiteSpace(caravanId)
+                   && !string.IsNullOrWhiteSpace(tradeId)
+                   && SaveDataLookup.TryGetPendingSettlement(
+                       GetSaveData(), caravanId, tradeId, out var pending)
+                   && PendingSettlementSaveDataMapper.TryToRuntime(pending, out result);
+        }
+
         private bool TryResolveClaimDestination(
             SaveData saveData,
             string caravanId,
@@ -1185,6 +1233,63 @@ namespace ND.Framework
         /// SharedGameData가 로드된 뒤 호출해야 Economy pending 재계산이 가능하다.
         /// 성공 시 TradeSettlementReady를 다시 발행해 SettlementUiBridge cache를 갱신한다.
         /// </remarks>
+        /// <summary>
+        /// 모든 durable pending settlement를 독립 검증하고 runtime Caravan 및 선택된 호환 cache를 복구한다.
+        /// 복구는 저장 데이터, Economy 또는 완료 이벤트를 변경하지 않는다.
+        /// </summary>
+        public bool RestorePendingSettlements(SaveData saveData = null)
+        {
+            saveData = saveData ?? GetSaveData();
+            if (saveData?.pendingSettlements == null) return false;
+
+            var restoredAny = false;
+            JourneyResultData selectedResult = null;
+            var selectedTradeId = string.Empty;
+            var entries = new List<PendingSettlementSaveData>(saveData.pendingSettlements);
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var pending = entries[i];
+                var caravanId = pending?.caravanId ?? string.Empty;
+                var tradeId = pending?.tradeId ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId)
+                    || !SaveDataLookup.TryGetCaravan(saveData, caravanId, out _)
+                    || !SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out var progress)
+                    || progress.state != TradeProgressState.SettlementPending
+                    || !string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal)
+                    || exactTradePrepareCommitStore == null
+                    || !exactTradePrepareCommitStore.TryGet(caravanId, tradeId, out var commit)
+                    || commit == null
+                    || !string.Equals(commit.caravanId, caravanId, StringComparison.Ordinal)
+                    || !string.Equals(commit.tradeId, tradeId, StringComparison.Ordinal)
+                    || !PendingSettlementSaveDataMapper.TryToRuntime(pending, out var result))
+                {
+                    FrameworkLog.Warning(
+                        $"PendingValidation failed. CaravanId: {FormatCaravanIdForLog(caravanId)}, TradeId: {FormatTradeIdForLog(tradeId)}, Reason: durable owner, progress, commit, or result mismatch.");
+                    continue;
+                }
+
+                var caravan = GetOrCreateRuntimeCaravan(caravanId);
+                if (caravan == null || caravan.state != JourneyState.Settling || caravan.settlementClaimed)
+                {
+                    FrameworkLog.Warning(
+                        $"PendingRestore failed. CaravanId: {caravanId}, TradeId: {tradeId}, Reason: runtime Caravan is unavailable or not claimable.");
+                    continue;
+                }
+
+                restoredAny = true;
+                if (string.Equals(saveData.selectedCaravanId, caravanId, StringComparison.Ordinal))
+                {
+                    selectedTradeId = tradeId;
+                    selectedResult = result;
+                }
+                FrameworkLog.Info($"PendingRestore succeeded. CaravanId: {caravanId}, TradeId: {tradeId}");
+            }
+
+            LastSettlementTradeId = selectedTradeId;
+            LastSettlementResult = selectedResult;
+            return restoredAny;
+        }
+
         public bool RestorePendingSettlement(SaveData saveData = null)
         {
             saveData = saveData ?? GetSaveData();
