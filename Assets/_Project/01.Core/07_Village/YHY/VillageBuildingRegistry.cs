@@ -254,9 +254,11 @@ public class VillageBuildingRegistry : MonoBehaviour
         }
         go.name = "Building_" + displayName;
         UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, gameObject.scene);
+        // 바닥(y=0)에 놓는다. x·z는 임시값 — 배치 컨트롤러의 격자 등록이 곧 빈 칸으로 재배치한다.
+        // (예전엔 y=1로 띄웠으나, 그러면 격자 등록 전까지 공중에 떠 보여서 0으로 내림.)
         float x = -4f + (n % 4) * 2.6f;
         float z = -4f + (n / 4) * 2.6f;
-        go.transform.position = new Vector3(x, 1f, z);
+        go.transform.position = new Vector3(x, 0f, z);
 
         Renderer r = go.GetComponentInChildren<Renderer>();
         buildings.Add(new Building

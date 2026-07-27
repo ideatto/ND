@@ -1,0 +1,108 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3942359996107727175
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6302923003883896727}
+  - component: {fileID: 7173990800855567280}
+  - component: {fileID: 3377382089761325782}
+  - component: {fileID: 5223289138679479416}
+  m_Layer: 0
+  m_Name: VillageView
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &6302923003883896727
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3942359996107727175}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 175}
+  m_SizeDelta: {x: -40, y: -390}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!222 &7173990800855567280
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3942359996107727175}
+  m_CullTransparentMesh: 1
+--- !u!114 &3377382089761325782
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3942359996107727175}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Texture: {fileID: 8400000, guid: 3a863675059d3884991ee5b3d96133a0, type: 2}
+  m_UVRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+--- !u!114 &5223289138679479416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3942359996107727175}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc373b26632b83b49b010fc3ef6ea466, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingPlacementController
+  view: {fileID: 0}
+  villageCamera: {fileID: 0}
+  highlightTint: {r: 1, g: 0.85, b: 0.4, a: 1}
+  gridWidth: 24
+  gridHeight: 24
+  zoomStep: 1
+  zoomMin: 4
+  zoomMax: 15
+  panSpeed: 0.004
+  panRange: 12
+  npcCount: 3
+  npcPrefabs:
+  - {fileID: 5850316074316476321, guid: 596c4de4e6a395e4a92ee2e380c76bf8, type: 3}
+  - {fileID: 7933423966439090356, guid: d2e50b5aabfc03648a4f64a94d9033da, type: 3}
+  - {fileID: 8601721479057698850, guid: 4b12a280ee4fd5646884b43b188d5ef2, type: 3}
+  - {fileID: 6753241843220848129, guid: 9a88bb6ba2c0e2749be36d4f18f8aa26, type: 3}
+  - {fileID: 884350740381241613, guid: 3932a9e5925a1054fa65443d15f68838, type: 3}
+  - {fileID: 1866259828326946406, guid: 8fb5039b5e3e3904396ceed8e44237ab, type: 3}
+  - {fileID: 4678577081659864690, guid: 7f0e0cd518191274397092e32515dedf, type: 3}
+  - {fileID: 4469781060019629199, guid: 78583a2dad3beb7448aa598068adce21, type: 3}
+  npcCubeSize: 0.6
