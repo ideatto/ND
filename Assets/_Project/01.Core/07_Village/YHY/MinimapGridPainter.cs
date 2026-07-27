@@ -35,6 +35,7 @@ public class MinimapGridPainter : MonoBehaviour, IPointerClickHandler
     private Camera cachedCam;
     private MinimapGrid grid;
     private MinimapGridDebug debug;
+    private RectTransform mapButton;   // '지도' 열기 버튼(브러시를 이 아래에 그림)
     private GUIStyle btnStyle;
 
     private void Awake()
@@ -77,8 +78,9 @@ public class MinimapGridPainter : MonoBehaviour, IPointerClickHandler
         if (btnStyle == null) btnStyle = new GUIStyle(GUI.skin.button);
         float s = Mathf.Max(1f, Screen.height / 1080f);
         btnStyle.fontSize = Mathf.RoundToInt(22f * s);
-        float w = 240f * s, h = 60f * s, pad = 8f * s;
-        float x = 24f * s, y = Screen.height * 0.35f;
+        float w = 185f * s, h = 60f * s, pad = 8f * s;
+        // 가운데 빈 띠 좌열(좌상단=캐러밴 테스트 패널, 우측 절반=미니맵 이라 그 사이에 둠)
+        float x = 545f * s, y = 20f * s;
 
         if (GUI.Button(new Rect(x, y, w, h), paintMode ? "페인트 모드 끄기" : "페인트 모드 켜기", btnStyle))
         {
@@ -88,21 +90,33 @@ public class MinimapGridPainter : MonoBehaviour, IPointerClickHandler
             if (router != null) router.enabled = !paintMode;
             if (paintMode) ResolveDebug()?.SetOverlay(true);   // 켜면 오버레이도 켬
         }
-        y += h + pad;
         if (!paintMode) return;
 
-        // 브러시 팔레트
+        // 브러시 팔레트: '지도' 버튼(WorldMapButton) 실제 화면 위치를 읽어 그 '바로 아래'에 컴팩트하게 그림.
+        // (지도 열림/닫힘·해상도와 무관하게 항상 지도 버튼 밑에 붙음)
+        float bw = 160f * s, bh = 42f * s, bgap = 3f * s;
+        float bx = 785f * s, by = 170f * s;                 // 폴백(지도 버튼 못 찾을 때)
+        RectTransform mb = ResolveMapButton();
+        if (mb != null)
+        {
+            Vector3[] cs = new Vector3[4]; mb.GetWorldCorners(cs);
+            float mnx = cs[0].x, mny = cs[0].y;              // 좌하단(스크린 픽셀, y는 아래가 0)
+            for (int i = 1; i < 4; i++) { if (cs[i].x < mnx) mnx = cs[i].x; if (cs[i].y < mny) mny = cs[i].y; }
+            bx = mnx;                                        // 지도 버튼 왼쪽에 맞춤
+            by = Screen.height - mny + 6f * s;               // 지도 버튼 하단 바로 아래(GUI는 y가 위에서 0)
+            bw = Mathf.Max(bw, RectTransformUtility.WorldToScreenPoint(null, cs[2]).x - mnx); // 버튼 폭에 맞춤
+        }
         for (int i = 0; i < Brushes.Length; i++)
         {
             var prevBg = GUI.backgroundColor;
             GUI.backgroundColor = MinimapGridDebug.TerrainColor(Brushes[i]);
             string label = (brush == Brushes[i] ? "● " : "") + BrushNames[i];
-            if (GUI.Button(new Rect(x, y, w, h * 0.8f), label, btnStyle)) brush = Brushes[i];
+            if (GUI.Button(new Rect(bx, by, bw, bh), label, btnStyle)) brush = Brushes[i];
             GUI.backgroundColor = prevBg;
-            y += h * 0.8f + pad * 0.5f;
+            by += bh + bgap;
         }
-        y += pad;
-        if (GUI.Button(new Rect(x, y, w, h), "파일 저장", btnStyle)) SaveToFile();
+        by += 4f * s;
+        if (GUI.Button(new Rect(bx, by, bw, bh + 6f * s), "파일 저장", btnStyle)) SaveToFile();
     }
 
     private void SaveToFile()
@@ -148,5 +162,14 @@ public class MinimapGridPainter : MonoBehaviour, IPointerClickHandler
         var cam = ResolveCamera();
         if (cam != null) debug = cam.transform.root.GetComponentInChildren<MinimapGridDebug>(true);
         return debug;
+    }
+
+    /// <summary>'지도' 열기 버튼(WorldMapButton) RectTransform. 브러시 팔레트를 이 버튼 바로 아래에 배치하기 위함.</summary>
+    private RectTransform ResolveMapButton()
+    {
+        if (mapButton != null) return mapButton;
+        var go = GameObject.Find("WorldMapButton");   // 씬에 활성 상태로 존재
+        if (go != null) mapButton = go.GetComponent<RectTransform>();
+        return mapButton;
     }
 }

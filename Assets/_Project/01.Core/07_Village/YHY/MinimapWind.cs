@@ -48,11 +48,17 @@ public class MinimapWind : MonoBehaviour
     [SerializeField] private float ambientStrength = 0.6f;
     [SerializeField] private float ambientDriftSpeed = 0.25f;
 
+    [Header("지형(산) 기압")]
+    [Tooltip("산 셀에 더할 고기압(바람이 부딪히면 돌아감). 0이면 지형 무시")]
+    [SerializeField] private float mountainPressure = 2.6f;   // 산=고기압(계절풍과 맞먹는 +1.0대) → 바람이 산을 또렷이 우회
+    [SerializeField] private int terrainBlur = 2;   // 산 기압을 부드럽게(그라디언트용)
+
     private readonly List<Source> sources = new List<Source>();
     private string curSeason = "";
     private Vector2 areaMin, areaMax;
     private float zPlane, eps;
     private bool ready;
+    private float[,] terrainP;   // 셀별 지형 기압(산=고기압), 블러된 값
 
     private void Awake()
     {
@@ -78,8 +84,64 @@ public class MinimapWind : MonoBehaviour
         eps = (areaMax.x - areaMin.x) / Mathf.Max(1, grid.Cols) * 0.5f;
         RebuildSeasonal();
         SpawnAmbient();
+        BuildTerrainPressure();
         ready = true;
         return true;
+    }
+
+    /// <summary>산 셀 = 고기압으로 지형 기압장을 만든다(블러로 부드럽게 → 바람이 산을 우회).</summary>
+    public void BuildTerrainPressure()
+    {
+        if (grid == null || mountainPressure == 0f) { terrainP = null; return; }
+        int R = grid.Rows, C = grid.Cols;
+        var t = new float[R, C];
+        for (int r = 0; r < R; r++)
+            for (int c = 0; c < C; c++)
+            {
+                var cell = grid.GetCell(r, c);
+                if (cell != null && cell.terrain == TerrainType.Mountain) t[r, c] = mountainPressure;
+            }
+        // 박스 블러(경계 부드럽게)
+        for (int pass = 0; pass < terrainBlur; pass++)
+        {
+            var n = new float[R, C];
+            for (int r = 0; r < R; r++)
+                for (int c = 0; c < C; c++)
+                {
+                    float sum = 0f; int cnt = 0;
+                    for (int dr = -1; dr <= 1; dr++)
+                        for (int dc = -1; dc <= 1; dc++)
+                        {
+                            int rr = r + dr, cc = c + dc;
+                            if (rr < 0 || rr >= R || cc < 0 || cc >= C) continue;
+                            sum += t[rr, cc]; cnt++;
+                        }
+                    n[r, c] = sum / cnt;
+                }
+            t = n;
+        }
+        terrainP = t;
+    }
+
+    /// <summary>위치의 지형 기압(셀 격자 bilinear 샘플).</summary>
+    private float SampleTerrainP(Vector2 p)
+    {
+        if (terrainP == null) return 0f;
+        int R = grid.Rows, C = grid.Cols;
+        float u = (p.x - areaMin.x) / Mathf.Max(1e-4f, areaMax.x - areaMin.x);
+        float v = (p.y - areaMin.y) / Mathf.Max(1e-4f, areaMax.y - areaMin.y);
+        float fx = u * C - 0.5f, fy = v * R - 0.5f;
+        int x0 = Mathf.FloorToInt(fx), y0 = Mathf.FloorToInt(fy);
+        float tx = fx - x0, ty = fy - y0;
+        float p00 = TP(y0, x0), p10 = TP(y0, x0 + 1), p01 = TP(y0 + 1, x0), p11 = TP(y0 + 1, x0 + 1);
+        return Mathf.Lerp(Mathf.Lerp(p00, p10, tx), Mathf.Lerp(p01, p11, tx), ty);
+    }
+
+    private float TP(int r, int c)
+    {
+        r = Mathf.Clamp(r, 0, grid.Rows - 1);
+        c = Mathf.Clamp(c, 0, grid.Cols - 1);
+        return terrainP[r, c];
     }
 
     private void Update()
@@ -126,7 +188,7 @@ public class MinimapWind : MonoBehaviour
             if (r2 <= 0f) continue;
             sum += s.strength * Mathf.Exp(-(dx * dx + dy * dy) / (2f * r2));
         }
-        return sum;
+        return sum + SampleTerrainP(p);   // + 산 등 지형 기압
     }
 
     /// <summary>위치의 바람 벡터(-∇P 회전).</summary>
@@ -155,13 +217,21 @@ public class MinimapWind : MonoBehaviour
         });
     }
 
+    /// <summary>지정한 월드 위치에 이벤트 주입. highPressure=고기압(메테오)/false=저기압(큰불). radiusFactor는 맵 폭 대비 반경 비율.</summary>
+    public void DropEventAt(Vector2 world, bool highPressure, float strengthAbs, float radiusFactor, float life)
+    {
+        if (!EnsureArea()) return;                              // 반경 계산에 area 필요
+        float radius = (areaMax.x - areaMin.x) * radiusFactor;
+        DropEvent(world, (highPressure ? 1f : -1f) * strengthAbs, radius, life);
+    }
+
     /// <summary>맵 중앙 근처에 이벤트 주입(디버그 편의). kind: fire/war=저기압, meteor=고기압.</summary>
     public void DropEventAtCenter(bool highPressure, float strengthAbs, float radiusFactor, float life)
     {
+        if (!EnsureArea()) return;
         Vector2 c = (areaMin + areaMax) * 0.5f;
-        Vector2 jitter = Random.insideUnitCircle * (areaMax - areaMin).magnitude * 0.15f;
-        float radius = (areaMax.x - areaMin.x) * radiusFactor;
-        DropEvent(c + jitter, (highPressure ? 1f : -1f) * strengthAbs, radius, life);
+        Vector2 jitter = Random.insideUnitCircle * (areaMax - areaMin).magnitude * 0.15f;   // 중앙 근처 랜덤
+        DropEventAt(c + jitter, highPressure, strengthAbs, radiusFactor, life);
     }
 
     // ------------------------------------------------------------------ 계절/떠돌이 구성

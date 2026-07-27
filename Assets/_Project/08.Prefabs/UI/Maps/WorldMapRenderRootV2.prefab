@@ -5024,6 +5024,8 @@ MonoBehaviour:
   ambientCount: 3
   ambientStrength: 0.55
   ambientDriftSpeed: 0.35
+  mountainPressure: 2.6
+  terrainBlur: 2
 --- !u!114 &2883929891840334061
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5060,6 +5062,8 @@ MonoBehaviour:
   ambientCount: 2
   ambientStrength: 0.35
   ambientDriftSpeed: 0.15
+  mountainPressure: 1.3
+  terrainBlur: 2
 --- !u!114 &6896620292822575875
 MonoBehaviour:
   m_ObjectHideFlags: 0

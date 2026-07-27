@@ -61,9 +61,9 @@ public class MinimapGridDebug : MonoBehaviour
         if (btnStyle == null) btnStyle = new GUIStyle(GUI.skin.button);
         float s = Mathf.Max(1f, Screen.height / 1080f);
         btnStyle.fontSize = Mathf.RoundToInt(24f * s);
-        float w = 300f * s, h = 76f * s;
-        // 우하단(상단 HUD·지도 버튼과 안 겹치게)
-        if (GUI.Button(new Rect(Screen.width - w - 24f * s, Screen.height - h - 24f * s, w, h),
+        float w = 190f * s, h = 70f * s;
+        // 좌열, 바람 버튼 스택 아래(페인트 모드 켜기 밑으로 세로 정렬)
+        if (GUI.Button(new Rect(545f * s, 360f * s, w, h),
                 overlayOn ? "격자 디버그 끄기" : "격자 디버그 켜기", btnStyle))
             ToggleOverlay();
     }

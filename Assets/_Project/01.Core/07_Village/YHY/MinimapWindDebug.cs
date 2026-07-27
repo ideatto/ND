@@ -117,8 +117,9 @@ public class MinimapWindDebug : MonoBehaviour
         if (btnStyle == null) btnStyle = new GUIStyle(GUI.skin.button);
         float s = Mathf.Max(1f, Screen.height / 1080f);
         btnStyle.fontSize = Mathf.RoundToInt(22f * s);
-        float w = 240f * s, h = 62f * s, pad = 8f * s;
-        float x = Screen.width - w - 24f * s, y = Screen.height * 0.28f;
+        float w = 190f * s, h = 62f * s, pad = 8f * s;
+        // 좌열, '페인트 모드 켜기' 바로 아래. 아래로 격자·이벤트 버튼이 이어짐(지도 버튼과 안 겹치게)
+        float x = 545f * s, y = 90f * s;
 
         if (GUI.Button(new Rect(x, y, w, h), overlayOn ? "바람 끄기" : "바람 보기", btnStyle))
             SetOverlay(!overlayOn);
@@ -128,13 +129,10 @@ public class MinimapWindDebug : MonoBehaviour
         if (GUI.Button(new Rect(x, y, w * 0.5f - 2f, h), "여름", btnStyle)) SetSeason("summer");
         if (GUI.Button(new Rect(x + w * 0.5f + 2f, y, w * 0.5f - 2f, h), "겨울", btnStyle)) SetSeason("winter");
         y += h + pad;
-        if (GUI.Button(new Rect(x, y, w, h), "🔥 큰불/전쟁 (저기압)", btnStyle))
-            wind.DropEventAtCenter(false, 2.5f, 0.18f, 8f);
-        y += h + pad;
-        if (GUI.Button(new Rect(x, y, w, h), "☄ 메테오 (고기압)", btnStyle))
-            wind.DropEventAtCenter(true, 3.5f, 0.14f, 5f);
-        y += h + pad;
         GUI.Label(new Rect(x, y, w, 30f * s), "계절: " + CurrentSeason(), btnStyle);
+        y += 30f * s + pad;
+        // 큰불/메테오는 아래 "놓기" 버튼을 누른 뒤 미니맵을 클릭해 그 지점에 배치(MinimapEventPlacer)
+        GUI.Label(new Rect(x, y, w, 30f * s), "🔥/☄: 아래 버튼→클릭", btnStyle);
     }
 
     private static string CurrentSeason()
