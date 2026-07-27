@@ -55,3 +55,35 @@
 3. 실제 효과·데이터 authoring 책임/API는 프레임워크 팀과 역할 정리.
 
 > 근거 파일: `TradeRouteEventProcessor.cs`, `FrameworkDebugCommands.cs`, `FrameworkRoot.cs`, `02.Data/01_ScriptableObjects/Routes/*.asset`, `FrameworkEvents.cs`
+
+---
+
+# 추가 감사: 계절·재난·날씨 (묶어서)
+
+## 계절 / 재난
+- **데이터 모델**: `WorldSaveData.currentSeasonId`(기본 `"summer"`) · `currentDisasterId`(기본 빈값) — 저장값 ([SaveData.cs:549](Assets/_Project/11.CoreServices/Scripts/Save/SaveData.cs#L549))
+- ❌ **시간 기반 자동 변경 없음** — `ForceSeason`/`ForceDisaster`(디버그)로만 바뀜. SeasonManager·회전 스케줄 없음. → **실게임에선 계절이 여름에 고정.**
+- **계산 엔진 상태**:
+  - `JourneyEconomyModifierCalculator`(Price/Speed/Food/Risk/Loss 배율) — 구현 + 테스트 O. **그러나 실정산 경로는 `SettlementEconomicValidationCalculator`(다른 계산기)를 사용** → 이 종합 계산기는 **실여행에 미배선(테스트 위주)으로 보임**.
+  - 가격 쪽: `LjhEconomyM1InputAdapter`가 `currentSeason`/`currentDisaster` → 가격 모디파이어로 변환(M1). 단 **계절별 모디파이어 데이터가 authoring돼 있어야** 효과 발생 — 데이터가 거의 없어 보임(route event 빈 배열과 동일 패턴).
+- **요약**: 저장값·계산기는 있으나 (a) 자동 변경 X, (b) 데이터 거의 없음, (c) 종합 효과 미배선 → **실게임 영향 미미.**
+
+## 날씨
+- ❌ **날씨 시스템 없음.** `RouteEvent.Weather`(stub, 효과 없음)뿐이고 **계절과도 무관(별개)**.
+
+## 요약표
+| 부분 | 상태 |
+|---|---|
+| 계절/재난 저장값 | ✅ 있음 |
+| 계절 자동 변경(시간) | ❌ 없음(항상 여름) |
+| 계절→가격 효과 배선 | △ 배선은 있으나 데이터 부족 |
+| 계절→여행(속도/식량/위험) 효과 | ❌ 종합 계산기 미배선 |
+| 날씨 시스템 | ❌ 없음(stub route event만) |
+| 날씨↔계절 연동 | ❌ 없음 |
+
+## 시사점 (구름·날씨 기획 관점)
+- **날씨도, 작동하는 계절 변화도 둘 다 greenfield** → 우리 미니맵 격자 구름/날씨는 **충돌 없이 새로 설계 가능**.
+- 님 말대로 **날씨는 계절과 묶어 설계**하는 게 맞음(겨울=눈구름 등). 근데 지금은 계절 자체가 안 돌아가니, "계절→날씨 확률" 같은 건 계절 회전 로직부터 필요.
+- **경계**: 우리 = 공간(격자 구름·판정·표시/연출). **실제 효과(경제·여행)·데이터·계절 회전은 프레임워크/경제 팀 도메인** → 협의 항목.
+
+> 추가 근거 파일: `03.Economy/02_SeasonDisaster/JourneyEconomyModifierCalculator.cs`, `03.Economy/06_Integration/LjhEconomyM1InputAdapter.cs` · `SettlementEconomicFrameworkAdapter.cs`, `SaveData.cs`, `FrameworkDebugCommands.cs`
