@@ -69,13 +69,27 @@ public class MinimapWindDebug : MonoBehaviour
     {
         overlayOn = on;
         if (on) BuildArrows();
-        else if (arrowRoot != null) { Destroy(arrowRoot.gameObject); arrowRoot = null; arrows.Clear(); }
+        else PurgeArrows();
+    }
+
+    /// <summary>renderRoot 밑 WindArrows를 전부 제거(중복/잔존 방지).</summary>
+    private void PurgeArrows()
+    {
+        arrows.Clear();
+        arrowRoot = null;
+        if (renderRoot == null) return;
+        var stray = new List<Transform>();
+        foreach (Transform ch in renderRoot) if (ch.name == "WindArrows") stray.Add(ch);
+        foreach (var ch in stray)
+        {
+            if (Application.isPlaying) Destroy(ch.gameObject);
+            else DestroyImmediate(ch.gameObject);
+        }
     }
 
     private void BuildArrows()
     {
-        if (arrowRoot != null) Destroy(arrowRoot.gameObject);
-        arrows.Clear();
+        PurgeArrows();   // 기존/잔존 화살표 먼저 싹 제거
         arrowRoot = new GameObject("WindArrows").transform;
         arrowRoot.SetParent(renderRoot, false);
         for (int r = 0; r < grid.Rows; r++)
