@@ -68,17 +68,6 @@ public class MinimapGridDebug : MonoBehaviour
         if (grid == null) { Debug.LogWarning("[격자디버그] MinimapGrid 없음"); return; }
         grid.BuildCells();
 
-        // 배경 스프라이트(가장 큰 SpriteRenderer)에서 색 샘플
-        SpriteRenderer bg = null; float best = -1f;
-        foreach (var sr in renderRoot.GetComponentsInChildren<SpriteRenderer>(true))
-        {
-            if (sr == null || sr.sprite == null) continue;
-            Vector3 sz = sr.bounds.size; float a = sz.x * sz.y;
-            if (a > best) { best = a; bg = sr; }
-        }
-        Texture2D tex = null;
-        if (bg != null) { try { tex = bg.sprite.texture; var _ = tex.width; } catch { tex = null; } }
-
         if (overlayRoot != null) Destroy(overlayRoot.gameObject);
         overlayRoot = new GameObject("GridDebugOverlay").transform;
         overlayRoot.SetParent(renderRoot, false);
@@ -91,19 +80,32 @@ public class MinimapGridDebug : MonoBehaviour
                 var mc = grid.GetCell(r, c);
                 Vector3 pos = mc != null ? mc.worldCenter : grid.CellToWorld(r, c);
 
-                // 1) 지역색 칠하기 — 그 셀 자리 맵 아트 색 샘플
-                Color region = Color.gray;
-                if (tex != null)
-                {
-                    float u = (c + 0.5f) / cols, v = (r + 0.5f) / rows;
-                    Color px = tex.GetPixelBilinear(u, v);
-                    region = new Color(px.r, px.g, px.b, tintAlpha);
-                }
-                MakeTint(pos, new Vector2(cell.x * 0.98f, cell.y * 0.98f), region);
+                // 1) 지형 종류별 색(범례)으로 칠하기
+                Color col = TerrainColor(mc != null ? mc.terrain : TerrainType.Plain);
+                col.a = tintAlpha;
+                MakeTint(pos, new Vector2(cell.x * 0.98f, cell.y * 0.98f), col);
 
                 // 2) 좌표 라벨 (열=알파벳, 행=숫자) 예: A1
                 MakeLabel(pos, CoordLabel(r, c));
             }
+    }
+
+    /// <summary>지형 종류별 범례 색.</summary>
+    public static Color TerrainColor(TerrainType t)
+    {
+        switch (t)
+        {
+            case TerrainType.Plain:    return new Color(0.85f, 0.82f, 0.40f);
+            case TerrainType.Grass:    return new Color(0.55f, 0.80f, 0.35f);
+            case TerrainType.Forest:   return new Color(0.15f, 0.45f, 0.15f);
+            case TerrainType.Farmland: return new Color(0.90f, 0.60f, 0.20f);
+            case TerrainType.River:    return new Color(0.25f, 0.55f, 0.95f);
+            case TerrainType.Bridge:   return new Color(0.55f, 0.35f, 0.15f);
+            case TerrainType.Mountain: return new Color(0.55f, 0.55f, 0.58f);
+            case TerrainType.Water:    return new Color(0.20f, 0.70f, 0.85f);
+            case TerrainType.Cloud:    return new Color(0.96f, 0.96f, 0.96f);
+            default:                   return Color.gray;
+        }
     }
 
     /// <summary>열→알파벳(A..), 행→숫자(1..). 예: (row0,col0)=A1.</summary>
