@@ -15,6 +15,7 @@
 // [부착] 미니맵 렌더 루트(WorldMapRenderRootV2)에 붙인다.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>미니맵 배경을 격자로 나눠 셀↔월드좌표 변환을 제공한다(프로토타입).</summary>
@@ -33,13 +34,19 @@ public class MinimapGrid : MonoBehaviour
     [SerializeField] private float lineWidth = 0.03f;
     [SerializeField] private int sortingOrder = 5;   // 배경(0)보다 위, 마을(10)보다 아래
 
+    [Header("셀 정보(땅정보)")]
+    // 저장/편집용 flat 리스트(Unity는 2D 배열을 직렬화 못 하므로). 각 셀에 row,col,terrain 포함.
+    [SerializeField] private List<MinimapCell> savedCells = new List<MinimapCell>();
+
     public int Cols => cols;
     public int Rows => rows;
     public int CellCount => cols * rows;
     public bool IsReady { get; private set; }
+    public bool CellsBuilt { get; private set; }
 
     private Bounds area;          // 격자 영역(배경 bounds)
     private Transform overlayRoot;
+    private MinimapCell[,] cells; // 런타임 빠른 접근용 2D 배열
 
     private void Awake()
     {
@@ -49,6 +56,7 @@ public class MinimapGrid : MonoBehaviour
     private void Start()
     {
         if (!EnsureArea()) return;
+        BuildCells();
         if (drawOverlay) BuildOverlay();
     }
 
@@ -86,6 +94,85 @@ public class MinimapGrid : MonoBehaviour
     {
         EnsureArea();
         return new Vector2(area.size.x / cols, area.size.y / rows);
+    }
+
+    // ------------------------------------------------------------------ 셀 정보(땅정보)
+
+    /// <summary>
+    /// 셀 2D 배열을 구성한다(좌표 채우고, 저장된 terrain이 있으면 반영).
+    /// Unity가 [,]를 직렬화 못 하므로 저장은 savedCells(flat)에, 런타임 접근은 cells[,]에 둔다.
+    /// </summary>
+    public void BuildCells()
+    {
+        if (!EnsureArea()) return;
+        cells = new MinimapCell[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                cells[r, c] = new MinimapCell(r, c, CellToWorld(r, c));
+
+        // 저장된 땅정보 반영
+        if (savedCells != null)
+            foreach (var s in savedCells)
+                if (s != null && InRange(s.row, s.col))
+                    cells[s.row, s.col].terrain = s.terrain;
+
+        CellsBuilt = true;
+    }
+
+    /// <summary>셀(row,col) 반환(없으면 null). 범위를 벗어나면 null.</summary>
+    public MinimapCell GetCell(int row, int col)
+    {
+        if (!CellsBuilt) BuildCells();
+        return InRange(row, col) ? cells[row, col] : null;
+    }
+
+    /// <summary>월드 좌표가 속한 셀을 반환. 영역 밖이면 false.</summary>
+    public bool TryGetCellAtWorld(Vector3 world, out MinimapCell cell)
+    {
+        cell = null;
+        int row, col;
+        bool inside = WorldToCell(world, out row, out col);
+        cell = GetCell(row, col);
+        return inside && cell != null;
+    }
+
+    /// <summary>셀의 땅정보를 설정하고 저장 리스트에도 반영한다.</summary>
+    public void SetTerrain(int row, int col, TerrainType terrain)
+    {
+        var cell = GetCell(row, col);
+        if (cell == null) return;
+        cell.terrain = terrain;
+        UpsertSaved(cell);
+    }
+
+    /// <summary>모든 셀을 순회(읽기용).</summary>
+    public IEnumerable<MinimapCell> AllCells()
+    {
+        if (!CellsBuilt) BuildCells();
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                yield return cells[r, c];
+    }
+
+    /// <summary>현재 cells[,]의 terrain을 저장 리스트(savedCells)로 평탄화한다(영속화 대비).</summary>
+    public void FlushToSaved()
+    {
+        if (!CellsBuilt) return;
+        savedCells = new List<MinimapCell>(rows * cols);
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                savedCells.Add(cells[r, c]);
+    }
+
+    private bool InRange(int row, int col) => row >= 0 && row < rows && col >= 0 && col < cols;
+
+    private void UpsertSaved(MinimapCell cell)
+    {
+        if (savedCells == null) savedCells = new List<MinimapCell>();
+        for (int i = 0; i < savedCells.Count; i++)
+            if (savedCells[i] != null && savedCells[i].row == cell.row && savedCells[i].col == cell.col)
+            { savedCells[i] = cell; return; }
+        savedCells.Add(cell);
     }
 
     // ------------------------------------------------------------------ 영역/오버레이
