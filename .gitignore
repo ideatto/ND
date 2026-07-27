@@ -155,3 +155,7 @@ crashlytics-build.properties
 # -----------------------------------------------------------------------------
 /Assets/Screenshots/
 /Assets/Screenshots.meta
+
+# External Asset Local Import Area
+/[Aa]ssets/_ExternalPackages/*
+!/[Aa]ssets/_ExternalPackages/.gitkeep
