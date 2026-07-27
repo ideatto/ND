@@ -100,6 +100,7 @@ public class MinimapGridDebug : MonoBehaviour
             case TerrainType.Forest:   return new Color(0.15f, 0.45f, 0.15f);
             case TerrainType.Farmland: return new Color(0.90f, 0.60f, 0.20f);
             case TerrainType.River:    return new Color(0.25f, 0.55f, 0.95f);
+            case TerrainType.Riverbank:return new Color(0.55f, 0.80f, 0.75f);  // 강변(옅은 청록)
             case TerrainType.Bridge:   return new Color(0.55f, 0.35f, 0.15f);
             case TerrainType.Mountain: return new Color(0.55f, 0.55f, 0.58f);
             case TerrainType.Water:    return new Color(0.20f, 0.70f, 0.85f);
