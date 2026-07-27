@@ -272,6 +272,7 @@ namespace ND.UI.Market
         public const string ErrorCurrentTownMissing = "MARKET_CURRENT_TOWN_MISSING";
         public const string ErrorTownMarketMismatch = "MARKET_TOWN_MISMATCH";
         public const string ErrorMarketDataMissing = "MARKET_DATA_MISSING";
+        public const string ErrorArrivalSaleIdentityMismatch = "ARRIVAL_SALE_IDENTITY_MISMATCH";
 
         [SerializeField] private MarketData marketData;
         [SerializeField] private MarketData[] marketCatalog = Array.Empty<MarketData>();
@@ -286,6 +287,7 @@ namespace ND.UI.Market
         private bool arrivalSaleAccess;
         private bool townPurchaseAccess;
         private string activeCaravanId = string.Empty;
+        private string activeTradeId = string.Empty;
 
         public event Action<IReadOnlyList<MarketTradeItemState>> StateChanged;
         public event Action<MarketTransactionResult> TransactionCompleted;
@@ -293,6 +295,8 @@ namespace ND.UI.Market
 
         public MarketTradePanelModel Model => model;
         public bool IsOpen => model != null;
+        public string ActiveCaravanId => activeCaravanId;
+        public string ActiveTradeId => activeTradeId;
         public string LastErrorCode { get; private set; } = string.Empty;
 
         private void OnEnable()
@@ -340,10 +344,13 @@ namespace ND.UI.Market
         }
 
         /// <summary>
-        /// Opens a destination market in sell-only mode for one arrived caravan. The caller
-        /// resolves the MarketData from that caravan's saved pending route, not player.currentTownId.
+        /// Opens a destination market in sell-only mode for one exact Caravan and trade Pending.
+        /// The requested trade ID remains authoritative for the panel session and commit validation.
         /// </summary>
-        public bool OpenForArrivalSale(string caravanId, MarketData destinationMarket)
+        public bool OpenForArrivalSale(
+            string caravanId,
+            string tradeId,
+            MarketData destinationMarket)
         {
             FrameworkRoot root = FrameworkRoot.Instance;
             if (root == null || root.CurrentSaveData == null || root.SaveService == null || root.GameTime == null)
@@ -355,6 +362,7 @@ namespace ND.UI.Market
                 root.CurrentSaveData,
                 root.SharedGameData,
                 caravanId,
+                tradeId,
                 destinationMarket.MarketId);
             if (!string.IsNullOrEmpty(accessError))
                 return FailOpen(accessError);
@@ -363,6 +371,7 @@ namespace ND.UI.Market
             return OpenResolved(
                 root,
                 caravanId,
+                tradeId,
                 MarketTradeMode.SellOnly,
                 allowPreparation: false,
                 isArrivalSale: true,
@@ -393,6 +402,7 @@ namespace ND.UI.Market
             return OpenResolved(
                 root,
                 caravanId,
+                string.Empty,
                 MarketTradeMode.BuyOnly,
                 allowPreparation: false,
                 isArrivalSale: false,
@@ -428,6 +438,7 @@ namespace ND.UI.Market
             return OpenResolved(
                 root,
                 root.CurrentSaveData.selectedCaravanId,
+                string.Empty,
                 MarketTradeMode.BuyAndSell,
                 allowPreparation,
                 isArrivalSale: false,
@@ -437,6 +448,7 @@ namespace ND.UI.Market
         private bool OpenResolved(
             FrameworkRoot root,
             string caravanId,
+            string tradeId,
             MarketTradeMode tradeMode,
             bool allowPreparation,
             bool isArrivalSale,
@@ -447,12 +459,14 @@ namespace ND.UI.Market
             arrivalSaleAccess = isArrivalSale;
             townPurchaseAccess = isTownPurchase;
             activeCaravanId = caravanId ?? string.Empty;
+            string requestedTradeId = tradeId ?? string.Empty;
             bool hasMarketCatalog = marketCatalog != null && marketCatalog.Any(value => value != null);
 
             if (model != null
                 && string.Equals(model.MarketId, marketData.MarketId, StringComparison.Ordinal)
                 && string.Equals(model.CaravanId, activeCaravanId, StringComparison.Ordinal)
-                && model.TradeMode == tradeMode)
+                && model.TradeMode == tradeMode
+                && string.Equals(activeTradeId, requestedTradeId, StringComparison.Ordinal))
             {
                 // Repeated button input must not recreate the session and discard its draft.
                 SetError(string.Empty);
@@ -464,6 +478,7 @@ namespace ND.UI.Market
             // belongs to the previous town and is discarded before replacing that session.
             model?.CancelDraft();
             model = null;
+            activeTradeId = requestedTradeId;
 
             TradeItemData[] catalog = marketData.TradeItems
                 .Concat(marketData.LocalSpecialtyItems)
@@ -549,6 +564,7 @@ namespace ND.UI.Market
             arrivalSaleAccess = false;
             townPurchaseAccess = false;
             activeCaravanId = string.Empty;
+            activeTradeId = string.Empty;
             SetError(string.Empty);
             RaiseStateChanged();
         }
@@ -573,6 +589,7 @@ namespace ND.UI.Market
                         root?.CurrentSaveData,
                         root?.SharedGameData,
                         activeCaravanId,
+                        activeTradeId,
                         model.MarketId)
                     : townPurchaseAccess
                         ? ValidateTownPurchaseAccess(
@@ -629,17 +646,22 @@ namespace ND.UI.Market
             ND.Framework.SaveData saveData,
             ISharedGameDataProvider sharedGameData,
             string caravanId,
+            string tradeId,
             string marketId)
         {
             if (saveData == null || sharedGameData == null || !sharedGameData.IsLoaded)
                 return MarketInventoryMutationSession.ErrorInvalidFramework;
             if (!SaveDataLookup.TryGetCaravan(saveData, caravanId, out _))
                 return MarketInventoryMutationSession.ErrorInvalidCaravan;
+            if (string.IsNullOrWhiteSpace(tradeId))
+                return ErrorArrivalSaleIdentityMismatch;
             if (!SaveDataLookup.TryGetTradeProgress(
                     saveData, caravanId, out ND.Framework.TradeProgressSaveData progress)
                 || progress.state != ND.Framework.TradeProgressState.SettlementPending)
                 return ErrorNotInTown;
-            if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, progress.activeTradeId, out PendingSettlementSaveData pending)
+            if (!string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal))
+                return ErrorArrivalSaleIdentityMismatch;
+            if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, tradeId, out PendingSettlementSaveData pending)
                 || pending == null
                 || !pending.hasResult
                 || pending.grade == JourneyResultGrade.Failed)
@@ -748,13 +770,18 @@ namespace ND.UI.Market
 
         private bool FailOpen(string error)
         {
+            string failedCaravanId = activeCaravanId;
+            string failedTradeId = activeTradeId;
             model = null;
             allowPreparationAccess = false;
             arrivalSaleAccess = false;
             townPurchaseAccess = false;
             activeCaravanId = string.Empty;
+            activeTradeId = string.Empty;
             SetError(error);
-            Debug.LogError($"[Market Panel] Open failed: {error}", this);
+            Debug.LogError(
+                $"[Market Panel] Open failed. CaravanId={failedCaravanId}, TradeId={failedTradeId}, Error={error}",
+                this);
             return false;
         }
 
