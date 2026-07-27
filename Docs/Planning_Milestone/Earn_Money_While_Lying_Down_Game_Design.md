@@ -1,5 +1,9 @@
 # 누워서 돈벌기 — 게임 기획서
 
+## Current trade completion loop
+
+Current product flow is `Prepare → Travel → arrival result → optional partial/full/no cargo sale → settlement presentation → Claim → next preparation`. Sale confirmation persists Cargo, destination market stock, and proceeds immediately; Claim later applies only separate travel settlement economy. Unsold Cargo remains in the caravan. See `Docs/Contract/Arrival_Sale_Settlement_Claim_Policy.md`.
+
 ## 문서 정보
 
 - **장르:** 방치형 무역 경영 시뮬레이션
@@ -37,7 +41,7 @@
 - Traveling 상태 저장 및 재실행 후 진행률 복구
 - 오프라인 경과 시간 반영
 - 정산 대기 상태와 정산 결과의 재실행 후 복구
-- Claim 이후 재화 반영 및 중복 Claim 차단
+- Claim에서 여행 정산 경제 반영 및 중복 Claim 차단(도착 화물 판매대금은 판매 확인 Save에서 선반영)
 - 성공 정산 후 다음 무역 재출발
 - 실패 정산 후 Claim하고 다음 무역 재출발
 - 무역 루프 3회 연속 실행
@@ -136,9 +140,9 @@
 ### 정산과 반복
 
 - 성공 또는 실패 결과 생성
-- 구매 비용, 판매 수익, 총비용, 순이익 표시
+- 여행 정산의 구매 비용, 총비용, 순이익 표시와 별도로 도착 화물 판매 결과 표시
 - 실패 원인 표시
-- Claim 시 재화 반영
+- Claim 시 여행 정산 경제만 반영(도착 화물 판매대금 중복 지급 금지)
 - 동일 정산 중복 Claim 방지
 - 정산 대기 중 종료해도 결과 복구
 - Claim 후 Preparation 복귀

@@ -152,7 +152,7 @@ public sealed class TradePrepareStartAdapter
         }
         catch
         {
-            commitSink?.Rollback(tradeId.Trim());
+            RollbackCommit(commitData);
             throw;
         }
 
@@ -162,7 +162,7 @@ public sealed class TradePrepareStartAdapter
 
         if (departure != null && !departure.canDepart && HasDepartureBlockReasons(departure))
         {
-            commitSink?.Rollback(tradeId.Trim());
+            RollbackCommit(commitData);
             return CreateFailure(
                 ErrorCoreDepartureBlocked,
                 CreateCoreDepartureBlockedMessage(departure),
@@ -174,7 +174,7 @@ public sealed class TradePrepareStartAdapter
 
         if (gatewayResult == null || !gatewayResult.recordSucceeded)
         {
-            commitSink?.Rollback(tradeId.Trim());
+            RollbackCommit(commitData);
             return CreateFailure(
                 ErrorFrameworkRecordFailed,
                 "The start gateway failed to record the started trade.",
@@ -186,7 +186,7 @@ public sealed class TradePrepareStartAdapter
 
         if (departure == null || !departure.canDepart)
         {
-            commitSink?.Rollback(tradeId.Trim());
+            RollbackCommit(commitData);
             return CreateFailure(
                 ErrorCoreDepartureBlocked,
                 CreateCoreDepartureBlockedMessage(departure),
@@ -206,6 +206,22 @@ public sealed class TradePrepareStartAdapter
             prepareCondition = viewData.startCondition,
             departureValidation = departure
         };
+    }
+
+    private void RollbackCommit(TradePrepareCommitData commitData)
+    {
+        if (commitData == null)
+        {
+            return;
+        }
+
+        if (commitSink is IExactTradePrepareCommitStore exactStore)
+        {
+            exactStore.Rollback(commitData.caravanId, commitData.tradeId);
+            return;
+        }
+
+        commitSink?.Rollback(commitData.tradeId);
     }
 
     private static ITradePrepareStartGateway CreateFrameworkGateway(
@@ -280,13 +296,14 @@ public sealed class TradePrepareStartAdapter
             routeId = routeId,
             selectedWagonId = draft.selectedWagonId,
             selectedAnimals = CreateSelectedAnimalSnapshots(draft),
-            // The summary projection already prices the authoritative S4 plan.
-            // Keep food separate because settlement adds purchaseCost and foodCost.
-            purchaseCost = Math.Max(0L, viewData.totalPurchaseCost - viewData.draftAnimalFoodCost),
+            // Market purchases are committed to SaveData before departure.
+            // Do not stage them again or settlement will charge the same transaction twice.
+            purchaseCost = 0L,
             foodCost = Math.Max(0L, viewData.draftAnimalFoodCost),
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
-            estimatedSellRevenue = Math.Max(0L, viewData.estimatedSellRevenue),
-            purchasedItems = CreatePurchasedItemSnapshots(draft),
+            // Arrival sales are calculated from the committed cargo at settlement time.
+            estimatedSellRevenue = 0L,
+            purchasedItems = new TradeItemBundle[0],
             selectedMercenaryIds = mercenaryIds
         };
     }

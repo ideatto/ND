@@ -415,7 +415,7 @@ namespace ND.Framework
 
             NormalizeRescueLoan(data);
 
-            FrameworkTradePrepareCommitStore.Normalize(data);
+            assetDataChanged |= FrameworkTradePrepareCommitStore.Normalize(data);
 
             if (data.world == null)
             {

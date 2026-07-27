@@ -1,5 +1,9 @@
 # SaveData V2 Field Contract
 
+## Arrival-sale persistence boundary
+
+See `Arrival_Sale_Settlement_Claim_Policy.md`. Confirmed sale effects persist through remaining Cargo, destination market stock, and `tradingCurrency`; pending state persists as `JourneyState.Settling`, `TradeProgressState.SettlementPending`, and the travel result. Draft quantities, separate `SaleSaveData`, a detailed ledger, product-flow `JourneyState.Selling`, and runtime presentation flags are not persisted.
+
 ## Status and version
 
 `V2`는 second-build 제품 문서 라벨이며 serialized numeric version이 아니다. 현재 production은 version 6이고 승인된 다음 numeric version은 7이다. 이 문서 작업은 production `CurrentVersion`을 변경하지 않는다.

@@ -609,13 +609,40 @@ namespace ND.Framework
                     Distance = item.Distance,
                     DefaultElapsedTime = item.DefaultElapsedTime,
                     BaseRequiredFoodQuantity = item.BaseRequiredFoodQuantity,
-                    BaseRequiredMercenaryPower = item.BaseRequiredMercenaryPower,
-                    BaseRiskLevel = item.BaseRiskLevel,
-                    MaxEventCount = item.MaxEventCount,
-                    BaseFoodCost = item.BaseFoodCost,
-                    BaseMercenaryCost = item.BaseMercenaryCost
-                });
+                     BaseRequiredMercenaryPower = item.BaseRequiredMercenaryPower,
+                     BaseRiskLevel = item.BaseRiskLevel,
+                     MaxEventCount = item.MaxEventCount,
+                     Events = CopyRouteEvents(item.RouteEvents),
+                     BaseFoodCost = item.BaseFoodCost,
+                     BaseMercenaryCost = item.BaseMercenaryCost
+                 });
+             }
+         }
+
+        private static SharedRouteEventDefinition[] CopyRouteEvents(global::RouteEventData[] source)
+        {
+            if (source == null || source.Length == 0)
+                return new SharedRouteEventDefinition[0];
+
+            var result = new SharedRouteEventDefinition[source.Length];
+            for (var index = 0; index < source.Length; index++)
+            {
+                var item = source[index];
+                if (item == null) continue;
+                result[index] = new SharedRouteEventDefinition
+                {
+                    Id = item.routeEventId,
+                    EventType = item.eventType,
+                    DisplayName = item.displayName,
+                    Description = item.description,
+                    BanditCombatPower = item.BanditCombatPower,
+                    CargoLootRate = item.CargoLootRate,
+                    FodderLootRate = item.FodderLootRate,
+                    RewardType = item.eventRewardType,
+                    Reward = item.eventValue
+                };
             }
+            return result;
         }
 
         private static bool CanAddId<T>(Dictionary<string, T> target, string id, string label, List<string> errors)

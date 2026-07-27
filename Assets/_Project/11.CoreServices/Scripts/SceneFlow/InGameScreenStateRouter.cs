@@ -87,7 +87,10 @@ namespace ND.Framework
             if (progressState == TradeProgressState.Completed || progressState == TradeProgressState.Failed)
             {
                 var pendingCleared = saveData.pendingSettlement == null || !saveData.pendingSettlement.hasResult;
-                var commitCleared = saveData.tradePreparationCommit == null || !saveData.tradePreparationCommit.hasCommit;
+                var commitCleared = !FrameworkTradePrepareCommitStore.HasActiveCommit(
+                    saveData,
+                    saveData.selectedCaravanId,
+                    saveData.tradeProgress.activeTradeId);
                 var hasCurrentTown = saveData.player != null
                     && !string.IsNullOrWhiteSpace(saveData.player.currentTownId);
                 return pendingCleared && commitCleared && hasCurrentTown
