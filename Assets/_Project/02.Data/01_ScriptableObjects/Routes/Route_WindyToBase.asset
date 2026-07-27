@@ -10,11 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d6ca5c35337d5bd4594d2809d4a7c844, type: 3}
-  m_Name: Route_BaseToWindy
+  m_Name: Route_WindyToBase
   m_EditorClassIdentifier: Assembly-CSharp::RouteData
-  routeId: BaseToWindy
-  fromTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
-  toTown: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  routeId: WindyToBase
+  fromTown: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  toTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
   displayName: "\uC624\uC194\uAE38"
   unlockedByDefault: 1
   distance: 10
