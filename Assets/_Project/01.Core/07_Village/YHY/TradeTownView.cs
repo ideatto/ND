@@ -27,6 +27,9 @@ public class TradeTownView : MonoBehaviour
     [SerializeField] private string sceneName = "TradeTowns"; // 3D 거래마을 씬 이름 (Build Settings에 등록 필요)
     [SerializeField] private bool showOnStart = false;       // 테스트용: 시작하자마자 표시할지
 
+    /// <summary>지금 무역마을 화면이 표시 중인가(이름표 등에서 참조).</summary>
+    public bool IsShowing => view != null && view.enabled;
+
     private void Awake()
     {
         // RawImage를 지정 안 했으면 자기 자신에서 찾는다.
