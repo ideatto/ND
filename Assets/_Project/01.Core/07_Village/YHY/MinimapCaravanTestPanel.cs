@@ -170,9 +170,9 @@ public class MinimapCaravanTestPanel : MonoBehaviour
     private void EnsureStyles()
     {
         if (btnStyle != null) return;
-        boxStyle = new GUIStyle(GUI.skin.box) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.UpperCenter };
-        btnStyle = new GUIStyle(GUI.skin.button) { fontSize = 22 };
-        labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, wordWrap = true };
+        boxStyle = new GUIStyle(GUI.skin.box) { fontStyle = FontStyle.Bold, alignment = TextAnchor.UpperCenter };
+        btnStyle = new GUIStyle(GUI.skin.button);
+        labelStyle = new GUIStyle(GUI.skin.label) { wordWrap = true };
     }
 
     private void OnGUI()
@@ -180,10 +180,16 @@ public class MinimapCaravanTestPanel : MonoBehaviour
         if (!showPanel) return;
         EnsureStyles();
 
-        const float w = 360f, h = 64f, pad = 10f, header = 34f;
-        float x = panelPos.x, y = panelPos.y;
+        // 화면 높이에 비례해 스케일(고해상도 게임뷰에서도 크게 보이도록). 1080 기준.
+        float s = Mathf.Max(1f, Screen.height / 1080f);
+        btnStyle.fontSize = Mathf.RoundToInt(26f * s);
+        boxStyle.fontSize = Mathf.RoundToInt(24f * s);
+        labelStyle.fontSize = Mathf.RoundToInt(20f * s);
 
-        GUI.Box(new Rect(x - pad, y - pad, w + pad * 2f, header + (h + pad) * 5f + 30f + pad), "미니맵 캐러밴 테스트", boxStyle);
+        float w = 480f * s, h = 84f * s, pad = 14f * s, header = 44f * s;
+        float x = 24f * s, y = 24f * s;
+
+        GUI.Box(new Rect(x - pad, y - pad, w + pad * 2f, header + (h + pad) * 5f + 36f * s + pad), "미니맵 캐러밴 테스트", boxStyle);
         y += header;
 
         if (GUI.Button(new Rect(x, y, w, h), "1번 캐러밴 → 리버타운 (3분)", btnStyle))
@@ -206,7 +212,7 @@ public class MinimapCaravanTestPanel : MonoBehaviour
             ResetAll();
         y += h + pad;
 
-        GUI.Label(new Rect(x, y, w, 30f), StatusText(), labelStyle);
+        GUI.Label(new Rect(x, y, w, 36f * s), StatusText(), labelStyle);
     }
 
     /// <summary>각 캐러밴의 현재 상태(이동중 %/정박 마을) 요약.</summary>

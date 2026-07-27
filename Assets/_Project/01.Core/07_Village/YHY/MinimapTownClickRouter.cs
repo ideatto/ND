@@ -48,10 +48,10 @@ public class MinimapTownClickRouter : MonoBehaviour, IPointerClickHandler
     {
         if (string.IsNullOrEmpty(townId)) return;
 
-        // 거점은 무조건 활성. 무역마을은 캐러밴이 지금 그 마을에 있어야(도착) 활성.
-        if (townId != homeTownId && townId != GetCaravanMapTownId())
+        // 거점은 무조건 활성. 무역마을은 캐러밴이 "정박(도착)"해 있어야 활성.
+        if (townId != homeTownId && !IsCaravanDockedAt(townId))
         {
-            Debug.Log($"[MinimapTownClickRouter] '{townId}'는 비활성(캐러밴 없음/이동중) — 진입 안 함");
+            Debug.Log($"[MinimapTownClickRouter] '{townId}'는 비활성(정박 캐러밴 없음/이동중) — 진입 안 함");
             return;
         }
 
@@ -100,29 +100,37 @@ public class MinimapTownClickRouter : MonoBehaviour, IPointerClickHandler
         return best;
     }
 
-    /// <summary>캐러밴 마커의 현재 지도 위치에서 그 위에 있는 마을 townId(마을 위가 아니면 null).</summary>
-    private string GetCaravanMapTownId()
+    /// <summary>
+    /// 그 마을에 "정박(이동 중 아님)"한 캐러밴이 있으면 true.
+    /// SaveData를 직접 읽으므로 미니맵 마커 표시 방식과 무관하다(다중 캐러밴 대응).
+    /// </summary>
+    private bool IsCaravanDockedAt(string townId)
     {
-        Transform scope = (renderRoot != null) ? renderRoot : transform;
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        var save = fr != null ? fr.CurrentSaveData : null;
+        if (save == null || save.caravans == null) return false;
 
-        // 캐러밴이 지도에서 실제 그려지는 위치: 진행 마커(이동/도착) 우선, 없으면 정박 인디케이터
-        Vector3? caravanPos = null;
-        var marker = scope.GetComponentInChildren<CaravanMapMarker>(true);
-        if (marker != null && marker.gameObject.activeInHierarchy) caravanPos = marker.transform.position;
-        if (caravanPos == null)
+        for (int i = 0; i < save.caravans.Count; i++)
         {
-            var indicator = scope.Find("CaravanLocationIndicator");   // MinimapCaravanIndicator가 만든 아이콘
-            if (indicator != null)
-            {
-                var sr = indicator.GetComponent<SpriteRenderer>();
-                if (sr != null && sr.enabled) caravanPos = indicator.position;
-            }
+            var c = save.caravans[i];
+            if (c == null || c.currentTownId != townId) continue;
+            if (IsTraveling(save, c.caravanId)) continue;   // 이동 중이면 currentTownId는 출발지일 뿐 — "정박" 아님
+            return true;
         }
-        if (caravanPos == null) return null;
+        return false;
+    }
 
-        // 마커가 "마을 위"에 있어야 그 마을이 활성 (이동 중이면 마을 사이라 반경 밖 → null)
-        const float onTownRadius = 0.4f;
-        return FindNearestTownId(caravanPos.Value, onTownRadius);
+    /// <summary>해당 캐러밴이 지금 이동(Traveling) 중인가.</summary>
+    private static bool IsTraveling(ND.Framework.SaveData save, string caravanId)
+    {
+        if (save.tradeProgressEntries == null) return false;
+        for (int i = 0; i < save.tradeProgressEntries.Count; i++)
+        {
+            var e = save.tradeProgressEntries[i];
+            if (e != null && e.caravanId == caravanId
+                && e.state == ND.Framework.TradeProgressState.Traveling) return true;
+        }
+        return false;
     }
 
     private Camera ResolveCamera()
