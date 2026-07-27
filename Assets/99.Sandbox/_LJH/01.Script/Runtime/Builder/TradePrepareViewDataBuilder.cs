@@ -17,16 +17,15 @@ public sealed class TradePrepareViewDataBuilder
         string currentTownId = draft.currentTownId ?? string.Empty;
 
         TownData currentTown = FindTown(context.towns, currentTownId);
-        RouteData[] availableRoutes = MergeUnique(
-            context.routes,
-            currentTown != null ? currentTown.AvailableRoutes : null,
-            route => route != null ? route.RouteId : string.Empty);
+        RouteData[] availableRoutes = currentTown != null ? currentTown.AvailableRoutes : Array.Empty<RouteData>();
         RouteData selectedRoute = FindRoute(availableRoutes, draft.selectedRouteId);
         if (!IsRouteValidForDraft(selectedRoute, currentTownId, draft.selectedDestinationTownId))
         {
             selectedRoute = null;
         }
 
+        RouteViewData[] routeViewData = BuildRoutes(availableRoutes, context.towns, currentTownId, saveData);
+        TownViewData[] townViewData = BuildTowns(context.towns, routeViewData, currentTownId, saveData);
         TradeItemData[] availableItems = MergeUnique(
             context.tradeItems,
             currentTown != null && currentTown.Market != null ? currentTown.Market.TradeItems : null,
@@ -109,7 +108,7 @@ public sealed class TradePrepareViewDataBuilder
             out bool canPurchaseCargo,
             out bool canHireSelectedMercenaries);
         long estimatedNetProfit = sellRevenue - totalPreparationCost;
-        bool routeUnlocked = IsRouteUnlocked(selectedRoute, saveData);
+        bool routeSelectable = IsRouteSelectable(selectedRoute, context.towns, currentTownId, saveData);
         DraftAnimalType[] selectedAnimalTypes = GetSelectedAnimalTypes(draft, availableAnimals);
 
         TradePrepareConditionInput conditionInput = new TradePrepareConditionInput
@@ -120,7 +119,7 @@ public sealed class TradePrepareViewDataBuilder
             isDepartureCaravanSelectionRequired = context.caravanOptions != null && context.caravanOptions.Length > 0,
             isDepartureCaravanSelected = !string.IsNullOrEmpty(draft.departureCaravanId),
             isRouteSelected = selectedRoute != null,
-            isRouteUnlocked = routeUnlocked,
+            isRouteUnlocked = routeSelectable,
             isWagonRequired = true,
             isWagonSelected = selectedWagon != null,
             // Walking (WagonType.None) is a travel method, not an inventory-owned wagon.
@@ -169,8 +168,8 @@ public sealed class TradePrepareViewDataBuilder
             currentTownName = currentTown != null ? currentTown.DisplayName : string.Empty,
             currentTradingCurrency = currentTradingCurrency,
             currentDevelopmentCurrency = ReadDevelopmentCurrency(saveData),
-            towns = BuildTowns(context.towns, currentTownId, saveData),
-            routes = BuildRoutes(availableRoutes, currentTownId, saveData),
+            towns = townViewData,
+            routes = routeViewData,
             tradeItems = itemViewData,
             selectedRouteId = draft.selectedRouteId ?? string.Empty,
             currentLoad = currentLoad,
@@ -590,10 +589,12 @@ public sealed class TradePrepareViewDataBuilder
         return result.ToArray();
     }
 
-    private static TownViewData[] BuildTowns(TownData[] towns, string currentTownId, ND.Framework.SaveData saveData)
+    private static TownViewData[] BuildTowns(TownData[] towns, RouteViewData[] routes, string currentTownId, ND.Framework.SaveData saveData)
     {
         var result = new List<TownViewData>();
-        towns = towns ?? new TownData[0];
+        towns = towns ?? Array.Empty<TownData>();
+        routes = routes ?? Array.Empty<RouteViewData>();
+
         for (int index = 0; index < towns.Length; index++)
         {
             TownData town = towns[index];
@@ -602,28 +603,55 @@ public sealed class TradePrepareViewDataBuilder
                 continue;
             }
 
-            bool unlocked = town.UnlockedByDefault || Contains(saveData != null && saveData.world != null ? saveData.world.unlockedTownIds : null, town.TownId);
+            bool unlocked = IsTownUnlocked(town, saveData);
             bool isCurrent = string.Equals(town.TownId, currentTownId, StringComparison.Ordinal);
+            bool hasSelectableRoute = HasSelectableRouteToTown(routes, town.TownId);
+            bool canSelect = !isCurrent && unlocked && hasSelectableRoute;
+
+            string disableReason;
+
+            if (isCurrent)
+            {
+                disableReason = unlocked ? "현재 도시입니다." : "현재 도시가 잠금 상태입니다. 세이브 데이터의 확인을 부탁드립니다.";
+            }
+            else if (!unlocked)
+            {
+                disableReason = "도시가 잠금 상태입니다.";
+            }
+            else if (!hasSelectableRoute)
+            {
+                disableReason = "선택 가능한 루트가 없습니다.";
+            }
+            else
+            {
+                disableReason = string.Empty;
+            }
+
             result.Add(new TownViewData
             {
                 townId = town.TownId,
                 displayName = town.DisplayName,
                 icon = town.Icon,
                 description = town.Description,
-                isUnlocked = unlocked || isCurrent,
+                isUnlocked = unlocked,
                 isCurrentTown = isCurrent,
-                canSelect = (unlocked || isCurrent) && !isCurrent,
-                disabledReason = isCurrent ? "Current town." : unlocked ? string.Empty : "Town is locked."
+                canSelect = canSelect,
+                disabledReason = disableReason
             });
         }
 
         return result.ToArray();
     }
 
-    private static RouteViewData[] BuildRoutes(RouteData[] routes, string currentTownId, ND.Framework.SaveData saveData)
+    private static RouteViewData[] BuildRoutes(RouteData[] routes, TownData[] towns, string currentTownId, ND.Framework.SaveData saveData)
     {
         var result = new List<RouteViewData>();
-        routes = routes ?? new RouteData[0];
+        routes = routes ?? Array.Empty<RouteData>();
+        towns = towns ?? Array.Empty<TownData>();
+
+        TownData currentTown = FindTown(towns, currentTownId);
+        bool currentTownUnlocked = IsTownUnlocked(currentTown, saveData);
+
         for (int index = 0; index < routes.Length; index++)
         {
             RouteData route = routes[index];
@@ -632,24 +660,52 @@ public sealed class TradePrepareViewDataBuilder
                 continue;
             }
 
-            bool unlocked = IsRouteUnlocked(route, saveData);
-            result.Add(new RouteViewData
+            TownData destinationTown = FindTown(towns, route.ToTownId);
+
+            bool routeUnlocked = IsRouteUnlocked(route, saveData);
+            bool destinationTownUnlocked = IsTownUnlocked(destinationTown, saveData);
+            bool canSelect = currentTownUnlocked && destinationTownUnlocked && routeUnlocked;
+
+            string disableReason;
+
+            if (!currentTownUnlocked)
             {
-                routeId = route.RouteId,
-                displayName = route.DisplayName,
-                fromTownId = route.FromTownId,
-                fromTownName = route.FromTownName,
-                toTownId = route.ToTownId,
-                toTownName = route.ToTownName,
-                distance = route.Distance,
-                estimatedTime = route.DefaultElapsedTime,
-                requiredDraftAnimalFoodQuantity = route.BaseRequiredDraftAnimalFoodQuantity,
-                requiredMercenaryPower = route.BaseRequiredMercenaryPower,
-                riskLevel = route.BaseRiskLevel,
-                isUnlocked = unlocked,
-                canSelect = unlocked,
-                disabledReason = unlocked ? string.Empty : "Route is locked."
-            });
+                disableReason = "현재 도시가 잠금 상태입니다.";
+            }
+            else if (destinationTown == null)
+            {
+                disableReason = "도착지가 존재하지 않습니다.";
+            }
+            else if (!destinationTownUnlocked)
+            {
+                disableReason = "도착지가 잠금 상태입니다.";
+            }
+            else if (!routeUnlocked)
+            {
+                disableReason = "경로가 잠금 상태입니다.";
+            }
+            else
+            {
+                disableReason = string.Empty;
+            }
+
+                result.Add(new RouteViewData
+                {
+                    routeId = route.RouteId,
+                    displayName = route.DisplayName,
+                    fromTownId = route.FromTownId,
+                    fromTownName = route.FromTownName,
+                    toTownId = route.ToTownId,
+                    toTownName = route.ToTownName,
+                    distance = route.Distance,
+                    estimatedTime = route.DefaultElapsedTime,
+                    requiredDraftAnimalFoodQuantity = route.BaseRequiredDraftAnimalFoodQuantity,
+                    requiredMercenaryPower = route.BaseRequiredMercenaryPower,
+                    riskLevel = route.BaseRiskLevel,
+                    isUnlocked = routeUnlocked,
+                    canSelect = canSelect,
+                    disabledReason = disableReason
+                });
         }
 
         return result.ToArray();
@@ -761,7 +817,48 @@ public sealed class TradePrepareViewDataBuilder
     private static bool IsRouteUnlocked(RouteData route, ND.Framework.SaveData saveData)
     {
         return route != null && (route.UnlockedByDefault
-            || Contains(saveData != null && saveData.world != null ? saveData.world.unlockedRouteIds : null, route.RouteId));
+            || Contains(saveData?.world?.unlockedRouteIds, route.RouteId));
+    }
+
+    private static bool IsTownUnlocked(TownData town, ND.Framework.SaveData saveData)
+    {
+        if(town == null)
+        {
+            return false;
+        }
+
+        return town.UnlockedByDefault || Contains(saveData?.world?.unlockedTownIds, town.TownId);
+    }
+
+    private static bool IsRouteSelectable(RouteData route, TownData[] towns, string currentTownId, ND.Framework.SaveData saveData)
+    {
+        if(route == null || !string.Equals(route.FromTownId, currentTownId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        TownData fromTown = FindTown(towns, route.FromTownId);
+        TownData toTown = FindTown(towns, route.ToTownId);
+
+        return IsRouteUnlocked(route, saveData) && IsTownUnlocked(fromTown, saveData) && IsTownUnlocked(toTown, saveData);
+    }
+
+    private static bool HasSelectableRouteToTown(RouteViewData[] routes, string destinationTownId)
+    {
+        if(routes == null || string.IsNullOrWhiteSpace(destinationTownId))
+        {
+            return false;
+        }
+
+        foreach (RouteViewData route in routes)
+        {
+            if (route != null && route.canSelect && string.Equals(route.toTownId, destinationTownId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsRouteValidForDraft(RouteData route, string currentTownId, string destinationTownId)
