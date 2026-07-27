@@ -21,8 +21,8 @@ using UnityEngine;
 public class MinimapGrid : MonoBehaviour
 {
     [Header("격자 크기")]
-    [SerializeField] private int cols = 12;   // 가로 셀 수
-    [SerializeField] private int rows = 8;    // 세로 셀 수
+    [SerializeField] private int cols = 24;   // 가로 셀 수
+    [SerializeField] private int rows = 16;   // 세로 셀 수
 
     [Header("영역 기준")]
     [SerializeField] private Transform renderRoot;   // 배경 탐색 범위(비면 자기 자신)

@@ -2628,8 +2628,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ce5bfe8120aacea499e6b0e2eb7faab6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapGrid
-  cols: 12
-  rows: 8
+  cols: 24
+  rows: 16
   renderRoot: {fileID: 0}
   drawOverlay: 1
   lineColor: {r: 1, g: 1, b: 1, a: 0.25}
