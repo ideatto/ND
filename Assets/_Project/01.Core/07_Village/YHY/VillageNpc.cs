@@ -112,8 +112,8 @@ public class VillageNpc : MonoBehaviour
         pathIndex = 0;
         if (grid == null) return;
 
-        currentGoal = LowestNeed();
-        goalBuilding = FindBuildingFor(currentGoal);
+        // "채워줄 건물이 실제로 있는 스탯" 중 가장 낮은 것을 목표로 (없는 건물로 향해 빈터 배회하는 것 방지)
+        currentGoal = LowestSatisfiableNeed(out goalBuilding);
 
         grid.WorldToCell(transform.position, out int sx, out int sz);
 
@@ -149,14 +149,23 @@ public class VillageNpc : MonoBehaviour
         }
     }
 
-    /// <summary>지금 가장 낮은(급한) 스탯 종류.</summary>
-    private NeedType LowestNeed()
+    /// <summary>
+    /// "채워줄 건물이 마을에 있는" 스탯들 중 가장 낮은 것을 고르고, 그 건물도 함께 반환한다.
+    /// 어떤 스탯도 채울 건물이 없으면 building=null(→ 호출부에서 배회 처리).
+    /// </summary>
+    private NeedType LowestSatisfiableNeed(out BuildingNeedProvider building)
     {
-        NeedType low = NeedType.Hunger;
-        float min = needs[NeedType.Hunger];
-        if (needs[NeedType.Energy] < min) { min = needs[NeedType.Energy]; low = NeedType.Energy; }
-        if (needs[NeedType.Fun] < min) { low = NeedType.Fun; }
-        return low;
+        NeedType best = NeedType.Hunger;
+        float min = float.MaxValue;
+        building = null;
+
+        foreach (NeedType need in new[] { NeedType.Hunger, NeedType.Energy, NeedType.Fun })
+        {
+            BuildingNeedProvider b = FindBuildingFor(need);
+            if (b == null) continue;                    // 이 스탯 채울 건물 없음 → 후보에서 제외
+            if (needs[need] < min) { min = needs[need]; best = need; building = b; }
+        }
+        return best;
     }
 
     /// <summary>해당 욕구를 채워주는 건물 중 하나를 고른다(여러 개면 랜덤). 없으면 null.</summary>
@@ -177,27 +186,35 @@ public class VillageNpc : MonoBehaviour
     private void EnterInteract()
     {
         state = State.Interacting;
-        interactTimer = interactSeconds;
+        // 건물 앞이면 정식 상호작용 시간, 배회(빈터)면 잠깐만 멈췄다 바로 다음 목적지.
+        interactTimer = (goalBuilding != null) ? interactSeconds : 0.2f;
     }
 
-    /// <summary>건물 앞 까딱 + 상호작용이 끝나면 해당 욕구를 회복하고 다시 판단.</summary>
+    /// <summary>건물 앞이면 까딱거리며 상호작용(끝나면 욕구 회복). 배회(빈터)면 까딱 없이 잠깐 대기.</summary>
     private void UpdateInteract()
     {
+        bool atBuilding = goalBuilding != null;
+
+        // 건물 쪽 바라보기(배회면 이동 방향 유지)
         Vector3 look = faceTarget - transform.position; look.y = 0f;
-        if (look.sqrMagnitude > 0.0001f)
+        if (atBuilding && look.sqrMagnitude > 0.0001f)
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(look), 8f * Time.deltaTime);
 
-        float bob = Mathf.Abs(Mathf.Sin(Time.time * bobSpeed)) * bobHeight;
+        // 까딱거림은 "건물 앞"에서만. 빈터에선 가만히 서 있는다.
         var p = transform.position;
-        transform.position = new Vector3(p.x, baseY + bob, p.z);
+        if (atBuilding)
+        {
+            float bob = Mathf.Abs(Mathf.Sin(Time.time * bobSpeed)) * bobHeight;
+            transform.position = new Vector3(p.x, baseY + bob, p.z);
+        }
 
         interactTimer -= Time.deltaTime;
         if (interactTimer <= 0f)
         {
             transform.position = new Vector3(p.x, baseY, p.z);
 
-            // 목표 건물이 있으면 그 욕구를 회복 (없으면 배회였던 것 → 회복 없음)
-            if (goalBuilding != null && needs.ContainsKey(goalBuilding.satisfies))
+            // 건물 앞이었으면 그 욕구를 회복 (배회면 회복 없음)
+            if (atBuilding && needs.ContainsKey(goalBuilding.satisfies))
                 needs[goalBuilding.satisfies] = Mathf.Min(100f, needs[goalBuilding.satisfies] + goalBuilding.restoreAmount);
 
             state = State.Walking;

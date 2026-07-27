@@ -383,36 +383,55 @@ public class BuildingPlacementController : MonoBehaviour,
         gridOverlay.Build(gridWidth, gridHeight, VillageGrid.CellSize);
     }
 
-    [Header("NPC (프로토타입)")]
-    [SerializeField] private int npcCount = 3;            // 스폰할 배회 NPC 수
-    [SerializeField] private float npcSize = 0.6f;        // 큐브 NPC 한 변 크기(m)
+    [Header("NPC")]
+    [SerializeField] private int npcCount = 3;               // 스폰할 NPC 수
+    [Tooltip("스폰에 사용할 NPC 프리팹들(VillageNpc 컴포넌트 보유). 여기서 넣고 빼면 등장 NPC가 바뀐다. 비면 큐브로 폴백.")]
+    [SerializeField] private List<GameObject> npcPrefabs = new List<GameObject>();
+    [SerializeField] private float npcCubeSize = 0.6f;       // 폴백 큐브 크기(프리팹 없을 때)
 
-    /// <summary>배회 NPC(큐브)를 npcCount만큼 생성해 grid + 공유 건물 목록을 주입한다.</summary>
+    /// <summary>NPC를 npcCount만큼 생성해 grid + 공유 건물 목록을 주입한다.
+    /// npcPrefabs에서 골라 스폰하고, 비어 있으면 큐브로 폴백한다.</summary>
     private void SpawnNpcs()
     {
         // 스폰 시점의 건물은 RegisterExistingBuildings가 이미 npcBuildingList에 넣고 태그했다.
-        // NPC들은 이 "공유 목록"을 참조하므로, 이후 새로 지어진 건물도 자동으로 인식한다.
         for (int i = 0; i < npcCount; i++)
         {
-            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cube.name = "VillageNpc_" + i;
-            cube.transform.localScale = new Vector3(npcSize, npcSize, npcSize);
-
-            // 눈에 띄는 색 (URP Lit)
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            mat.color = new Color(0.9f, 0.3f + 0.2f * i, 0.2f);
-            cube.GetComponent<Renderer>().sharedMaterial = mat;
-
-            // NPC는 격자 판정 대상이 아니므로 콜라이더 제거(건물 집기 광선에 안 걸리게)
-            Destroy(cube.GetComponent<Collider>());
+            GameObject go = MakeNpcObject(i);
 
             // 마을 씬으로 옮기고(마을 카메라가 비추게), 시작 위치는 대충 중앙 근처
-            if (villageSceneValid) UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(cube, villageScene);
-            cube.transform.position = new Vector3(i * 0.5f, npcSize * 0.5f, 0f);
+            if (villageSceneValid) UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, villageScene);
+            go.transform.position = new Vector3(i * 0.5f, 0f, 0f);
 
-            var npc = cube.AddComponent<VillageNpc>();
+            var npc = go.GetComponent<VillageNpc>();
+            if (npc == null) npc = go.AddComponent<VillageNpc>();
             npc.Init(grid, npcBuildingList);
         }
+    }
+
+    /// <summary>NPC 오브젝트 하나 생성 — 프리팹 목록에서 순환 선택, 없으면 큐브 폴백.</summary>
+    private GameObject MakeNpcObject(int index)
+    {
+        // 유효한 프리팹만 추림
+        var valid = npcPrefabs != null ? npcPrefabs.FindAll(p => p != null) : null;
+        if (valid != null && valid.Count > 0)
+        {
+            GameObject prefab = valid[index % valid.Count];   // 순환 선택(여러 종류 섞이게)
+            GameObject go = Instantiate(prefab);
+            go.name = prefab.name + "_" + index;
+            // 프리팹에 콜라이더가 있으면 제거(건물 집기 광선 방해 방지)
+            foreach (var col in go.GetComponentsInChildren<Collider>()) Destroy(col);
+            return go;
+        }
+
+        // 폴백: 큐브
+        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = "VillageNpc_" + index;
+        cube.transform.localScale = new Vector3(npcCubeSize, npcCubeSize, npcCubeSize);
+        var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        mat.color = new Color(0.9f, 0.3f + 0.2f * index, 0.2f);
+        cube.GetComponent<Renderer>().sharedMaterial = mat;
+        Destroy(cube.GetComponent<Collider>());
+        return cube;
     }
 
     private UnityEngine.SceneManagement.Scene villageScene;
