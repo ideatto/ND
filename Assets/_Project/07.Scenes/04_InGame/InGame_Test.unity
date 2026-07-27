@@ -5997,6 +5997,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: TownNameLabel
       objectReference: {fileID: 0}
+    - target: {fileID: 3183092846844939268, guid: 434a080644e9646418ebc0f9970a38cf, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5959764154303986204, guid: 434a080644e9646418ebc0f9970a38cf, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5

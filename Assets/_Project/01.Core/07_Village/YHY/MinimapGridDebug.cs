@@ -62,8 +62,8 @@ public class MinimapGridDebug : MonoBehaviour
         float s = Mathf.Max(1f, Screen.height / 1080f);
         btnStyle.fontSize = Mathf.RoundToInt(24f * s);
         float w = 300f * s, h = 76f * s;
-        // 오른쪽 상단 근처(테스트 패널과 안 겹치게)
-        if (GUI.Button(new Rect(Screen.width - w - 24f * s, 24f * s, w, h),
+        // 우하단(상단 HUD·지도 버튼과 안 겹치게)
+        if (GUI.Button(new Rect(Screen.width - w - 24f * s, Screen.height - h - 24f * s, w, h),
                 overlayOn ? "격자 디버그 끄기" : "격자 디버그 켜기", btnStyle))
             ToggleOverlay();
     }
