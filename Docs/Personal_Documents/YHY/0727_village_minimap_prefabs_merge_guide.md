@@ -13,6 +13,7 @@ InGame_Test(내 샌드박스)와 Village_Home에서 만든 마을/미니맵 기�
 | 프리팹 | 경로 | 내용 |
 |---|---|---|
 | **WorldMapRenderRootV2** | `08.Prefabs/UI/Maps/WorldMapRenderRootV2.prefab` | 미니맵 렌더 루트(카메라→RT, 마을/경로, 배경) + 내 스크립트(`MinimapCaravanIndicator`(비활성), `MinimapMultiCaravanMarkers`) |
+| **WorldMapPanelV2** ⭐ | `08.Prefabs/UI/Maps/WorldMapPanelV2.prefab` | 미니맵 UI 패널 통째(RawImage=V2 RT + `MinimapCameraController`+`MinimapTownClickRouter` 내장 + 지도버튼→SlidePanel). **이거 하나로 패널 교체**. Router는 renderRoot 자동 탐색 |
 | **VillageWorldTowns** | `08.Prefabs/Village/VillageWorldTowns.prefab` | 한 맵 안 거점/무역마을 마커(`TradeTown_*`) + `TradeTownCameraMover`(카메라 이동기). 마을을 좌표로 떨어뜨려 배치 |
 | **MinimapCaravanTestPanel** | `08.Prefabs/UI/Maps/MinimapCaravanTestPanel.prefab` | 개발용 테스트 버튼(캐러밴 출발/즉시도착/리셋). 실제 빌드에는 넣지 않음 |
 | **HomeButton** | `08.Prefabs/UI/Maps/HomeButton.prefab` | "거점" 버튼(`HomeViewButton`) — 카메라를 거점으로 이동 |
@@ -28,14 +29,21 @@ InGame_Test(내 샌드박스)와 Village_Home에서 만든 마을/미니맵 기�
 - `MinimapCaravanTestPanel` — 테스트 패널
 - `BuildingPlacementController.RecenterPanHome()` — 마을 이동 후 팬 중심 재설정(드래그 시 옛 거점으로 안 끌려오게)
 
-## 실제 InGame 씬에 얹는 순서 (병합 시)
-1. **Village_Home**에 `VillageWorldTowns.prefab`을 드롭. `TradeTownCameraMover`의 `targetCamera`는 비어 있으면 런타임에 `VillageCamera`를 자동 탐색하지만, 명시 배선을 권장.
-2. **미니맵**: `WorldMapRenderRootV2.prefab`을 씬에 두고, 미니맵 RawImage의 texture를 이 루트의 RenderTexture(V2)로 지정.
-3. **UI 글루(수동 — MainUICanvas 공유라 프리팹 불가)**: 미니맵 RawImage에
-   - `MinimapCameraController` 추가
-   - `MinimapTownClickRouter` 추가 → `view`=그 RawImage, `renderRoot`=WorldMapRenderRootV2, `homeTownId`="BaseCamp"
-4. 캔버스에 `HomeButton.prefab`, `TownNameLabel.prefab` 배치(위치/스타일은 씬에 맞게).
-5. (선택) 테스트할 때만 `MinimapCaravanTestPanel.prefab` 배치.
+## 실제 InGame 씬에 얹는 순서 (병합 시) — **간단 버전(프리팹 교체 + 드롭만)**
+> 배선(Add Component/인스펙터 연결) 불필요. `WorldMapPanelV2`는 자기완결(RawImage=V2 RT,
+> Router/CameraController 내장, 지도버튼→SlidePanel.Toggle 내부 참조). Router는 `renderRoot`가
+> 비면 **자기 RawImage가 그리는 RT의 카메라 루트**를 런타임에 자동 탐색한다.
+
+1. **Village_Home**: 이미 `VillageWorldTowns`가 들어있음(공유 씬). 별도 작업 없음.
+   (신규 씬에 얹을 때만 `VillageWorldTowns.prefab` 드롭 — 카메라는 `VillageCamera` 자동 탐색.)
+2. **미니맵 렌더 소스**: `WorldMapRenderRootV2.prefab`을 Hierarchy에 드롭(위치 무관, 자기 RT로 렌더).
+3. **미니맵 패널 교체**: `MainUICanvas`의 기존 `WorldMapPanel`을 지우고,
+   그 자리에 `WorldMapPanelV2.prefab`을 `MainUICanvas` 자식으로 드롭. → **배선 끝**.
+   - ⚠️ 다른 스크립트가 기존 WorldMapPanel을 참조하면 V2로 다시 연결할 것.
+4. (선택) `HomeButton.prefab` / `TownNameLabel.prefab`을 `MainUICanvas` 하위에 드롭(HUD, 위치 자유).
+5. (선택) 테스트할 때만 `MinimapCaravanTestPanel.prefab` 드롭 → 확인 후 제거.
+
+**요약: ②③만 하면 미니맵 완성.** (프리팹 2개 드롭, 하나는 기존 패널과 교체)
 
 ## 남은 열린 질문 (팀 논의)
 - 정식 미니맵(`WorldMapPresenter`)은 **선택 캐러밴 1대만** 그린다. 여러 캐러밴을 미니맵에 동시 표시하려면

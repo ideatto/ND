@@ -32,8 +32,30 @@ public class MinimapTownClickRouter : MonoBehaviour, IPointerClickHandler
 
     private Camera cachedCam;
 
+    private void Awake()
+    {
+        EnsureWiring();
+    }
+
+    /// <summary>
+    /// 인스펙터 배선 없이도 동작하도록 자동 연결.
+    /// - view: 같은 오브젝트의 RawImage
+    /// - renderRoot: 이 RawImage가 표시하는 RT를 그리는 카메라의 루트(= 미니맵 렌더 루트)
+    /// 프리팹 교체만으로 얹을 수 있게 하기 위함(씬 참조를 프리팹이 못 담으므로 런타임 탐색).
+    /// </summary>
+    private void EnsureWiring()
+    {
+        if (view == null) view = GetComponent<RawImage>();
+        if (renderRoot == null)
+        {
+            Camera cam = ResolveCamera();
+            if (cam != null) renderRoot = cam.transform.root;
+        }
+    }
+
     public void OnPointerClick(PointerEventData e)
     {
+        EnsureWiring();   // Awake 시점에 렌더 루트가 아직 없었을 수 있으므로 클릭 때 재확인
         string townId = ResolveClickedTown(e);
         if (string.IsNullOrEmpty(townId)) return;
         HandleTownClicked(townId);
