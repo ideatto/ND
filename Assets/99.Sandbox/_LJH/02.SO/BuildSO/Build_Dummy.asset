@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe788a43db47f334c8b4adc7f173c672, type: 3}
+  m_Name: Build_Dummy
+  m_EditorClassIdentifier: Assembly-CSharp::BuildData
+  buildId: dummybuild
+  displayName: "\uB354\uBBF8 \uAC74\uBB3C"
+  description: "\uB354\uBBF8\uC6A9\uC73C\uB85C \uC81C\uC791\uB41C \uAC74\uBB3C\uC785\uB2C8\uB2E4."
+  dataPerLevels:
+  - level: 1
+    buildPrefab: {fileID: 0}
+    buildRequirements:
+    - type: 0
+      value: 0
+      requirementItemId:
+      requirementQuantity: 0
