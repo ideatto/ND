@@ -18,6 +18,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using ND.UI.WorldMap;
 
 /// <summary>미니맵(XY 평면) 카메라 드래그 패닝 + 줌 (맵 경계 클램프).</summary>
 public class MinimapCameraController : MonoBehaviour, IDragHandler, IScrollHandler
@@ -32,15 +33,63 @@ public class MinimapCameraController : MonoBehaviour, IDragHandler, IScrollHandl
     [Header("패닝")]
     [SerializeField] private float panSpeed = 0.01f;
 
-    [Header("맵 경계 (월드 XY)")]
-    [SerializeField] private Vector2 mapCenter;        // 맵 중심
-    [SerializeField] private Vector2 mapHalfSize;      // 맵 반크기(가로/세로 절반)
+    [Header("맵 경계")]
+    // autoBounds=true면 렌더 루트의 실제 콘텐츠(배경 스프라이트/마을)에서 경계를 자동 계산한다.
+    // → 렌더 루트를 어느 위치에 두든(프리팹 드롭) 맵이 사라지지 않는다. false면 아래 수동값 사용.
+    [SerializeField] private bool autoBounds = true;
+    [SerializeField] private float boundsPadding = 0.5f; // 자동 경계에 더할 여유(월드)
+    [SerializeField] private Vector2 mapCenter;        // (수동) 맵 중심
+    [SerializeField] private Vector2 mapHalfSize;      // (수동) 맵 반크기
 
     private Camera cachedCam;
+    private bool boundsComputed;
 
     private void Awake()
     {
         if (view == null) view = GetComponent<RawImage>();
+    }
+
+    /// <summary>
+    /// 렌더 루트(카메라의 최상위 부모)의 실제 콘텐츠에서 맵 중심·크기를 1회 계산한다.
+    /// 우선순위: 가장 큰 SpriteRenderer(배경 맵 아트) → 없으면 마을(TownWorldView) 바운즈.
+    /// 절대 좌표 하드코딩을 대체해, 렌더 루트 위치와 무관하게 클램프가 맞도록 한다.
+    /// </summary>
+    private void ComputeBoundsIfNeeded(Camera cam)
+    {
+        if (boundsComputed || !autoBounds || cam == null) return;
+        Transform root = cam.transform.root;
+
+        // 1) 가장 큰 SpriteRenderer = 배경 맵 아트
+        SpriteRenderer bg = null; float bestArea = -1f;
+        foreach (var sr in root.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            if (sr == null || sr.sprite == null) continue;
+            Vector3 s = sr.bounds.size;
+            float area = s.x * s.y;
+            if (area > bestArea) { bestArea = area; bg = sr; }
+        }
+        if (bg != null)
+        {
+            Bounds b = bg.bounds;
+            mapCenter = b.center;
+            mapHalfSize = new Vector2(b.extents.x + boundsPadding, b.extents.y + boundsPadding);
+            boundsComputed = true;
+            return;
+        }
+
+        // 2) 폴백: 마을 위치들의 바운즈
+        var towns = root.GetComponentsInChildren<TownWorldView>(true);
+        if (towns.Length == 0) return;   // 아직 준비 안 됨 — 다음 기회에 재시도
+        Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
+        Vector2 max = new Vector2(float.MinValue, float.MinValue);
+        foreach (var t in towns)
+        {
+            Vector2 p = t.transform.position;
+            min = Vector2.Min(min, p); max = Vector2.Max(max, p);
+        }
+        mapCenter = (min + max) * 0.5f;
+        mapHalfSize = (max - min) * 0.5f + Vector2.one * (boundsPadding + 1f);
+        boundsComputed = true;
     }
 
     public void OnScroll(PointerEventData e)
@@ -73,6 +122,7 @@ public class MinimapCameraController : MonoBehaviour, IDragHandler, IScrollHandl
     /// <summary>카메라 뷰가 맵 경계를 벗어나지 않게 X·Y를 제한한다(줌 크기 반영).</summary>
     private void ClampToBounds(Camera cam)
     {
+        ComputeBoundsIfNeeded(cam);   // 최초 1회 실제 콘텐츠에서 경계 산출
         float viewHalfH = cam.orthographicSize;
         float viewHalfW = cam.orthographicSize * cam.aspect;
 
