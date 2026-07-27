@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ND.UI.Market;
 using UnityEngine;
 
 /// <summary>
@@ -17,6 +18,9 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
     [Tooltip("Displays Provider-owned unlock guidance when a locked slot is selected.")]
     [SerializeField] private NoticeUI noticeUI;
+
+    [Tooltip("도착 판매 행 동작이 정확한 Caravan·Trade ID를 바인딩할 공유 버튼입니다.")]
+    [SerializeField] private CaravanArrivalSaleButton arrivalSaleButton;
 
     private ICaravanOverviewViewDataProvider provider;
     private bool hasRuntimeProviderOverride;
@@ -228,6 +232,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
             slotView.SettingRequested += HandleSettingRequested;
             slotView.CargoRequested += HandleCargoRequested;
+            slotView.ArrivalSaleRequested += HandleArrivalSaleRequested;
             slotView.CreateRequested += HandleCreateRequested;
             slotView.UnlockHintRequested += HandleUnlockHintRequested;
         }
@@ -250,6 +255,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
             slotView.SettingRequested -= HandleSettingRequested;
             slotView.CargoRequested -= HandleCargoRequested;
+            slotView.ArrivalSaleRequested -= HandleArrivalSaleRequested;
             slotView.CreateRequested -= HandleCreateRequested;
             slotView.UnlockHintRequested -= HandleUnlockHintRequested;
         }
@@ -263,6 +269,20 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
     private void HandleCargoRequested(string caravanId)
     {
         CargoRequested?.Invoke(caravanId);
+    }
+
+    private void HandleArrivalSaleRequested(string caravanId, string tradeId)
+    {
+        if (arrivalSaleButton == null)
+        {
+            Debug.LogError(
+                $"Arrival Sale action failed. CaravanId={caravanId}, TradeId={tradeId}, Reason=ButtonMissing",
+                this);
+            return;
+        }
+
+        arrivalSaleButton.Bind(caravanId, tradeId);
+        arrivalSaleButton.OpenSale();
     }
 
     private void HandleCreateRequested(int slotIndex)

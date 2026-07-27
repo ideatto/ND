@@ -4,6 +4,8 @@ using ND.Framework;
 using UnityEngine;
 using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
 using FrameworkSaveData = ND.Framework.SaveData;
+using FrameworkTradeProgressSaveData = ND.Framework.TradeProgressSaveData;
+using FrameworkTradeProgressState = ND.Framework.TradeProgressState;
 
 /// <summary>
 /// Adapts Framework SaveData into immutable Caravan Overview snapshots owned by the UI layer.
@@ -56,7 +58,7 @@ public sealed class SaveDataCaravanOverviewProviderBehaviour :
             }
 
             claimedSlots[slotIndex] = true;
-            slots[slotIndex] = CreateOccupiedBlock(caravan, slotIndex);
+            slots[slotIndex] = CreateOccupiedBlock(saveData, caravan, slotIndex);
         }
 
         // Unlock ownership remains in persistent progression data. Creating a Caravan changes only
@@ -113,21 +115,69 @@ public sealed class SaveDataCaravanOverviewProviderBehaviour :
         };
     }
 
-    private static CaravanBlockViewData CreateOccupiedBlock(
+    private CaravanBlockViewData CreateOccupiedBlock(
+        FrameworkSaveData saveData,
         FrameworkCaravanSaveData caravan,
         int slotIndex)
     {
+        bool canOpenArrivalSale = TryResolveArrivalSaleTradeId(
+            saveData,
+            caravan.caravanId,
+            out string arrivalSaleTradeId);
         return new CaravanBlockViewData
         {
             slotIndex = slotIndex,
             slotState = CaravanSlotState.Occupied,
             caravanId = caravan.caravanId ?? string.Empty,
+            arrivalSaleTradeId = arrivalSaleTradeId,
+            canOpenArrivalSale = canOpenArrivalSale,
             displayName = $"Caravan {slotIndex + 1}",
             state = caravan.state,
             wagonContentId = caravan.wagon != null ? caravan.wagon.wagonName ?? string.Empty : string.Empty,
             animalIcons = CreateAnimalIcons(caravan),
             cargoIcons = CreateCargoIcons(caravan)
         };
+    }
+
+    /// <summary>
+    /// Resolves one exact, eligible Arrival Sale Pending from the row Caravan identity.
+    /// Duplicate progress or Pending entries fail closed through the canonical lookup contract.
+    /// </summary>
+    private bool TryResolveArrivalSaleTradeId(
+        FrameworkSaveData saveData,
+        string caravanId,
+        out string tradeId)
+    {
+        tradeId = string.Empty;
+        if (string.IsNullOrWhiteSpace(caravanId)
+            || !SaveDataLookup.TryGetTradeProgress(
+                saveData,
+                caravanId,
+                out FrameworkTradeProgressSaveData progress)
+            || progress.state != FrameworkTradeProgressState.SettlementPending
+            || string.IsNullOrWhiteSpace(progress.activeTradeId))
+        {
+            return false;
+        }
+
+        string requestedTradeId = progress.activeTradeId;
+        if (!SaveDataLookup.TryGetPendingSettlement(
+                saveData,
+                caravanId,
+                requestedTradeId,
+                out PendingSettlementSaveData pending)
+            || pending == null
+            || !pending.hasResult
+            || pending.grade == JourneyResultGrade.Failed)
+        {
+            Debug.LogWarning(
+                $"Arrival Sale row disabled. CaravanId={caravanId}, TradeId={requestedTradeId}, Reason=ExactPendingInvalid",
+                this);
+            return false;
+        }
+
+        tradeId = requestedTradeId;
+        return true;
     }
 
     private static AnimalIconViewData[] CreateAnimalIcons(FrameworkCaravanSaveData caravan)

@@ -39,7 +39,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     [Tooltip("Optional child Image placed inside the Cargo button.")]
     [SerializeField] private Image cargoButtonIconImage;
     [SerializeField] private Sprite cargoLoadButtonIcon;
-    [Tooltip("Reserved for the future arrival-sale action. It is not selected until Framework exposes a distinct sale-pending state.")]
+    [Tooltip("Cargo 버튼이 도착 판매 동작으로 전환될 때 표시할 선택 아이콘입니다.")]
     [SerializeField] private Sprite cargoSellButtonIcon;
     [Tooltip("Optional label hidden only when a valid Set icon is available.")]
     [SerializeField] private TMP_Text settingButtonText;
@@ -66,10 +66,12 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private CaravanSlotState currentState = CaravanSlotState.Unknown;
     private string currentCaravanId = string.Empty;
+    private string currentArrivalSaleTradeId = string.Empty;
     private string currentUnlockHintText = string.Empty;
     private bool isCreatePending;
     private bool canRequestSetting;
     private bool canRequestCargo;
+    private bool canRequestArrivalSale;
 
     public int SlotIndex => slotIndex;
     public bool IsCreatePending => isCreatePending;
@@ -77,6 +79,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     // These events expose UI intent without coupling the View to Framework commands.
     public event Action<string> SettingRequested;
     public event Action<string> CargoRequested;
+    public event Action<string, string> ArrivalSaleRequested;
     public event Action<int> CreateRequested;
     public event Action<string> UnlockHintRequested;
 
@@ -105,6 +108,9 @@ public sealed class CaravanSlotView : MonoBehaviour
         currentCaravanId = data.slotState == CaravanSlotState.Occupied
             ? data.caravanId ?? string.Empty
             : string.Empty;
+        currentArrivalSaleTradeId = data.slotState == CaravanSlotState.Occupied
+            ? data.arrivalSaleTradeId ?? string.Empty
+            : string.Empty;
 
         switch (data.slotState)
         {
@@ -132,6 +138,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     {
         currentState = CaravanSlotState.Unknown;
         currentCaravanId = string.Empty;
+        currentArrivalSaleTradeId = string.Empty;
         currentUnlockHintText = string.Empty;
         isCreatePending = false;
 
@@ -139,9 +146,9 @@ public sealed class CaravanSlotView : MonoBehaviour
         SetText(displayNameText, unknownSlotLabel);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
-        ApplyActionIcons();
+        ApplyActionIcons(false);
         SetOccupiedControlsVisible(false);
-        SetButtonsInteractable(false, false);
+        SetButtonsInteractable(false, false, false);
         SetCreateButtonVisible(false);
         SetLockOverlayVisible(true, false);
     }
@@ -158,15 +165,16 @@ public sealed class CaravanSlotView : MonoBehaviour
         // otherwise ignore the initial IsTraveling value when it becomes occupied.
         SetOccupiedControlsVisible(true);
         ApplyJourneyStatePresentation(data.state);
-        ApplyActionIcons();
         currentUnlockHintText = string.Empty;
         isCreatePending = false;
 
-        // Until Framework exposes a distinct arrival-sale state, only Prepare permits editing.
-        // Traveling, Settling, and Completed remain display-only to avoid mutating an active run.
         bool hasValidIdentity = !string.IsNullOrWhiteSpace(currentCaravanId);
         bool canEdit = hasValidIdentity && data.state == JourneyState.Prepare;
-        SetButtonsInteractable(canEdit, canEdit);
+        bool canOpenArrivalSale = hasValidIdentity
+            && data.canOpenArrivalSale
+            && !string.IsNullOrWhiteSpace(currentArrivalSaleTradeId);
+        ApplyActionIcons(canOpenArrivalSale);
+        SetButtonsInteractable(canEdit, canEdit, canOpenArrivalSale);
         SetCreateButtonVisible(false);
         SetLockOverlayVisible(false, false);
     }
@@ -177,14 +185,14 @@ public sealed class CaravanSlotView : MonoBehaviour
         SetText(displayNameText, emptySlotLabel);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
-        ApplyActionIcons();
+        ApplyActionIcons(false);
         currentUnlockHintText = string.Empty;
         isCreatePending = false;
 
         // UI raises slotIndex only. Framework owns Caravan creation, ID generation, and persistence.
         // Hiding the occupied-only actions lets CaravanInfo and CreateButton fill the entire row.
         SetOccupiedControlsVisible(false);
-        SetButtonsInteractable(false, false);
+        SetButtonsInteractable(false, false, false);
         SetCreateButtonVisible(true);
         SetLockOverlayVisible(false, false);
     }
@@ -196,13 +204,13 @@ public sealed class CaravanSlotView : MonoBehaviour
         SetDisplayNameVisible(false);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
-        ApplyActionIcons();
+        ApplyActionIcons(false);
         currentUnlockHintText = string.IsNullOrWhiteSpace(unlockHintText)
             ? defaultUnlockHintText
             : unlockHintText;
         isCreatePending = false;
         SetOccupiedControlsVisible(false);
-        SetButtonsInteractable(false, false);
+        SetButtonsInteractable(false, false, false);
         SetCreateButtonVisible(false);
 
         SetLockOverlayVisible(true, true);
@@ -224,7 +232,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         // Empty and pending slots do not expose occupied-only actions or JourneyState presentation.
         SetOccupiedControlsVisible(false);
-        SetButtonsInteractable(false, false);
+        SetButtonsInteractable(false, false, false);
         SetCreateButtonVisible(true);
 
         if (createButton != null)
@@ -259,10 +267,12 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void SetButtonsInteractable(
         bool canOpenSetting,
-        bool canOpenCargo)
+        bool canOpenCargo,
+        bool canOpenArrivalSale)
     {
         canRequestSetting = canOpenSetting;
         canRequestCargo = canOpenCargo;
+        canRequestArrivalSale = canOpenArrivalSale;
 
         if (settingButton != null)
         {
@@ -271,7 +281,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         if (cargoButton != null)
         {
-            cargoButton.interactable = canOpenCargo;
+            cargoButton.interactable = canOpenCargo || canOpenArrivalSale;
         }
     }
 
@@ -350,10 +360,13 @@ public sealed class CaravanSlotView : MonoBehaviour
         }
     }
 
-    private void ApplyActionIcons()
+    private void ApplyActionIcons(bool showArrivalSale)
     {
         ApplyOptionalButtonIcon(settingButtonIconImage, settingButtonText, settingButtonIcon);
-        ApplyOptionalButtonIcon(cargoButtonIconImage, cargoButtonText, cargoLoadButtonIcon);
+        ApplyOptionalButtonIcon(
+            cargoButtonIconImage,
+            cargoButtonText,
+            showArrivalSale ? cargoSellButtonIcon : cargoLoadButtonIcon);
     }
 
     private static void ApplyOptionalButtonIcon(
@@ -481,7 +494,14 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void HandleCargoClicked()
     {
-        if (canRequestCargo
+        if (canRequestArrivalSale
+            && currentState == CaravanSlotState.Occupied
+            && !string.IsNullOrWhiteSpace(currentCaravanId)
+            && !string.IsNullOrWhiteSpace(currentArrivalSaleTradeId))
+        {
+            ArrivalSaleRequested?.Invoke(currentCaravanId, currentArrivalSaleTradeId);
+        }
+        else if (canRequestCargo
             && currentState == CaravanSlotState.Occupied
             && !string.IsNullOrWhiteSpace(currentCaravanId))
         {

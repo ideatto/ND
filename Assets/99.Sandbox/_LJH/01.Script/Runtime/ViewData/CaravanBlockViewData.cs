@@ -35,6 +35,13 @@ public sealed class CaravanBlockViewData
     // This value must remain empty unless slotState is Occupied.
     public string caravanId = string.Empty;
 
+    // Identifies the exact eligible Arrival Sale Pending owned by this Caravan.
+    // This remains empty when no unique, valid Pending can be resolved.
+    public string arrivalSaleTradeId = string.Empty;
+
+    // Enables the row Arrival Sale action only for the exact caravanId + arrivalSaleTradeId pair.
+    public bool canOpenArrivalSale;
+
     // Provides the user-facing name shown at the top of the block.
     public string displayName = string.Empty;
 

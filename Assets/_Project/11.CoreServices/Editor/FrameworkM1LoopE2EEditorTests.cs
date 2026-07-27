@@ -39,6 +39,7 @@ namespace ND.Framework.Editor
             RunMultiActiveOfflineRestoreChecks();
             RunExplicitEconomyTradeIdChecks();
             RunTradePreparationCommitChecks();
+            RunSettlementPresentationIdentityChecks();
             RunClaimRegressionChecks();
             Debug.Log("[Framework Multi-active E2E] All checks passed.");
         }
@@ -569,6 +570,86 @@ namespace ND.Framework.Editor
             SaveDataLookup.TryGetCaravan(context.SaveData, caravanId, out var caravanSave);
             if (string.IsNullOrWhiteSpace(caravanSave.currentTownId))
                 throw new InvalidOperationException("Claim did not retain the destination currentTownId.");
+        }
+
+        private static void RunSettlementPresentationIdentityChecks()
+        {
+            var saveData = new SaveData();
+            var caravanA = saveData.selectedCaravanId;
+            var caravanB = SaveDataLookup.NewInstanceId();
+            saveData.caravans.Add(new CaravanSaveData { caravanId = caravanB });
+            saveData.selectedCaravanId = caravanB;
+
+            const string tradeA = "presentation-a";
+            const string tradeB = "presentation-b";
+            saveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravanA,
+                activeTradeId = tradeA,
+                state = TradeProgressState.SettlementPending
+            });
+            saveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravanB,
+                activeTradeId = tradeB,
+                state = TradeProgressState.SettlementPending
+            });
+
+            var resultA = new JourneyResultData { grade = JourneyResultGrade.Success };
+            var resultB = new JourneyResultData { grade = JourneyResultGrade.PartialSuccess };
+            var pendingA = PendingSettlementSaveDataMapper.ToSave(resultA, tradeA, RouteId);
+            pendingA.caravanId = caravanA;
+            var pendingB = PendingSettlementSaveDataMapper.ToSave(resultB, tradeB, RouteId);
+            pendingB.caravanId = caravanB;
+            saveData.pendingSettlements.Add(pendingA);
+            saveData.pendingSettlements.Add(pendingB);
+
+            var bridgeObject = new GameObject("SettlementPresentationIdentityEditorTest");
+            try
+            {
+                var bridge = bridgeObject.AddComponent<SettlementUiBridge>();
+                bridge.Initialize(() => saveData, null, new InGameScreenStateRouter());
+                if (!bridge.PresentSettlement(caravanA, tradeA)
+                    || !bridge.TryGetPendingSettlement(
+                        out var presentedCaravanId,
+                        out var presentedTradeId,
+                        out var presentedResult)
+                    || presentedCaravanId != caravanA
+                    || presentedTradeId != tradeA
+                    || presentedResult == null
+                    || !SaveDataLookup.TryGetPendingSettlement(saveData, caravanB, tradeB, out _))
+                {
+                    throw new InvalidOperationException(
+                        "Exact settlement presentation followed selected Caravan state.");
+                }
+
+                FrameworkEvents.RaiseTradeSettlementReady(caravanB, tradeB, resultB);
+                if (!bridge.TryGetPendingSettlement(
+                        out presentedCaravanId,
+                        out presentedTradeId,
+                        out presentedResult)
+                    || presentedCaravanId != caravanA
+                    || presentedTradeId != tradeA
+                    || presentedResult == null
+                    || !SaveDataLookup.TryGetPendingSettlement(saveData, caravanB, tradeB, out _))
+                {
+                    throw new InvalidOperationException(
+                        "A later settlement notification overwrote the presented identity.");
+                }
+
+                bridge.ClearPendingSettlement();
+                if (bridge.ClaimSettlementAndReset()
+                    || !SaveDataLookup.TryGetPendingSettlement(saveData, caravanA, tradeA, out _)
+                    || !SaveDataLookup.TryGetPendingSettlement(saveData, caravanB, tradeB, out _))
+                {
+                    throw new InvalidOperationException(
+                        "Missing presentation cursor mutated a durable pending settlement.");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(bridgeObject);
+            }
         }
 
         private static CaravanSaveData AddCaravan(TestContext context, string caravanId)
