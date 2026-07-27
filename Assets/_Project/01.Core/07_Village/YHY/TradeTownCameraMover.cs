@@ -31,6 +31,17 @@ public class TradeTownCameraMover : MonoBehaviour
     private void Awake()
     {
         if (groupsParent == null) groupsParent = transform;
+        EnsureCamera();
+    }
+
+    /// <summary>
+    /// targetCamera가 비었으면(프리팹으로 씬에 얹은 경우 씬 카메라 참조가 끊김) 이름으로 자동 탐색한다.
+    /// </summary>
+    private void EnsureCamera()
+    {
+        if (targetCamera != null) return;
+        foreach (var cam in Camera.allCameras)
+            if (cam != null && cam.name == "VillageCamera") { targetCamera = cam; return; }
     }
 
     private void Update()
@@ -43,6 +54,7 @@ public class TradeTownCameraMover : MonoBehaviour
     /// <summary>townId 마을 좌표 + 오프셋으로 카메라를 이동한다.</summary>
     public void MoveTo(string townId)
     {
+        EnsureCamera();
         if (targetCamera == null) return;
         Transform town = FindTown(townId);
         if (town == null) return;

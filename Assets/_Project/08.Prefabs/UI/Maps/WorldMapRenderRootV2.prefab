@@ -2557,6 +2557,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4683084452933495309}
+  - component: {fileID: 8486915839699159402}
+  - component: {fileID: 1783667683770831253}
   m_Layer: 0
   m_Name: WorldMapRenderRootV2
   m_TagString: Untagged
@@ -2581,6 +2583,38 @@ Transform:
   - {fileID: 1880415000449159704}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8486915839699159402
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8223251769062633283}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21801f9eac7b7e34385a98bde3661e96, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapCaravanIndicator
+  renderRoot: {fileID: 4683084452933495309}
+  iconColor: {r: 0.95, g: 0.4, b: 0.15, a: 1}
+  iconScale: 0.35
+  offset: {x: 0, y: 0.35, z: 0}
+--- !u!114 &1783667683770831253
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8223251769062633283}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e2735c140466ac42a2153c9e911caba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapMultiCaravanMarkers
+  renderRoot: {fileID: 4683084452933495309}
+  iconScale: 0.4
+  offset: {x: 0, y: 0.35, z: 0}
+  hideFrameworkSingleMarker: 1
 --- !u!1 &8251771701417638144
 GameObject:
   m_ObjectHideFlags: 0
