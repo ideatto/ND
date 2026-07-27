@@ -215,7 +215,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 57089360}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21801f9eac7b7e34385a98bde3661e96, type: 3}
   m_Name: 
@@ -224,6 +224,22 @@ MonoBehaviour:
   iconColor: {r: 0.95, g: 0.4, b: 0.15, a: 1}
   iconScale: 0.35
   offset: {x: 0, y: 0.35, z: 0}
+--- !u!114 &57089363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 57089360}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e2735c140466ac42a2153c9e911caba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapMultiCaravanMarkers
+  renderRoot: {fileID: 57089361}
+  iconScale: 0.4
+  offset: {x: 0, y: 0.35, z: 0}
+  hideFrameworkSingleMarker: 1
 --- !u!1 &116151844 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6064639208301837526, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
@@ -2548,6 +2564,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8223251769062633283, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       insertIndex: -1
       addedObject: {fileID: 57089362}
+    - targetCorrespondingSourceObject: {fileID: 8223251769062633283, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 57089363}
   m_SourcePrefab: {fileID: 100100000, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
 --- !u!1 &1587347607
 GameObject:
