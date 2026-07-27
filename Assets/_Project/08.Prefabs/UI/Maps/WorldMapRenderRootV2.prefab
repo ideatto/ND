@@ -8132,6 +8132,7 @@ GameObject:
   - component: {fileID: 8486915839699159402}
   - component: {fileID: 1783667683770831253}
   - component: {fileID: 3270757068816519589}
+  - component: {fileID: 3335005101101407746}
   m_Layer: 0
   m_Name: WorldMapRenderRootV2
   m_TagString: Untagged
@@ -8212,6 +8213,24 @@ MonoBehaviour:
   lineWidth: 0.03
   sortingOrder: 5
   savedCells: []
+--- !u!114 &3335005101101407746
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8223251769062633283}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9826ebdfa1cb9ed4aa7304578d7ae2ed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapGridDebug
+  grid: {fileID: 3270757068816519589}
+  renderRoot: {fileID: 4683084452933495309}
+  showPanel: 1
+  tintAlpha: 0.5
+  labelColor: {r: 0, g: 0, b: 0, a: 1}
+  labelCharSize: 0.045
 --- !u!1 &8251771701417638144
 GameObject:
   m_ObjectHideFlags: 0
