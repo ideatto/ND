@@ -49,7 +49,9 @@ namespace ND.UI.Market
             if (string.IsNullOrWhiteSpace(caravanId))
                 saleController?.TryResolveSinglePendingCaravanId(out caravanId);
             if (saleController != null && saleController.OpenForCaravan(caravanId))
-                button.interactable = false;
+                // A completed sale reuses this action as "reopen pending settlement". Keep it
+                // available until Payment claims the result and IsSalePending becomes false.
+                RefreshInteractable();
             else
                 Debug.LogError(
                     $"[Arrival Sale UI] Open failed. CaravanId={caravanId}, Error={saleController?.LastErrorCode ?? "CONTROLLER_MISSING"}",

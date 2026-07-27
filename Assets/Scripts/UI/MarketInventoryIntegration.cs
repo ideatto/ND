@@ -6,6 +6,34 @@ using ND.Framework;
 
 namespace ND.Framework.CargoLoading
 {
+    /// <summary>
+    /// Process-local change token for shared market stock presentation.
+    /// Consumers compare revisions as well as listening to Changed, so inactive panels recover
+    /// even when they were not subscribed at transaction time.
+    /// </summary>
+    public static class MarketInventoryChangeTracker
+    {
+        private static readonly Dictionary<string, int> revisions =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+        public static event Action<string, int, bool> Changed;
+
+        public static int GetRevision(string marketId)
+        {
+            string key = marketId ?? string.Empty;
+            return revisions.TryGetValue(key, out int revision) ? revision : 0;
+        }
+
+        internal static int Publish(string marketId, bool stockChanged = true)
+        {
+            string key = marketId ?? string.Empty;
+            int current = GetRevision(key);
+            int next = current == int.MaxValue ? 1 : current + 1;
+            revisions[key] = next;
+            Changed?.Invoke(key, next, stockChanged);
+            return next;
+        }
+    }
+
     public enum MarketTradeMode
     {
         BuyAndSell = 0,
@@ -65,6 +93,7 @@ namespace ND.Framework.CargoLoading
         public long TradingCurrencyAfter;
         public long PurchaseCost;
         public long SaleRevenue;
+        public List<MarketTransactionItemSummary> Items = new List<MarketTransactionItemSummary>();
 
         internal static MarketTransactionResult Fail(string errorCode, long currency)
         {
@@ -75,6 +104,15 @@ namespace ND.Framework.CargoLoading
                 TradingCurrencyAfter = Math.Max(0L, currency)
             };
         }
+    }
+
+    public sealed class MarketTransactionItemSummary
+    {
+        public string ItemId = string.Empty;
+        public int BuyQuantity;
+        public int SellQuantity;
+        public long PurchaseCost;
+        public long SaleRevenue;
     }
 
     /// <summary>
@@ -476,7 +514,18 @@ namespace ND.Framework.CargoLoading
                     Success = true,
                     TradingCurrencyAfter = calculation.TradingCurrencyAfter,
                     PurchaseCost = calculation.TotalPurchaseCost,
-                    SaleRevenue = calculation.TotalSaleRevenue
+                    SaleRevenue = calculation.TotalSaleRevenue,
+                    Items = calculation.Items
+                        .Where(item => item != null)
+                        .Select(item => new MarketTransactionItemSummary
+                        {
+                            ItemId = item.ItemId ?? string.Empty,
+                            BuyQuantity = item.BuyQuantity,
+                            SellQuantity = item.SellQuantity,
+                            PurchaseCost = item.PurchaseCost,
+                            SaleRevenue = item.SaleRevenue
+                        })
+                        .ToList()
                 };
             }
             catch
@@ -487,6 +536,7 @@ namespace ND.Framework.CargoLoading
 
             // Publish only after SaveData persistence succeeds. UI subscribers re-read the saved
             // Caravan snapshot, and failed/rolled-back transactions never emit refresh signals.
+            MarketInventoryChangeTracker.Publish(MarketId);
             FrameworkEvents.RaiseCaravanCargoChanged(CaravanId);
             FrameworkEvents.RaiseTradingCurrencyChanged(calculation.TradingCurrencyAfter);
             return successfulResult;

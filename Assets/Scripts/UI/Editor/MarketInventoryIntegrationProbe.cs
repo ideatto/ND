@@ -75,6 +75,8 @@ public static class MarketInventoryIntegrationProbe
             VerifyInventoryRefreshSaveFailureRollsBack(catalog, checks);
             VerifyDeltaTransactionAndRollback(catalog, checks);
             VerifySuccessfulTransactionsRaiseFrameworkEvents(catalog, checks);
+            VerifyOtherCaravanDraftReservesMarketStock(checks);
+            VerifyOtherCaravanPurchaseRefreshesOpenPanel(catalog, checks);
             VerifyRejectedTransactionsDoNotMutate(catalog, checks);
             VerifyPanelDraftIsolation(catalog, checks);
             VerifyCargoPanelDeltaAdapter(checks);
@@ -820,6 +822,105 @@ public static class MarketInventoryIntegrationProbe
 
         checks.Add("successful_market_transaction_raises_framework_change_events");
         checks.Add("failed_market_transaction_suppresses_framework_change_events");
+    }
+
+    private static void VerifyOtherCaravanPurchaseRefreshesOpenPanel(
+        TradeItemData[] catalog,
+        List<string> checks)
+    {
+        const string otherCaravanId = "test-only-market-probe-caravan-b";
+        DateTime time = new DateTime(2026, 7, 24, 3, 0, 0, DateTimeKind.Utc);
+        FrameworkSaveData save = NewSave(1000L);
+        save.caravans.Add(new FrameworkCaravanSaveData { caravanId = otherCaravanId });
+        var service = new MemorySaveService(save);
+        var timeProvider = new FixedTimeProvider(time);
+
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save, TestOnlyCaravanId, service, timeProvider, "shared-town-market",
+            catalog, catalog, 4, 20, 3600d, 20260724,
+            out MarketInventoryMutationSession firstSession, out string firstError), firstError);
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save, otherCaravanId, service, timeProvider, "shared-town-market",
+            catalog, catalog, 4, 20, 3600d, 20260724,
+            out MarketInventoryMutationSession secondSession, out string secondError), secondError);
+
+        var firstModel = new MarketTradePanelModel(firstSession, 1000f, 20);
+        var secondModel = new MarketTradePanelModel(secondSession, 1000f, 20);
+        MarketTradeItemState secondPurchase = secondModel.Items.First(item => item.MarketStock > 0);
+        int stockBefore = firstModel.Items
+            .First(item => item.ItemId == secondPurchase.ItemId)
+            .MarketStock;
+
+        GameObject owner = new GameObject("MarketTradePanelControllerProbe");
+        try
+        {
+            MarketTradePanelController controller = owner.AddComponent<MarketTradePanelController>();
+            SetField(controller, "model", firstModel);
+            int refreshCount = 0;
+            controller.StateChanged += _ => refreshCount++;
+            owner.SetActive(false);
+
+            Assert(secondModel.SetBuyDraft(secondPurchase.ItemId, 1),
+                "The second Caravan could not stage a shared-market purchase.");
+            MarketTransactionResult result = secondModel.Commit();
+
+            Assert(result.Success, "The second Caravan shared-market purchase failed: " + result.ErrorCode);
+            Assert(refreshCount == 0,
+                "An inactive panel must not depend on receiving the market change event.");
+            owner.SetActive(true);
+            Assert(controller.RefreshIfMarketInventoryChanged(),
+                "The first Caravan panel must detect the missed shared-market revision.");
+            Assert(firstModel.Items.First(item => item.ItemId == secondPurchase.ItemId).MarketStock
+                    == stockBefore - 1,
+                "The first Caravan panel must display stock consumed by the second Caravan.");
+            Assert(refreshCount == 1,
+                "The recovered revision must publish one refreshed panel state.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(owner);
+        }
+
+        checks.Add("other_caravan_purchase_refreshes_open_market_panel");
+    }
+
+    private static void VerifyOtherCaravanDraftReservesMarketStock(List<string> checks)
+    {
+        const string marketId = "draft-reservation-market";
+        const string firstCaravanId = "draft-reservation-caravan-a";
+        const string secondCaravanId = "draft-reservation-caravan-b";
+        try
+        {
+            CaravanCargoDraftStore.Snapshot snapshot =
+                CaravanCargoDraftStore.SetPurchases(
+                marketId,
+                firstCaravanId,
+                new[] { new KeyValuePair<string, int>("bread", 3) });
+
+            Assert(snapshot.Revision > 0,
+                "Changing a Caravan Cargo draft must advance the draft-store revision.");
+            Assert(CaravanCargoDraftStore.GetReservedByOtherCaravans(
+                    marketId,
+                    secondCaravanId,
+                    "bread") == 3,
+                "Another Caravan must see the first Caravan's draft quantity as reserved stock.");
+            Assert(CaravanCargoDraftStore.GetReservedByOtherCaravans(
+                    marketId,
+                    firstCaravanId,
+                    "bread") == 0,
+                "A Caravan must not subtract its own reservation before restoring its draft.");
+        }
+        finally
+        {
+            CaravanCargoDraftStore.Clear(marketId, firstCaravanId);
+        }
+
+        Assert(CaravanCargoDraftStore.GetReservedByOtherCaravans(
+                marketId,
+                secondCaravanId,
+                "bread") == 0,
+            "Cancelling or committing a draft must release its shared market reservation.");
+        checks.Add("other_caravan_draft_reserves_shared_market_stock");
     }
 
         private static CargoEntrySaveData CreateCargo(TradeItemData item, int quantity)

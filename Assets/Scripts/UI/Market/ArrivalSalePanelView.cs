@@ -10,6 +10,7 @@ namespace ND.UI.Market
     {
         [SerializeField] private MarketTradePanelController marketPanel;
         [SerializeField] private CaravanArrivalSaleController saleController;
+        [SerializeField] private FrameworkTradeScreenPresenter tradeScreenPresenter;
 
         private GameObject panelRoot;
         private RectTransform itemRoot;
@@ -28,6 +29,7 @@ namespace ND.UI.Market
 
         private void Awake()
         {
+            ResolveTradeScreenPresenter();
             BuildView();
             panelRoot.SetActive(false);
         }
@@ -67,6 +69,41 @@ namespace ND.UI.Market
         private void HandleSettlementRequested(string caravanId, string tradeId)
         {
             panelRoot.SetActive(false);
+
+            // The Framework is already in Settlement while it waits for the arrival sale, so
+            // PresentSettlement can request the same screen state without emitting another
+            // InGameScreenChanged event. Explicitly reopen the trade presentation here; this
+            // also works after a previous claim disabled the shared TradePrepareUI root.
+            ResolveTradeScreenPresenter();
+            if (tradeScreenPresenter != null)
+            {
+                tradeScreenPresenter.OpenTradeScreen();
+                return;
+            }
+
+            Debug.LogError(
+                $"[ArrivalSale] Settlement presentation is ready but no " +
+                $"{nameof(FrameworkTradeScreenPresenter)} is available. " +
+                $"CaravanId={caravanId}, TradeId={tradeId}",
+                this);
+        }
+
+        private void ResolveTradeScreenPresenter()
+        {
+            if (tradeScreenPresenter != null)
+                return;
+
+            FrameworkTradeScreenPresenter[] presenters =
+                Resources.FindObjectsOfTypeAll<FrameworkTradeScreenPresenter>();
+            for (int index = 0; index < presenters.Length; index++)
+            {
+                FrameworkTradeScreenPresenter candidate = presenters[index];
+                if (candidate != null && candidate.gameObject.scene.IsValid())
+                {
+                    tradeScreenPresenter = candidate;
+                    return;
+                }
+            }
         }
 
         private void HandleError(string error)

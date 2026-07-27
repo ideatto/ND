@@ -109,6 +109,24 @@ namespace ND.Framework
             return applied;
         }
 
+        public bool TryGetPendingResult(string tradeId, out EconomyM1LoopResult result)
+        {
+            result = null;
+            if (pendingEconomyResult == null || !pendingEconomyResult.Success)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(tradeId)
+                || !string.Equals(pendingTradeId, tradeId, System.StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            result = pendingEconomyResult;
+            return true;
+        }
+
         /// <summary>
         /// pending Economy cache를 삭제한다.
         /// </summary>

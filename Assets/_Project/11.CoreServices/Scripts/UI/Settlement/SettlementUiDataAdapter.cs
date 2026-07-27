@@ -23,6 +23,7 @@
  * - 이 adapter는 저장 데이터나 Core 정산을 직접 수정하지 않고 SettlementUiBridge에 위임한다.
  * - OnDisable에서 이벤트 구독과 claim processing 상태를 정리한다.
  */
+using ND.Economy;
 using UnityEngine;
 
 namespace ND.Framework
@@ -178,6 +179,27 @@ namespace ND.Framework
 
         private SettlementViewData CreateViewData(string tradeId, JourneyResultData result, bool canClaim)
         {
+            EconomyM1SettlementViewData economySettlement = null;
+            var bridge = GetBridge();
+            if (bridge != null
+                && bridge.TryGetPendingEconomyResult(tradeId, out EconomyM1LoopResult economyResult))
+            {
+                economySettlement = EconomyM1SettlementViewAdapter.Create(economyResult);
+                if (bridge.TryGetPendingSettlement(
+                        out string caravanId,
+                        out string pendingTradeId,
+                        out _)
+                    && string.Equals(pendingTradeId, tradeId, System.StringComparison.Ordinal)
+                    && SaveDataLookup.TryGetPendingSettlement(
+                        FrameworkRoot.Instance?.CurrentSaveData,
+                        caravanId,
+                        tradeId,
+                        out PendingSettlementSaveData pending))
+                {
+                    economySettlement = CreatePersistedReceiptView(economySettlement, pending);
+                }
+            }
+
             return new SettlementViewData(
                 tradeId,
                 result.grade,
@@ -198,7 +220,131 @@ namespace ND.Framework
                 result.departureLoad,
                 result.overloadRatio,
                 canClaim,
-                CreateStatusMessage(result));
+                CreateStatusMessage(result),
+                economySettlement);
+        }
+
+        private static EconomyM1SettlementViewData CreatePersistedReceiptView(
+            EconomyM1SettlementViewData source,
+            PendingSettlementSaveData pending)
+        {
+            if (source?.Settlement == null || pending == null)
+                return source;
+
+            SettlementBreakdown sourceBreakdown = source.Settlement;
+            var breakdown = new SettlementBreakdown
+            {
+                TradeId = sourceBreakdown.TradeId ?? string.Empty,
+                TotalRevenue = AddClamped(sourceBreakdown.TotalRevenue, pending.arrivalSaleRevenue),
+                TotalExpense = AddClamped(sourceBreakdown.TotalExpense, pending.purchaseCost),
+                TradeMoneyAfter = sourceBreakdown.TradeMoneyAfter,
+                DevelopmentCurrencyReward = sourceBreakdown.DevelopmentCurrencyReward,
+                IsBankrupt = sourceBreakdown.IsBankrupt,
+                MinimumRecoveryMoney = sourceBreakdown.MinimumRecoveryMoney
+            };
+            breakdown.GrossTradeProfit = SubtractClamped(
+                breakdown.TotalRevenue,
+                breakdown.TotalExpense);
+            breakdown.NetProfit = breakdown.GrossTradeProfit;
+
+            if (sourceBreakdown.Entries != null)
+            {
+                foreach (SettlementEntry entry in sourceBreakdown.Entries)
+                {
+                    if (entry == null
+                        || entry.EntryType == SettlementEntryType.ItemPurchaseCost
+                        || entry.EntryType == SettlementEntryType.ItemSaleRevenue)
+                    {
+                        continue;
+                    }
+
+                    breakdown.Entries.Add(new SettlementEntry
+                    {
+                        EntryType = entry.EntryType,
+                        DisplayNameKey = entry.DisplayNameKey ?? string.Empty,
+                        Amount = entry.Amount,
+                        IsPositive = entry.IsPositive,
+                        SourceId = entry.SourceId ?? string.Empty
+                    });
+                }
+            }
+
+            AddPersistedItemEntries(
+                breakdown,
+                pending.purchasedItems,
+                SettlementEntryType.ItemPurchaseCost,
+                false,
+                pending.purchaseCost);
+            AddPersistedItemEntries(
+                breakdown,
+                pending.soldItems,
+                SettlementEntryType.ItemSaleRevenue,
+                true,
+                pending.arrivalSaleRevenue);
+
+            return new EconomyM1SettlementViewData
+            {
+                Success = source.Success,
+                ErrorCode = source.ErrorCode ?? string.Empty,
+                PriceResult = source.PriceResult,
+                Settlement = breakdown,
+                GrowthPurchase = source.GrowthPurchase,
+                RuntimeStats = source.RuntimeStats
+            };
+        }
+
+        private static void AddPersistedItemEntries(
+            SettlementBreakdown breakdown,
+            System.Collections.Generic.IReadOnlyList<SettlementItemSaveData> items,
+            SettlementEntryType type,
+            bool positive,
+            long fallbackTotal)
+        {
+            bool added = false;
+            if (items != null)
+            {
+                foreach (SettlementItemSaveData item in items)
+                {
+                    if (item == null || item.quantity <= 0)
+                        continue;
+                    breakdown.Entries.Add(new SettlementEntry
+                    {
+                        EntryType = type,
+                        DisplayNameKey = positive
+                            ? "settlement.item_sale_revenue"
+                            : "settlement.item_purchase_cost",
+                        Amount = System.Math.Max(0L, item.totalAmount),
+                        IsPositive = positive,
+                        SourceId = item.itemId ?? string.Empty
+                    });
+                    added = true;
+                }
+            }
+
+            if (!added && fallbackTotal > 0L)
+            {
+                breakdown.Entries.Add(new SettlementEntry
+                {
+                    EntryType = type,
+                    Amount = fallbackTotal,
+                    IsPositive = positive,
+                    SourceId = "system"
+                });
+            }
+        }
+
+        private static long AddClamped(long left, long right)
+        {
+            left = System.Math.Max(0L, left);
+            right = System.Math.Max(0L, right);
+            return left > long.MaxValue - right ? long.MaxValue : left + right;
+        }
+
+        private static long SubtractClamped(long left, long right)
+        {
+            if (right > 0L && left < long.MinValue + right)
+                return long.MinValue;
+            return left - right;
         }
 
         private static string CreateStatusMessage(JourneyResultData result)

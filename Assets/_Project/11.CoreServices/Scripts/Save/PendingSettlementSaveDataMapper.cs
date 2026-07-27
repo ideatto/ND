@@ -67,6 +67,44 @@ namespace ND.Framework
             };
         }
 
+        public static void ApplyPreparation(
+            PendingSettlementSaveData pending,
+            TradePreparationCommitSaveData preparation)
+        {
+            if (pending == null || preparation == null || !preparation.hasCommit
+                || !string.Equals(pending.tradeId, preparation.tradeId, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            pending.purchaseCost = System.Math.Max(0L, preparation.purchaseCost);
+            pending.mercenaryCost = System.Math.Max(0L, preparation.mercenaryCost);
+            pending.purchasedItems = new System.Collections.Generic.List<SettlementItemSaveData>();
+            if (preparation.purchasedItems == null)
+                return;
+
+            foreach (TradePreparationItemSaveData item in preparation.purchasedItems)
+            {
+                if (item == null || item.quantity <= 0)
+                    continue;
+                long unitPrice = System.Math.Max(0L, item.purchaseUnitPrice);
+                pending.purchasedItems.Add(new SettlementItemSaveData
+                {
+                    itemId = item.itemId ?? string.Empty,
+                    quantity = item.quantity,
+                    unitPrice = unitPrice,
+                    totalAmount = MultiplyClamped(unitPrice, item.quantity)
+                });
+            }
+        }
+
+        private static long MultiplyClamped(long value, int quantity)
+        {
+            if (value <= 0L || quantity <= 0)
+                return 0L;
+            return value > long.MaxValue / quantity ? long.MaxValue : value * quantity;
+        }
+
         /// <summary>
         /// 저장된 pending 정산을 runtime JourneyResultData로 복원한다.
         /// </summary>

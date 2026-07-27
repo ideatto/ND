@@ -651,6 +651,13 @@ namespace ND.Framework
             return result != null;
         }
 
+        public bool TryGetPendingEconomyResult(string tradeId, out EconomyM1LoopResult result)
+        {
+            result = null;
+            return tradeProgressCoordinator != null
+                && tradeProgressCoordinator.TryGetPendingEconomyResult(tradeId, out result);
+        }
+
         public bool IsSettlementPresentationRequested => settlementPresentationRequested;
 
         /// <summary>

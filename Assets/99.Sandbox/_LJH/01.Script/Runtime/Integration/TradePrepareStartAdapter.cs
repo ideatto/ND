@@ -280,12 +280,16 @@ public sealed class TradePrepareStartAdapter
             routeId = routeId,
             selectedWagonId = draft.selectedWagonId,
             selectedAnimals = CreateSelectedAnimalSnapshots(draft),
-            // The summary projection already prices the authoritative S4 plan.
-            // Keep food separate because settlement adds purchaseCost and foodCost.
-            purchaseCost = Math.Max(0L, viewData.totalPurchaseCost - viewData.draftAnimalFoodCost),
-            foodCost = Math.Max(0L, viewData.draftAnimalFoodCost),
+            // Cargo and draft-animal food are committed by the Market transaction before
+            // departure. The journey commit records only non-market preparation costs; carrying
+            // these values forward would charge the selected Caravan's purchase a second time.
+            // Purchase money was already applied by Market. Keep the amount and item lines in
+            // the persisted preparation snapshot for receipt reconstruction only.
+            purchaseCost = viewData.totalPurchaseCost > 0L ? viewData.totalPurchaseCost : 0L,
+            foodCost = 0L,
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
-            estimatedSellRevenue = Math.Max(0L, viewData.estimatedSellRevenue),
+            // Arrival sales are also Market-owned and must not be projected into departure.
+            estimatedSellRevenue = 0L,
             purchasedItems = CreatePurchasedItemSnapshots(draft),
             selectedMercenaryIds = mercenaryIds
         };

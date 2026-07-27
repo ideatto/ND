@@ -21,11 +21,18 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         public int quantity;
     }
 
+    public sealed class CargoChangeSnapshot
+    {
+        public string caravanId = string.Empty;
+        public string marketId = string.Empty;
+        public IReadOnlyList<CargoSelection> items = Array.Empty<CargoSelection>();
+    }
+
     /// <summary>
     /// Raised after S4 cargo changes. A complete snapshot is sent so items removed from
     /// the UI can also be cleared from Runtime Draft by assigning quantity zero.
     /// </summary>
-    public event Action<IReadOnlyList<CargoSelection>> LoadChanged;
+    public event Action<CargoChangeSnapshot> LoadChanged;
 
     /// <summary>
     /// Optional integration boundary invoked before S4 advances to the mercenary step.
@@ -84,6 +91,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private readonly List<LoadedLine> loadedLines = new List<LoadedLine>();
     private int[] remainingStocks = Array.Empty<int>();
+    private string marketDraftCaravanId = string.Empty;
+    private string marketDraftMarketId = string.Empty;
 
     private RectTransform panelRect;
     private RectTransform shopGrid;
@@ -253,7 +262,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// </summary>
     public void RestoreSelectedCargo(
         IReadOnlyList<TradeItemViewData> selectedItems,
-        bool useOwnedCargo = false)
+        bool useOwnedCargo = false,
+        bool notifyChange = true)
     {
         if (selectedItems == null || shopItems == null)
             return;
@@ -289,7 +299,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         }
 
         RefreshAll();
-        NotifyLoadChanged();
+        if (notifyChange)
+            NotifyLoadChanged();
     }
 
     public void SetCargoEditingEnabled(bool enabled)
@@ -466,6 +477,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 quantity = group.Sum(line => line.Quantity)
             })
             .ToArray();
+    }
+
+    public void SetMarketDraftContext(string caravanId, string marketId)
+    {
+        marketDraftCaravanId = caravanId ?? string.Empty;
+        marketDraftMarketId = marketId ?? string.Empty;
     }
 
     public void BackToPreviousStep()
@@ -1442,7 +1459,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             });
         }
 
-        LoadChanged?.Invoke(snapshot);
+        LoadChanged?.Invoke(new CargoChangeSnapshot
+        {
+            caravanId = marketDraftCaravanId,
+            marketId = marketDraftMarketId,
+            items = snapshot
+        });
     }
 
     private bool TryAddLoadedQuantity(

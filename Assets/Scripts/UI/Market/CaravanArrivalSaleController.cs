@@ -82,6 +82,31 @@ namespace ND.UI.Market
                 return Fail(ErrorPanelMissing);
             if (root == null || root.CurrentSaveData == null || root.SharedGameData == null)
                 return Fail(MarketInventoryMutationSession.ErrorInvalidFramework);
+
+            // After the sale is confirmed, the Framework intentionally keeps the same pending
+            // settlement until Payment claims it. Reusing the Caravan status action must reopen
+            // that receipt instead of reopening an already-completed sell-only market.
+            if (root.SettlementUiBridge != null
+                && root.SettlementUiBridge.IsSettlementPresentationRequested
+                && root.SettlementUiBridge.TryGetPendingSettlement(
+                    out string pendingCaravanId,
+                    out string pendingTradeId,
+                    out JourneyResultData pendingResult)
+                && pendingResult != null
+                && string.Equals(pendingCaravanId, caravanId, StringComparison.Ordinal))
+            {
+                if (!root.SettlementUiBridge.PresentSettlement(
+                        pendingCaravanId,
+                        pendingTradeId))
+                {
+                    return Fail(ErrorSettlementPresentation);
+                }
+
+                SetError(string.Empty);
+                SettlementRequested?.Invoke(pendingCaravanId, pendingTradeId);
+                return true;
+            }
+
             if (!SaveDataLookup.TryGetTradeProgress(
                     root.CurrentSaveData, caravanId, out ND.Framework.TradeProgressSaveData progress)
                 || progress.state != ND.Framework.TradeProgressState.SettlementPending
@@ -132,6 +157,8 @@ namespace ND.UI.Market
                 MarketTransactionResult transaction = marketPanel.Commit();
                 if (transaction == null || !transaction.Success)
                     return Fail(transaction?.ErrorCode ?? MarketInventoryMutationSession.ErrorInvalidTransaction);
+                if (!TryPersistArrivalSale(transaction))
+                    return Fail(MarketInventoryMutationSession.ErrorSaveFailed);
             }
 
             FrameworkRoot root = FrameworkRoot.Instance;
@@ -149,6 +176,45 @@ namespace ND.UI.Market
             SetError(string.Empty);
             SettlementRequested?.Invoke(caravanId, tradeId);
             return true;
+        }
+
+        private bool TryPersistArrivalSale(MarketTransactionResult transaction)
+        {
+            FrameworkRoot root = FrameworkRoot.Instance;
+            if (root?.CurrentSaveData == null || root.SaveService == null || transaction == null)
+                return false;
+
+            if (!SaveDataLookup.TryGetPendingSettlement(
+                    root.CurrentSaveData,
+                    activeCaravanId,
+                    activeTradeId,
+                    out PendingSettlementSaveData pending)
+                || pending == null)
+            {
+                return false;
+            }
+
+            pending.arrivalSaleRevenue = Math.Max(0L, transaction.SaleRevenue);
+            pending.soldItems = new System.Collections.Generic.List<SettlementItemSaveData>();
+            if (transaction.Items != null)
+            {
+                foreach (MarketTransactionItemSummary item in transaction.Items)
+                {
+                    if (item == null || item.SellQuantity <= 0)
+                        continue;
+                    long total = Math.Max(0L, item.SaleRevenue);
+                    pending.soldItems.Add(new SettlementItemSaveData
+                    {
+                        itemId = item.ItemId ?? string.Empty,
+                        quantity = item.SellQuantity,
+                        unitPrice = total / item.SellQuantity,
+                        totalAmount = total
+                    });
+                }
+            }
+
+            SaveResult saveResult = root.SaveService.Save(root.CurrentSaveData);
+            return saveResult != null && saveResult.Succeeded;
         }
 
         public void ConfirmSaleFromUi()
