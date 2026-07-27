@@ -74,4 +74,42 @@ public class MinimapCell
     }
 
     public override string ToString() => $"Cell({row},{col}) {terrain} @ {worldCenter}";
+
+    // ------------------------------------------------------------------ 글자 ↔ 지형 (텍스트맵용)
+
+    /// <summary>지형 → 한 글자 코드. (P평지 R강 B강변 D다리 M산 W호수 F숲 L논밭 C구름 G풀)</summary>
+    public static char ToChar(TerrainType t)
+    {
+        switch (t)
+        {
+            case TerrainType.River:     return 'R';
+            case TerrainType.Riverbank: return 'B';
+            case TerrainType.Bridge:    return 'D';
+            case TerrainType.Mountain:  return 'M';
+            case TerrainType.Water:     return 'W';
+            case TerrainType.Forest:    return 'F';
+            case TerrainType.Farmland:  return 'L';
+            case TerrainType.Cloud:     return 'C';
+            case TerrainType.Grass:     return 'G';
+            default:                    return 'P'; // Plain
+        }
+    }
+
+    /// <summary>한 글자 코드 → 지형(알 수 없으면 Plain).</summary>
+    public static TerrainType FromChar(char ch)
+    {
+        switch (char.ToUpperInvariant(ch))
+        {
+            case 'R': return TerrainType.River;
+            case 'B': return TerrainType.Riverbank;
+            case 'D': return TerrainType.Bridge;
+            case 'M': return TerrainType.Mountain;
+            case 'W': return TerrainType.Water;
+            case 'F': return TerrainType.Forest;
+            case 'L': return TerrainType.Farmland;
+            case 'C': return TerrainType.Cloud;
+            case 'G': return TerrainType.Grass;
+            default:  return TerrainType.Plain;
+        }
+    }
 }

@@ -12,6 +12,7 @@
 // [주의] 배경 텍스처는 Read/Write Enabled(isReadable) 여야 색 샘플 가능.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>격자 디버그 오버레이(셀 지역색 + 좌표 라벨) 토글.</summary>
@@ -29,6 +30,22 @@ public class MinimapGridDebug : MonoBehaviour
     private GUIStyle btnStyle;
     private static Sprite whiteSquare;
     private static Font labelFont;
+    private readonly Dictionary<int, SpriteRenderer> tintByCell = new Dictionary<int, SpriteRenderer>();
+
+    public bool IsOverlayOn => overlayOn;
+    public MinimapGrid Grid => grid;
+
+    /// <summary>페인트 후 그 셀 한 칸의 색만 즉시 갱신한다.</summary>
+    public void RefreshCell(int row, int col)
+    {
+        if (!overlayOn || grid == null) return;
+        var mc = grid.GetCell(row, col);
+        if (mc == null) return;
+        if (tintByCell.TryGetValue(row * grid.Cols + col, out var sr) && sr != null)
+        {
+            Color col2 = TerrainColor(mc.terrain); col2.a = tintAlpha; sr.color = col2;
+        }
+    }
 
     private void Awake()
     {
@@ -69,6 +86,7 @@ public class MinimapGridDebug : MonoBehaviour
         grid.BuildCells();
 
         if (overlayRoot != null) Destroy(overlayRoot.gameObject);
+        tintByCell.Clear();
         overlayRoot = new GameObject("GridDebugOverlay").transform;
         overlayRoot.SetParent(renderRoot, false);
 
@@ -83,7 +101,8 @@ public class MinimapGridDebug : MonoBehaviour
                 // 1) 지형 종류별 색(범례)으로 칠하기
                 Color col = TerrainColor(mc != null ? mc.terrain : TerrainType.Plain);
                 col.a = tintAlpha;
-                MakeTint(pos, new Vector2(cell.x * 0.98f, cell.y * 0.98f), col);
+                var sr = MakeTint(pos, new Vector2(cell.x * 0.98f, cell.y * 0.98f), col);
+                tintByCell[r * cols + c] = sr;
 
                 // 2) 좌표 라벨 (열=알파벳, 행=숫자) 예: A1
                 MakeLabel(pos, CoordLabel(r, c));
@@ -118,7 +137,7 @@ public class MinimapGridDebug : MonoBehaviour
         return letters + (row + 1);
     }
 
-    private void MakeTint(Vector3 pos, Vector2 size, Color color)
+    private SpriteRenderer MakeTint(Vector3 pos, Vector2 size, Color color)
     {
         var go = new GameObject("Tint");
         go.transform.SetParent(overlayRoot, false);
@@ -128,6 +147,7 @@ public class MinimapGridDebug : MonoBehaviour
         sr.sprite = WhiteSquare();
         sr.color = color;
         sr.sortingOrder = 4;   // 배경(0) 위, 격자선(5)·마을(10) 아래
+        return sr;
     }
 
     private void MakeLabel(Vector3 pos, string text)

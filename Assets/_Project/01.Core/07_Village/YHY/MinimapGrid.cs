@@ -35,8 +35,13 @@ public class MinimapGrid : MonoBehaviour
     [SerializeField] private int sortingOrder = 5;   // 배경(0)보다 위, 마을(10)보다 아래
 
     [Header("셀 정보(땅정보)")]
+    // 지형 텍스트맵(있으면 이걸로 지형을 채운다 — 페인트 툴/직접 편집 대상). 없으면 savedCells 사용.
+    [SerializeField] private TextAsset terrainMap;
     // 저장/편집용 flat 리스트(Unity는 2D 배열을 직렬화 못 하므로). 각 셀에 row,col,terrain 포함.
     [SerializeField] private List<MinimapCell> savedCells = new List<MinimapCell>();
+
+    /// <summary>지형 텍스트맵 에셋(페인트 저장 시 이 파일 경로에 쓴다).</summary>
+    public TextAsset TerrainMap => terrainMap;
 
     public int Cols => cols;
     public int Rows => rows;
@@ -110,13 +115,58 @@ public class MinimapGrid : MonoBehaviour
             for (int c = 0; c < cols; c++)
                 cells[r, c] = new MinimapCell(r, c, CellToWorld(r, c));
 
-        // 저장된 땅정보 반영
-        if (savedCells != null)
+        // 지형 반영: 텍스트맵이 있으면 우선, 없으면 저장 리스트.
+        if (terrainMap != null && !string.IsNullOrEmpty(terrainMap.text))
+            ApplyTerrainMap(terrainMap.text);
+        else if (savedCells != null)
             foreach (var s in savedCells)
                 if (s != null && InRange(s.row, s.col))
                     cells[s.row, s.col].terrain = s.terrain;
 
         CellsBuilt = true;
+    }
+
+    /// <summary>ASCII 지형 텍스트(주석 # 무시, "NN| chars" 또는 chars)를 파싱해 지형을 채운다.</summary>
+    public void ApplyTerrainMap(string text)
+    {
+        if (string.IsNullOrEmpty(text) || cells == null) return;
+        var raw = text.Replace("\r", "").Split('\n');
+        var body = new List<string>();
+        foreach (var line in raw)
+        {
+            var l = line.Trim();
+            if (l.Length == 0 || l.StartsWith("#")) continue;
+            int bar = l.IndexOf('|');
+            string s = (bar >= 0 ? l.Substring(bar + 1) : l).Trim();
+            if (s.Length > 0) body.Add(s);
+        }
+        // 첫 데이터 줄 = 맨 위 행(rows-1), 아래로 내려간다.
+        for (int i = 0; i < body.Count && i < rows; i++)
+        {
+            int r = rows - 1 - i;
+            string s = body[i];
+            for (int c = 0; c < cols && c < s.Length; c++)
+                cells[r, c].terrain = MinimapCell.FromChar(s[c]);
+        }
+    }
+
+    /// <summary>현재 지형을 ASCII 텍스트맵 문자열로 만든다(저장용).</summary>
+    public string BuildTerrainMapText()
+    {
+        if (!CellsBuilt) BuildCells();
+        var sb = new System.Text.StringBuilder();
+        sb.Append("# 미니맵 지형 맵 (").Append(cols).Append('x').Append(rows).Append("). 위=").Append(rows).Append("행, 아래=1행. 한 글자=한 셀.\n");
+        sb.Append("# P 평지  R 강  B 강변  D 다리  M 산  W 호수  F 숲  L 논밭  C 구름  G 풀\n");
+        sb.Append("#    ");
+        for (int c = 0; c < cols; c++) sb.Append((char)('A' + c % 26));
+        sb.Append('\n');
+        for (int r = rows - 1; r >= 0; r--)
+        {
+            sb.Append((r + 1).ToString().PadLeft(2)).Append("| ");
+            for (int c = 0; c < cols; c++) sb.Append(MinimapCell.ToChar(cells[r, c].terrain));
+            sb.Append('\n');
+        }
+        return sb.ToString();
     }
 
     /// <summary>셀(row,col) 반환(없으면 null). 범위를 벗어나면 null.</summary>
