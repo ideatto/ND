@@ -4,7 +4,8 @@
 // [담당] Core Gameplay (윤호영)
 //
 // [역할] 미니맵 RawImage 클릭 위치를 맵 카메라 월드 좌표로 변환해 가장 가까운 마을을 찾고,
-//        그 마을이 "활성"(=캐러밴이 현재 있는 마을)이면 TradeTownView.Show()로 전환한다.
+//        그 마을이 "활성"이면 TradeTownCameraMover로 VillageCamera를 그 마을 좌표로 이동시킨다.
+//        (거점·무역마을이 Village_Home 한 씬에 서로 다른 좌표로 있고, 카메라만 이동 → 하나의 큰 맵으로 확장 가능)
 //        (미니맵은 RenderTexture라 마을 콜라이더가 화면 클릭을 직접 못 받으므로 좌표 변환이 필요)
 //
 // [활성 판정] FrameworkRoot.CurrentSaveData.caravans[0].currentTownId 와 클릭한 townId가 같으면 활성.
@@ -23,11 +24,10 @@ public class MinimapTownClickRouter : MonoBehaviour, IPointerClickHandler
 {
     [SerializeField] private RawImage view;             // 미니맵 RawImage(RT 표시)
     [SerializeField] private Transform renderRoot;      // 마을 탐색 범위(V2 렌더 루트)
-    [SerializeField] private TradeTownView tradeTownView; // 활성 마을 클릭 시 열 화면
     [SerializeField] private float hitRadius = 1.2f;    // 마을 클릭 판정 반경(월드 단위)
     [SerializeField] private string homeTownId = "BaseCamp"; // 거점 townId — 언제나 활성(홈)
 
-    /// <summary>현재 진입해 표시 중인 무역마을 townId (없으면 null). 이름표 등에서 참조.</summary>
+    /// <summary>현재 카메라가 비추는 마을 townId. 이름표 등에서 참조.</summary>
     public string CurrentTownId { get; private set; }
 
     private Camera cachedCam;
@@ -40,37 +40,26 @@ public class MinimapTownClickRouter : MonoBehaviour, IPointerClickHandler
     }
 
     /// <summary>
-    /// 클릭한 townId 처리.
-    /// - 거점(homeTownId): 언제나 활성 → 거점 화면(무역마을 숨김)으로.
-    /// - 그 외: 캐러밴이 있는 마을만 활성 → 그 무역마을 화면으로.
+    /// 클릭한 townId 처리 — 활성이면 VillageCamera를 그 마을 좌표로 이동.
+    /// - 거점(homeTownId): 언제나 활성.
+    /// - 그 외: 캐러밴이 있는 마을만 활성(도착 후).
     /// </summary>
     public void HandleTownClicked(string townId)
     {
         if (string.IsNullOrEmpty(townId)) return;
 
-        // 거점은 무조건 활성 — 누르면 거점 화면으로 돌아간다.
-        if (townId == homeTownId)
-        {
-            if (tradeTownView != null) tradeTownView.Hide();   // 무역마을 숨김 → 거점(VillageView) 노출
-            CloseMinimap();
-            CurrentTownId = null;
-            Debug.Log($"[MinimapTownClickRouter] 거점({townId}) 클릭 → 거점 화면");
-            return;
-        }
-
-        // 그 외 마을: 캐러밴이 지금 그 마을에 있어야(도착) 활성.
-        if (townId != GetCaravanMapTownId())
+        // 거점은 무조건 활성. 무역마을은 캐러밴이 지금 그 마을에 있어야(도착) 활성.
+        if (townId != homeTownId && townId != GetCaravanMapTownId())
         {
             Debug.Log($"[MinimapTownClickRouter] '{townId}'는 비활성(캐러밴 없음/이동중) — 진입 안 함");
             return;
         }
-        if (tradeTownView != null)
-        {
-            tradeTownView.Show();
-            CloseMinimap();
-            CurrentTownId = townId;   // 이름표가 표시할 현재 무역마을 기록
-            Debug.Log($"[MinimapTownClickRouter] '{townId}' 활성 → 무역마을 화면 열기(지도 닫음)");
-        }
+
+        // 카메라를 그 마을 좌표로 이동(enable/disable 아님 — 한 씬 안에서 카메라만 이동).
+        TradeTownCameraMover.RequestedTownId = townId;
+        CloseMinimap();
+        CurrentTownId = townId;   // 이름표가 표시할 현재 마을 기록
+        Debug.Log($"[MinimapTownClickRouter] '{townId}' 활성 → 카메라 이동(지도 닫음)");
     }
 
     /// <summary>열려 있던 지도(SlidePanel)를 정상 방식으로 닫는다(지도버튼으로 재열기 가능).</summary>

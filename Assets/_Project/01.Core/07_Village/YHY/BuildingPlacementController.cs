@@ -229,6 +229,19 @@ public class BuildingPlacementController : MonoBehaviour,
         return villageCam;
     }
 
+    /// <summary>
+    /// 카메라를 "현재 위치"를 새 팬 중심(camHome)으로 재설정한다.
+    /// 다른 마을로 카메라를 이동(TradeTownCameraMover)한 뒤 호출 →
+    /// 팬 범위(panRange)가 옛 거점이 아니라 지금 보는 마을 기준이 되어, 드래그해도 안 끌려온다.
+    /// </summary>
+    public void RecenterPanHome()
+    {
+        Camera cam = ResolveVillageCamera();
+        if (cam == null) return;
+        camHome = cam.transform.position;
+        camHomeSet = true;
+    }
+
     [Header("카메라 이동(패닝)")]
     [SerializeField] private float panSpeed = 0.01f;   // 드래그 픽셀당 이동량(월드 m)
     [SerializeField] private float panRange = 12f;     // 마을 중심에서 벗어날 수 있는 최대 거리(m)
