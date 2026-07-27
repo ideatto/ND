@@ -3360,6 +3360,8 @@ GameObject:
   - component: {fileID: 3335005101101407746}
   - component: {fileID: 2096875058882745143}
   - component: {fileID: 2883929891840334061}
+  - component: {fileID: 483717640951603007}
+  - component: {fileID: 6896620292822575875}
   m_Layer: 0
   m_Name: WorldMapRenderRootV2
   m_TagString: Untagged
@@ -5016,12 +5018,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapWind
   grid: {fileID: 3270757068816519589}
-  swirlAngleDeg: 40
+  swirlAngleDeg: 50
   windScale: 1
   seasonalStrength: 1
-  ambientCount: 2
-  ambientStrength: 0.35
-  ambientDriftSpeed: 0.15
+  ambientCount: 3
+  ambientStrength: 0.55
+  ambientDriftSpeed: 0.35
 --- !u!114 &2883929891840334061
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5035,6 +5037,42 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapWindDebug
   wind: {fileID: 2096875058882745143}
+  grid: {fileID: 3270757068816519589}
+  renderRoot: {fileID: 4683084452933495309}
+  showPanel: 1
+  arrowWidth: 0.09
+--- !u!114 &483717640951603007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8223251769062633283}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5f109ea3bd24e548a32af648967c710, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapWind
+  grid: {fileID: 3270757068816519589}
+  swirlAngleDeg: 40
+  windScale: 1
+  seasonalStrength: 1
+  ambientCount: 2
+  ambientStrength: 0.35
+  ambientDriftSpeed: 0.15
+--- !u!114 &6896620292822575875
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8223251769062633283}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea7c13b9a53755a41b0794fcf6cf6b61, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MinimapWindDebug
+  wind: {fileID: 483717640951603007}
   grid: {fileID: 3270757068816519589}
   renderRoot: {fileID: 4683084452933495309}
   showPanel: 1
