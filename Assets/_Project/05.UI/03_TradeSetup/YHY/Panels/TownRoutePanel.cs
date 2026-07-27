@@ -141,11 +141,21 @@ public class TownRoutePanel : MonoBehaviour
 
     private static bool IsRouteForTown(RouteViewData route, string currentTownId, string townId)
     {
-        if (string.IsNullOrEmpty(townId)) return false;
-        if (!string.IsNullOrEmpty(currentTownId))
-            return (route.fromTownId == currentTownId && route.toTownId == townId) ||
-                   (route.toTownId == currentTownId && route.fromTownId == townId);
-        return route.fromTownId == townId || route.toTownId == townId;
+        if(route == null || string.IsNullOrEmpty(currentTownId) || string.IsNullOrEmpty(townId))
+        {
+            return false;
+        }
+
+        // 방향성 Route는 현재 Town에서 출발하고,
+        // 현재 펼친 목적지 Town으로 도착하는 경우만 허용한다.
+        return string.Equals(
+                   route.fromTownId,
+                   currentTownId,
+                   StringComparison.Ordinal) &&
+               string.Equals(
+                   route.toTownId,
+                   townId,
+                   StringComparison.Ordinal);
     }
 
     private static string FallbackReason(string reason)
