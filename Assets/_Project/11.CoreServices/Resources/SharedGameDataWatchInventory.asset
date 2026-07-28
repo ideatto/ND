@@ -123,6 +123,16 @@ MonoBehaviour:
     typeName: RouteData
     dataId: MountToBase
     watchRootKind: 0
+  - assetGuid: a5d8076319ccb7b4a9f44887ead18cb2
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_MountToRiver.asset
+    typeName: RouteData
+    dataId: MountToRiver
+    watchRootKind: 0
+  - assetGuid: 293b5c3abd77186438b831c8bbbac5e3
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_MountToRiver2.asset
+    typeName: RouteData
+    dataId: MountToRiver2
+    watchRootKind: 0
   - assetGuid: 10113bd0c38b8394d9cc07cfc15a1443
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_RiverToBase.asset
     typeName: RouteData
@@ -137,6 +147,11 @@ MonoBehaviour:
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_RiverToMount.asset
     typeName: RouteData
     dataId: RiverToMount
+    watchRootKind: 0
+  - assetGuid: e84432ee7ce491e4d943cc0c98b0a48b
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_WindyToBase.asset
+    typeName: RouteData
+    dataId: WindyToBase
     watchRootKind: 0
   - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset

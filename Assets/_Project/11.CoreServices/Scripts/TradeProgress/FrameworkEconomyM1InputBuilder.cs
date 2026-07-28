@@ -73,13 +73,11 @@ namespace ND.Framework
                 ? (long)journeyResult.durabilityLost * DurabilityRepairCostPerPoint
                 : 0L;
             long mercenaryCost = routeDefinition.BaseMercenaryCost;
-            TradePreparationCommitSaveData preparation = saveData.tradePreparationCommit;
-            if (preparation != null
-                && preparation.hasCommit
-                && string.Equals(
-                    preparation.tradeId,
+            if (TryGetExactPreparation(
+                    saveData,
+                    progress.caravanId,
                     progress.activeTradeId,
-                    System.StringComparison.Ordinal))
+                    out TradePreparationCommitSaveData preparation))
             {
                 mercenaryCost = System.Math.Max(0L, preparation.mercenaryCost);
             }
@@ -104,6 +102,43 @@ namespace ND.Framework
                 PlayerGrowthLevel = saveData.player.playerGrowthLevel,
                 CaravanGrowthLevel = saveData.player.caravanGrowthLevel
             };
+        }
+
+        private static bool TryGetExactPreparation(
+            SaveData saveData,
+            string caravanId,
+            string tradeId,
+            out TradePreparationCommitSaveData preparation)
+        {
+            preparation = null;
+            if (saveData?.tradePreparationCommits == null
+                || string.IsNullOrWhiteSpace(caravanId)
+                || string.IsNullOrWhiteSpace(tradeId))
+            {
+                return false;
+            }
+
+            foreach (TradePreparationCommitSaveData candidate in saveData.tradePreparationCommits)
+            {
+                if (candidate == null || !candidate.hasCommit
+                    || !string.Equals(candidate.caravanId, caravanId, System.StringComparison.Ordinal)
+                    || !string.Equals(candidate.tradeId, tradeId, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (preparation != null)
+                {
+                    FrameworkLog.Error(
+                        $"Economy input build rejected an ambiguous preparation commit. CaravanId: {caravanId}, TradeId: {tradeId}");
+                    preparation = null;
+                    return false;
+                }
+
+                preparation = candidate;
+            }
+
+            return preparation != null;
         }
 
     }

@@ -10,21 +10,41 @@ namespace ND.UI.Market
     {
         [SerializeField] private CaravanArrivalSaleController saleController;
         [SerializeField] private string caravanId = string.Empty;
+        [SerializeField] private string tradeId = string.Empty;
 
         private Button button;
         private bool explicitlyBound;
 
+        /// <summary>
+        /// Binds this action to one exact eligible Arrival Sale Pending. Both IDs remain
+        /// authoritative until the next bind and are never replaced by current selection.
+        /// </summary>
+        public void Bind(string caravanIdValue, string tradeIdValue)
+        {
+            caravanId = caravanIdValue ?? string.Empty;
+            tradeId = tradeIdValue ?? string.Empty;
+            explicitlyBound = !string.IsNullOrWhiteSpace(caravanId)
+                && !string.IsNullOrWhiteSpace(tradeId);
+            RefreshInteractable();
+        }
+
+        /// <summary>
+        /// Preserves the legacy single-ID call surface. It does not create an explicit binding;
+        /// opening succeeds only when the controller can resolve one eligible Pending globally.
+        /// </summary>
         public void Bind(string value)
         {
             caravanId = value ?? string.Empty;
-            explicitlyBound = !string.IsNullOrWhiteSpace(caravanId);
+            tradeId = string.Empty;
+            explicitlyBound = false;
             RefreshInteractable();
         }
 
         private void Awake()
         {
             button = GetComponent<Button>();
-            explicitlyBound = !string.IsNullOrWhiteSpace(caravanId);
+            explicitlyBound = !string.IsNullOrWhiteSpace(caravanId)
+                && !string.IsNullOrWhiteSpace(tradeId);
         }
 
         private void OnEnable()
@@ -46,15 +66,15 @@ namespace ND.UI.Market
 
         public void OpenSale()
         {
-            if (string.IsNullOrWhiteSpace(caravanId))
-                saleController?.TryResolveSinglePendingCaravanId(out caravanId);
-            if (saleController != null && saleController.OpenForCaravan(caravanId))
+            if (!explicitlyBound)
+                saleController?.TryResolveSinglePendingIdentity(out caravanId, out tradeId);
+            if (saleController != null && saleController.OpenForCaravan(caravanId, tradeId))
                 // A completed sale reuses this action as "reopen pending settlement". Keep it
-                // available until Payment claims the result and IsSalePending becomes false.
+                // available until Payment claims the exact pending identity.
                 RefreshInteractable();
             else
                 Debug.LogError(
-                    $"[Arrival Sale UI] Open failed. CaravanId={caravanId}, Error={saleController?.LastErrorCode ?? "CONTROLLER_MISSING"}",
+                    $"[Arrival Sale UI] Open failed. CaravanId={caravanId}, TradeId={tradeId}, Error={saleController?.LastErrorCode ?? "CONTROLLER_MISSING"}",
                     this);
         }
 
@@ -64,13 +84,14 @@ namespace ND.UI.Market
                 button = GetComponent<Button>();
             if (!explicitlyBound
                 && (string.IsNullOrWhiteSpace(caravanId)
+                    || string.IsNullOrWhiteSpace(tradeId)
                     || saleController == null
-                    || !saleController.IsSalePending(caravanId)))
+                    || !saleController.IsSalePending(caravanId, tradeId)))
             {
-                saleController?.TryResolveSinglePendingCaravanId(out caravanId);
+                saleController?.TryResolveSinglePendingIdentity(out caravanId, out tradeId);
             }
             button.interactable = saleController != null
-                && saleController.IsSalePending(caravanId);
+                && saleController.IsSalePending(caravanId, tradeId);
         }
 
         private void HandleSettlementReady(
@@ -80,12 +101,16 @@ namespace ND.UI.Market
         {
             if (!explicitlyBound
                 && saleController != null
-                && saleController.IsSalePending(arrivedCaravanId))
+                && saleController.TryResolveSinglePendingIdentity(
+                    out string resolvedCaravanId,
+                    out string resolvedTradeId))
             {
-                caravanId = arrivedCaravanId ?? string.Empty;
+                caravanId = resolvedCaravanId;
+                tradeId = resolvedTradeId;
             }
 
-            if (string.Equals(arrivedCaravanId, caravanId, System.StringComparison.Ordinal))
+            if (string.Equals(arrivedCaravanId, caravanId, System.StringComparison.Ordinal)
+                && string.Equals(tradeId, this.tradeId, System.StringComparison.Ordinal))
                 RefreshInteractable();
         }
 

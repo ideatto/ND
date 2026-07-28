@@ -16,7 +16,7 @@ MonoBehaviour:
   fromTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   toTown: {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
   displayName: "\uC0B0 \uAE38"
-  unlockedByDefault: 1
+  unlockedByDefault: 0
   distance: 28
   defaultElapsedTime: 140
   baseFoodCost: 0
@@ -24,5 +24,6 @@ MonoBehaviour:
   baseRequiredFoodQuantity: 7
   baseRequiredMercenaryPower: 3
   baseRiskLevel: 0
-  routeEvents: []
   maxEventCount: 0
+  eventCheckIntervalKm: 10
+  routeEvents: []

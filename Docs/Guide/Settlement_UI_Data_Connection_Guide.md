@@ -1,6 +1,10 @@
 ```markdown
 # 정산 UI 데이터 연결 가이드
 
+## Arrival sale and presentation gate
+
+See `Docs/Contract/Arrival_Sale_Settlement_Claim_Policy.md`. Arrival cargo sale is an optional `SettlementPending` overlay/sub-flow before this settlement presentation UI. `SettlementUiBridge.PresentSettlement(caravanId, tradeId)` opens the pending result after partial, full, or empty sale. Claim is a separate explicit-ID command and must not credit cargo-sale proceeds again. There is no current Selling screen state.
+
 ## 목적
 
 이 문서는 정산 UI에서 사용할 수 있는 데이터, 사용해야 하는 API, 그리고 Framework 정산 흐름과 UI를 연결하는 방법을 설명한다.
@@ -336,10 +340,9 @@ UI 소유:
 
 ---
 
-## 현재 M1 한계
+## 현재 복구 계약
 
-M1에서는 정산 결과 데이터를 현재 세션의 메모리 안에서만 유지한다.
+`SettlementPending`과 pending travel settlement result는 저장·복구된다. 확인된 Cargo, 목적지 market stock, `tradingCurrency` 변경도 각 canonical SaveData 경로로 복구된다.
 
-플레이어가 `SettlementPending` 상태에서 앱을 종료하면 상세 정산 결과 복원은 아직 보장되지 않는다.  
-저장 기반 정산 결과 복구는 M3에서 처리할 예정이다.
+도착 화물 판매 draft, itemized sale ledger, runtime-only settlement-presentation request는 저장되지 않으므로 복구를 보장하지 않는다. Multi-Caravan의 legacy singular pending 경로는 여전히 제한 사항이다.
 ```

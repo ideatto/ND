@@ -152,6 +152,10 @@ namespace ND.Framework
         /// <summary>Active trade departure-time preparation snapshot.</summary>
         public TradePreparationCommitSaveData tradePreparationCommit = new TradePreparationCommitSaveData();
 
+        /// <summary>Caravan과 trade의 정확한 소유 identity로 보관하는 출발 준비 snapshot 목록이다.</summary>
+        public List<TradePreparationCommitSaveData> tradePreparationCommits =
+            new List<TradePreparationCommitSaveData>();
+
         /// <summary>
         /// 월드 계절, 재난, unlock 목록, 상점 재고·구매 준비를 저장하는 데이터이다.
         /// </summary>

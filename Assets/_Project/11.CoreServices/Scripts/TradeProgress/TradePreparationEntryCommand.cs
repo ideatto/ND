@@ -22,7 +22,9 @@ namespace ND.Framework
             }
 
             if ((saveData.pendingSettlement != null && saveData.pendingSettlement.hasResult) ||
-                (saveData.tradePreparationCommit != null && saveData.tradePreparationCommit.hasCommit))
+                FrameworkTradePrepareCommitStore.HasActiveCommit(
+                    saveData,
+                    saveData.selectedCaravanId))
             {
                 FrameworkLog.Warning("Trade preparation entry blocked because settlement data is still pending.");
                 return false;

@@ -1,5 +1,11 @@
 # Immediate Save and Dirty Policy
 
+## Arrival sale confirmation
+
+Arrival cargo sale confirmation is an implemented immediate-save transaction over caravan Cargo, destination market stock, and player `tradingCurrency`; see `Arrival_Sale_Settlement_Claim_Policy.md`. It validates and calculates, snapshots, applies all three mutations, saves, rolls all three back on failure, and publishes `CaravanCargoChanged`/`TradingCurrencyChanged` only after success.
+
+This transaction credits sale proceeds before separate Claim. Wrappers must not add a second Save or duplicate calculation, mutation, rollback, or events.
+
 ## Approved target API direction
 
 The target save contract is:
@@ -26,7 +32,7 @@ Important commands execute sequentially and block other important-command input.
 
 ## Immediate-save operations
 
-Trade departure, settlement confirmation/finalization, settlement claim, growth purchase, wagon repair, building purchase/upgrade, one-time investment-quest completion, rescue-loan issue, rescue-loan repayment, wagon destruction, and Caravan-to-home cargo transfer require durable save success before the operation reports success.
+Trade departure, arrival cargo sale confirmation, settlement confirmation/finalization, settlement claim, growth purchase, wagon repair, building purchase/upgrade, one-time investment-quest completion, rescue-loan issue, rescue-loan repayment, wagon destruction, and Caravan-to-home cargo transfer require durable save success before the operation reports success.
 
 Because the current flow can mutate runtime state before calling a void save, changing only the return type is insufficient. Each command must adopt validation plus snapshot/rollback, or transaction-style staging and commit. No rollback or atomicity guarantee exists until implemented and tested.
 

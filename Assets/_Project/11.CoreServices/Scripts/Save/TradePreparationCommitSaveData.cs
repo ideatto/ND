@@ -7,6 +7,7 @@ namespace ND.Framework
     public sealed class TradePreparationCommitSaveData
     {
         public bool hasCommit;
+        public string caravanId = string.Empty;
         public string tradeId = string.Empty;
         public string currentTownId = string.Empty;
         public string destinationTownId = string.Empty;

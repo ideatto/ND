@@ -13,7 +13,7 @@
  *
  * Usage for Team Members
  * - settlementViewBehaviour에는 ISettlementView를 구현한 MonoBehaviour를 연결한다.
- * - claim 버튼은 OnClickClaimSettlement()에 연결한다.
+ * - claim 버튼은 OnClickClaimSettlement()에 연결하며 adapter가 실제 표시한 Caravan·trade identity를 사용한다.
  * - refreshOnEnable이 true이면 활성화 시 bridge의 pending settlement를 즉시 표시한다.
  *
  * Main Public APIs
@@ -38,10 +38,12 @@ namespace ND.Framework
 
         private ISettlementView settlementView;
         private SettlementUiBridge subscribedBridge;
+        private string displayedCaravanId = string.Empty;
+        private string displayedTradeId = string.Empty;
         private bool isClaimProcessing;
 
         /// <summary>
-        /// settlement claim 버튼 클릭을 처리한다.
+        /// 현재 표시된 Caravan·trade identity의 settlement claim 버튼 클릭을 처리한다.
         /// </summary>
         /// <remarks>
         /// 중복 클릭을 막기 위해 처리 중에는 추가 요청을 무시하고 claim 버튼을 비활성화한다.
@@ -70,19 +72,31 @@ namespace ND.Framework
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(displayedCaravanId)
+                || string.IsNullOrWhiteSpace(displayedTradeId))
+            {
+                FrameworkLog.Warning(
+                    $"Adapter Claim failed. CaravanId: {displayedCaravanId}, TradeId: {displayedTradeId}, Reason: displayed identity is missing.");
+                ShowNoSettlement("No displayed settlement identity.");
+                return;
+            }
+
             isClaimProcessing = true;
             SetClaimInteractable(false);
 
             // 실제 claim과 저장 데이터 갱신은 bridge/coordinator가 수행한다.
-            var claimed = bridge.ClaimSettlementAndReset();
-            if (!claimed)
+            var claimResult = bridge.ClaimSettlement(displayedCaravanId, displayedTradeId);
+            if (!claimResult.Succeeded)
             {
-                // claim 실패 시 처리 상태를 되돌리고 현재 pending settlement를 다시 표시한다.
                 isClaimProcessing = false;
-                RefreshSettlementView();
+                SetClaimInteractable(true);
+                FrameworkLog.Warning(
+                    $"Adapter Claim failed. CaravanId: {displayedCaravanId}, TradeId: {displayedTradeId}, Reason: {claimResult.FailureReason}.");
                 return;
             }
 
+            displayedCaravanId = string.Empty;
+            displayedTradeId = string.Empty;
             ClearClaimProcessing();
         }
 
@@ -128,7 +142,7 @@ namespace ND.Framework
 
         private void HandleSettlementReady(string tradeId, JourneyResultData result)
         {
-            ShowSettlement(tradeId, result);
+            RefreshSettlementView();
         }
 
         private void RefreshSettlementView()
@@ -153,10 +167,10 @@ namespace ND.Framework
                 return;
             }
 
-            ShowSettlement(tradeId, result);
+            ShowSettlement(caravanId, tradeId, result);
         }
 
-        private void ShowSettlement(string tradeId, JourneyResultData result)
+        private void ShowSettlement(string caravanId, string tradeId, JourneyResultData result)
         {
             ResolveView();
             // view가 연결되지 않은 경우 adapter는 저장 상태를 바꾸지 않고 표시만 생략한다.
@@ -172,32 +186,34 @@ namespace ND.Framework
                 return;
             }
 
-            var viewData = CreateViewData(tradeId, result, !isClaimProcessing);
+            displayedCaravanId = caravanId;
+            displayedTradeId = tradeId;
+            var viewData = CreateViewData(caravanId, tradeId, result, !isClaimProcessing);
             settlementView.ShowSettlement(viewData);
             settlementView.SetClaimInteractable(viewData.CanClaim);
         }
 
-        private SettlementViewData CreateViewData(string tradeId, JourneyResultData result, bool canClaim)
+        private SettlementViewData CreateViewData(
+            string caravanId,
+            string tradeId,
+            JourneyResultData result,
+            bool canClaim)
         {
             EconomyM1SettlementViewData economySettlement = null;
             var bridge = GetBridge();
             if (bridge != null
-                && bridge.TryGetPendingEconomyResult(tradeId, out EconomyM1LoopResult economyResult))
+                && bridge.TryGetPendingEconomyResult(
+                    caravanId, tradeId, out EconomyM1LoopResult economyResult))
             {
                 economySettlement = EconomyM1SettlementViewAdapter.Create(economyResult);
-                if (bridge.TryGetPendingSettlement(
-                        out string caravanId,
-                        out string pendingTradeId,
-                        out _)
-                    && string.Equals(pendingTradeId, tradeId, System.StringComparison.Ordinal)
-                    && SaveDataLookup.TryGetPendingSettlement(
-                        FrameworkRoot.Instance?.CurrentSaveData,
-                        caravanId,
-                        tradeId,
-                        out PendingSettlementSaveData pending))
-                {
-                    economySettlement = CreatePersistedReceiptView(economySettlement, pending);
-                }
+            }
+            if (SaveDataLookup.TryGetPendingSettlement(
+                    FrameworkRoot.Instance?.CurrentSaveData,
+                    caravanId,
+                    tradeId,
+                    out PendingSettlementSaveData pending))
+            {
+                economySettlement = CreatePersistedReceiptView(economySettlement, pending);
             }
 
             return new SettlementViewData(
@@ -228,10 +244,17 @@ namespace ND.Framework
             EconomyM1SettlementViewData source,
             PendingSettlementSaveData pending)
         {
-            if (source?.Settlement == null || pending == null)
+            if (pending == null)
                 return source;
 
-            SettlementBreakdown sourceBreakdown = source.Settlement;
+            bool isReceiptOnly = source?.Settlement == null;
+            SettlementBreakdown sourceBreakdown = source?.Settlement ?? new SettlementBreakdown
+            {
+                TradeId = pending.tradeId ?? string.Empty,
+                TotalRevenue = pending.revenue,
+                TotalExpense = pending.cost,
+                NetProfit = pending.netProfit
+            };
             var breakdown = new SettlementBreakdown
             {
                 TradeId = sourceBreakdown.TradeId ?? string.Empty,
@@ -269,6 +292,18 @@ namespace ND.Framework
                 }
             }
 
+            if (isReceiptOnly)
+            {
+                breakdown.Entries.Add(new SettlementEntry
+                {
+                    EntryType = SettlementEntryType.MercenaryCost,
+                    DisplayNameKey = "settlement.mercenary_cost",
+                    Amount = pending.mercenaryCost,
+                    IsPositive = false,
+                    SourceId = "mercenary"
+                });
+            }
+
             AddPersistedItemEntries(
                 breakdown,
                 pending.purchasedItems,
@@ -284,12 +319,12 @@ namespace ND.Framework
 
             return new EconomyM1SettlementViewData
             {
-                Success = source.Success,
-                ErrorCode = source.ErrorCode ?? string.Empty,
-                PriceResult = source.PriceResult,
+                Success = source?.Success ?? true,
+                ErrorCode = source?.ErrorCode ?? string.Empty,
+                PriceResult = source?.PriceResult,
                 Settlement = breakdown,
-                GrowthPurchase = source.GrowthPurchase,
-                RuntimeStats = source.RuntimeStats
+                GrowthPurchase = source?.GrowthPurchase,
+                RuntimeStats = source?.RuntimeStats
             };
         }
 
@@ -370,6 +405,8 @@ namespace ND.Framework
 
         private void ShowNoSettlement(string reason)
         {
+            displayedCaravanId = string.Empty;
+            displayedTradeId = string.Empty;
             ResolveView();
             // view가 없으면 화면 갱신 대신 로그를 남겨 scene wiring 문제를 추적할 수 있게 한다.
             if (settlementView == null)

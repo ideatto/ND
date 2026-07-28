@@ -19,6 +19,8 @@ MonoBehaviour:
   description: River Side Town
   market: {fileID: 11400000, guid: 24facdcdcd1273e4a901c56ee267a402, type: 2}
   availableRoutes:
-  - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
+  - {fileID: 11400000, guid: 10113bd0c38b8394d9cc07cfc15a1443, type: 2}
+  - {fileID: 11400000, guid: 73bb5efdd4909b24ea1ec0bc440e0d93, type: 2}
+  - {fileID: 11400000, guid: 4adf786d6f18b784b92b05774d23e2d4, type: 2}
   canContribute: 1
   maximumContributionLimit: 100

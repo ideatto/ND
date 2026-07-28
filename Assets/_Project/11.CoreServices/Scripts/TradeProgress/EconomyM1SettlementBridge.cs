@@ -15,6 +15,7 @@
  * - Economy 실패 시 Core 정산 결과는 유지하고 금액 필드는 0으로 남을 수 있다.
  */
 using ND.Economy;
+using System.Collections.Generic;
 
 namespace ND.Framework
 {
@@ -23,8 +24,8 @@ namespace ND.Framework
     /// </summary>
     public sealed class EconomyM1SettlementBridge
     {
-        private string pendingTradeId = string.Empty;
-        private EconomyM1LoopResult pendingEconomyResult;
+        private readonly Dictionary<string, EconomyM1LoopResult> pendingResults =
+            new Dictionary<string, EconomyM1LoopResult>(System.StringComparer.Ordinal);
 
         /// <summary>
         /// Core 정산 결과에 Economy M1 금액을 계산해 반영하고 pending cache를 저장한다.
@@ -48,8 +49,9 @@ namespace ND.Framework
             JourneyResultData journeyResult,
             ISharedGameDataProvider sharedGameData)
         {
-            ClearPending();
-            if (progress == null || string.IsNullOrWhiteSpace(progress.activeTradeId))
+            if (progress == null
+                || string.IsNullOrWhiteSpace(progress.caravanId)
+                || string.IsNullOrWhiteSpace(progress.activeTradeId))
             {
                 FrameworkLog.Warning(
                     "Economy M1 settlement calculation skipped because the explicit trade ID is missing.");
@@ -76,8 +78,7 @@ namespace ND.Framework
                 return false;
             }
 
-            pendingTradeId = progress.activeTradeId;
-            pendingEconomyResult = economyResult;
+            pendingResults[CreateKey(progress.caravanId, progress.activeTradeId)] = economyResult;
             return true;
         }
 
@@ -87,44 +88,74 @@ namespace ND.Framework
         /// <returns>active trade ID가 일치하고 반영에 성공하면 true.</returns>
         public bool TryApplyPendingEconomy(SaveData saveData, CaravanData runtimeCaravan, string activeTradeId)
         {
-            if (pendingEconomyResult == null || !pendingEconomyResult.Success)
+            return TryApplyPendingEconomy(
+                saveData,
+                runtimeCaravan,
+                runtimeCaravan?.caravanId,
+                activeTradeId);
+        }
+
+        public bool TryApplyPendingEconomy(
+            SaveData saveData,
+            CaravanData runtimeCaravan,
+            string caravanId,
+            string tradeId)
+        {
+            if (!TryGetPendingResult(caravanId, tradeId, out EconomyM1LoopResult pendingEconomyResult))
             {
                 FrameworkLog.Warning("Economy claim apply skipped because pending economy result is missing.");
                 return false;
             }
 
-            if (string.IsNullOrEmpty(pendingTradeId) || pendingTradeId != (activeTradeId ?? string.Empty))
-            {
-                FrameworkLog.Warning(
-                    $"Economy claim apply blocked because pending trade ID does not match. Pending: {pendingTradeId}, Active: {activeTradeId}");
-                return false;
-            }
-
             var applied = RuntimeStatsSaveDataMapper.ApplyEconomyResult(saveData, runtimeCaravan, pendingEconomyResult);
-            if (applied)
-            {
-                ClearPending();
-            }
-
             return applied;
         }
 
         public bool TryGetPendingResult(string tradeId, out EconomyM1LoopResult result)
         {
             result = null;
-            if (pendingEconomyResult == null || !pendingEconomyResult.Success)
+            if (string.IsNullOrWhiteSpace(tradeId))
             {
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(tradeId)
-                || !string.Equals(pendingTradeId, tradeId, System.StringComparison.Ordinal))
+            foreach (KeyValuePair<string, EconomyM1LoopResult> pair in pendingResults)
+            {
+                if (!KeyMatchesTrade(pair.Key, tradeId) || pair.Value == null || !pair.Value.Success)
+                    continue;
+                if (result != null)
+                {
+                    result = null;
+                    return false;
+                }
+                result = pair.Value;
+            }
+
+            return result != null;
+        }
+
+        public bool TryGetPendingResult(
+            string caravanId,
+            string tradeId,
+            out EconomyM1LoopResult result)
+        {
+            result = null;
+            if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId)
+                || !pendingResults.TryGetValue(CreateKey(caravanId, tradeId), out EconomyM1LoopResult candidate)
+                || candidate == null || !candidate.Success)
             {
                 return false;
             }
 
-            result = pendingEconomyResult;
+            result = candidate;
             return true;
+        }
+
+        public void ClearPending(string caravanId, string tradeId)
+        {
+            if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId))
+                return;
+            pendingResults.Remove(CreateKey(caravanId, tradeId));
         }
 
         /// <summary>
@@ -132,8 +163,19 @@ namespace ND.Framework
         /// </summary>
         public void ClearPending()
         {
-            pendingTradeId = string.Empty;
-            pendingEconomyResult = null;
+            pendingResults.Clear();
+        }
+
+        private static string CreateKey(string caravanId, string tradeId)
+        {
+            return (caravanId ?? string.Empty) + "\n" + (tradeId ?? string.Empty);
+        }
+
+        private static bool KeyMatchesTrade(string key, string tradeId)
+        {
+            int separator = key != null ? key.IndexOf('\n') : -1;
+            return separator >= 0
+                && string.Equals(key.Substring(separator + 1), tradeId, System.StringComparison.Ordinal);
         }
     }
 }

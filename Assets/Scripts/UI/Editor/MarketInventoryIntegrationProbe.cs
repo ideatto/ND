@@ -81,7 +81,7 @@ public static class MarketInventoryIntegrationProbe
             VerifyPanelDraftIsolation(catalog, checks);
             VerifyCargoPanelDeltaAdapter(checks);
             VerifyCommittedMarketCargoUsedAtDeparture(catalog, checks);
-            VerifyDepartureCommitExcludesMarketSettlement(checks);
+            VerifyDepartureCommitPreservesReceiptWithoutSettlement(checks);
             VerifyTownMarketAccessBoundaries(checks);
             VerifyTownMarketScreenTransitions(checks);
             VerifyCurrentTownMarketResolution(checks);
@@ -655,7 +655,7 @@ public static class MarketInventoryIntegrationProbe
         checks.Add("committed_market_cargo_is_departure_source_without_duplicate_charge");
     }
 
-    private static void VerifyDepartureCommitExcludesMarketSettlement(List<string> checks)
+    private static void VerifyDepartureCommitPreservesReceiptWithoutSettlement(List<string> checks)
     {
         MethodInfo createCommit = typeof(TradePrepareStartAdapter).GetMethod(
             "CreateCommitData",
@@ -682,13 +682,13 @@ public static class MarketInventoryIntegrationProbe
 
         Assert(commit != null
             && commit.caravanId == TestOnlyCaravanId
-            && commit.purchaseCost == 0L
+            && commit.purchaseCost == 400L
             && commit.estimatedSellRevenue == 0L
             && (commit.purchasedItems == null || commit.purchasedItems.Length == 0),
-            "Departure commit must preserve the selected Caravan ID and exclude already committed market purchases and automatic sale revenue.");
+            "Departure commit must preserve the selected Caravan ID and paid purchase receipt, while excluding automatic sale revenue.");
         Assert(commit.mercenaryCost == 50L,
             "Separating market settlement must preserve non-market departure costs.");
-        checks.Add("departure_commit_excludes_market_purchase_and_sale_settlement");
+        checks.Add("departure_commit_preserves_paid_purchase_receipt_without_reapplying_market_settlement");
     }
 
     private static void VerifyDeltaTransactionAndRollback(TradeItemData[] catalog, List<string> checks)
@@ -803,14 +803,24 @@ public static class MarketInventoryIntegrationProbe
                 out MarketInventoryMutationSession failingSession,
                 out string failingError), failingError);
             failingService.FailSaves = true;
+            int stagedReceiptValue = 0;
 
             MarketTransactionResult failed = MarketTransactionCommand.Execute(
                 failingSession,
                 new[] { new MarketTransactionLine { ItemId = "cloth", SellQuantity = 1 } },
-                100f);
+                100f,
+                int.MaxValue,
+                transaction =>
+                {
+                    stagedReceiptValue = (int)transaction.SaleRevenue;
+                    return true;
+                },
+                () => stagedReceiptValue = 0);
 
             Assert(!failed.Success && failed.ErrorCode == MarketInventoryMutationSession.ErrorSaveFailed,
                 "Event probe save failure must be reported.");
+            Assert(stagedReceiptValue == 0,
+                "A save failure must roll back data staged into the same transaction boundary.");
             Assert(cargoChangedCount == 1 && currencyChangedCount == 1,
                 "A failed and rolled-back transaction must not raise Framework change events.");
         }

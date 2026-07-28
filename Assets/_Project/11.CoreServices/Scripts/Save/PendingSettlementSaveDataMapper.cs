@@ -72,6 +72,7 @@ namespace ND.Framework
             TradePreparationCommitSaveData preparation)
         {
             if (pending == null || preparation == null || !preparation.hasCommit
+                || !string.Equals(pending.caravanId, preparation.caravanId, System.StringComparison.Ordinal)
                 || !string.Equals(pending.tradeId, preparation.tradeId, System.StringComparison.Ordinal))
             {
                 return;
@@ -84,6 +85,38 @@ namespace ND.Framework
                 return;
 
             foreach (TradePreparationItemSaveData item in preparation.purchasedItems)
+            {
+                if (item == null || item.quantity <= 0)
+                    continue;
+                long unitPrice = System.Math.Max(0L, item.purchaseUnitPrice);
+                pending.purchasedItems.Add(new SettlementItemSaveData
+                {
+                    itemId = item.itemId ?? string.Empty,
+                    quantity = item.quantity,
+                    unitPrice = unitPrice,
+                    totalAmount = MultiplyClamped(unitPrice, item.quantity)
+                });
+            }
+        }
+
+        public static void ApplyPreparation(
+            PendingSettlementSaveData pending,
+            global::TradePrepareCommitData preparation)
+        {
+            if (pending == null || preparation == null
+                || !string.Equals(pending.caravanId, preparation.caravanId, System.StringComparison.Ordinal)
+                || !string.Equals(pending.tradeId, preparation.tradeId, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            pending.purchaseCost = System.Math.Max(0L, preparation.purchaseCost);
+            pending.mercenaryCost = System.Math.Max(0L, preparation.mercenaryCost);
+            pending.purchasedItems = new System.Collections.Generic.List<SettlementItemSaveData>();
+            if (preparation.purchasedItems == null)
+                return;
+
+            foreach (global::TradeItemBundle item in preparation.purchasedItems)
             {
                 if (item == null || item.quantity <= 0)
                     continue;
@@ -155,6 +188,64 @@ namespace ND.Framework
                 netProfit = pending.netProfit
             };
             return true;
+        }
+
+        /// <summary>권위 저장 DTO와 컬렉션 필드를 공유하지 않는 복사본을 만든다.</summary>
+        public static PendingSettlementSaveData Copy(PendingSettlementSaveData source)
+        {
+            if (source == null) return null;
+            return new PendingSettlementSaveData
+            {
+                caravanId = source.caravanId ?? string.Empty,
+                hasResult = source.hasResult,
+                tradeId = source.tradeId ?? string.Empty,
+                routeId = source.routeId ?? string.Empty,
+                resultVersion = source.resultVersion,
+                grade = source.grade,
+                failureReason = source.failureReason,
+                cargoLost = source.cargoLost,
+                durabilityLost = source.durabilityLost,
+                travelSeconds = source.travelSeconds,
+                foodConsumed = source.foodConsumed,
+                foodLost = source.foodLost,
+                eventsOccurred = source.eventsOccurred,
+                battlesFought = source.battlesFought,
+                lostMercenaryInstanceIds = new System.Collections.Generic.List<string>(
+                    source.lostMercenaryInstanceIds ?? new System.Collections.Generic.List<string>()),
+                wagonDestroyed = source.wagonDestroyed,
+                destroyedWagonInstanceId = source.destroyedWagonInstanceId ?? string.Empty,
+                departureLoad = source.departureLoad,
+                finalEfficientLoad = source.finalEfficientLoad,
+                overloadRatio = source.overloadRatio,
+                revenue = source.revenue,
+                cost = source.cost,
+                netProfit = source.netProfit,
+                purchaseCost = source.purchaseCost,
+                mercenaryCost = source.mercenaryCost,
+                arrivalSaleRevenue = source.arrivalSaleRevenue,
+                purchasedItems = CopyItems(source.purchasedItems),
+                soldItems = CopyItems(source.soldItems),
+                claimed = source.claimed
+            };
+        }
+
+        private static System.Collections.Generic.List<SettlementItemSaveData> CopyItems(
+            System.Collections.Generic.List<SettlementItemSaveData> source)
+        {
+            var result = new System.Collections.Generic.List<SettlementItemSaveData>();
+            if (source == null) return result;
+            foreach (SettlementItemSaveData item in source)
+            {
+                if (item == null) continue;
+                result.Add(new SettlementItemSaveData
+                {
+                    itemId = item.itemId ?? string.Empty,
+                    quantity = System.Math.Max(0, item.quantity),
+                    unitPrice = System.Math.Max(0L, item.unitPrice),
+                    totalAmount = System.Math.Max(0L, item.totalAmount)
+                });
+            }
+            return result;
         }
 
         /// <summary>

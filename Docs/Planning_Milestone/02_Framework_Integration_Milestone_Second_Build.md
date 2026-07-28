@@ -1,5 +1,9 @@
 # Framework & Integration 담당자 — 2차 빌드 개인 마일스톤
 
+## Arrival-sale integration boundary
+
+Framework records `SettlementPending`, preserves explicit `caravanId + full tradeId`, presents settlement after optional arrival cargo sale, and keeps Claim separate from the saved sale transaction. Draft/ledger persistence and complete legacy Multi-Caravan restore are not current guarantees. See `Docs/Contract/Arrival_Sale_Settlement_Claim_Policy.md`.
+
 - **담당자:** 천성욱
 
 ## 1. 역할

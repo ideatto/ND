@@ -125,11 +125,18 @@ namespace ND.Framework.CargoLoading
             MarketInventoryMutationSession session,
             IReadOnlyList<MarketTransactionLine> lines,
             float maximumCargoWeight,
-            int maximumCargoSlots = int.MaxValue)
+            int maximumCargoSlots = int.MaxValue,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
         {
             return session == null
                 ? MarketTransactionResult.Fail(MarketInventoryMutationSession.ErrorInvalidFramework, 0L)
-                : session.ExecuteTransaction(lines, maximumCargoWeight, maximumCargoSlots);
+                : session.ExecuteTransaction(
+                    lines,
+                    maximumCargoWeight,
+                    maximumCargoSlots,
+                    stageBeforeSave,
+                    rollbackStagedData);
         }
     }
 
@@ -411,7 +418,9 @@ namespace ND.Framework.CargoLoading
         internal MarketTransactionResult ExecuteTransaction(
             IReadOnlyList<MarketTransactionLine> lines,
             float maximumCargoWeight,
-            int maximumCargoSlots)
+            int maximumCargoSlots,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
         {
             if (lines == null || float.IsNaN(maximumCargoWeight) || maximumCargoWeight < 0f ||
                 maximumCargoSlots < 0)
@@ -502,13 +511,6 @@ namespace ND.Framework.CargoLoading
                 }
 
                 saveData.player.tradingCurrency = calculation.TradingCurrencyAfter;
-                SaveResult saveResult = saveService.Save(saveData);
-                if (saveResult == null || !saveResult.Succeeded)
-                {
-                    RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
-                    return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
-                }
-
                 successfulResult = new MarketTransactionResult
                 {
                     Success = true,
@@ -527,9 +529,24 @@ namespace ND.Framework.CargoLoading
                         })
                         .ToList()
                 };
+                if (stageBeforeSave != null && !stageBeforeSave(successfulResult))
+                {
+                    rollbackStagedData?.Invoke();
+                    RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
+                    return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
+                }
+
+                SaveResult saveResult = saveService.Save(saveData);
+                if (saveResult == null || !saveResult.Succeeded)
+                {
+                    rollbackStagedData?.Invoke();
+                    RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
+                    return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
+                }
             }
             catch
             {
+                rollbackStagedData?.Invoke();
                 RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
                 return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
             }

@@ -3112,6 +3112,7 @@ MonoBehaviour:
   - {fileID: 2063724360886798399}
   - {fileID: 1866509051800295555}
   noticeUI: {fileID: 1962801421393486745}
+  arrivalSaleButton: {fileID: 5580020709590859577}
 --- !u!1 &1667321969378990882
 GameObject:
   m_ObjectHideFlags: 0
@@ -14389,6 +14390,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ddc883b5f4be47544b3f356225831707, type: 3}
+--- !u!114 &5580020709590859577 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5652589413898106650, guid: ddc883b5f4be47544b3f356225831707, type: 3}
+  m_PrefabInstance: {fileID: 216805391722072099}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50d0223f5ec14384a701050083008600, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Market.CaravanArrivalSaleButton
 --- !u!224 &6887077358998133614 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 6670375325807137613, guid: ddc883b5f4be47544b3f356225831707, type: 3}
