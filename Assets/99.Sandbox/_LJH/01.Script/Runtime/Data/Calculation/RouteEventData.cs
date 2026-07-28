@@ -126,7 +126,6 @@ public enum RouteEvent
     // so inserting None before it would silently reinterpret old Combat entries.
     Combat = 0,
     Lucky = 1,
-    Weather = 2,
 
     // A completed event check with no gameplay effect. Runtime logic should not
     // count this result toward RouteData.MaxEventCount.

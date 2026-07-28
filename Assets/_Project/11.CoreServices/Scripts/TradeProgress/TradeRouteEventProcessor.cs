@@ -224,8 +224,7 @@ namespace ND.Framework
                     return true;
 
                 case RouteEvent.Lucky:
-                case RouteEvent.Weather:
-                    // 현재 Core에는 Lucky/Weather runtime 효과 API가 없다.
+                    // 현재 Core에는 Lucky runtime 효과 API가 없다.
                     // 정의된 event 발생 자체만 기록하고 임의의 cargo/재화 효과를 만들지 않는다.
                     return true;
 
@@ -250,8 +249,7 @@ namespace ND.Framework
             if (routeEvent == null || string.IsNullOrWhiteSpace(routeEvent.Id))
                 return "Route event definition or ID is missing.";
             if (routeEvent.EventType != RouteEvent.Combat
-                && routeEvent.EventType != RouteEvent.Lucky
-                && routeEvent.EventType != RouteEvent.Weather)
+                && routeEvent.EventType != RouteEvent.Lucky)
                 return $"Unsupported route event type: {routeEvent.EventType}.";
             return null;
         }

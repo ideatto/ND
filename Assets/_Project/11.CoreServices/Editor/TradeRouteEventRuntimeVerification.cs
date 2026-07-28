@@ -98,8 +98,8 @@ namespace ND.Framework.Editor
             {
                 new SharedRouteEventDefinition
                 {
-                    Id = "weather-auto",
-                    EventType = RouteEvent.Weather
+                    Id = "lucky-auto",
+                    EventType = RouteEvent.Lucky
                 },
                 new SharedRouteEventDefinition
                 {
@@ -222,7 +222,7 @@ namespace ND.Framework.Editor
             var foodA = runtimeA.foodAmount;
 
             var forced = context.Coordinator.TryProcessForcedRouteEvent(
-                second.caravanId, progressB.activeTradeId, "weather-auto");
+                second.caravanId, progressB.activeTradeId, "lucky-auto");
             report.Check("forced-success", forced.Succeeded);
             report.Check("forced-cursor-isolated", runtimeB.runEventChecksProcessed == cursorB);
             report.Check("forced-occurred-increment", runtimeB.runEventsOccurred == eventsB + 1);
@@ -233,12 +233,12 @@ namespace ND.Framework.Editor
             report.Check("forced-selected-still-A", context.SaveData.selectedCaravanId == firstId);
 
             report.Check("forced-empty-caravan",
-                !context.Coordinator.TryProcessForcedRouteEvent("", progressB.activeTradeId, "weather-auto").Succeeded);
+                !context.Coordinator.TryProcessForcedRouteEvent("", progressB.activeTradeId, "lucky-auto").Succeeded);
             report.Check("forced-missing-caravan",
-                !context.Coordinator.TryProcessForcedRouteEvent("missing", progressB.activeTradeId, "weather-auto").Succeeded);
+                !context.Coordinator.TryProcessForcedRouteEvent("missing", progressB.activeTradeId, "lucky-auto").Succeeded);
             report.Check("forced-trade-mismatch",
                 context.Coordinator.TryProcessForcedRouteEvent(
-                    second.caravanId, "bad-trade", "weather-auto").FailureReason
+                    second.caravanId, "bad-trade", "lucky-auto").FailureReason
                 == ForcedRouteEventFailureReason.TradeMismatch);
             report.Check("forced-event-missing",
                 context.Coordinator.TryProcessForcedRouteEvent(
@@ -246,7 +246,7 @@ namespace ND.Framework.Editor
                 == ForcedRouteEventFailureReason.EventNotFound);
             report.Check("forced-not-traveling",
                 !context.Coordinator.TryProcessForcedRouteEvent(
-                    preparing.caravanId, "x", "weather-auto").Succeeded);
+                    preparing.caravanId, "x", "lucky-auto").Succeeded);
 
             cursorB = runtimeB.runEventChecksProcessed;
             eventsB = runtimeB.runEventsOccurred;
