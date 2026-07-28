@@ -18,6 +18,7 @@
 
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>⑥ 무역 요약 표시 패널(순수 UI). 값은 SummaryData로 주입.</summary>
 public class TradeSummaryPanel : MonoBehaviour
@@ -27,8 +28,9 @@ public class TradeSummaryPanel : MonoBehaviour
     {
         public string fromTown;       // 출발 도시
         public string toTown;         // 목적지 도시
+        public Sprite destinationSprite;
         public string viaText;        // 경유 도시 표기("없음" 등)
-        public int expectedRisk;      // 예상 위험도(루트 내 최고 습격 이벤트 값)
+        public int expectedRisk;      // 전체 여정에서 하나 이상의 이벤트가 발생할 확률(%)
         public int mercenaryPower;    // 고용 용병 전투력
         public float expectedFood;    // 예상 음식 소모량
         public int loadedFood;        // 음식 적재량
@@ -39,6 +41,7 @@ public class TradeSummaryPanel : MonoBehaviour
 
     [Header("타이틀 (출발 → 목적지)")]
     [SerializeField] private TMP_Text titleText;
+    [SerializeField] private Image destinationImage;
 
     [Header("좌측 정보 줄")]
     [SerializeField] private TMP_Text viaText;      // 경유 도시
@@ -52,6 +55,18 @@ public class TradeSummaryPanel : MonoBehaviour
     public void Show(SummaryData d)
     {
         if (titleText != null) titleText.text = $"{d.fromTown} → {d.toTown}";
+        if (destinationImage != null)
+        {
+            bool hasDestinationSprite = d.destinationSprite != null;
+            destinationImage.sprite = d.destinationSprite;
+            destinationImage.color = hasDestinationSprite
+                ? Color.white
+                : new Color(0.82f, 0.82f, 0.86f, 1f);
+            destinationImage.preserveAspect = hasDestinationSprite;
+
+            for (int index = 0; index < destinationImage.transform.childCount; index++)
+                destinationImage.transform.GetChild(index).gameObject.SetActive(!hasDestinationSprite);
+        }
         if (viaText != null) viaText.text = $"경유 도시 : {d.viaText}";
         if (riskText != null) riskText.text = $"예상 위험도 {d.expectedRisk} / 고용 용병 {d.mercenaryPower}";
         if (foodText != null)

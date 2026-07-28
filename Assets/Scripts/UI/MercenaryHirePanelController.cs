@@ -53,6 +53,12 @@ public sealed class MercenaryHirePanelController : MonoBehaviour
         : offers[selectedOfferIndex].displayName ?? string.Empty;
     public bool CanConfirm => SelectedHireCost <= availableGold;
 
+    public void SetExpectedRisk(float riskLevel)
+    {
+        expectedRisk = Mathf.Max(0, Mathf.RoundToInt(riskLevel));
+        Refresh();
+    }
+
     public static MercenaryHirePanelController CreateForCargo(CargoLoadingPanelController cargo)
     {
         GameObject go = new GameObject("MercenaryHirePanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));

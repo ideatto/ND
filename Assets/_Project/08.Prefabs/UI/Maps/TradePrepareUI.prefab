@@ -1208,6 +1208,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TradeSummaryPanel
   titleText: {fileID: 731195668352004293}
+  destinationImage: {fileID: 2369255510283142796}
   viaText: {fileID: 5629004764114527584}
   riskText: {fileID: 3448385570347905058}
   foodText: {fileID: 822532143205070949}

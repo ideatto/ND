@@ -27,16 +27,14 @@ public class RouteData : ScriptableObject, IIdentifiableData
     [SerializeField] private int baseRequiredMercenaryPower;
 
     [Header("Route_Risk_Info")]
-    [Tooltip("Automatically calculated from the highest Combat event value.")]
+    [Tooltip("Probability (0~1) that a configured Route Event occurs at each distance check.")]
+    [Range(0f, 1f)]
     [SerializeField] private float baseRiskLevel;
 
     [Header("Route_EventTable_Info")]
-    [Tooltip("Maximum number of non-None events that may occur during one journey.")]
+    [Tooltip("Number of equally spaced event checks during one journey. Check interval is Distance / MaxEventCount.")]
     [Min(0)]
     [SerializeField] private int maxEventCount;
-    [Tooltip("Distance in kilometers between route-event checks.")]
-    [Min(0.1f)]
-    [SerializeField] private float eventCheckIntervalKm = 10f;
     [SerializeField] private RouteEventData[] routeEvents;
 
     #region Public Properties
@@ -60,9 +58,8 @@ public class RouteData : ScriptableObject, IIdentifiableData
     // Framework shared-data conversion still uses the old general name.
     public int BaseRequiredFoodQuantity => Mathf.Max(0, baseRequiredFoodQuantity);
     public int BaseRequiredMercenaryPower => Mathf.Max(0, baseRequiredMercenaryPower);
-    public float BaseRiskLevel => Mathf.Max(0f, baseRiskLevel);
+    public float BaseRiskLevel => Mathf.Clamp01(baseRiskLevel);
     public int MaxEventCount => Mathf.Max(0, maxEventCount);
-    public float EventCheckIntervalKm => Mathf.Max(0.1f, eventCheckIntervalKm);
     // A check may resolve to RouteEvent.None. None must not increase the
     // number of events counted against MaxEventCount.
     public bool HasRouteEvents => routeEvents != null
@@ -89,16 +86,12 @@ public class RouteData : ScriptableObject, IIdentifiableData
         // Keep serialized configuration safe when an older asset has no value
         // for a newly introduced field or an invalid value is entered.
         maxEventCount = Mathf.Max(0, maxEventCount);
-        eventCheckIntervalKm = Mathf.Max(0.1f, eventCheckIntervalKm);
+        baseRiskLevel = Mathf.Clamp01(baseRiskLevel);
 
         if (routeEvents == null || routeEvents.Length == 0)
         {
-            // Risk is derived data. An empty event table has no Combat risk.
-            baseRiskLevel = 0f;
             return;
         }
-
-        int highestCombatPower = 0;
 
         for (int index = 0; index < routeEvents.Length; index++)
         {
@@ -107,16 +100,6 @@ public class RouteData : ScriptableObject, IIdentifiableData
                 continue;
 
             routeEvent.NormalizeRewards();
-
-            if (routeEvent.eventType == RouteEvent.Combat)
-            {
-                // Cache the strongest Combat candidate for UI and shared-data views.
-                highestCombatPower = Mathf.Max(
-                    highestCombatPower,
-                    routeEvent.eventValue);
-            }
         }
-
-        baseRiskLevel = highestCombatPower;
     }
 }
