@@ -45,7 +45,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TradePrepareRuntimeContextProvider
   towns: []
-  routes: []
   tradeItems: []
   wagons: []
   draftAnimals: []

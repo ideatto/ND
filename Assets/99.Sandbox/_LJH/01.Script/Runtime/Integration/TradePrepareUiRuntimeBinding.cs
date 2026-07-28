@@ -580,7 +580,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     private void HandleRouteSelected(string destinationTownId, string routeId, float distance)
     {
-        if (runtimeContext == null || !CanSelectRoute(runtimeContext.CurrentViewData, routeId))
+        if (runtimeContext == null || !CanSelectRoute(runtimeContext.CurrentViewData, destinationTownId, routeId))
             return;
 
         // Provider commands update the draft and rebuild ViewData; the panel only supplies IDs.
@@ -588,17 +588,43 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         runtimeContext.SelectRoute(routeId);
     }
 
-    private static bool CanSelectRoute(TradePrepareViewData viewData, string routeId)
+    private static bool CanSelectRoute(TradePrepareViewData viewData, string destinationTownId, string routeId)
     {
-        if (viewData == null || viewData.routes == null || string.IsNullOrWhiteSpace(routeId))
+        if(viewData == null || viewData.towns == null || viewData.routes == null ||
+            string.IsNullOrWhiteSpace(viewData.currentTownId) || string.IsNullOrWhiteSpace(destinationTownId) || string.IsNullOrWhiteSpace(routeId))
+        {
             return false;
+        }
+
+        TownViewData destinationTown = null;
+
+        foreach(TownViewData town in viewData.towns)
+        {
+            if(town != null && string.Equals(town.townId, destinationTownId, StringComparison.Ordinal))
+            {
+                destinationTown = town;
+                break;
+            }
+        }
+
+        if(destinationTown == null || !destinationTown.isUnlocked || !destinationTown.canSelect)
+        {
+            return false;
+        }
 
         foreach (RouteViewData route in viewData.routes)
         {
-            if (route != null &&
-                string.Equals(route.routeId, routeId, StringComparison.Ordinal) &&
-                route.isUnlocked &&
-                route.canSelect)
+            if(route == null)
+            {
+                continue;
+            }
+
+            bool isValidRoute = string.Equals(route.routeId, routeId, StringComparison.Ordinal) &&
+                string.Equals(route.fromTownId, viewData.currentTownId, StringComparison.Ordinal) &&
+                string.Equals(route.toTownId, destinationTownId, StringComparison.Ordinal) &&
+                route.isUnlocked && route.canSelect;
+
+            if (isValidRoute)
             {
                 return true;
             }
