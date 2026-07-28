@@ -59,9 +59,7 @@ public class VillageNpc : MonoBehaviour
         baseY = transform.position.y;
 
         // 스탯 랜덤 초기화 (NPC마다 다른 욕구부터 급하게)
-        needs[NeedType.Hunger] = Random.Range(startMin, startMax);
-        needs[NeedType.Energy] = Random.Range(startMin, startMax);
-        needs[NeedType.Fun] = Random.Range(startMin, startMax);
+        SeedNeeds();
 
         SnapToNearestFreeCell();
         Decide();
@@ -93,9 +91,18 @@ public class VillageNpc : MonoBehaviour
             pathIndex++;
     }
 
+    /// <summary>스탯 3종을 랜덤 초기값으로 채운다(핫 리로드로 딕셔너리가 비어도 여기서 복구).</summary>
+    private void SeedNeeds()
+    {
+        needs[NeedType.Hunger] = Random.Range(startMin, startMax);
+        needs[NeedType.Energy] = Random.Range(startMin, startMax);
+        needs[NeedType.Fun] = Random.Range(startMin, startMax);
+    }
+
     /// <summary>모든 스탯을 시간에 비례해 줄인다(0 밑으론 안 감).</summary>
     private void DecayNeeds()
     {
+        if (needs.Count == 0) SeedNeeds();   // 플레이 중 재컴파일로 딕셔너리가 비면 재시드(KeyNotFound 방지)
         float d = decayPerSecond * Time.deltaTime;
         needs[NeedType.Hunger] = Mathf.Max(0f, needs[NeedType.Hunger] - d);
         needs[NeedType.Energy] = Mathf.Max(0f, needs[NeedType.Energy] - d);
