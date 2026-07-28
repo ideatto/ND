@@ -77,7 +77,7 @@ namespace ND.UI.Market
             ResolveTradeScreenPresenter();
             if (tradeScreenPresenter != null)
             {
-                tradeScreenPresenter.OpenTradeScreen();
+                tradeScreenPresenter.OpenSettlementScreen();
                 return;
             }
 

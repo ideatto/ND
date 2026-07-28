@@ -323,12 +323,30 @@ namespace ND.Framework
             snapshot = default;
 
             var saveData = GetSaveData();
-            if (saveData?.tradeProgress == null)
-            {
-                return false;
-            }
+            return TryCreateMapProgressSnapshot(saveData?.tradeProgress, out snapshot);
+        }
 
-            var progress = saveData.tradeProgress;
+        public IReadOnlyList<TradeMapProgressSnapshot> GetMapProgressSnapshots()
+        {
+            var snapshots = new List<TradeMapProgressSnapshot>();
+            SaveData saveData = GetSaveData();
+            if (saveData?.tradeProgressEntries == null)
+                return snapshots;
+            foreach (TradeProgressSaveData progress in saveData.tradeProgressEntries)
+            {
+                if (TryCreateMapProgressSnapshot(progress, out TradeMapProgressSnapshot snapshot))
+                    snapshots.Add(snapshot);
+            }
+            return snapshots;
+        }
+
+        private bool TryCreateMapProgressSnapshot(
+            TradeProgressSaveData progress,
+            out TradeMapProgressSnapshot snapshot)
+        {
+            snapshot = default;
+            if (progress == null)
+                return false;
             var state = progress.state;
             if (state != TradeProgressState.Traveling && state != TradeProgressState.SettlementPending)
             {
@@ -342,7 +360,7 @@ namespace ND.Framework
             }
             else if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
             {
-                var caravan = GetRuntimeForProgress(saveData);
+                var caravan = GetOrCreateRuntimeCaravan(progress.caravanId);
                 progress01 = caravan != null
                     ? caravan.progress01
                     : CalculateProgress(progress, gameTimeProvider != null ? gameTimeProvider.CurrentUtc : DateTime.UtcNow);
@@ -372,7 +390,8 @@ namespace ND.Framework
                 state: state,
                 progress01: progress01,
                 tradeStartUtcTick: progress.tradeStartUtcTick,
-                expectedTradeEndUtcTick: progress.expectedTradeEndUtcTick);
+                expectedTradeEndUtcTick: progress.expectedTradeEndUtcTick,
+                caravanId: progress.caravanId);
             return true;
         }
 
