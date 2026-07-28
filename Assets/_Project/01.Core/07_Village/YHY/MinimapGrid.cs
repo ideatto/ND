@@ -47,7 +47,8 @@ public class MinimapGrid : MonoBehaviour
     public int Rows => rows;
     public int CellCount => cols * rows;
     public bool IsReady { get; private set; }
-    public bool CellsBuilt { get; private set; }
+    // 실제 배열 존재로 판정 → 핫 리로드로 2D 배열(cells)만 날아가도(bool은 살아남음) 자동으로 재빌드 유도
+    public bool CellsBuilt => cells != null;
 
     /// <summary>격자 영역(배경 bounds). 구름/캐러밴 이동 경계 등 외부에서 참조.</summary>
     public Bounds Area { get { EnsureArea(); return area; } }
@@ -125,8 +126,6 @@ public class MinimapGrid : MonoBehaviour
             foreach (var s in savedCells)
                 if (s != null && InRange(s.row, s.col))
                     cells[s.row, s.col].terrain = s.terrain;
-
-        CellsBuilt = true;
     }
 
     /// <summary>ASCII 지형 텍스트(주석 # 무시, "NN| chars" 또는 chars)를 파싱해 지형을 채운다.</summary>
