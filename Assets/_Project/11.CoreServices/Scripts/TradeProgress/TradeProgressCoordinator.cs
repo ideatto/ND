@@ -152,6 +152,65 @@ namespace ND.Framework
             => new ForcedRouteEventResult(false, reason, caravanId, tradeId, eventId, saveResult);
     }
 
+    public enum ForcedTradeCompletionFailureReason
+    {
+        None,
+        InvalidCaravanId,
+        InvalidTradeId,
+        TradeProgressNotFound,
+        NotTraveling,
+        TradeIdentityMismatch,
+        CaravanNotFound,
+        RuntimeCaravanNotFound,
+        RuntimeIdentityMismatch,
+        DuplicatePendingSettlement,
+        RequiredDependencyMissing,
+        SettlementFailed,
+        SaveFailed,
+        RollbackFailed
+    }
+
+    public readonly struct ForcedTradeCompletionResult
+    {
+        private ForcedTradeCompletionResult(
+            bool succeeded,
+            ForcedTradeCompletionFailureReason failureReason,
+            string caravanId,
+            string tradeId,
+            SaveResult saveResult)
+        {
+            Succeeded = succeeded;
+            FailureReason = failureReason;
+            CaravanId = caravanId ?? string.Empty;
+            TradeId = tradeId ?? string.Empty;
+            SaveResult = saveResult;
+        }
+
+        public bool Succeeded { get; }
+        public ForcedTradeCompletionFailureReason FailureReason { get; }
+        public string CaravanId { get; }
+        public string TradeId { get; }
+        public SaveResult SaveResult { get; }
+
+        public static ForcedTradeCompletionResult Success(
+            string caravanId,
+            string tradeId,
+            SaveResult saveResult)
+            => new ForcedTradeCompletionResult(
+                true,
+                ForcedTradeCompletionFailureReason.None,
+                caravanId,
+                tradeId,
+                saveResult);
+
+        public static ForcedTradeCompletionResult Failure(
+            ForcedTradeCompletionFailureReason reason,
+            string caravanId,
+            string tradeId,
+            SaveResult saveResult = null)
+            => new ForcedTradeCompletionResult(false, reason, caravanId, tradeId, saveResult);
+    }
+
     /// <summary>
     /// 무역 진행률, 정산 생성, 정산 claim을 저장 데이터와 Core caravan 상태에 반영하는 coordinator이다.
     /// </summary>
@@ -780,6 +839,189 @@ namespace ND.Framework
                 $"Route event occurred after save. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, RouteId: {route.Id}, EventId: {normalizedEventId}, CheckIndex: -1, Forced: True, Offline: False, Fatal: {processResult.BecameFatal}");
             return ForcedRouteEventResult.Success(
                 normalizedCaravanId, normalizedTradeId, normalizedEventId, saveResult);
+        }
+
+        /// <summary>
+        /// 명시된 Caravan과 trade가 모두 일치하는 Traveling 무역 하나를 도착 정산 대기로 전환한다.
+        /// </summary>
+        /// <returns>
+        /// 저장까지 성공한 경우에만 성공한다. 검증, 정산 생성 또는 저장 실패 시 성공 알림을 발행하지 않으며
+        /// 이 호출이 변경한 저장 데이터, runtime Caravan, 정산 cache를 원래 상태로 복원한다.
+        /// </returns>
+        public ForcedTradeCompletionResult TryForceCompleteTrade(string caravanId, string tradeId)
+        {
+            var normalizedCaravanId = caravanId?.Trim() ?? string.Empty;
+            var normalizedTradeId = tradeId?.Trim() ?? string.Empty;
+            if (normalizedCaravanId.Length == 0)
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.InvalidCaravanId,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            if (normalizedTradeId.Length == 0)
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.InvalidTradeId,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+
+            var saveData = GetSaveData();
+            if (!SaveDataLookup.TryGetTradeProgress(saveData, normalizedCaravanId, out var progress))
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.TradeProgressNotFound,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            if (progress.state != TradeProgressState.Traveling)
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.NotTraveling,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            if (!string.Equals(progress.activeTradeId, normalizedTradeId, StringComparison.Ordinal))
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.TradeIdentityMismatch,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            if (!SaveDataLookup.TryGetCaravan(saveData, normalizedCaravanId, out var caravanSave))
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.CaravanNotFound,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            if (!TryGetRuntimeCaravan(normalizedCaravanId, out var runtimeCaravan)
+                || runtimeCaravan == null)
+            {
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.RuntimeCaravanNotFound,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            }
+            if (!string.Equals(caravanSave.caravanId, normalizedCaravanId, StringComparison.Ordinal)
+                || !string.Equals(runtimeCaravan.caravanId, normalizedCaravanId, StringComparison.Ordinal))
+            {
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.RuntimeIdentityMismatch,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            }
+            if (SaveDataLookup.TryGetPendingSettlement(
+                    saveData, normalizedCaravanId, normalizedTradeId, out _))
+            {
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.DuplicatePendingSettlement,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            }
+            if (saveData.pendingSettlements == null || tradeProgressRecorder == null
+                || saveService == null || gameTimeProvider == null)
+            {
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.RequiredDependencyMissing,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            }
+
+            var saveDataSnapshot = JsonUtility.ToJson(saveData);
+            var runtimeCaravanSnapshot = JsonUtility.ToJson(runtimeCaravan);
+            var previousSettlementTradeId = LastSettlementTradeId;
+            var previousSettlementResult = LastSettlementResult;
+            var deferredEvents = new List<SettlementNotification>();
+
+            SyncElapsedInGameSeconds(progress, caravanSave, runtimeCaravan, gameTimeProvider.CurrentUtc);
+            JourneyRunner.SetProgress(runtimeCaravan, JourneyRunner.ArrivalProgress);
+            CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
+            if (!SettleTrade(
+                    saveData,
+                    progress,
+                    caravanSave,
+                    runtimeCaravan,
+                    normalizedCaravanId,
+                    normalizedTradeId,
+                    deferredEvents))
+            {
+                if (!TryRestoreForcedTradeCompletion(
+                        saveData,
+                        runtimeCaravan,
+                        saveDataSnapshot,
+                        runtimeCaravanSnapshot,
+                        previousSettlementTradeId,
+                        previousSettlementResult,
+                        normalizedCaravanId,
+                        normalizedTradeId))
+                {
+                    return ForcedTradeCompletionResult.Failure(
+                        ForcedTradeCompletionFailureReason.RollbackFailed,
+                        normalizedCaravanId,
+                        normalizedTradeId);
+                }
+
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.SettlementFailed,
+                    normalizedCaravanId,
+                    normalizedTradeId);
+            }
+
+            var saveResult = saveService.Save(saveData);
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                if (!TryRestoreForcedTradeCompletion(
+                        saveData,
+                        runtimeCaravan,
+                        saveDataSnapshot,
+                        runtimeCaravanSnapshot,
+                        previousSettlementTradeId,
+                        previousSettlementResult,
+                        normalizedCaravanId,
+                        normalizedTradeId))
+                {
+                    FrameworkLog.Error(
+                        $"Force trade arrival rollback failed. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, SaveFailure: {saveResult?.FailureReason}, Message: {saveResult?.Message}");
+                    return ForcedTradeCompletionResult.Failure(
+                        ForcedTradeCompletionFailureReason.RollbackFailed,
+                        normalizedCaravanId,
+                        normalizedTradeId,
+                        saveResult);
+                }
+
+                FrameworkLog.Warning(
+                    $"Force trade arrival rolled back because save failed. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, SaveFailure: {saveResult?.FailureReason}, Message: {saveResult?.Message}");
+                return ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.SaveFailed,
+                    normalizedCaravanId,
+                    normalizedTradeId,
+                    saveResult);
+            }
+
+            PublishSettlementNotifications(saveData, deferredEvents, isOfflineRestore: false);
+            FrameworkLog.Info(
+                $"Force trade arrival succeeded. CaravanId: {normalizedCaravanId}, TradeId: {normalizedTradeId}, ProgressState: {progress.state}");
+            return ForcedTradeCompletionResult.Success(
+                normalizedCaravanId,
+                normalizedTradeId,
+                saveResult);
+        }
+
+        private bool TryRestoreForcedTradeCompletion(
+            SaveData saveData,
+            CaravanData runtimeCaravan,
+            string saveDataSnapshot,
+            string runtimeCaravanSnapshot,
+            string previousSettlementTradeId,
+            JourneyResultData previousSettlementResult,
+            string caravanId,
+            string tradeId)
+        {
+            try
+            {
+                JsonUtility.FromJsonOverwrite(saveDataSnapshot, saveData);
+                JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, runtimeCaravan);
+                LastSettlementTradeId = previousSettlementTradeId;
+                LastSettlementResult = previousSettlementResult;
+                economySettlementBridge.ClearPending(caravanId, tradeId);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error(
+                    $"Force trade arrival rollback failed. CaravanId: {caravanId}, TradeId: {tradeId}, Error: {exception.Message}");
+                return false;
+            }
         }
 
         private bool ProcessRouteEvents(

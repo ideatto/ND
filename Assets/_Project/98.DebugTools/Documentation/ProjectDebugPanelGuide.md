@@ -78,3 +78,63 @@ Assets/_Project/98.DebugTools/Prefabs/ProjectDebugCanvas.prefab
 - F12 입력은 Input System Package의 현재 `Keyboard` 장치를 사용합니다. 키보드 장치가 없는 환경에서는 입력을 안전하게 무시합니다.
 - 프리팹 배치 없이 자동 생성되지는 않습니다. Scene 직접 수정 금지 조건에 따라 각 테스트 Scene에서 명시적으로 배치해야 합니다.
 - Unity Editor 컴파일, 실제 Scene 흐름, Player 빌드 검증은 Unity 환경에서 수행해야 합니다.
+
+## Monitoring behavior
+
+Monitoring sections are read-only. Opening, closing, scrolling, periodic refreshing, IMGUI Layout, and Repaint do not mutate game state.
+
+The panel is compiled only when `UNITY_EDITOR` or `DEVELOPMENT_BUILD` is defined. It is not available in a normal Release build.
+
+## Force Arrival command
+
+`Force Selected Trade to Arrival` is enabled only when the current selected Caravan has an exact matching progress entry whose state is `Traveling` and whose active trade ID is non-empty.
+
+The displayed snapshot is presentation-only. On every click, the panel resolves the current `FrameworkRoot.Instance`, `CurrentSaveData`, `selectedCaravanId`, and matching `tradeProgressEntries` entry again. It validates the entry's exact `caravanId` and `activeTradeId`, then calls:
+
+```text
+TryForceCompleteTrade(caravanId, tradeId)
+```
+
+The persistent `Last Result` area reports structured command, identity, and Save failure details when those properties are available. After an invocation, the monitoring snapshot refreshes once.
+
+## Trade lifecycle warning
+
+The intended lifecycle is:
+
+```text
+Traveling
+-> SettlementPending / Settling
+-> Arrival Sale
+-> Claim
+```
+
+The command does not sell cargo. It does not grant Claim rewards. It does not move the trade directly to `Completed`.
+
+## Legacy command distinction
+
+`ProjectDebugPanel` does not call `CompleteTradeImmediately()`. It calls only the exact-target `TryForceCompleteTrade(caravanId, tradeId)` API through Reflection.
+
+## Currency controls
+
+The panel displays the current player-global Trading Currency and Development Currency values. Each currency has explicit `+100`, `+1,000`, and `+10,000` grant buttons plus a separate custom input and `Add` button.
+
+Custom amounts accept plain positive whole numbers representable by `long`. Empty input, zero, negative values, decimal text, non-numeric text, and values above `long.MaxValue` are rejected without invoking a command. The controls do not subtract, set, or reset currency.
+
+Each explicit grant calls the matching Framework debug command through Reflection:
+
+```text
+TryAddTradingCurrency(long amount)
+TryAddDevelopmentCurrency(long amount)
+```
+
+The panel does not directly edit SaveData and does not call Save itself. A valid Framework grant performs one Save transaction; a failed Save rolls back the candidate currency change. Structured `SaveResult` success or failure details remain visible, and the panel refreshes the current SaveData values after an invocation.
+
+`TradingCurrencyChanged` is emitted only after a successful Save. Development Currency introduces no new event contract.
+
+Currency grants occur only inside explicit preset or `Add` button-click branches. Layout, Repaint, panel open or close, F12 toggling, scrolling, periodic refresh, and text editing do not grant currency.
+
+## Known verification limitations
+
+- Failed-grade visual routing was not manually exercised.
+- Full Play Mode exit/restart was not exercised; the canonical API restore path passed.
+- Currency persistence was verified through the Save transaction and JSON Save/Load round trip, not a full application restart.

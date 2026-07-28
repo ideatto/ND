@@ -6,6 +6,7 @@
  * - Editor와 Development Build에서 Framework 공개 상태를 읽기 전용으로 표시한다.
  *
  * Main Features
+ * - Monitoring is read-only; force-arrival and currency grants mutate only from explicit button clicks.
  * - F12로 패널을 열고 닫는다.
  * - Framework가 없거나 초기화 중이어도 N/A 상태로 안전하게 표시한다.
  * - CoreServices가 predefined assembly에 있으므로 공개 멤버를 런타임 리플렉션으로 조회한다.
@@ -15,6 +16,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
@@ -26,6 +28,9 @@ namespace ND.DebugTools
     /// <summary>
     /// 프로젝트 Framework 상태를 변경하지 않고 조회하는 개발 빌드 전용 패널이다.
     /// </summary>
+    /// <remarks>
+    /// Monitoring remains read-only. Explicit command buttons revalidate current Framework state before invoking one debug mutation command.
+    /// </remarks>
     public sealed class ProjectDebugPanel : MonoBehaviour
     {
         private const string FrameworkRootTypeName = "ND.Framework.FrameworkRoot";
@@ -42,6 +47,10 @@ namespace ND.DebugTools
         private GUIStyle labelStyle;
         private Type frameworkRootType;
         private string snapshot = string.Empty;
+        private string lastForceArrivalResult = "No command executed.";
+        private string tradingCurrencyAmountInput = string.Empty;
+        private string developmentCurrencyAmountInput = string.Empty;
+        private string lastCurrencyResult = "No currency command executed.";
         private float nextRefreshTime;
         private bool isVisible;
         private Vector2 scrollPosition;
@@ -99,8 +108,100 @@ namespace ND.DebugTools
         {
             scrollPosition = GUILayout.BeginScrollView(scrollPosition);
             GUILayout.Label(snapshot, labelStyle);
+            DrawForceArrivalControl();
+            DrawCurrencyControls();
             GUILayout.EndScrollView();
             GUI.DragWindow(new Rect(0f, 0f, windowRect.width, 24f));
+        }
+
+        private void DrawForceArrivalControl()
+        {
+            var state = ResolveForceArrivalState();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[Selected Traveling Trade - Force Arrival]", labelStyle);
+            GUILayout.Label($"Selected Caravan ID: {FormatIdentifier(state.SelectedCaravanId)}", labelStyle);
+            GUILayout.Label($"Entry Caravan ID: {FormatIdentifier(state.EntryCaravanId)}", labelStyle);
+            GUILayout.Label($"Active Trade ID: {FormatIdentifier(state.TradeId)}", labelStyle);
+            GUILayout.Label($"State: {FormatIdentifier(state.State)}", labelStyle);
+            GUILayout.Label($"Route ID: {FormatIdentifier(state.RouteId)}", labelStyle);
+            GUILayout.Label($"Progress: {FormatProgress(state.Progress)}", labelStyle);
+            GUILayout.Label($"Availability: {(state.CanExecute ? "Ready" : state.DisabledReason)}", labelStyle);
+            GUILayout.Label("Debug mutation command.", labelStyle);
+            GUILayout.Label("Forces only the exact selected Traveling trade to arrival.", labelStyle);
+            GUILayout.Label("Does not sell cargo, claim rewards, or complete the trade.", labelStyle);
+            GUILayout.Label("The command revalidates caravanId and tradeId at click time.", labelStyle);
+
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && state.CanExecute;
+            var clicked = GUILayout.Button("Force Selected Trade to Arrival");
+            GUI.enabled = previousEnabled;
+
+            if (clicked)
+            {
+                ExecuteForceArrival();
+            }
+
+            GUILayout.Label($"Last Result: {lastForceArrivalResult}", labelStyle);
+        }
+
+        private void DrawCurrencyControls()
+        {
+            var tradingState = ResolveCurrencyState("TryAddTradingCurrency", "tradingCurrency");
+            var developmentState = ResolveCurrencyState("TryAddDevelopmentCurrency", "developmentCurrency");
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[Currency Controls]", labelStyle);
+            DrawCurrencyControl("Trading Currency", true, tradingState, ref tradingCurrencyAmountInput);
+            GUILayout.Space(4f);
+            DrawCurrencyControl("Development Currency", false, developmentState, ref developmentCurrencyAmountInput);
+            GUILayout.Label($"Last Currency Result:\n{lastCurrencyResult}", labelStyle);
+        }
+
+        private void DrawCurrencyControl(
+            string displayName,
+            bool isTradingCurrency,
+            CurrencyState state,
+            ref string amountInput)
+        {
+            GUILayout.Label(displayName, labelStyle);
+            GUILayout.Label($"Current: {FormatCurrency(state)}", labelStyle);
+            GUILayout.Label($"Availability: {(state.CanExecute ? "Ready" : state.DisabledReason)}", labelStyle);
+
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && state.CanExecute;
+            GUILayout.BeginHorizontal();
+            var add100 = GUILayout.Button("+100");
+            var add1000 = GUILayout.Button("+1,000");
+            var add10000 = GUILayout.Button("+10,000");
+            GUILayout.EndHorizontal();
+            GUI.enabled = previousEnabled;
+
+            if (add100)
+            {
+                ExecuteCurrencyGrant(isTradingCurrency, 100L);
+            }
+            else if (add1000)
+            {
+                ExecuteCurrencyGrant(isTradingCurrency, 1000L);
+            }
+            else if (add10000)
+            {
+                ExecuteCurrencyGrant(isTradingCurrency, 10000L);
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Custom:", labelStyle, GUILayout.Width(64f));
+            amountInput = GUILayout.TextField(amountInput);
+            GUI.enabled = previousEnabled && state.CanExecute;
+            var addCustom = GUILayout.Button("Add", GUILayout.Width(64f));
+            GUI.enabled = previousEnabled;
+            GUILayout.EndHorizontal();
+
+            if (addCustom)
+            {
+                ExecuteCustomCurrencyGrant(isTradingCurrency, amountInput);
+            }
         }
 
         private void HandleActiveSceneChanged(Scene previousScene, Scene nextScene)
@@ -158,6 +259,450 @@ namespace ND.DebugTools
         {
             frameworkRootType ??= FindType(FrameworkRootTypeName);
             return GetStaticMemberValue(frameworkRootType, "Instance");
+        }
+
+        private CurrencyState ResolveCurrencyState(string methodName, string currencyMemberName)
+        {
+            var state = new CurrencyState();
+
+            try
+            {
+                state.Root = GetFrameworkRoot();
+                if (state.Root == null)
+                {
+                    state.DisabledReason = "Framework is unavailable";
+                    return state;
+                }
+
+                state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
+                if (state.DebugCommands == null)
+                {
+                    state.DisabledReason = "DebugCommands is unavailable";
+                    return state;
+                }
+
+                state.Method = FindCurrencyMethod(state.DebugCommands.GetType(), methodName);
+                if (state.Method == null)
+                {
+                    state.DisabledReason = "Currency API is unavailable";
+                    return state;
+                }
+
+                var saveData = GetMemberValue(state.Root, "CurrentSaveData");
+                if (saveData == null)
+                {
+                    state.DisabledReason = "Current SaveData is unavailable";
+                    return state;
+                }
+
+                var player = GetMemberValue(saveData, "player");
+                if (player == null)
+                {
+                    state.DisabledReason = "Player data is unavailable";
+                    return state;
+                }
+
+                if (!TryGetMemberValue(player, currencyMemberName, out var value) || !(value is long currentValue))
+                {
+                    state.DisabledReason = "Currency value is unavailable";
+                    return state;
+                }
+
+                state.CurrentValue = currentValue;
+                state.HasCurrentValue = true;
+                state.CanExecute = true;
+                state.DisabledReason = string.Empty;
+                return state;
+            }
+            catch (Exception exception)
+            {
+                state.DisabledReason = $"Currency status unavailable: {exception.GetType().Name}";
+                return state;
+            }
+        }
+
+        private static MethodInfo FindCurrencyMethod(Type debugCommandsType, string methodName)
+        {
+            if (debugCommandsType == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var methods = debugCommandsType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                for (var index = 0; index < methods.Length; index++)
+                {
+                    var method = methods[index];
+                    if (!string.Equals(method.Name, methodName, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var parameters = method.GetParameters();
+                    if (parameters.Length == 1
+                        && parameters[0].ParameterType == typeof(long)
+                        && string.Equals(method.ReturnType.FullName, "ND.Framework.SaveResult", StringComparison.Ordinal))
+                    {
+                        return method;
+                    }
+                }
+            }
+            catch (Exception exception) when (IsReflectionAccessException(exception))
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private void ExecuteCustomCurrencyGrant(bool isTradingCurrency, string input)
+        {
+            var trimmedInput = input?.Trim();
+            if (string.IsNullOrEmpty(trimmedInput))
+            {
+                lastCurrencyResult = "Currency grant not executed.\nReason: Enter a positive whole number.";
+                return;
+            }
+
+            if (!long.TryParse(trimmedInput, NumberStyles.None, CultureInfo.InvariantCulture, out var amount))
+            {
+                lastCurrencyResult = ContainsOnlyAsciiDigits(trimmedInput)
+                    ? "Currency grant not executed.\nReason: Amount is too large or is not a positive whole number."
+                    : "Currency grant not executed.\nReason: Enter a positive whole number.";
+                return;
+            }
+
+            if (amount <= 0L)
+            {
+                lastCurrencyResult = "Currency grant not executed.\nReason: Enter a positive whole number.";
+                return;
+            }
+
+            ExecuteCurrencyGrant(isTradingCurrency, amount);
+        }
+
+        private static bool ContainsOnlyAsciiDigits(string value)
+        {
+            for (var index = 0; index < value.Length; index++)
+            {
+                if (value[index] < '0' || value[index] > '9')
+                {
+                    return false;
+                }
+            }
+
+            return value.Length > 0;
+        }
+
+        private void ExecuteCurrencyGrant(bool isTradingCurrency, long amount)
+        {
+            var displayName = isTradingCurrency ? "Trading Currency" : "Development Currency";
+            var methodName = isTradingCurrency ? "TryAddTradingCurrency" : "TryAddDevelopmentCurrency";
+            var memberName = isTradingCurrency ? "tradingCurrency" : "developmentCurrency";
+            var state = ResolveCurrencyState(methodName, memberName);
+
+            if (amount <= 0L)
+            {
+                lastCurrencyResult = $"{displayName} grant not executed.\nRequested: {amount}\nReason: Enter a positive whole number.";
+                return;
+            }
+
+            if (!state.CanExecute)
+            {
+                lastCurrencyResult =
+                    $"{displayName} grant invocation failed.\nRequested: {amount:N0}\nReason: {state.DisabledReason}.";
+                RefreshSnapshot();
+                return;
+            }
+
+            try
+            {
+                var result = state.Method.Invoke(state.DebugCommands, new object[] { amount });
+                var refreshedState = ResolveCurrencyState(methodName, memberName);
+                lastCurrencyResult = FormatCurrencyResult(result, displayName, amount, refreshedState);
+            }
+            catch (TargetInvocationException exception)
+            {
+                var cause = exception.InnerException ?? exception;
+                lastCurrencyResult =
+                    $"{displayName} grant invocation failed.\nRequested: {amount:N0}\nReason: {cause.GetType().Name}: {cause.Message}";
+            }
+            catch (Exception exception) when (
+                IsReflectionAccessException(exception)
+                || exception is InvalidOperationException)
+            {
+                lastCurrencyResult =
+                    $"{displayName} grant invocation failed.\nRequested: {amount:N0}\nReason: {exception.GetType().Name}: {exception.Message}";
+            }
+
+            RefreshSnapshot();
+        }
+
+        private static string FormatCurrencyResult(
+            object result,
+            string displayName,
+            long requestedAmount,
+            CurrencyState refreshedState)
+        {
+            if (result == null)
+            {
+                return $"{displayName} grant invocation failed.\nRequested: {requestedAmount:N0}\nReason: Command returned no result.";
+            }
+
+            if (!(GetMemberValue(result, "Succeeded") is bool succeeded))
+            {
+                return $"{displayName} grant invocation failed.\nRequested: {requestedAmount:N0}\nReason: Unexpected result shape.";
+            }
+
+            var builder = new StringBuilder(256);
+            if (succeeded)
+            {
+                builder.AppendLine($"{displayName} grant succeeded.");
+                builder.AppendLine($"Added: {requestedAmount:N0}");
+                builder.Append($"Current: {(refreshedState.HasCurrentValue ? refreshedState.CurrentValue.ToString("N0", CultureInfo.InvariantCulture) : "N/A")}");
+                return builder.ToString();
+            }
+
+            builder.AppendLine($"{displayName} grant failed.");
+            builder.AppendLine($"Requested: {requestedAmount:N0}");
+            AppendResultMember(builder, "Category", result, "FailedDataCategory");
+            AppendResultMember(builder, "Reason", result, "FailureReason");
+            AppendResultMember(builder, "Message", result, "Message");
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void AppendResultMember(
+            StringBuilder builder,
+            string label,
+            object result,
+            string memberName)
+        {
+            if (!TryGetMemberValue(result, memberName, out var value) || value == null)
+            {
+                return;
+            }
+
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                builder.AppendLine($"{label}: {text}");
+            }
+        }
+
+        private static string FormatCurrency(CurrencyState state)
+        {
+            return state.HasCurrentValue
+                ? state.CurrentValue.ToString("N0", CultureInfo.InvariantCulture)
+                : "N/A";
+        }
+
+        private ForceArrivalState ResolveForceArrivalState()
+        {
+            var state = new ForceArrivalState();
+
+            try
+            {
+                state.Root = GetFrameworkRoot();
+                if (state.Root == null)
+                {
+                    state.DisabledReason = "Framework is unavailable";
+                    return state;
+                }
+
+                state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
+                if (state.DebugCommands == null)
+                {
+                    state.DisabledReason = "DebugCommands is unavailable";
+                    return state;
+                }
+
+                state.Method = FindForceArrivalMethod(state.DebugCommands.GetType());
+                if (state.Method == null)
+                {
+                    state.DisabledReason = "Exact force-arrival API is unavailable";
+                    return state;
+                }
+
+                var saveData = GetMemberValue(state.Root, "CurrentSaveData");
+                if (saveData == null)
+                {
+                    state.DisabledReason = "Current SaveData is unavailable";
+                    return state;
+                }
+
+                state.SelectedCaravanId = GetStringMember(saveData, "selectedCaravanId");
+                if (string.IsNullOrWhiteSpace(state.SelectedCaravanId))
+                {
+                    state.DisabledReason = "No selected Caravan";
+                    return state;
+                }
+
+                if (!TryGetMemberValue(saveData, "tradeProgressEntries", out var entriesValue))
+                {
+                    state.DisabledReason = "Selected Caravan progress not found (exact entry list unavailable)";
+                    return state;
+                }
+
+                var entry = FindFirstByCaravanId(ReadCollection(entriesValue), state.SelectedCaravanId);
+                if (entry == null)
+                {
+                    state.DisabledReason = "Selected Caravan progress not found";
+                    return state;
+                }
+
+                state.EntryCaravanId = GetStringMember(entry, "caravanId");
+                state.TradeId = GetStringMember(entry, "activeTradeId");
+                state.State = Convert.ToString(GetMemberValue(entry, "state"));
+                state.RouteId = GetStringMember(entry, "activeRouteId");
+                state.Progress = GetMemberValue(entry, "progress01");
+
+                if (string.IsNullOrWhiteSpace(state.EntryCaravanId)
+                    || !IdEquals(state.EntryCaravanId, state.SelectedCaravanId))
+                {
+                    state.DisabledReason = "Selected entry identity mismatch";
+                    return state;
+                }
+
+                if (string.IsNullOrWhiteSpace(state.TradeId))
+                {
+                    state.DisabledReason = "No active trade";
+                    return state;
+                }
+
+                if (!string.Equals(state.State, "Traveling", StringComparison.Ordinal))
+                {
+                    state.DisabledReason = "Selected trade is not Traveling";
+                    return state;
+                }
+
+                state.CanExecute = true;
+                state.DisabledReason = string.Empty;
+                return state;
+            }
+            catch (Exception exception)
+            {
+                state.CanExecute = false;
+                state.DisabledReason = $"Force-arrival status unavailable: {exception.GetType().Name}";
+                return state;
+            }
+        }
+
+        private static MethodInfo FindForceArrivalMethod(Type debugCommandsType)
+        {
+            if (debugCommandsType == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var methods = debugCommandsType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                for (var index = 0; index < methods.Length; index++)
+                {
+                    var method = methods[index];
+                    if (!string.Equals(method.Name, "TryForceCompleteTrade", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var parameters = method.GetParameters();
+                    if (parameters.Length == 2
+                        && parameters[0].ParameterType == typeof(string)
+                        && parameters[1].ParameterType == typeof(string))
+                    {
+                        return method;
+                    }
+                }
+            }
+            catch (Exception exception) when (IsReflectionAccessException(exception))
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private void ExecuteForceArrival()
+        {
+            var state = ResolveForceArrivalState();
+            if (!state.CanExecute)
+            {
+                lastForceArrivalResult = $"Force arrival not executed. Reason: {state.DisabledReason}.";
+                RefreshSnapshot();
+                return;
+            }
+
+            try
+            {
+                var result = state.Method.Invoke(
+                    state.DebugCommands,
+                    new object[] { state.EntryCaravanId, state.TradeId });
+                lastForceArrivalResult = FormatForceArrivalResult(result, state.EntryCaravanId, state.TradeId);
+            }
+            catch (TargetInvocationException exception)
+            {
+                var cause = exception.InnerException ?? exception;
+                lastForceArrivalResult =
+                    $"Force arrival invocation failed. Reason: {cause.GetType().Name}: {cause.Message}";
+            }
+            catch (Exception exception) when (
+                IsReflectionAccessException(exception)
+                || exception is InvalidOperationException)
+            {
+                lastForceArrivalResult =
+                    $"Force arrival invocation failed. Reason: {exception.GetType().Name}: {exception.Message}";
+            }
+
+            RefreshSnapshot();
+        }
+
+        private static string FormatForceArrivalResult(object result, string requestedCaravanId, string requestedTradeId)
+        {
+            if (result == null)
+            {
+                return "Force arrival invocation failed. Reason: command returned no result.";
+            }
+
+            var succeededValue = GetMemberValue(result, "Succeeded");
+            if (!(succeededValue is bool succeeded))
+            {
+                return "Force arrival invocation failed. Reason: unexpected result shape.";
+            }
+
+            var caravanId = GetStringMember(result, "CaravanId");
+            var tradeId = GetStringMember(result, "TradeId");
+            caravanId = string.IsNullOrWhiteSpace(caravanId) ? requestedCaravanId : caravanId;
+            tradeId = string.IsNullOrWhiteSpace(tradeId) ? requestedTradeId : tradeId;
+
+            if (succeeded)
+            {
+                return $"Success - {FormatIdentifier(caravanId)} / {FormatIdentifier(tradeId)} is now SettlementPending.";
+            }
+
+            var builder = new StringBuilder(256);
+            builder.Append($"Force arrival failed. Reason: {FormatValue(GetMemberValue(result, "FailureReason"))}");
+            builder.Append($". Caravan: {FormatIdentifier(caravanId)}. Trade: {FormatIdentifier(tradeId)}");
+
+            var saveResult = GetMemberValue(result, "SaveResult");
+            if (saveResult != null)
+            {
+                builder.Append($". Save Succeeded: {FormatValue(GetMemberValue(saveResult, "Succeeded"))}");
+                builder.Append($". Save Failure: {FormatValue(GetMemberValue(saveResult, "FailureReason"))}");
+                var message = GetStringMember(saveResult, "Message");
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    builder.Append($". Message: {message}");
+                }
+
+                var failedDataCategory = GetMemberValue(saveResult, "FailedDataCategory");
+                if (failedDataCategory != null)
+                {
+                    builder.Append($". Failed Data Category: {FormatValue(failedDataCategory)}");
+                }
+            }
+
+            return builder.ToString();
         }
 
         private static Type FindType(string fullName)
@@ -615,6 +1160,32 @@ namespace ND.DebugTools
             {
                 return "Invalid";
             }
+        }
+
+        private sealed class ForceArrivalState
+        {
+            public object Root;
+            public object DebugCommands;
+            public MethodInfo Method;
+            public string SelectedCaravanId;
+            public string EntryCaravanId;
+            public string TradeId;
+            public string State;
+            public string RouteId;
+            public object Progress;
+            public bool CanExecute;
+            public string DisabledReason;
+        }
+
+        private sealed class CurrencyState
+        {
+            public object Root;
+            public object DebugCommands;
+            public MethodInfo Method;
+            public long CurrentValue;
+            public bool HasCurrentValue;
+            public bool CanExecute;
+            public string DisabledReason;
         }
     }
 }

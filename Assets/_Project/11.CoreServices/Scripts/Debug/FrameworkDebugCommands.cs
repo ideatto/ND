@@ -35,6 +35,8 @@
  * - ForceRouteEvent는 Core 로드/약탈 적용 API가 준비되기 전까지 Framework stub hook이다.
  * - Related Documentation: Docs/Personal_Documents/CSU/2026-07-11-framework-m2-planning-handoff.md
  */
+using System;
+
 namespace ND.Framework
 {
     /// <summary>
@@ -43,6 +45,8 @@ namespace ND.Framework
     public sealed class FrameworkDebugCommands
     {
         private readonly GameTimeService gameTimeService;
+        private readonly Func<SaveData> getCurrentSaveData;
+        private readonly ISaveService saveService;
 
         private string pendingForcedRouteEventId = string.Empty;
         private string pendingForcedRouteEventTradeId = string.Empty;
@@ -51,9 +55,14 @@ namespace ND.Framework
         /// debug command service를 생성한다.
         /// </summary>
         /// <param name="gameTimeService">time scale 변경을 수행할 GameTimeService.</param>
-        public FrameworkDebugCommands(GameTimeService gameTimeService)
+        public FrameworkDebugCommands(
+            GameTimeService gameTimeService,
+            Func<SaveData> getCurrentSaveData = null,
+            ISaveService saveService = null)
         {
             this.gameTimeService = gameTimeService;
+            this.getCurrentSaveData = getCurrentSaveData;
+            this.saveService = saveService;
         }
 
         /// <summary>
@@ -107,6 +116,56 @@ namespace ND.Framework
         {
             // coordinator가 이벤트를 받아 실제 progress와 settlement 생성을 처리한다.
             FrameworkEvents.RaiseCompleteTradeRequested();
+        }
+
+        /// <summary>
+        /// 명시된 Caravan과 trade가 모두 일치하는 Traveling 무역을 도착 정산 대기로 전환한다.
+        /// </summary>
+        public ForcedTradeCompletionResult TryForceCompleteTrade(string caravanId, string tradeId)
+        {
+            var coordinator = FrameworkRoot.Instance?.TradeProgressCoordinator;
+            return coordinator != null
+                ? coordinator.TryForceCompleteTrade(caravanId, tradeId)
+                : ForcedTradeCompletionResult.Failure(
+                    ForcedTradeCompletionFailureReason.RequiredDependencyMissing,
+                    caravanId,
+                    tradeId);
+        }
+
+        /// <summary>
+        /// 플레이어 공용 무역 화폐를 양수만큼 증가시키고 저장 성공 후 변경 이벤트를 발행한다.
+        /// </summary>
+        /// <param name="amount">추가할 무역 화폐. 0보다 커야 한다.</param>
+        /// <returns>
+        /// 저장까지 완료되면 성공 결과를 반환한다.
+        /// 입력, 의존성, 오버플로 또는 저장 실패 시 실패 결과를 반환하며 화폐 값은 변경 전 상태로 유지된다.
+        /// </returns>
+        public SaveResult TryAddTradingCurrency(long amount)
+        {
+            return TryAddCurrency(
+                "tradingCurrency",
+                amount,
+                player => player.tradingCurrency,
+                (player, value) => player.tradingCurrency = value,
+                FrameworkEvents.RaiseTradingCurrencyChanged);
+        }
+
+        /// <summary>
+        /// 플레이어 공용 개발 화폐를 양수만큼 증가시킨다.
+        /// </summary>
+        /// <param name="amount">추가할 개발 화폐. 0보다 커야 한다.</param>
+        /// <returns>
+        /// 저장까지 완료되면 성공 결과를 반환한다.
+        /// 입력, 의존성, 오버플로 또는 저장 실패 시 실패 결과를 반환하며 화폐 값은 변경 전 상태로 유지된다.
+        /// </returns>
+        public SaveResult TryAddDevelopmentCurrency(long amount)
+        {
+            return TryAddCurrency(
+                "developmentCurrency",
+                amount,
+                player => player.developmentCurrency,
+                (player, value) => player.developmentCurrency = value,
+                null);
         }
 
         /// <summary>
@@ -246,6 +305,73 @@ namespace ND.Framework
             pendingForcedRouteEventId = string.Empty;
             pendingForcedRouteEventTradeId = string.Empty;
             return true;
+        }
+
+        private SaveResult TryAddCurrency(
+            string category,
+            long amount,
+            Func<PlayerSaveData, long> read,
+            Action<PlayerSaveData, long> write,
+            Action<long> publishSuccess)
+        {
+            if (amount <= 0)
+            {
+                return CurrencyFailure(
+                    category,
+                    $"Currency add requires a positive amount. Requested: {amount}.");
+            }
+
+            var root = FrameworkRoot.Instance;
+            var data = getCurrentSaveData != null
+                ? getCurrentSaveData()
+                : root != null ? root.CurrentSaveData : null;
+            var persistence = saveService ?? (root != null ? root.SaveService : null);
+            if (data == null || data.player == null || persistence == null)
+            {
+                return CurrencyFailure(
+                    category,
+                    $"Currency add dependencies are unavailable. Requested: {amount}.");
+            }
+
+            var previousValue = read(data.player);
+            long nextValue;
+            try
+            {
+                nextValue = checked(previousValue + amount);
+            }
+            catch (OverflowException)
+            {
+                return CurrencyFailure(
+                    category,
+                    $"Currency add overflowed. Previous: {previousValue}, Requested: {amount}.");
+            }
+
+            write(data.player, nextValue);
+            var result = persistence.Save(data);
+            if (result == null || !result.Succeeded)
+            {
+                write(data.player, previousValue);
+                var failure = result ?? SaveResult.Failure(
+                    SaveFailureReason.Unknown,
+                    "Save service returned no result.",
+                    category);
+                FrameworkLog.Warning(
+                    $"Currency add failed. Currency: {category}, Previous: {previousValue}, Requested: {amount}, " +
+                    $"FailureReason: {failure.FailureReason}, Message: {failure.Message}");
+                return failure;
+            }
+
+            publishSuccess?.Invoke(nextValue);
+            FrameworkLog.Info(
+                $"Currency add succeeded. Currency: {category}, Previous: {previousValue}, " +
+                $"Added: {amount}, New: {nextValue}");
+            return result;
+        }
+
+        private static SaveResult CurrencyFailure(string category, string message)
+        {
+            FrameworkLog.Warning(message);
+            return SaveResult.Failure(SaveFailureReason.InvalidData, message, category);
         }
 
         private static bool TryGetWritableWorld(
