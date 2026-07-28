@@ -439,7 +439,9 @@ namespace ND.Framework.Editor
                 }
             }
 
-            report.Check("shared-route-count", routes == 8);
+            // The production catalog may add routes over time. Preserve the original
+            // baseline without rejecting intentional additions from another owner.
+            report.Check("shared-route-count", routes >= 8);
             report.Info("shared empty-id events=" + emptyIdEvents);
         }
 

@@ -32,40 +32,6 @@ public sealed class TownTradePreparationEntryController : MonoBehaviour
 
     public bool TryBeginTradePreparation()
     {
-        return TryOpenTradePreparationWithoutSelection();
-    }
-
-    public bool TryBeginTradePreparation(string caravanId)
-    {
-        return TryBeginTradePreparationInternal(caravanId, false);
-    }
-
-    private bool TryOpenTradePreparationWithoutSelection()
-    {
-        if (tradeScreenPresenter == null)
-        {
-            Debug.LogError("[Town Trade] Trade screen presenter is not connected.", this);
-            return false;
-        }
-
-        FrameworkRoot root = FrameworkRoot.Instance;
-        if (root == null || root.InGameScreenRouter == null)
-            return false;
-
-        InGameScreenState currentState = root.InGameScreenRouter.CurrentScreenState;
-        if (currentState != InGameScreenState.Preparation
-            && (currentState != InGameScreenState.Town
-                || !root.TryBeginTradePreparationFromTown()))
-        {
-            return false;
-        }
-
-        tradeScreenPresenter.OpenTradeScreen();
-        return true;
-    }
-
-    private bool TryBeginTradePreparationInternal(string caravanId, bool selectOnlyAvailable)
-    {
         if (tradeScreenPresenter == null)
         {
             Debug.LogError(
@@ -74,58 +40,19 @@ public sealed class TownTradePreparationEntryController : MonoBehaviour
             return false;
         }
 
-        FrameworkRoot root = FrameworkRoot.Instance;
-        if (root == null || root.InGameScreenRouter == null)
-        {
-            Debug.LogWarning(
-                "[Town Trade] Trade preparation could not be started from the current state.",
-                this);
-            return false;
-        }
-
         ResolveRuntimeContext();
         if (runtimeContext == null)
-            return false;
-
-        string selectedCaravanId = caravanId;
-        bool canSelect = selectOnlyAvailable
-            ? runtimeContext.TryGetOnlyAvailableDepartureCaravanId(out selectedCaravanId)
-            : runtimeContext.CanSelectDepartureCaravan(selectedCaravanId);
-        if (!canSelect)
         {
             Debug.LogWarning(
-                selectOnlyAvailable
-                    ? "[Town Trade] Exactly one selectable departure Caravan is required."
-                    : $"[Town Trade] Caravan '{caravanId}' is not a selectable departure option.",
+                "[Town Trade] Caravan selection data is not connected.",
                 this);
             return false;
         }
 
-        InGameScreenState currentState = root.InGameScreenRouter.CurrentScreenState;
-        if (currentState != InGameScreenState.Preparation
-            && (currentState != InGameScreenState.Town
-                || !root.TryBeginTradePreparationFromTown()))
-        {
-            Debug.LogWarning(
-                "[Town Trade] Trade preparation could not be started from the current state.",
-                this);
-            return false;
-        }
-
-        // Entering Preparation initializes a fresh Runtime Draft. Select the Caravan only after
-        // that transition, otherwise HandleScreenChanged would immediately erase the selected ID.
-        bool selected = runtimeContext.SelectDepartureCaravan(selectedCaravanId);
-        if (!selected)
-        {
-            Debug.LogWarning(
-                selectOnlyAvailable
-                    ? "[Town Trade] Exactly one selectable departure Caravan is required."
-                    : $"[Town Trade] Caravan '{caravanId}' is not a selectable departure option.",
-                this);
-            return false;
-        }
-
-        tradeScreenPresenter.OpenTradeScreen();
+        // The global screen state can represent another selected Caravan that is Traveling.
+        // Refresh all options and let the selection panel enforce each Caravan's canSelect flag.
+        runtimeContext.RefreshFromFramework();
+        tradeScreenPresenter.OpenPreparationSelection();
         return true;
     }
 

@@ -96,14 +96,13 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         currentCanClaim = viewData.CanClaim;
         currentFailureMessage = viewData.IsFailed ? $"실패 사유  {viewData.FailureReason}" : string.Empty;
         currentRouteTitle = ResolveFrameworkRouteTitle();
-        var settlement = new SettlementBreakdown {
-            TradeId = viewData.TradeId, TotalRevenue = viewData.Revenue,
-            TotalExpense = viewData.Cost, GrossTradeProfit = viewData.Revenue - viewData.Cost,
-            NetProfit = viewData.NetProfit
-        };
-        if (viewData.Revenue > 0) settlement.Entries.Add(new SettlementEntry { EntryType = SettlementEntryType.ItemSaleRevenue, Amount = viewData.Revenue, IsPositive = true, SourceId = "trade" });
-        if (viewData.Cost > 0) settlement.Entries.Add(new SettlementEntry { EntryType = SettlementEntryType.ItemPurchaseCost, Amount = viewData.Cost, IsPositive = false, SourceId = "trade" });
-        ShowInternal(new EconomyM1SettlementViewData { Success = true, Settlement = settlement }, null, viewData.TravelSeconds);
+        if (viewData.EconomySettlement == null || viewData.EconomySettlement.Settlement == null)
+        {
+            ShowNoSettlement("Itemized settlement result is unavailable.");
+            return;
+        }
+
+        ShowInternal(viewData.EconomySettlement, null, viewData.TravelSeconds);
     }
 
     public void ShowNoSettlement(string reason)

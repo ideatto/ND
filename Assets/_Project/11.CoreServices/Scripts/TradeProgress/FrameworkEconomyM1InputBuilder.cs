@@ -72,6 +72,15 @@ namespace ND.Framework
             var cartRepairCost = journeyResult.durabilityLost > 0f
                 ? (long)journeyResult.durabilityLost * DurabilityRepairCostPerPoint
                 : 0L;
+            long mercenaryCost = routeDefinition.BaseMercenaryCost;
+            if (TryGetExactPreparation(
+                    saveData,
+                    progress.caravanId,
+                    progress.activeTradeId,
+                    out TradePreparationCommitSaveData preparation))
+            {
+                mercenaryCost = System.Math.Max(0L, preparation.mercenaryCost);
+            }
 
             return new EconomyM1LoopInput
             {
@@ -85,7 +94,7 @@ namespace ND.Framework
                 // 먹이는 출발 마켓에서 일반 상품처럼 구매되어 이미 tradingCurrency에 반영된다.
                 // 경로 기본 식량비까지 정산에서 다시 차감하면 같은 먹이를 이중 결제하게 된다.
                 FoodCost = 0L,
-                MercenaryCost = routeDefinition.BaseMercenaryCost,
+                MercenaryCost = mercenaryCost,
                 CartRepairCost = cartRepairCost,
                 LoanRepayment = 0L,
                 DevelopmentCurrencyReward = 0L,
@@ -93,6 +102,43 @@ namespace ND.Framework
                 PlayerGrowthLevel = saveData.player.playerGrowthLevel,
                 CaravanGrowthLevel = saveData.player.caravanGrowthLevel
             };
+        }
+
+        private static bool TryGetExactPreparation(
+            SaveData saveData,
+            string caravanId,
+            string tradeId,
+            out TradePreparationCommitSaveData preparation)
+        {
+            preparation = null;
+            if (saveData?.tradePreparationCommits == null
+                || string.IsNullOrWhiteSpace(caravanId)
+                || string.IsNullOrWhiteSpace(tradeId))
+            {
+                return false;
+            }
+
+            foreach (TradePreparationCommitSaveData candidate in saveData.tradePreparationCommits)
+            {
+                if (candidate == null || !candidate.hasCommit
+                    || !string.Equals(candidate.caravanId, caravanId, System.StringComparison.Ordinal)
+                    || !string.Equals(candidate.tradeId, tradeId, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (preparation != null)
+                {
+                    FrameworkLog.Error(
+                        $"Economy input build rejected an ambiguous preparation commit. CaravanId: {caravanId}, TradeId: {tradeId}");
+                    preparation = null;
+                    return false;
+                }
+
+                preparation = candidate;
+            }
+
+            return preparation != null;
         }
 
     }

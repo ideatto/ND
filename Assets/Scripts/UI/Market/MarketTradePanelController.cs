@@ -120,7 +120,9 @@ namespace ND.UI.Market
             }
         }
 
-        public MarketTransactionResult Commit()
+        public MarketTransactionResult Commit(
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
         {
             List<MarketTransactionLine> lines = items
                 .Where(item => item.BuyDraftQuantity > 0 || item.SellDraftQuantity > 0)
@@ -136,7 +138,9 @@ namespace ND.UI.Market
                 commands,
                 lines,
                 maximumCargoWeight,
-                maximumCargoSlots);
+                maximumCargoSlots,
+                stageBeforeSave,
+                rollbackStagedData);
             if (result.Success)
                 Refresh();
             return result;
@@ -174,7 +178,13 @@ namespace ND.UI.Market
                 {
                     ItemId = itemId,
                     Item = definition,
-                    MarketStock = stock?.Quantity ?? 0,
+                    MarketStock = Math.Max(
+                        0,
+                        (stock?.Quantity ?? 0)
+                        - CaravanCargoDraftStore.GetReservedByOtherCaravans(
+                            MarketId,
+                            CaravanId,
+                            itemId)),
                     CargoQuantity = held?.Quantity ?? 0,
                     BuyUnitPrice = stock?.UnitPrice ?? 0L,
                     SellUnitPrice = definition?.BaseSellPrice ?? 0L
@@ -287,6 +297,7 @@ namespace ND.UI.Market
         private bool arrivalSaleAccess;
         private bool townPurchaseAccess;
         private string activeCaravanId = string.Empty;
+        private int observedMarketRevision;
         private string activeTradeId = string.Empty;
 
         public event Action<IReadOnlyList<MarketTradeItemState>> StateChanged;
@@ -302,11 +313,15 @@ namespace ND.UI.Market
         private void OnEnable()
         {
             FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
+            MarketInventoryChangeTracker.Changed += HandleMarketInventoryChanged;
+            CaravanCargoDraftStore.Changed += HandleCaravanCargoDraftChanged;
         }
 
         private void OnDisable()
         {
             FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
+            MarketInventoryChangeTracker.Changed -= HandleMarketInventoryChanged;
+            CaravanCargoDraftStore.Changed -= HandleCaravanCargoDraftChanged;
         }
 
         public void Configure(MarketData data, float cargoWeightLimit)
@@ -344,8 +359,40 @@ namespace ND.UI.Market
         }
 
         /// <summary>
+        /// Opens the market belonging to one Overview-selected Caravan. Unlike the ordinary
+        /// preparation entry point, this never relies on SaveData.selectedCaravanId or player town.
+        /// </summary>
+        public bool OpenForCaravanPreparation(string caravanId, MarketData caravanMarket)
+        {
+            FrameworkRoot root = FrameworkRoot.Instance;
+            if (root == null || root.CurrentSaveData == null || root.SaveService == null || root.GameTime == null)
+                return FailOpen(MarketInventoryMutationSession.ErrorInvalidFramework);
+            if (caravanMarket == null || string.IsNullOrWhiteSpace(caravanMarket.MarketId))
+                return FailOpen(MarketInventoryMutationSession.ErrorInvalidCatalog);
+
+            string accessError = ValidateCaravanPreparationAccess(
+                root.CurrentSaveData,
+                root.SharedGameData,
+                caravanId,
+                caravanMarket.MarketId);
+            if (!string.IsNullOrEmpty(accessError))
+                return FailOpen(accessError);
+
+            marketData = caravanMarket;
+            return OpenResolved(
+                root,
+                caravanId,
+                string.Empty,
+                MarketTradeMode.BuyAndSell,
+                allowPreparation: true,
+                isArrivalSale: false,
+                isTownPurchase: false);
+        }
+
+        /// <summary>
         /// Opens a destination market in sell-only mode for one exact Caravan and trade Pending.
-        /// The requested trade ID remains authoritative for the panel session and commit validation.
+        /// The caller resolves the MarketData from that caravan's saved pending route, and the
+        /// requested trade ID remains authoritative for panel commit validation.
         /// </summary>
         public bool OpenForArrivalSale(
             string caravanId,
@@ -469,8 +516,12 @@ namespace ND.UI.Market
                 && string.Equals(activeTradeId, requestedTradeId, StringComparison.Ordinal))
             {
                 // Repeated button input must not recreate the session and discard its draft.
+                // The shared market may have changed through another Caravan since this panel
+                // last rendered, so rebuild the presentation snapshot before showing it again.
+                bool refreshed = RefreshIfMarketInventoryChanged();
                 SetError(string.Empty);
-                RaiseStateChanged();
+                if (!refreshed)
+                    RaiseStateChanged();
                 return true;
             }
 
@@ -522,6 +573,7 @@ namespace ND.UI.Market
                 ? maximumCargoSlots
                 : ResolveMaximumCargoSlots(root.CurrentSaveData, activeCaravanId);
             model = new MarketTradePanelModel(commands, cargoWeightLimit, cargoSlotLimit);
+            observedMarketRevision = MarketInventoryChangeTracker.GetRevision(model.MarketId);
             SetError(string.Empty);
             RaiseStateChanged();
             return true;
@@ -564,6 +616,7 @@ namespace ND.UI.Market
             arrivalSaleAccess = false;
             townPurchaseAccess = false;
             activeCaravanId = string.Empty;
+            observedMarketRevision = 0;
             activeTradeId = string.Empty;
             SetError(string.Empty);
             RaiseStateChanged();
@@ -578,7 +631,56 @@ namespace ND.UI.Market
                 Close();
         }
 
-        public MarketTransactionResult Commit()
+        public bool RefreshIfMarketInventoryChanged()
+        {
+            if (model == null)
+                return false;
+
+            int currentRevision = MarketInventoryChangeTracker.GetRevision(model.MarketId);
+            if (currentRevision == observedMarketRevision)
+                return false;
+
+            model.Refresh();
+            observedMarketRevision = currentRevision;
+            RaiseStateChanged();
+            return true;
+        }
+
+        private void HandleMarketInventoryChanged(
+            string marketId,
+            int revision,
+            bool stockChanged)
+        {
+            if (model == null
+                || !string.Equals(model.MarketId, marketId, StringComparison.Ordinal)
+                || revision == observedMarketRevision)
+            {
+                return;
+            }
+
+            if (stockChanged)
+                model.Refresh();
+            observedMarketRevision = revision;
+            RaiseStateChanged();
+        }
+        private void HandleCaravanCargoDraftChanged(CaravanCargoDraftStore.Snapshot snapshot)
+        {
+            if (snapshot == null
+                || model == null
+                || !string.Equals(model.MarketId, snapshot.MarketId, StringComparison.Ordinal)
+                || string.Equals(model.CaravanId, snapshot.CaravanId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            model.Refresh();
+            RaiseStateChanged();
+        }
+
+
+        public MarketTransactionResult Commit(
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
         {
             MarketTransactionResult result;
             FrameworkRoot root = FrameworkRoot.Instance;
@@ -608,7 +710,7 @@ namespace ND.UI.Market
             }
             else
             {
-                result = model.Commit();
+                result = model.Commit(stageBeforeSave, rollbackStagedData);
             }
             SetError(result.Success ? string.Empty : result.ErrorCode);
             RaiseStateChanged();
@@ -673,6 +775,29 @@ namespace ND.UI.Market
 
             return string.IsNullOrWhiteSpace(marketId)
                 || !string.Equals(destinationTown.MarketId, marketId, StringComparison.Ordinal)
+                ? ErrorTownMarketMismatch
+                : string.Empty;
+        }
+
+        public static string ValidateCaravanPreparationAccess(
+            ND.Framework.SaveData saveData,
+            ISharedGameDataProvider sharedGameData,
+            string caravanId,
+            string marketId)
+        {
+            if (saveData == null || sharedGameData == null || !sharedGameData.IsLoaded)
+                return MarketInventoryMutationSession.ErrorInvalidFramework;
+            if (!SaveDataLookup.TryGetCaravan(
+                    saveData, caravanId, out ND.Framework.CaravanSaveData caravan))
+                return MarketInventoryMutationSession.ErrorInvalidCaravan;
+            if (caravan.state != JourneyState.Prepare)
+                return ErrorNotInTown;
+            if (string.IsNullOrWhiteSpace(caravan.currentTownId)
+                || !sharedGameData.TryGetTown(caravan.currentTownId, out SharedTownDefinition town))
+                return ErrorCurrentTownMissing;
+
+            return string.IsNullOrWhiteSpace(marketId)
+                || !string.Equals(town.MarketId, marketId, StringComparison.Ordinal)
                 ? ErrorTownMarketMismatch
                 : string.Empty;
         }

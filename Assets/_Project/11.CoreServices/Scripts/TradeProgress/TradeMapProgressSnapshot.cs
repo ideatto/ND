@@ -31,6 +31,9 @@ namespace ND.Framework
         /// </summary>
         public bool HasActiveTrade { get; }
 
+        /// <summary>The Caravan that owns this progress entry.</summary>
+        public string CaravanId { get; }
+
         /// <summary>
         /// 현재 진행 또는 정산 대기 중인 무역 ID이다.
         /// </summary>
@@ -76,9 +79,11 @@ namespace ND.Framework
             TradeProgressState state,
             float progress01,
             long tradeStartUtcTick,
-            long expectedTradeEndUtcTick)
+            long expectedTradeEndUtcTick,
+            string caravanId = "")
         {
             HasActiveTrade = hasActiveTrade;
+            CaravanId = caravanId ?? string.Empty;
             ActiveTradeId = activeTradeId ?? string.Empty;
             ActiveRouteId = activeRouteId ?? string.Empty;
             State = state;

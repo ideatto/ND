@@ -17,6 +17,8 @@
  * - null 문자열 입력은 빈 문자열로 보정된다.
  * - 속성은 생성 이후 외부에서 변경할 수 없다.
  */
+using ND.Economy;
+
 namespace ND.Framework
 {
     /// <summary>
@@ -47,7 +49,8 @@ namespace ND.Framework
             float departureLoad,
             float overloadRatio,
             bool canClaim,
-            string statusMessage)
+            string statusMessage,
+            EconomyM1SettlementViewData economySettlement = null)
         {
             TradeId = tradeId ?? string.Empty;
             Grade = grade;
@@ -70,6 +73,7 @@ namespace ND.Framework
             IsFailed = grade == JourneyResultGrade.Failed;
             CanClaim = canClaim;
             StatusMessage = statusMessage ?? string.Empty;
+            EconomySettlement = economySettlement;
         }
 
         public string TradeId { get; private set; }
@@ -113,5 +117,7 @@ namespace ND.Framework
         public bool CanClaim { get; private set; }
 
         public string StatusMessage { get; private set; }
+
+        public EconomyM1SettlementViewData EconomySettlement { get; private set; }
     }
 }

@@ -143,23 +143,38 @@ public static class TradePrepareCaravanFactory
             return null;
         }
 
-        // Departure route validation must not substitute the player's location.
+        // 출발 Route 검증은 Player의 위치를 대신 사용하지 않고,
+        // 선택한 Caravan Draft의 currentTownId만 사용한다.
         string currentTownId = draft.currentTownId ?? string.Empty;
         TownData currentTown = TradePrepareViewDataBuilder.FindTown(context.towns, currentTownId);
-        RouteData[] routes = TradePrepareViewDataBuilder.MergeUnique(
-            context.routes,
-            currentTown != null ? currentTown.AvailableRoutes : null,
-            route => route != null ? route.RouteId : string.Empty);
+
+        if (currentTown == null)
+        {
+            return null;
+        }
+
+        // Route 후보의 권위 데이터는 현재 Town의 AvailableRoutes다.
+        // 전역 context.routes를 후보에 합쳐 누락된 Town 연결을 보완하지 않는다.
+        RouteData[] routes = currentTown.AvailableRoutes ?? Array.Empty<RouteData>();
         RouteData selected = TradePrepareViewDataBuilder.FindRoute(routes, draft.selectedRouteId);
+
+        // 선택 Route는 반드시 현재 Town에서 출발해야 한다.
         if (selected == null || !string.Equals(selected.FromTownId, currentTownId, StringComparison.Ordinal))
         {
             return null;
         }
 
-        return string.IsNullOrEmpty(draft.selectedDestinationTownId)
-            || string.Equals(selected.ToTownId, draft.selectedDestinationTownId, StringComparison.Ordinal)
-            ? selected
-            : null;
+        // 목적지가 선택되어 있다면 Route의 실제 목적지와 정확히 일치해야 한다.
+        if (!string.IsNullOrEmpty(draft.selectedDestinationTownId)
+            && !string.Equals(
+                selected.ToTownId,
+                draft.selectedDestinationTownId,
+                StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return selected;
     }
 
     public static Dictionary<string, int> CreateFinalCargoQuantities(TradePrepareDraft draft)

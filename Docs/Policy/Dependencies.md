@@ -36,7 +36,68 @@
 
 ## 현재 사용 중인 외부 패키지
 
-*(아직 없음 — 추가 시 위 형식으로 기록)*
+- 에셋이름: HyperCasualFXPackVol.2 v1.2 / .unitypackage
+  위치: TeamDrive/Packages/HyperCasualFXPackVol.2_v1.2_20260727
+  Import: Assets/_ExternalPackages/HyperCasualFXPackVol.2
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: fantasygui4 v1.2 / .unitypackage
+  위치: TeamDrive/Packages/fantasygui4_v1.2_20260727
+  Import: Assets/_ExternalPackages/fantasygui4
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: polyperfect v10.0 / .unitypackage
+  위치: TeamDrive/Packages/polyperfect_v10.0_20260727
+  Import: Assets/_ExternalPackages/polyperfect
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: PixelartLoot v1.1 / .unitypackage
+  위치: TeamDrive/Packages/PixelartLoot_v1.1_20260727
+  Import: Assets/_ExternalPackages/PixelartLoot
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: MobileFantasyIdleUIKit v1.0 / .unitypackage
+  위치: TeamDrive/Packages/MobileFantasyIdleUIKit_v1.0_20260727
+  Import: Assets/_ExternalPackages/MobileFantasyIdleUIKit
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: GameVFX-CardEffectsCollection v1.01 / .unitypackage
+  위치: TeamDrive/Packages/GameVFX-CardEffectsCollection_v1.01_20260727
+  Import: Assets/_ExternalPackages/GameVFX-CardEffectsCollection
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: SmokeAndDust v1.0 / .unitypackage
+  위치: TeamDrive/Packages/SmokeAndDust_v1.0_20260727
+  Import: Assets/_ExternalPackages/SmokeAndDust
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: Match3GameEffect v1.0 / .unitypackage
+  위치: TeamDrive/Packages/Match3GameEffect_v1.0_20260727
+  Import: Assets/_ExternalPackages/Match3GameEffect
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: 6000FantasyIcons v1.1 / .unitypackage
+  위치: TeamDrive/Packages/6000FantasyIcons_v1.1_20260727
+  Import: Assets/_ExternalPackages/6000FantasyIcons
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
 
 ---
 

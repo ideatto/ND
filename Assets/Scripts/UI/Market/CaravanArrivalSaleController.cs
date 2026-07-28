@@ -100,6 +100,31 @@ namespace ND.UI.Market
                 return Fail(ErrorPanelMissing);
             if (root == null || root.CurrentSaveData == null || root.SharedGameData == null)
                 return Fail(MarketInventoryMutationSession.ErrorInvalidFramework);
+            // After the sale is confirmed, the Framework intentionally keeps the same pending
+            // settlement until Payment claims it. Reusing the Caravan status action must reopen
+            // that receipt instead of reopening an already-completed sell-only market.
+            if (root.SettlementUiBridge != null
+                && root.SettlementUiBridge.IsSettlementPresentationRequested
+                && root.SettlementUiBridge.TryGetPendingSettlement(
+                    out string pendingCaravanId,
+                    out string pendingTradeId,
+                    out JourneyResultData pendingResult)
+                && pendingResult != null
+                && string.Equals(pendingCaravanId, caravanId, StringComparison.Ordinal)
+                && string.Equals(pendingTradeId, tradeId, StringComparison.Ordinal))
+            {
+                if (!root.SettlementUiBridge.PresentSettlement(
+                        pendingCaravanId,
+                        pendingTradeId))
+                {
+                    return Fail(ErrorSettlementPresentation);
+                }
+
+                SetError(string.Empty);
+                SettlementRequested?.Invoke(pendingCaravanId, pendingTradeId);
+                return true;
+            }
+
             if (string.IsNullOrWhiteSpace(caravanId)
                 || string.IsNullOrWhiteSpace(tradeId)
                 || !SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out _)
@@ -171,7 +196,25 @@ namespace ND.UI.Market
 
             if (marketPanel.Model.HasDraft)
             {
-                MarketTransactionResult transaction = marketPanel.Commit();
+                if (!SaveDataLookup.TryGetPendingSettlement(
+                        FrameworkRoot.Instance?.CurrentSaveData,
+                        activeCaravanId,
+                        activeTradeId,
+                        out PendingSettlementSaveData pending)
+                    || pending == null)
+                {
+                    return Fail(ErrorPendingMissing);
+                }
+
+                long revenueBefore = pending.arrivalSaleRevenue;
+                var soldItemsBefore = pending.soldItems;
+                MarketTransactionResult transaction = marketPanel.Commit(
+                    result => TryStageArrivalSale(pending, result),
+                    () =>
+                    {
+                        pending.arrivalSaleRevenue = revenueBefore;
+                        pending.soldItems = soldItemsBefore;
+                    });
                 if (transaction == null || !transaction.Success)
                     return Fail(transaction?.ErrorCode ?? MarketInventoryMutationSession.ErrorInvalidTransaction);
             }
@@ -195,6 +238,35 @@ namespace ND.UI.Market
             marketPanel.Close();
             SetError(string.Empty);
             SettlementRequested?.Invoke(caravanId, tradeId);
+            return true;
+        }
+
+        private static bool TryStageArrivalSale(
+            PendingSettlementSaveData pending,
+            MarketTransactionResult transaction)
+        {
+            if (pending == null || transaction == null)
+                return false;
+
+            pending.arrivalSaleRevenue = Math.Max(0L, transaction.SaleRevenue);
+            pending.soldItems = new System.Collections.Generic.List<SettlementItemSaveData>();
+            if (transaction.Items != null)
+            {
+                foreach (MarketTransactionItemSummary item in transaction.Items)
+                {
+                    if (item == null || item.SellQuantity <= 0)
+                        continue;
+                    long total = Math.Max(0L, item.SaleRevenue);
+                    pending.soldItems.Add(new SettlementItemSaveData
+                    {
+                        itemId = item.ItemId ?? string.Empty,
+                        quantity = item.SellQuantity,
+                        unitPrice = total / item.SellQuantity,
+                        totalAmount = total
+                    });
+                }
+            }
+
             return true;
         }
 

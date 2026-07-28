@@ -63,7 +63,7 @@ public sealed class TownTradePreparationButton : MonoBehaviour
         if (entryController == null || !entryController.TryBeginTradePreparation())
         {
             Debug.LogWarning(
-                "[Town Trade] Begin-trade button could not open the preparation screen.",
+                "[Town Trade] Begin-trade button could not open the Caravan selection screen.",
                 this);
         }
     }
