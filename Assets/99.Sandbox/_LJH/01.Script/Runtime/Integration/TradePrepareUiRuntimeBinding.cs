@@ -55,6 +55,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             uiManager.DepartureCaravanSelector = SelectDepartureCaravan;
             uiManager.ClearMercenarySelection = ClearMercenarySelection;
             uiManager.MercenaryOptionsProvider = BuildMercenaryOptions;
+            uiManager.ExpectedRiskProvider = GetSelectedRouteRisk;
             uiManager.MercenarySelector = SelectMercenary;
             uiManager.RefreshPreparationDraft = RefreshPreparationDraft;
 
@@ -153,6 +154,8 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 uiManager.ClearMercenarySelection = null;
             if (uiManager.MercenaryOptionsProvider == BuildMercenaryOptions)
                 uiManager.MercenaryOptionsProvider = null;
+            if (uiManager.ExpectedRiskProvider == GetSelectedRouteRisk)
+                uiManager.ExpectedRiskProvider = null;
             if (uiManager.MercenarySelector == SelectMercenary)
                 uiManager.MercenarySelector = null;
             if (uiManager.RefreshPreparationDraft == RefreshPreparationDraft)
@@ -180,6 +183,14 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     {
         TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
         return viewData?.mercenaries ?? Array.Empty<MercenaryViewData>();
+    }
+
+    private float GetSelectedRouteRisk()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData == null)
+            return 0f;
+        return Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f;
     }
 
     private bool SelectMercenary(string mercenaryId)
@@ -1116,11 +1127,20 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         string toTown = selectedRoute != null && !string.IsNullOrWhiteSpace(selectedRoute.toTownName)
             ? selectedRoute.toTownName
             : selectedRoute != null ? selectedRoute.toTownId : string.Empty;
+        TownViewData destinationTown = null;
+        if (selectedRoute != null && viewData.towns != null)
+        {
+            destinationTown = Array.Find(
+                viewData.towns,
+                town => town != null &&
+                    string.Equals(town.townId, selectedRoute.toTownId, StringComparison.Ordinal));
+        }
 
         return new TradeSummaryPanel.SummaryData
         {
             fromTown = string.IsNullOrWhiteSpace(fromTown) ? "-" : fromTown,
             toTown = string.IsNullOrWhiteSpace(toTown) ? "-" : toTown,
+            destinationSprite = destinationTown != null ? destinationTown.icon : null,
             viaText = "없음",
             expectedRisk = Mathf.RoundToInt(
                 Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f),

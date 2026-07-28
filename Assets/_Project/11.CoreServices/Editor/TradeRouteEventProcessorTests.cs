@@ -1,5 +1,8 @@
 #if UNITY_EDITOR
+using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 namespace ND.Framework.Editor
 {
@@ -52,6 +55,56 @@ namespace ND.Framework.Editor
             Assert.That(result.Succeeded, Is.True);
             Assert.That(caravan.runEventChecksProcessed, Is.EqualTo(3));
             Assert.That(caravan.runEventsOccurred, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RouteData_NormalizePreservesConfiguredChanceInsteadOfCombatPower()
+        {
+            var route = ScriptableObject.CreateInstance<global::RouteData>();
+            try
+            {
+                var serialized = new SerializedObject(route);
+                serialized.FindProperty("baseRiskLevel").floatValue = 0.35f;
+                var events = serialized.FindProperty("routeEvents");
+                events.arraySize = 1;
+                var routeEvent = events.GetArrayElementAtIndex(0);
+                routeEvent.FindPropertyRelative("eventType").enumValueIndex =
+                    (int)global::RouteEvent.Combat;
+                routeEvent.FindPropertyRelative("eventValue").intValue = 90;
+                routeEvent.FindPropertyRelative("banditCombatPower").intValue = 120;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                MethodInfo normalize = typeof(global::RouteData).GetMethod(
+                    "NormalizeRouteEvents",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(normalize, Is.Not.Null);
+                normalize.Invoke(route, null);
+
+                Assert.That(route.BaseRiskLevel, Is.EqualTo(0.35f).Within(0.0001f));
+                Assert.That(route.RouteEvents[0].BanditCombatPower, Is.EqualTo(120));
+            }
+            finally
+            {
+                Object.DestroyImmediate(route);
+            }
+        }
+
+        [Test]
+        public void RouteData_BaseRiskLevelClampsToProbabilityRange()
+        {
+            var route = ScriptableObject.CreateInstance<global::RouteData>();
+            try
+            {
+                var serialized = new SerializedObject(route);
+                serialized.FindProperty("baseRiskLevel").floatValue = 2f;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                Assert.That(route.BaseRiskLevel, Is.EqualTo(1f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(route);
+            }
         }
 
         private static CaravanData CreateTravelingCaravan()

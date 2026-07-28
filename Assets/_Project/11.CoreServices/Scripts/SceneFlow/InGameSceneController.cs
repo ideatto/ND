@@ -24,6 +24,7 @@
  * - debug 성격의 time scale과 즉시 완료 API는 실제 release UI 노출 여부를 별도로 관리해야 한다.
  */
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace ND.Framework
 {
@@ -34,8 +35,29 @@ namespace ND.Framework
     {
         private void Start()
         {
+            WireReturnToTitleButton();
+
             // scene 진입 직후 기존 저장 상태를 UI가 다시 받을 수 있도록 강제 refresh한다.
             RefreshCurrentScreen();
+        }
+
+        private void WireReturnToTitleButton()
+        {
+            var buttons = FindObjectsByType<Button>(FindObjectsInactive.Include);
+            for (var index = 0; index < buttons.Length; index++)
+            {
+                var button = buttons[index];
+                if (button == null
+                    || button.name != "InGameToTitle"
+                    || !button.gameObject.scene.IsValid()
+                    || !button.gameObject.scene.isLoaded)
+                {
+                    continue;
+                }
+
+                button.onClick.RemoveListener(ReturnToTitle);
+                button.onClick.AddListener(ReturnToTitle);
+            }
         }
 
         /// <summary>
