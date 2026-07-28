@@ -127,7 +127,13 @@ namespace ND.Economy
             if (!IsFinite(rawPrice) || rawPrice > long.MaxValue)
                 return Fail(result, JourneyModifierFailureReason.ArithmeticOverflow);
 
-            result.AdjustedUnitPrice = (long)Math.Floor(Math.Max(0d, rawPrice));
+            // Normalize multiplication noise (for example 100 * 1.2 * 1.5 =
+            // 179.99999999999997) before applying the intentional floor policy.
+            double normalizedPrice = Math.Round(
+                Math.Max(0d, rawPrice),
+                9,
+                MidpointRounding.AwayFromZero);
+            result.AdjustedUnitPrice = (long)Math.Floor(normalizedPrice);
             result.AdjustedSpeed = FiniteProduct(
                 input.BaseSpeed,
                 result.CombinedSpeedFactor);

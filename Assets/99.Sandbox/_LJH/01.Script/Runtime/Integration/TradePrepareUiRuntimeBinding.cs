@@ -34,9 +34,13 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     {
         ND.Framework.FrameworkEvents.SharedGameDataLoaded += HandleFrameworkDataReady;
         ND.Framework.FrameworkEvents.LoadCompleted += HandleFrameworkDataReady;
+        MarketInventoryChangeTracker.Changed += HandleMarketInventoryChanged;
+        CaravanCargoDraftStore.Changed += HandleCaravanCargoDraftChanged;
         EnsureMarketTradePanel();
         if (marketTradePanel != null)
+        {
             marketTradePanel.ErrorChanged += HandleMarketErrorChanged;
+        }
 
         if (uiManager != null)
         {
@@ -45,6 +49,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             uiManager.AnimalProvider = BuildAnimalEntries;
             uiManager.OwnedWagonProvider = BuildOwnedWagonEntries;
             uiManager.CargoProvider = BuildCargoConfig;
+            uiManager.DetachedCargoProvider = BuildDetachedCargoConfig;
             uiManager.SummaryProvider = BuildSummaryData;
             uiManager.CaravanOptionsProvider = BuildCaravanOptions;
             uiManager.DepartureCaravanSelector = SelectDepartureCaravan;
@@ -93,8 +98,12 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     {
         ND.Framework.FrameworkEvents.SharedGameDataLoaded -= HandleFrameworkDataReady;
         ND.Framework.FrameworkEvents.LoadCompleted -= HandleFrameworkDataReady;
+        MarketInventoryChangeTracker.Changed -= HandleMarketInventoryChanged;
+        CaravanCargoDraftStore.Changed -= HandleCaravanCargoDraftChanged;
         if (marketTradePanel != null)
+        {
             marketTradePanel.ErrorChanged -= HandleMarketErrorChanged;
+        }
 
         if (runtimeContext != null)
             runtimeContext.ViewDataChanged -= HandleViewDataChanged;
@@ -132,6 +141,8 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 uiManager.OwnedWagonProvider = null;
             if (uiManager.CargoProvider == BuildCargoConfig)
                 uiManager.CargoProvider = null;
+            if (uiManager.DetachedCargoProvider == BuildDetachedCargoConfig)
+                uiManager.DetachedCargoProvider = null;
             if (uiManager.SummaryProvider == BuildSummaryData)
                 uiManager.SummaryProvider = null;
             if (uiManager.CaravanOptionsProvider == BuildCaravanOptions)
@@ -234,10 +245,31 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         // DepartData belongs to the legacy panel flow. RuntimeContext's Draft is authoritative
         // because every production selection was already sent to it through provider commands.
         // A new ID is created only at confirmation so retries cannot reuse a failed trade record.
+        if (!TryCommitDepartureCargo(
+                viewData,
+                out DepartureMarketCheckpoint marketCheckpoint,
+                out string marketError))
+        {
+            string message = string.IsNullOrWhiteSpace(marketError)
+                ? "The selected Caravan cargo purchase could not be committed."
+                : $"The selected Caravan cargo purchase could not be committed: {marketError}";
+            departureWarning?.Show(message);
+            Debug.LogError($"[TradePrepare Market] Departure cargo commit failed: {marketError}", this);
+            return;
+        }
+
         string tradeId = Guid.NewGuid().ToString("N");
         TradePrepareStartResult result = runtimeContext.TryStartTrade(tradeId);
         if (result == null || !result.succeeded)
         {
+            if (marketCheckpoint != null && !marketCheckpoint.TryRollback())
+            {
+                Debug.LogError(
+                    "[TradePrepare Market] Trade start failed and the departure cargo transaction " +
+                    "could not be rolled back.",
+                    this);
+            }
+
             // Runtime validation remains authoritative; the binding only converts its result
             // into a user-facing message and forwards it to the temporary notice view.
             if (departureWarning != null)
@@ -254,6 +286,229 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
         // Do not activate S7 here. A successful start changes Framework SaveData to Traveling;
         // FrameworkTradeScreenPresenter observes that state and becomes the sole screen router.
+    }
+
+    private bool TryCommitDepartureCargo(
+        TradePrepareViewData viewData,
+        out DepartureMarketCheckpoint checkpoint,
+        out string errorCode)
+    {
+        checkpoint = null;
+        errorCode = string.Empty;
+        string caravanId = viewData?.departureCaravanId?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(caravanId))
+        {
+            errorCode = MarketInventoryMutationSession.ErrorInvalidCaravan;
+            return false;
+        }
+
+        if (!TryOpenPreparationMarket() || marketTradePanel?.Model == null)
+        {
+            errorCode = marketTradePanel?.LastErrorCode
+                ?? MarketInventoryMutationSession.ErrorInvalidFramework;
+            return false;
+        }
+
+        MarketTradePanelModel model = marketTradePanel.Model;
+        if (!string.Equals(model.CaravanId, caravanId, StringComparison.Ordinal))
+        {
+            errorCode = MarketInventoryMutationSession.ErrorInvalidCaravan;
+            return false;
+        }
+
+        CaravanCargoDraftStore.Snapshot reservation =
+            CaravanCargoDraftStore.GetSnapshot(model.MarketId, model.CaravanId);
+        if (reservation.PurchaseQuantities.Count == 0)
+        {
+            // Previously committed cargo needs no second Market transaction.
+            return true;
+        }
+
+        RestoreMarketModelDraft(reservation);
+        model = marketTradePanel.Model;
+        if (model == null || !model.HasDraft || !model.CanCommit)
+        {
+            errorCode = model?.DraftValidationError
+                ?? MarketInventoryMutationSession.ErrorInvalidTransaction;
+            return false;
+        }
+
+        checkpoint = DepartureMarketCheckpoint.Capture(
+            ND.Framework.FrameworkRoot.Instance,
+            model.MarketId,
+            model.CaravanId,
+            reservation);
+        if (checkpoint == null)
+        {
+            errorCode = MarketInventoryMutationSession.ErrorInvalidFramework;
+            return false;
+        }
+
+        MarketTransactionResult result = marketTradePanel.Commit();
+        if (result == null || !result.Success)
+        {
+            checkpoint = null;
+            errorCode = result?.ErrorCode
+                ?? MarketInventoryMutationSession.ErrorInvalidTransaction;
+            return false;
+        }
+
+        CaravanCargoDraftStore.Clear(model.MarketId, model.CaravanId);
+        runtimeContext?.RefreshFromCurrentSaveData();
+        return true;
+    }
+
+    private sealed class DepartureMarketCheckpoint
+    {
+        private readonly ND.Framework.FrameworkRoot root;
+        private readonly string marketId;
+        private readonly string caravanId;
+        private readonly long tradingCurrency;
+        private readonly List<ND.Framework.CargoEntrySaveData> cargo;
+        private readonly ND.Framework.MarketInventorySaveData marketInventory;
+        private readonly Dictionary<string, int> reservations;
+
+        private DepartureMarketCheckpoint(
+            ND.Framework.FrameworkRoot root,
+            string marketId,
+            string caravanId,
+            long tradingCurrency,
+            List<ND.Framework.CargoEntrySaveData> cargo,
+            ND.Framework.MarketInventorySaveData marketInventory,
+            IReadOnlyDictionary<string, int> reservations)
+        {
+            this.root = root;
+            this.marketId = marketId;
+            this.caravanId = caravanId;
+            this.tradingCurrency = tradingCurrency;
+            this.cargo = cargo;
+            this.marketInventory = marketInventory;
+            this.reservations = new Dictionary<string, int>(
+                reservations ?? new Dictionary<string, int>(),
+                StringComparer.Ordinal);
+        }
+
+        public static DepartureMarketCheckpoint Capture(
+            ND.Framework.FrameworkRoot root,
+            string marketId,
+            string caravanId,
+            CaravanCargoDraftStore.Snapshot reservation)
+        {
+            ND.Framework.SaveData saveData = root?.CurrentSaveData;
+            if (saveData?.player == null
+                || saveData.world == null
+                || root.SaveService == null
+                || !ND.Framework.SaveDataLookup.TryGetCaravan(
+                    saveData,
+                    caravanId,
+                    out ND.Framework.CaravanSaveData caravan))
+            {
+                return null;
+            }
+
+            ND.Framework.MarketInventorySaveData inventory =
+                saveData.world.marketInventories?.FirstOrDefault(candidate =>
+                    candidate != null
+                    && string.Equals(candidate.marketId, marketId, StringComparison.Ordinal));
+            return new DepartureMarketCheckpoint(
+                root,
+                marketId,
+                caravanId,
+                saveData.player.tradingCurrency,
+                CloneCargo(caravan.cargo),
+                CloneMarketInventory(inventory),
+                reservation?.PurchaseQuantities);
+        }
+
+        public bool TryRollback()
+        {
+            ND.Framework.SaveData saveData = root?.CurrentSaveData;
+            if (saveData?.player == null
+                || saveData.world == null
+                || root.SaveService == null
+                || !ND.Framework.SaveDataLookup.TryGetCaravan(
+                    saveData,
+                    caravanId,
+                    out ND.Framework.CaravanSaveData caravan))
+            {
+                RestoreReservation();
+                return false;
+            }
+
+            saveData.player.tradingCurrency = tradingCurrency;
+            caravan.cargo = CloneCargo(cargo);
+            saveData.world.marketInventories ??=
+                new List<ND.Framework.MarketInventorySaveData>();
+            saveData.world.marketInventories.RemoveAll(candidate =>
+                candidate != null
+                && string.Equals(candidate.marketId, marketId, StringComparison.Ordinal));
+            if (marketInventory != null)
+                saveData.world.marketInventories.Add(CloneMarketInventory(marketInventory));
+
+            ND.Framework.SaveResult saveResult = root.SaveService.Save(saveData);
+            RestoreReservation();
+            if (saveResult == null || !saveResult.Succeeded)
+                return false;
+
+            MarketInventoryChangeTracker.Publish(marketId);
+            ND.Framework.FrameworkEvents.RaiseCaravanCargoChanged(caravanId);
+            ND.Framework.FrameworkEvents.RaiseTradingCurrencyChanged(tradingCurrency);
+            return true;
+        }
+
+        private void RestoreReservation()
+        {
+            CaravanCargoDraftStore.SetPurchases(
+                marketId,
+                caravanId,
+                reservations);
+        }
+
+        private static List<ND.Framework.CargoEntrySaveData> CloneCargo(
+            IEnumerable<ND.Framework.CargoEntrySaveData> source)
+        {
+            return (source ?? Enumerable.Empty<ND.Framework.CargoEntrySaveData>())
+                .Where(entry => entry != null)
+                .Select(entry => new ND.Framework.CargoEntrySaveData
+                {
+                    quantity = entry.quantity,
+                    item = entry.item == null
+                        ? null
+                        : new ND.Framework.TradeItemSaveData
+                        {
+                            itemId = entry.item.itemId,
+                            itemName = entry.item.itemName,
+                            weight = entry.item.weight,
+                            basePrice = entry.item.basePrice,
+                            maxCount = entry.item.maxCount
+                        }
+                })
+                .ToList();
+        }
+
+        private static ND.Framework.MarketInventorySaveData CloneMarketInventory(
+            ND.Framework.MarketInventorySaveData source)
+        {
+            if (source == null)
+                return null;
+
+            return new ND.Framework.MarketInventorySaveData
+            {
+                marketId = source.marketId,
+                refreshIndex = source.refreshIndex,
+                nextRefreshUtcTicks = source.nextRefreshUtcTicks,
+                seed = source.seed,
+                stocks = (source.stocks ?? new List<ND.Framework.MarketStockSaveData>())
+                    .Where(stock => stock != null)
+                    .Select(stock => new ND.Framework.MarketStockSaveData
+                    {
+                        itemId = stock.itemId,
+                        quantity = stock.quantity,
+                        unitPrice = stock.unitPrice
+                    })
+                    .ToList()
+            };
+        }
     }
 
     private static string BuildDepartureWarning(TradePrepareStartResult result)
@@ -410,17 +665,32 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             MarketTradeItemState[] marketItems = marketModel.Items
                 .Where(item => item != null && item.Item != null)
                 .ToArray();
+            CaravanCargoDraftStore.Snapshot cargoDraft =
+                CaravanCargoDraftStore.GetSnapshot(
+                    marketModel.MarketId,
+                    marketModel.CaravanId);
+            RestoreMarketModelDraft(cargoDraft);
+            IReadOnlyDictionary<string, int> ownReservations = cargoDraft.PurchaseQuantities;
             return new TradePrepareUIManager.CargoConfig
             {
                 automaticCargoLoading = false,
                 restoreOwnedCargo = true,
+                caravanId = marketModel.CaravanId,
+                marketId = marketModel.MarketId,
                 gold = marketModel.TradingCurrency,
                 maxLoad = marketModel.MaximumCargoWeight,
                 requiredFood = runtimeContext?.CurrentViewData?.requiredDraftAnimalFoodQuantity ?? 0,
                 shopItems = marketItems.Select(item => item.Item).ToArray(),
                 stocks = marketItems.Select(item => Math.Max(0, item.MarketStock)).ToArray(),
                 buyUnitPrices = marketItems.Select(item => Math.Max(0L, item.BuyUnitPrice)).ToArray(),
-                selectedItems = marketItems.Select(CreateCargoViewData).ToArray()
+                selectedItems = marketItems.Select(CreateCargoViewData).ToArray(),
+                reservedItems = marketItems
+                    .Where(item => ownReservations.TryGetValue(item.ItemId, out int quantity)
+                        && quantity > 0)
+                    .Select(item => CreateReservedCargoViewData(
+                        item,
+                        ownReservations[item.ItemId]))
+                    .ToArray()
             };
         }
 
@@ -481,8 +751,6 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     {
         if (marketTradePanel == null)
             return false;
-        if (marketTradePanel.IsOpen)
-            return true;
         if (!IsFrameworkMarketReady())
             return false;
         TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
@@ -492,6 +760,104 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 Mathf.Max(0f, viewData.maxLoad),
                 Math.Max(0, viewData.maxInventorySlotCount));
         return marketTradePanel.OpenForTradePreparation();
+    }
+
+    private TradePrepareUIManager.CargoConfig BuildDetachedCargoConfig(
+        CaravanLoadSettingViewData viewData)
+    {
+        if (viewData == null
+            || string.IsNullOrWhiteSpace(viewData.caravanId)
+            || string.IsNullOrWhiteSpace(viewData.currentTownId)
+            || marketTradePanel == null
+            || runtimeContext == null)
+        {
+            return default;
+        }
+
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        if (root?.SharedGameData == null
+            || !root.SharedGameData.TryGetTown(
+                viewData.currentTownId,
+                out ND.Framework.SharedTownDefinition town))
+        {
+            return default;
+        }
+
+        MarketData market = runtimeContext.GetAvailableMarkets()
+            .FirstOrDefault(candidate => candidate != null
+                && string.Equals(candidate.MarketId, town.MarketId, StringComparison.Ordinal));
+        marketTradePanel.Configure(
+            market,
+            Mathf.Max(0f, viewData.maxLoad),
+            Math.Max(0, viewData.maxInventorySlotCount));
+        if (!marketTradePanel.OpenForCaravanPreparation(viewData.caravanId, market))
+            return default;
+
+        MarketTradePanelModel marketModel = marketTradePanel.Model;
+        MarketTradeItemState[] marketItems = marketModel.Items
+            .Where(item => item != null && item.Item != null)
+            .ToArray();
+        CaravanCargoDraftStore.Snapshot cargoDraft =
+            CaravanCargoDraftStore.GetSnapshot(
+                marketModel.MarketId,
+                marketModel.CaravanId);
+        RestoreMarketModelDraft(cargoDraft);
+        IReadOnlyDictionary<string, int> ownReservations = cargoDraft.PurchaseQuantities;
+        return new TradePrepareUIManager.CargoConfig
+        {
+            automaticCargoLoading = false,
+            restoreOwnedCargo = true,
+            caravanId = marketModel.CaravanId,
+            marketId = marketModel.MarketId,
+            gold = marketModel.TradingCurrency,
+            maxLoad = marketModel.MaximumCargoWeight,
+            requiredFood = 0,
+            shopItems = marketItems.Select(item => item.Item).ToArray(),
+            stocks = marketItems.Select(item => Math.Max(0, item.MarketStock)).ToArray(),
+            buyUnitPrices = marketItems.Select(item => Math.Max(0L, item.BuyUnitPrice)).ToArray(),
+            selectedItems = marketItems.Select(CreateCargoViewData).ToArray(),
+            reservedItems = marketItems
+                .Where(item => ownReservations.TryGetValue(item.ItemId, out int quantity)
+                    && quantity > 0)
+                .Select(item => CreateReservedCargoViewData(item, ownReservations[item.ItemId]))
+                .ToArray()
+        };
+    }
+
+    private void HandleMarketInventoryChanged(string marketId, int _, bool stockChanged)
+    {
+        // A reservation change originates from the currently edited Cargo panel. Reopening that
+        // same panel here races MarketTradePanelController's revision observer and can refresh
+        // its model before the observer sees the event, which clears the pending buy draft.
+        // Other Caravans read the shared reservations when their panel is opened, so only an
+        // authoritative persisted stock mutation needs to rebuild the currently visible panel.
+        if (!stockChanged)
+            return;
+
+        if (marketTradePanel?.Model != null
+            && string.Equals(
+                marketTradePanel.Model.MarketId,
+                marketId,
+                StringComparison.Ordinal))
+        {
+            uiManager?.RefreshCargoIfVisible();
+        }
+    }
+
+    private void HandleCaravanCargoDraftChanged(CaravanCargoDraftStore.Snapshot snapshot)
+    {
+        MarketTradePanelModel activeModel = marketTradePanel?.Model;
+        if (snapshot == null
+            || activeModel == null
+            || !string.Equals(activeModel.MarketId, snapshot.MarketId, StringComparison.Ordinal)
+            || string.Equals(activeModel.CaravanId, snapshot.CaravanId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // The source Caravan already owns the currently edited presentation state.
+        // Only another Caravan viewing the same Market needs its available stock rebuilt.
+        uiManager?.RefreshCargoIfVisible();
     }
 
     private void HandleFrameworkDataReady(ND.Framework.ISharedGameDataProvider _)
@@ -523,17 +889,39 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             && root.SharedGameData.IsLoaded;
     }
 
-    private void HandleCargoLoadChanged(IReadOnlyList<CargoLoadingPanelController.CargoSelection> snapshot)
+    private void HandleCargoLoadChanged(CargoLoadingPanelController.CargoChangeSnapshot snapshot)
     {
-        if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+        if (snapshot == null
+            || string.IsNullOrWhiteSpace(snapshot.caravanId)
+            || string.IsNullOrWhiteSpace(snapshot.marketId)
+            || marketTradePanel == null)
             return;
 
-        if (!TryOpenPreparationMarket() || marketTradePanel.Model == null)
+        MarketTradePanelModel model = marketTradePanel.Model;
+        if (model == null
+            || !string.Equals(model.CaravanId, snapshot.caravanId, StringComparison.Ordinal)
+            || !string.Equals(model.MarketId, snapshot.marketId, StringComparison.Ordinal))
+        {
+            if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+                return;
+            if (!TryOpenPreparationMarket())
+                return;
+            model = marketTradePanel.Model;
+        }
+        if (!string.Equals(model.CaravanId, snapshot.caravanId, StringComparison.Ordinal)
+            || !string.Equals(model.MarketId, snapshot.marketId, StringComparison.Ordinal))
+        {
+            Debug.LogWarning(
+                $"[TradePrepare Market] Ignored Cargo snapshot for stale context. " +
+                $"Snapshot={snapshot.marketId}/{snapshot.caravanId}, " +
+                $"Active={model.MarketId}/{model.CaravanId}",
+                this);
             return;
+        }
 
         List<MarketTransactionLine> lines = CargoMarketTransactionDeltaBuilder.Build(
-            snapshot,
-            marketTradePanel.Model.Items);
+            snapshot.items,
+            model.Items);
 
         marketTradePanel.CancelDraft();
         foreach (MarketTransactionLine line in lines)
@@ -542,7 +930,14 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             marketTradePanel.SetSellDraft(line.ItemId, line.SellQuantity);
         }
 
-        MarketTradePanelModel model = marketTradePanel.Model;
+        CaravanCargoDraftStore.SetPurchases(
+            snapshot.marketId,
+            snapshot.caravanId,
+            lines
+                .Where(line => line != null && line.BuyQuantity > 0)
+                .Select(line => new KeyValuePair<string, int>(
+                    line.ItemId,
+                    line.BuyQuantity)));
         cargoPanel?.SetCargoTransactionError(
             model != null && model.HasDraft && !model.CanCommit
                 ? model.DraftValidationError
@@ -552,6 +947,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     private bool CanCommitCargoTransaction()
     {
         MarketTradePanelModel model = marketTradePanel != null ? marketTradePanel.Model : null;
+        RestoreMarketModelDraftIfNeeded(model);
         return model != null && (!model.HasDraft || model.CanCommit);
     }
 
@@ -574,6 +970,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             cargoPanel?.SetCargoTransactionError(MarketInventoryMutationSession.ErrorInvalidFramework);
             return false;
         }
+        RestoreMarketModelDraftIfNeeded(model);
         if (!model.HasDraft)
             return true;
 
@@ -586,6 +983,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             return false;
         }
 
+        CaravanCargoDraftStore.Clear(model.MarketId, model.CaravanId);
         runtimeContext?.ClearCargoDraft();
         runtimeContext?.RefreshFromCurrentSaveData();
         Debug.Log(
@@ -603,10 +1001,38 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     private void CancelCargoTransactionDraft()
     {
-        if (uiManager != null && uiManager.IsDetachedCaravanCargoEditOpen)
+        marketTradePanel?.CancelDraft();
+        MarketTradePanelModel model = marketTradePanel?.Model;
+        if (model != null)
+            CaravanCargoDraftStore.Clear(model.MarketId, model.CaravanId);
+    }
+
+    private void RestoreMarketModelDraftIfNeeded(MarketTradePanelModel model)
+    {
+        if (model == null || model.HasDraft)
             return;
 
-        marketTradePanel?.CancelDraft();
+        RestoreMarketModelDraft(
+            CaravanCargoDraftStore.GetSnapshot(model.MarketId, model.CaravanId));
+    }
+
+    private void RestoreMarketModelDraft(CaravanCargoDraftStore.Snapshot snapshot)
+    {
+        MarketTradePanelModel model = marketTradePanel != null ? marketTradePanel.Model : null;
+        if (snapshot == null
+            || model == null
+            || !string.Equals(model.MarketId, snapshot.MarketId, StringComparison.Ordinal)
+            || !string.Equals(model.CaravanId, snapshot.CaravanId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        marketTradePanel.CancelDraft();
+        foreach (KeyValuePair<string, int> purchase in snapshot.PurchaseQuantities)
+        {
+            if (purchase.Value > 0)
+                marketTradePanel.SetBuyDraft(purchase.Key, purchase.Value);
+        }
     }
 
     private static long ReadCurrentTradingCurrency()
@@ -631,6 +1057,16 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             canBuy = item.MarketStock > 0,
             canSell = item.CargoQuantity > 0
         };
+    }
+
+    private static TradeItemViewData CreateReservedCargoViewData(
+        MarketTradeItemState item,
+        int quantity)
+    {
+        TradeItemViewData view = CreateCargoViewData(item);
+        view.ownedAmount = 0;
+        view.selectedBuyAmount = Math.Max(0, quantity);
+        return view;
     }
 
     private TradeSummaryPanel.SummaryData BuildSummaryData()

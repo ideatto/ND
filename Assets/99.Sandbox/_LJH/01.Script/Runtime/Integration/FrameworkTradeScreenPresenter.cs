@@ -65,6 +65,30 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
         RefreshFromCurrentSaveData();
     }
 
+    /// <summary>
+    /// Opens the preparation UI at Caravan selection without deriving the view from the
+    /// globally selected Caravan. Each Caravan option remains responsible for its own
+    /// availability check.
+    /// </summary>
+    public void OpenPreparationSelection()
+    {
+        isTradeScreenOpen = true;
+        currentScreenState = InGameScreenState.Preparation;
+        view?.ShowPreparation();
+    }
+
+    /// <summary>
+    /// Opens the settlement presentation that Framework has already validated and requested.
+    /// This path intentionally avoids remapping the screen from selectedCaravanId because the
+    /// settled Caravan can differ from the currently selected Caravan.
+    /// </summary>
+    public void OpenSettlementScreen()
+    {
+        isTradeScreenOpen = true;
+        currentScreenState = InGameScreenState.Settlement;
+        view?.ShowSettlement();
+    }
+
     /// <summary>Closes the trade UI without changing Framework trade state.</summary>
     public void CloseTradeScreen()
     {

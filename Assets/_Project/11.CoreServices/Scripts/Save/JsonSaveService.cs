@@ -545,11 +545,36 @@ namespace ND.Framework
             {
                 var pending = data.pendingSettlements[i];
                 if (pending == null) continue;
+                pending.purchaseCost = System.Math.Max(0L, pending.purchaseCost);
+                pending.mercenaryCost = System.Math.Max(0L, pending.mercenaryCost);
+                pending.arrivalSaleRevenue = System.Math.Max(0L, pending.arrivalSaleRevenue);
+                pending.purchasedItems ??= new List<SettlementItemSaveData>();
+                pending.soldItems ??= new List<SettlementItemSaveData>();
+                NormalizeSettlementItems(pending.purchasedItems);
+                NormalizeSettlementItems(pending.soldItems);
                 if (!caravanIds.Contains(pending.caravanId))
                     FrameworkLog.Error($"Orphan pending settlement was preserved. CaravanId: {pending.caravanId}");
                 var key = pending.caravanId + "\n" + pending.tradeId;
                 if (!pendingKeys.Add(key))
                     FrameworkLog.Error($"Duplicate pending settlement was preserved. CaravanId: {pending.caravanId}, TradeId: {pending.tradeId}");
+            }
+        }
+
+        private static void NormalizeSettlementItems(List<SettlementItemSaveData> items)
+        {
+            if (items == null) return;
+            for (var index = items.Count - 1; index >= 0; index--)
+            {
+                SettlementItemSaveData item = items[index];
+                if (item == null || string.IsNullOrWhiteSpace(item.itemId) || item.quantity <= 0)
+                {
+                    items.RemoveAt(index);
+                    continue;
+                }
+
+                item.itemId = item.itemId.Trim();
+                item.unitPrice = System.Math.Max(0L, item.unitPrice);
+                item.totalAmount = System.Math.Max(0L, item.totalAmount);
             }
         }
 

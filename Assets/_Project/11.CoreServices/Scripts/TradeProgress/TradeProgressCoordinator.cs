@@ -323,12 +323,30 @@ namespace ND.Framework
             snapshot = default;
 
             var saveData = GetSaveData();
-            if (saveData?.tradeProgress == null)
-            {
-                return false;
-            }
+            return TryCreateMapProgressSnapshot(saveData?.tradeProgress, out snapshot);
+        }
 
-            var progress = saveData.tradeProgress;
+        public IReadOnlyList<TradeMapProgressSnapshot> GetMapProgressSnapshots()
+        {
+            var snapshots = new List<TradeMapProgressSnapshot>();
+            SaveData saveData = GetSaveData();
+            if (saveData?.tradeProgressEntries == null)
+                return snapshots;
+            foreach (TradeProgressSaveData progress in saveData.tradeProgressEntries)
+            {
+                if (TryCreateMapProgressSnapshot(progress, out TradeMapProgressSnapshot snapshot))
+                    snapshots.Add(snapshot);
+            }
+            return snapshots;
+        }
+
+        private bool TryCreateMapProgressSnapshot(
+            TradeProgressSaveData progress,
+            out TradeMapProgressSnapshot snapshot)
+        {
+            snapshot = default;
+            if (progress == null)
+                return false;
             var state = progress.state;
             if (state != TradeProgressState.Traveling && state != TradeProgressState.SettlementPending)
             {
@@ -342,7 +360,7 @@ namespace ND.Framework
             }
             else if (inGameTimeProvider != null && inGameTimeProvider.IsGameTimePaused)
             {
-                var caravan = GetRuntimeForProgress(saveData);
+                var caravan = GetOrCreateRuntimeCaravan(progress.caravanId);
                 progress01 = caravan != null
                     ? caravan.progress01
                     : CalculateProgress(progress, gameTimeProvider != null ? gameTimeProvider.CurrentUtc : DateTime.UtcNow);
@@ -372,7 +390,8 @@ namespace ND.Framework
                 state: state,
                 progress01: progress01,
                 tradeStartUtcTick: progress.tradeStartUtcTick,
-                expectedTradeEndUtcTick: progress.expectedTradeEndUtcTick);
+                expectedTradeEndUtcTick: progress.expectedTradeEndUtcTick,
+                caravanId: progress.caravanId);
             return true;
         }
 
@@ -896,7 +915,8 @@ namespace ND.Framework
             }
 
             var activeTradeId = saveData.tradeProgress.activeTradeId ?? string.Empty;
-            if (!economySettlementBridge.TryApplyPendingEconomy(saveData, caravan, activeTradeId))
+            if (!economySettlementBridge.TryApplyPendingEconomy(
+                    saveData, caravan, saveData.tradeProgress.caravanId, activeTradeId))
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
                 FrameworkLog.Warning("Settlement claim rolled back because Economy M1 currency apply did not complete.");
@@ -945,6 +965,7 @@ namespace ND.Framework
                 return false;
             }
 
+            economySettlementBridge.ClearPending(saveData.tradeProgress.caravanId, activeTradeId);
             ClearSettlementCache();
             FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
@@ -1032,7 +1053,8 @@ namespace ND.Framework
             var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
             if (sharedGameData == null || !sharedGameData.IsLoaded
                 || !economySettlementBridge.TryCalculateAndFill(saveData, caravan, settlementResult, sharedGameData)
-                || !economySettlementBridge.TryApplyPendingEconomy(saveData, caravan, tradeId))
+                || !economySettlementBridge.TryApplyPendingEconomy(
+                    saveData, caravan, caravanId, tradeId))
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.EconomyApplyFailed);
@@ -1067,6 +1089,7 @@ namespace ND.Framework
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SaveFailed, saveResult);
             }
 
+            economySettlementBridge.ClearPending(caravanId, tradeId);
             if (LastSettlementTradeId == tradeId) ClearSettlementCache();
             FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
@@ -1119,6 +1142,25 @@ namespace ND.Framework
                    && SaveDataLookup.TryGetPendingSettlement(
                        GetSaveData(), caravanId, tradeId, out var pending)
                    && PendingSettlementSaveDataMapper.TryToRuntime(pending, out result);
+        }
+
+        /// <summary>
+        /// Preserves the settlement UI compatibility query while the authoritative durable
+        /// lookup remains keyed by the exact Caravan and trade identity.
+        /// </summary>
+        public bool TryGetPendingEconomyResult(
+            string tradeId,
+            out ND.Economy.EconomyM1LoopResult result)
+        {
+            return economySettlementBridge.TryGetPendingResult(tradeId, out result);
+        }
+
+        public bool TryGetPendingEconomyResult(
+            string caravanId,
+            string tradeId,
+            out ND.Economy.EconomyM1LoopResult result)
+        {
+            return economySettlementBridge.TryGetPendingResult(caravanId, tradeId, out result);
         }
 
         private bool TryResolveClaimDestination(
@@ -1592,6 +1634,16 @@ namespace ND.Framework
             var pending = PendingSettlementSaveDataMapper.ToSave(
                 result, tradeId, progress.activeRouteId ?? string.Empty);
             pending.caravanId = caravanId;
+            if (exactTradePrepareCommitStore != null
+                && exactTradePrepareCommitStore.TryGet(caravanId, tradeId, out var preparation))
+            {
+                PendingSettlementSaveDataMapper.ApplyPreparation(pending, preparation);
+            }
+            else
+            {
+                FrameworkLog.Warning(
+                    $"Settlement receipt was created without a preparation commit. CaravanId: {caravanId}, TradeId: {tradeId}");
+            }
             saveData.pendingSettlements.Add(pending);
             CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
 

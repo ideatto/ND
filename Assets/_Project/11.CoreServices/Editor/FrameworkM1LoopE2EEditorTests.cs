@@ -134,6 +134,50 @@ namespace ND.Framework.Editor
             {
                 throw new InvalidOperationException("Legacy commit migration was not exact and idempotent.");
             }
+
+            var receipt = PendingSettlementSaveDataMapper.ToSave(
+                new JourneyResultData(), "receipt-trade", RouteId);
+            receipt.caravanId = caravanA;
+            var wrongOwner = new TradePreparationCommitSaveData
+            {
+                hasCommit = true,
+                caravanId = caravanB,
+                tradeId = receipt.tradeId,
+                purchaseCost = 999L
+            };
+            PendingSettlementSaveDataMapper.ApplyPreparation(receipt, wrongOwner);
+            if (receipt.purchaseCost != 0L)
+                throw new InvalidOperationException("A preparation receipt crossed Caravan ownership.");
+
+            var exactOwner = new TradePreparationCommitSaveData
+            {
+                hasCommit = true,
+                caravanId = caravanA,
+                tradeId = receipt.tradeId,
+                purchaseCost = 120L,
+                mercenaryCost = 30L,
+                purchasedItems = new List<TradePreparationItemSaveData>
+                {
+                    new TradePreparationItemSaveData
+                    {
+                        itemId = ItemId,
+                        quantity = 2,
+                        purchaseUnitPrice = 60L
+                    }
+                }
+            };
+            PendingSettlementSaveDataMapper.ApplyPreparation(receipt, exactOwner);
+            var receiptCopy = PendingSettlementSaveDataMapper.Copy(receipt);
+            receipt.purchasedItems[0].quantity = 9;
+            if (receiptCopy.purchaseCost != 120L
+                || receiptCopy.mercenaryCost != 30L
+                || receiptCopy.purchasedItems.Count != 1
+                || receiptCopy.purchasedItems[0].quantity != 2
+                || receiptCopy.purchasedItems[0].totalAmount != 120L)
+            {
+                throw new InvalidOperationException(
+                    "Pending settlement receipt was not copied completely and independently.");
+            }
         }
 
         private static global::TradePrepareCommitData CreateCommit(
@@ -522,19 +566,70 @@ namespace ND.Framework.Editor
             };
             var runtime = CreateSampleCaravan(context.GameTime);
             runtime.caravanId = explicitProgress.caravanId;
+            var otherProgress = new TradeProgressSaveData
+            {
+                caravanId = "economy-other",
+                activeTradeId = "other-trade",
+                activeRouteId = RouteId,
+                state = TradeProgressState.Traveling
+            };
+            var otherRuntime = CreateSampleCaravan(context.GameTime);
+            otherRuntime.caravanId = otherProgress.caravanId;
+            context.SaveData.tradePreparationCommits.Add(new TradePreparationCommitSaveData
+            {
+                hasCommit = true,
+                caravanId = explicitProgress.caravanId,
+                tradeId = explicitProgress.activeTradeId,
+                routeId = RouteId,
+                mercenaryCost = 17L
+            });
+            context.SaveData.tradePreparationCommits.Add(new TradePreparationCommitSaveData
+            {
+                hasCommit = true,
+                caravanId = otherProgress.caravanId,
+                tradeId = otherProgress.activeTradeId,
+                routeId = RouteId,
+                mercenaryCost = 43L
+            });
             var result = new JourneyResultData();
+            var otherResult = new JourneyResultData();
             var input = FrameworkEconomyM1InputBuilder.TryBuild(
                 context.SaveData, explicitProgress, runtime, result, context.SharedGameData);
+            var otherInput = FrameworkEconomyM1InputBuilder.TryBuild(
+                context.SaveData, otherProgress, otherRuntime, otherResult, context.SharedGameData);
             var bridge = new EconomyM1SettlementBridge();
             if (input == null || input.TradeId != explicitProgress.activeTradeId
+                || input.MercenaryCost != 17L
+                || otherInput == null || otherInput.TradeId != otherProgress.activeTradeId
+                || otherInput.MercenaryCost != 43L
                 || !bridge.TryCalculateAndFill(
                     context.SaveData, explicitProgress, runtime, result, context.SharedGameData)
+                || !bridge.TryCalculateAndFill(
+                    context.SaveData, otherProgress, otherRuntime, otherResult, context.SharedGameData)
+                || !bridge.TryGetPendingResult(
+                    explicitProgress.caravanId, explicitProgress.activeTradeId, out _)
+                || !bridge.TryGetPendingResult(
+                    otherProgress.caravanId, otherProgress.activeTradeId, out _)
                 || bridge.TryApplyPendingEconomy(
                     context.SaveData, runtime, selectedProgress.activeTradeId)
                 || !bridge.TryApplyPendingEconomy(
-                    context.SaveData, runtime, explicitProgress.activeTradeId))
+                    context.SaveData,
+                    runtime,
+                    explicitProgress.caravanId,
+                    explicitProgress.activeTradeId))
             {
-                throw new InvalidOperationException("Economy settlement used the selected trade ID.");
+                throw new InvalidOperationException(
+                    "Economy settlement did not isolate exact preparation or result identities.");
+            }
+
+            bridge.ClearPending(explicitProgress.caravanId, explicitProgress.activeTradeId);
+            if (bridge.TryGetPendingResult(
+                    explicitProgress.caravanId, explicitProgress.activeTradeId, out _)
+                || !bridge.TryGetPendingResult(
+                    otherProgress.caravanId, otherProgress.activeTradeId, out _))
+            {
+                throw new InvalidOperationException(
+                    "Clearing one Economy result changed another Caravan result.");
             }
         }
 
@@ -555,14 +650,17 @@ namespace ND.Framework.Editor
             var failed = context.Coordinator.ClaimSettlement(caravanId, tradeId);
             if (failed.Succeeded
                 || failed.FailureReason != ClaimSettlementFailureReason.SaveFailed
-                || JsonUtility.ToJson(context.SaveData) != snapshot)
+                || JsonUtility.ToJson(context.SaveData) != snapshot
+                || !context.Coordinator.TryGetPendingEconomyResult(caravanId, tradeId, out _))
             {
-                throw new InvalidOperationException("Claim save failure did not roll back the staged state.");
+                throw new InvalidOperationException(
+                    "Claim save failure did not roll back state or retain the retryable Economy result.");
             }
 
             save.ShouldSucceed = true;
             var succeeded = context.Coordinator.ClaimSettlement(caravanId, tradeId);
             if (!succeeded.Succeeded
+                || context.Coordinator.TryGetPendingEconomyResult(caravanId, tradeId, out _)
                 || context.Coordinator.ClaimSettlement(caravanId, tradeId).Succeeded)
             {
                 throw new InvalidOperationException("Explicit claim or duplicate claim prevention regressed.");

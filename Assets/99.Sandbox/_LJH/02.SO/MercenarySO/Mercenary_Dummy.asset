@@ -20,3 +20,5 @@ MonoBehaviour:
   baseBuyPrice: 30
   combatCapability: 50
   unlockedByDefault: 0
+  affectModify: 0
+  modifiers: []

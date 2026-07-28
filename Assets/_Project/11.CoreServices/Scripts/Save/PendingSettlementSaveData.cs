@@ -134,9 +134,31 @@ namespace ND.Framework
         /// </summary>
         public long netProfit;
 
+        /// <summary>Departure-time cargo purchase total, already paid through Market.</summary>
+        public long purchaseCost;
+
+        /// <summary>Departure-time selected mercenary cost.</summary>
+        public long mercenaryCost;
+
+        /// <summary>Arrival sale total, already applied through Market.</summary>
+        public long arrivalSaleRevenue;
+
+        public List<SettlementItemSaveData> purchasedItems = new List<SettlementItemSaveData>();
+
+        public List<SettlementItemSaveData> soldItems = new List<SettlementItemSaveData>();
+
         /// <summary>
         /// 정산 수령이 완료되었는지 여부이다. true이면 복구와 재수령을 차단한다.
         /// </summary>
         public bool claimed;
+    }
+
+    [Serializable]
+    public sealed class SettlementItemSaveData
+    {
+        public string itemId = string.Empty;
+        public int quantity;
+        public long unitPrice;
+        public long totalAmount;
     }
 }

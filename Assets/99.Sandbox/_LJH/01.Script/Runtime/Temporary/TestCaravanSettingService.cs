@@ -269,8 +269,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                         "The Caravan cargo plan contains an invalid or duplicate item.");
                 }
 
-                TradeItemData catalogItem = FindCatalogItem(itemId);
-                if (catalogItem == null)
+                if (!IsAvailableCargoItem(itemId))
                 {
                     return CaravanLoadSettingCommandResult.Failure(
                         CaravanLoadSettingFailureCodes.ItemUnavailable,
@@ -735,6 +734,33 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         return null;
     }
 
+    private bool IsAvailableCargoItem(string itemId)
+    {
+        if (FindCatalogItem(itemId) != null)
+            return true;
+
+        ND.Framework.ISharedGameDataProvider sharedGameData =
+            FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null;
+        return sharedGameData != null
+            && sharedGameData.TryGetTradeItem(NormalizeId(itemId), out _);
+    }
+
+    private float GetCargoItemWeight(string itemId)
+    {
+        TradeItemData catalogItem = FindCatalogItem(itemId);
+        if (catalogItem != null)
+            return Mathf.Max(0f, catalogItem.Weight);
+
+        ND.Framework.ISharedGameDataProvider sharedGameData =
+            FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null;
+        return sharedGameData != null
+            && sharedGameData.TryGetTradeItem(
+                NormalizeId(itemId),
+                out ND.Framework.SharedTradeItemDefinition sharedItem)
+            ? Mathf.Max(0f, sharedItem.Weight)
+            : 0f;
+    }
+
     private static void GetCapacity(string wagonInstanceId, out float maxLoad, out int maxSlots)
     {
         bool hasWagon = NormalizeId(wagonInstanceId) == WagonInstanceId;
@@ -750,8 +776,8 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
 
         for (int index = 0; index < plannedCargo.Count; index++)
         {
-            TradeItemData item = FindCatalogItem(plannedCargo[index].itemId);
-            load += item != null ? item.Weight * Mathf.Max(0, plannedCargo[index].quantity) : 0f;
+            load += GetCargoItemWeight(plannedCargo[index].itemId)
+                * Mathf.Max(0, plannedCargo[index].quantity);
         }
 
         return load;
@@ -762,9 +788,8 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         float load = 0f;
         for (int index = 0; index < items.Count; index++)
         {
-            TradeItemData item = FindCatalogItem(items[index].itemId);
-            if (item != null)
-                load += item.Weight * Mathf.Max(0, items[index].quantity);
+            load += GetCargoItemWeight(items[index].itemId)
+                * Mathf.Max(0, items[index].quantity);
         }
 
         return load;

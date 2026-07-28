@@ -6,6 +6,34 @@ using ND.Framework;
 
 namespace ND.Framework.CargoLoading
 {
+    /// <summary>
+    /// Process-local change token for shared market stock presentation.
+    /// Consumers compare revisions as well as listening to Changed, so inactive panels recover
+    /// even when they were not subscribed at transaction time.
+    /// </summary>
+    public static class MarketInventoryChangeTracker
+    {
+        private static readonly Dictionary<string, int> revisions =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+        public static event Action<string, int, bool> Changed;
+
+        public static int GetRevision(string marketId)
+        {
+            string key = marketId ?? string.Empty;
+            return revisions.TryGetValue(key, out int revision) ? revision : 0;
+        }
+
+        internal static int Publish(string marketId, bool stockChanged = true)
+        {
+            string key = marketId ?? string.Empty;
+            int current = GetRevision(key);
+            int next = current == int.MaxValue ? 1 : current + 1;
+            revisions[key] = next;
+            Changed?.Invoke(key, next, stockChanged);
+            return next;
+        }
+    }
+
     public enum MarketTradeMode
     {
         BuyAndSell = 0,
@@ -65,6 +93,7 @@ namespace ND.Framework.CargoLoading
         public long TradingCurrencyAfter;
         public long PurchaseCost;
         public long SaleRevenue;
+        public List<MarketTransactionItemSummary> Items = new List<MarketTransactionItemSummary>();
 
         internal static MarketTransactionResult Fail(string errorCode, long currency)
         {
@@ -77,6 +106,15 @@ namespace ND.Framework.CargoLoading
         }
     }
 
+    public sealed class MarketTransactionItemSummary
+    {
+        public string ItemId = string.Empty;
+        public int BuyQuantity;
+        public int SellQuantity;
+        public long PurchaseCost;
+        public long SaleRevenue;
+    }
+
     /// <summary>
     /// Applies explicit buy/sell deltas atomically. Draft cancellation belongs to the UI and
     /// never calls this command, so unrelated cargo entries are preserved.
@@ -87,11 +125,18 @@ namespace ND.Framework.CargoLoading
             MarketInventoryMutationSession session,
             IReadOnlyList<MarketTransactionLine> lines,
             float maximumCargoWeight,
-            int maximumCargoSlots = int.MaxValue)
+            int maximumCargoSlots = int.MaxValue,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
         {
             return session == null
                 ? MarketTransactionResult.Fail(MarketInventoryMutationSession.ErrorInvalidFramework, 0L)
-                : session.ExecuteTransaction(lines, maximumCargoWeight, maximumCargoSlots);
+                : session.ExecuteTransaction(
+                    lines,
+                    maximumCargoWeight,
+                    maximumCargoSlots,
+                    stageBeforeSave,
+                    rollbackStagedData);
         }
     }
 
@@ -373,7 +418,9 @@ namespace ND.Framework.CargoLoading
         internal MarketTransactionResult ExecuteTransaction(
             IReadOnlyList<MarketTransactionLine> lines,
             float maximumCargoWeight,
-            int maximumCargoSlots)
+            int maximumCargoSlots,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
         {
             if (lines == null || float.IsNaN(maximumCargoWeight) || maximumCargoWeight < 0f ||
                 maximumCargoSlots < 0)
@@ -464,29 +511,49 @@ namespace ND.Framework.CargoLoading
                 }
 
                 saveData.player.tradingCurrency = calculation.TradingCurrencyAfter;
-                SaveResult saveResult = saveService.Save(saveData);
-                if (saveResult == null || !saveResult.Succeeded)
-                {
-                    RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
-                    return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
-                }
-
                 successfulResult = new MarketTransactionResult
                 {
                     Success = true,
                     TradingCurrencyAfter = calculation.TradingCurrencyAfter,
                     PurchaseCost = calculation.TotalPurchaseCost,
-                    SaleRevenue = calculation.TotalSaleRevenue
+                    SaleRevenue = calculation.TotalSaleRevenue,
+                    Items = calculation.Items
+                        .Where(item => item != null)
+                        .Select(item => new MarketTransactionItemSummary
+                        {
+                            ItemId = item.ItemId ?? string.Empty,
+                            BuyQuantity = item.BuyQuantity,
+                            SellQuantity = item.SellQuantity,
+                            PurchaseCost = item.PurchaseCost,
+                            SaleRevenue = item.SaleRevenue
+                        })
+                        .ToList()
                 };
+                if (stageBeforeSave != null && !stageBeforeSave(successfulResult))
+                {
+                    rollbackStagedData?.Invoke();
+                    RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
+                    return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
+                }
+
+                SaveResult saveResult = saveService.Save(saveData);
+                if (saveResult == null || !saveResult.Succeeded)
+                {
+                    rollbackStagedData?.Invoke();
+                    RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
+                    return MarketTransactionResult.Fail(ErrorSaveFailed, currencyBefore);
+                }
             }
             catch
             {
+                rollbackStagedData?.Invoke();
                 RestoreTransactionSnapshot(currencyBefore, cargoBefore, stockBefore);
                 return MarketTransactionResult.Fail(ErrorInvalidTransaction, currencyBefore);
             }
 
             // Publish only after SaveData persistence succeeds. UI subscribers re-read the saved
             // Caravan snapshot, and failed/rolled-back transactions never emit refresh signals.
+            MarketInventoryChangeTracker.Publish(MarketId);
             FrameworkEvents.RaiseCaravanCargoChanged(CaravanId);
             FrameworkEvents.RaiseTradingCurrencyChanged(calculation.TradingCurrencyAfter);
             return successfulResult;
