@@ -8,7 +8,7 @@ namespace ND.Framework.Editor
         [Test]
         public void Process_SplitAndSingleDistanceProduceSameCursorAndEvents()
         {
-            var route = CreateWeatherRoute();
+            var route = CreateLuckyRoute();
             var split = CreateTravelingCaravan();
             split.progress01 = 0.2f;
             var first = TradeRouteEventProcessor.Process(split, route, "trade-a", 10f, 1f);
@@ -30,7 +30,7 @@ namespace ND.Framework.Editor
         {
             var caravan = CreateTravelingCaravan();
             caravan.progress01 = 0.5f;
-            var route = CreateWeatherRoute();
+            var route = CreateLuckyRoute();
 
             var first = TradeRouteEventProcessor.Process(caravan, route, "trade-b", 10f, 1f);
             var second = TradeRouteEventProcessor.Process(caravan, route, "trade-b", 10f, 1f);
@@ -47,7 +47,7 @@ namespace ND.Framework.Editor
             caravan.runEventChecksProcessed = 3;
 
             var result = TradeRouteEventProcessor.ProcessForced(
-                caravan, CreateWeatherRoute(), "trade-c", "weather");
+                caravan, CreateLuckyRoute(), "trade-c", "lucky");
 
             Assert.That(result.Succeeded, Is.True);
             Assert.That(caravan.runEventChecksProcessed, Is.EqualTo(3));
@@ -65,7 +65,7 @@ namespace ND.Framework.Editor
             };
         }
 
-        private static SharedRouteDefinition CreateWeatherRoute()
+        private static SharedRouteDefinition CreateLuckyRoute()
         {
             return new SharedRouteDefinition
             {
@@ -77,8 +77,8 @@ namespace ND.Framework.Editor
                 {
                     new SharedRouteEventDefinition
                     {
-                        Id = "weather",
-                        EventType = RouteEvent.Weather
+                        Id = "lucky",
+                        EventType = RouteEvent.Lucky
                     }
                 }
             };

@@ -18,7 +18,6 @@ public static class TradePrepareTemporaryUICreator
         TradePrepareTemporaryUI temporaryUI = Undo.AddComponent<TradePrepareTemporaryUI>(gameObject);
         temporaryUI.ConfigureData(
             LoadAll<TownData>(),
-            LoadAll<RouteData>(),
             LoadAll<TradeItemData>(),
             LoadAll<WagonData>(),
             LoadAll<DraftAnimalData>(),
