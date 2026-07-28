@@ -49,6 +49,9 @@ public class MinimapGrid : MonoBehaviour
     public bool IsReady { get; private set; }
     public bool CellsBuilt { get; private set; }
 
+    /// <summary>격자 영역(배경 bounds). 구름/캐러밴 이동 경계 등 외부에서 참조.</summary>
+    public Bounds Area { get { EnsureArea(); return area; } }
+
     private Bounds area;          // 격자 영역(배경 bounds)
     private Transform overlayRoot;
     private MinimapCell[,] cells; // 런타임 빠른 접근용 2D 배열
