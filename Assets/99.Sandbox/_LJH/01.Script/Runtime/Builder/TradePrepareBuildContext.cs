@@ -8,7 +8,6 @@ public sealed class TradePrepareBuildContext
     public TradePrepareCaravanOptionViewData[] caravanOptions = new TradePrepareCaravanOptionViewData[0];
 
     public TownData[] towns = new TownData[0];
-    public RouteData[] routes = new RouteData[0];
     public TradeItemData[] tradeItems = new TradeItemData[0];
     public WagonData[] wagons = new WagonData[0];
     public DraftAnimalData[] draftAnimals = new DraftAnimalData[0];

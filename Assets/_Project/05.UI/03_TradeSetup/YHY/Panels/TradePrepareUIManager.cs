@@ -67,7 +67,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     {
         public string fromTownName;   // 출발 도시(루트 SO의 FromTown)
         public string viaText;        // 경유 도시 표기(비면 "없음" 처리)
-        public int expectedRisk;      // 루트 내 최고 습격 이벤트 값(없으면 0)
+        public int expectedRisk;      // 전체 여정에서 하나 이상의 이벤트가 발생할 확률(%)
         public float expectedFood;    // 예상 음식 소모량
         public float durationSeconds; // 예상 소요 시간(초)
     }
@@ -148,6 +148,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public Func<string, bool> DepartureCaravanSelector;
     public Action ClearMercenarySelection;
     public Func<MercenaryViewData[]> MercenaryOptionsProvider;
+    public Func<float> ExpectedRiskProvider;
     public Func<string, bool> MercenarySelector;
     public Action RefreshPreparationDraft;
     /// <summary>⑥ 요약 계산(출발도시·위험도·음식·시간) 공급자 — 데모는 Core 계산기 사용.</summary>
@@ -858,6 +859,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             mercenaryPanel.Populate(
                 MercenaryOptionsProvider() ?? Array.Empty<MercenaryViewData>());
         }
+        mercenaryPanel.SetExpectedRisk(
+            ExpectedRiskProvider != null ? ExpectedRiskProvider() : 0f);
 
         // S0 already selected a configured Caravan, so the normal preparation route skips
         // the legacy Animals and Cargo editors. The existing Cargo-origin route keeps its

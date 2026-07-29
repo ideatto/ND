@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 public sealed class TradePrepareStartAdapter
 {
@@ -6,6 +7,7 @@ public sealed class TradePrepareStartAdapter
     public const string ErrorPrepareBlocked = "PREPARE_BLOCKED";
     public const string ErrorInvalidTradeId = "INVALID_TRADE_ID";
     public const string ErrorRouteNotFound = "ROUTE_NOT_FOUND";
+    public const string ErrorRouteValidationFailed = "ROUTE_VALIDATION_FAILED";
     public const string ErrorStartServiceMissing = "START_SERVICE_MISSING";
     public const string ErrorCoreDepartureBlocked = "CORE_DEPARTURE_BLOCKED";
     public const string ErrorFrameworkRecordFailed = "FRAMEWORK_RECORD_FAILED";
@@ -84,6 +86,11 @@ public sealed class TradePrepareStartAdapter
                 tradeId,
                 viewData.startCondition,
                 null);
+        }
+
+        if(!TryValidateRouteForStart(draft, context, route, out string routeValidationMessage))
+        {
+            return CreateFailure(ErrorRouteValidationFailed, routeValidationMessage, tradeId, viewData.startCondition, null);
         }
 
         if (startGateway == null)
@@ -206,6 +213,213 @@ public sealed class TradePrepareStartAdapter
             prepareCondition = viewData.startCondition,
             departureValidation = departure
         };
+    }
+
+    private static bool TryValidateRouteForStart(
+    TradePrepareDraft draft,
+    TradePrepareBuildContext context,
+    RouteData route,
+    out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        if (draft == null ||
+            context == null ||
+            route == null)
+        {
+            errorMessage = "Route validation input is missing.";
+            return false;
+        }
+
+        string caravanId =
+            draft.departureCaravanId?.Trim() ?? string.Empty;
+
+        string currentTownId =
+            draft.currentTownId?.Trim() ?? string.Empty;
+
+        string destinationTownId =
+            draft.selectedDestinationTownId?.Trim()
+            ?? string.Empty;
+
+        // 선택 Caravan이 최신 SaveData에도 존재하는지 확인하고,
+        // 저장된 실제 위치와 Draft 위치를 비교한다.
+        if (!string.IsNullOrEmpty(caravanId))
+        {
+            if (!ND.Framework.SaveDataLookup.TryGetCaravan(
+                context.saveData,
+                caravanId,
+                out ND.Framework.CaravanSaveData savedCaravan))
+            {
+                errorMessage =
+                    "The selected departure Caravan does not exist.";
+                return false;
+            }
+
+            if (!string.Equals(
+                savedCaravan.currentTownId,
+                currentTownId,
+                StringComparison.Ordinal))
+            {
+                errorMessage =
+                    "The Caravan location changed. Refresh the preparation screen.";
+                return false;
+            }
+        }
+
+        TownData currentTown =
+            TradePrepareViewDataBuilder.FindTown(
+                context.towns,
+                currentTownId);
+
+        if (currentTown == null)
+        {
+            errorMessage =
+                "The departure town does not exist.";
+            return false;
+        }
+
+        TownData destinationTown =
+            TradePrepareViewDataBuilder.FindTown(
+                context.towns,
+                destinationTownId);
+
+        if (destinationTown == null)
+        {
+            errorMessage =
+                "The destination town does not exist.";
+            return false;
+        }
+
+        if (!IsTownUnlocked(currentTown, context.saveData))
+        {
+            errorMessage =
+                "The departure town is locked.";
+            return false;
+        }
+
+        if (!IsTownUnlocked(destinationTown, context.saveData))
+        {
+            errorMessage =
+                "The destination town is locked.";
+            return false;
+        }
+
+        if (!IsRouteUnlocked(route, context.saveData))
+        {
+            errorMessage =
+                "The selected route is locked.";
+            return false;
+        }
+
+        if (!string.Equals(
+            route.FromTownId,
+            currentTownId,
+            StringComparison.Ordinal))
+        {
+            errorMessage =
+                "The selected route does not depart from the current town.";
+            return false;
+        }
+
+        if (!string.Equals(
+            route.ToTownId,
+            destinationTownId,
+            StringComparison.Ordinal))
+        {
+            errorMessage =
+                "The selected route does not lead to the selected destination.";
+            return false;
+        }
+
+        if (!ContainsRoute(
+            currentTown.AvailableRoutes,
+            route.RouteId))
+        {
+            errorMessage =
+                "The selected route is not registered in the departure town.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsTownUnlocked(
+    TownData town,
+    ND.Framework.SaveData saveData)
+    {
+        if (town == null)
+        {
+            return false;
+        }
+
+        return town.UnlockedByDefault ||
+            ContainsId(
+                saveData?.world?.unlockedTownIds,
+                town.TownId);
+    }
+
+    private static bool IsRouteUnlocked(
+        RouteData route,
+        ND.Framework.SaveData saveData)
+    {
+        if (route == null)
+        {
+            return false;
+        }
+
+        return route.UnlockedByDefault ||
+            ContainsId(
+                saveData?.world?.unlockedRouteIds,
+                route.RouteId);
+    }
+
+    private static bool ContainsId(
+        IList<string> ids,
+        string expectedId)
+    {
+        if (ids == null ||
+            string.IsNullOrWhiteSpace(expectedId))
+        {
+            return false;
+        }
+
+        foreach (string id in ids)
+        {
+            if (string.Equals(
+                id,
+                expectedId,
+                StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsRoute(
+        RouteData[] routes,
+        string routeId)
+    {
+        if (routes == null ||
+            string.IsNullOrWhiteSpace(routeId))
+        {
+            return false;
+        }
+
+        foreach (RouteData availableRoute in routes)
+        {
+            if (availableRoute != null &&
+                string.Equals(
+                    availableRoute.RouteId,
+                    routeId,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static ITradePrepareStartGateway CreateFrameworkGateway(

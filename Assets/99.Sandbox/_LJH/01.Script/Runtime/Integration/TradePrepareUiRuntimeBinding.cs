@@ -55,6 +55,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             uiManager.DepartureCaravanSelector = SelectDepartureCaravan;
             uiManager.ClearMercenarySelection = ClearMercenarySelection;
             uiManager.MercenaryOptionsProvider = BuildMercenaryOptions;
+            uiManager.ExpectedRiskProvider = GetSelectedRouteRisk;
             uiManager.MercenarySelector = SelectMercenary;
             uiManager.RefreshPreparationDraft = RefreshPreparationDraft;
 
@@ -153,6 +154,8 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
                 uiManager.ClearMercenarySelection = null;
             if (uiManager.MercenaryOptionsProvider == BuildMercenaryOptions)
                 uiManager.MercenaryOptionsProvider = null;
+            if (uiManager.ExpectedRiskProvider == GetSelectedRouteRisk)
+                uiManager.ExpectedRiskProvider = null;
             if (uiManager.MercenarySelector == SelectMercenary)
                 uiManager.MercenarySelector = null;
             if (uiManager.RefreshPreparationDraft == RefreshPreparationDraft)
@@ -180,6 +183,14 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
     {
         TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
         return viewData?.mercenaries ?? Array.Empty<MercenaryViewData>();
+    }
+
+    private float GetSelectedRouteRisk()
+    {
+        TradePrepareViewData viewData = runtimeContext != null ? runtimeContext.CurrentViewData : null;
+        if (viewData == null)
+            return 0f;
+        return Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f;
     }
 
     private bool SelectMercenary(string mercenaryId)
@@ -580,7 +591,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
 
     private void HandleRouteSelected(string destinationTownId, string routeId, float distance)
     {
-        if (runtimeContext == null || !CanSelectRoute(runtimeContext.CurrentViewData, routeId))
+        if (runtimeContext == null || !CanSelectRoute(runtimeContext.CurrentViewData, destinationTownId, routeId))
             return;
 
         // Provider commands update the draft and rebuild ViewData; the panel only supplies IDs.
@@ -588,17 +599,43 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         runtimeContext.SelectRoute(routeId);
     }
 
-    private static bool CanSelectRoute(TradePrepareViewData viewData, string routeId)
+    private static bool CanSelectRoute(TradePrepareViewData viewData, string destinationTownId, string routeId)
     {
-        if (viewData == null || viewData.routes == null || string.IsNullOrWhiteSpace(routeId))
+        if(viewData == null || viewData.towns == null || viewData.routes == null ||
+            string.IsNullOrWhiteSpace(viewData.currentTownId) || string.IsNullOrWhiteSpace(destinationTownId) || string.IsNullOrWhiteSpace(routeId))
+        {
             return false;
+        }
+
+        TownViewData destinationTown = null;
+
+        foreach(TownViewData town in viewData.towns)
+        {
+            if(town != null && string.Equals(town.townId, destinationTownId, StringComparison.Ordinal))
+            {
+                destinationTown = town;
+                break;
+            }
+        }
+
+        if(destinationTown == null || !destinationTown.isUnlocked || !destinationTown.canSelect)
+        {
+            return false;
+        }
 
         foreach (RouteViewData route in viewData.routes)
         {
-            if (route != null &&
-                string.Equals(route.routeId, routeId, StringComparison.Ordinal) &&
-                route.isUnlocked &&
-                route.canSelect)
+            if(route == null)
+            {
+                continue;
+            }
+
+            bool isValidRoute = string.Equals(route.routeId, routeId, StringComparison.Ordinal) &&
+                string.Equals(route.fromTownId, viewData.currentTownId, StringComparison.Ordinal) &&
+                string.Equals(route.toTownId, destinationTownId, StringComparison.Ordinal) &&
+                route.isUnlocked && route.canSelect;
+
+            if (isValidRoute)
             {
                 return true;
             }
@@ -1090,11 +1127,20 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         string toTown = selectedRoute != null && !string.IsNullOrWhiteSpace(selectedRoute.toTownName)
             ? selectedRoute.toTownName
             : selectedRoute != null ? selectedRoute.toTownId : string.Empty;
+        TownViewData destinationTown = null;
+        if (selectedRoute != null && viewData.towns != null)
+        {
+            destinationTown = Array.Find(
+                viewData.towns,
+                town => town != null &&
+                    string.Equals(town.townId, selectedRoute.toTownId, StringComparison.Ordinal));
+        }
 
         return new TradeSummaryPanel.SummaryData
         {
             fromTown = string.IsNullOrWhiteSpace(fromTown) ? "-" : fromTown,
             toTown = string.IsNullOrWhiteSpace(toTown) ? "-" : toTown,
+            destinationSprite = destinationTown != null ? destinationTown.icon : null,
             viaText = "없음",
             expectedRisk = Mathf.RoundToInt(
                 Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f),

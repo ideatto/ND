@@ -41,12 +41,212 @@ namespace ND.Framework.Editor
             RunTradePreparationCommitChecks();
             RunSettlementPresentationIdentityChecks();
             RunClaimRegressionChecks();
+            RunExactForcedTradeCompletionChecks();
             Debug.Log("[Framework Multi-active E2E] All checks passed.");
         }
 
         public static void RunAllFromBatchMode()
         {
             RunAll();
+        }
+
+        [MenuItem("ND/Framework/Run Work F Currency Command Focused Checks")]
+        public static void RunWorkFCurrencyCommandFocusedChecks()
+        {
+            RunTradingCurrencySuccessCheck();
+            RunDevelopmentCurrencySuccessCheck();
+            RunCurrencyValidationChecks();
+            RunCurrencyOverflowChecks();
+            RunCurrencySaveRollbackChecks();
+            RunCurrencyMissingDependencyCheck();
+            Debug.Log("Work F currency command focused checks passed");
+        }
+
+        private static void RunTradingCurrencySuccessCheck()
+        {
+            var saveData = new SaveData();
+            saveData.player.tradingCurrency = 1000;
+            saveData.player.developmentCurrency = 200;
+            var save = new ConfigurableSaveService();
+            var commands = new FrameworkDebugCommands(null, () => saveData, save);
+            var eventCount = 0;
+            var eventValue = 0L;
+            Action<long> onChanged = value =>
+            {
+                eventCount++;
+                eventValue = value;
+            };
+            FrameworkEvents.TradingCurrencyChanged += onChanged;
+            SaveResult result;
+            try
+            {
+                result = commands.TryAddTradingCurrency(100);
+            }
+            finally
+            {
+                FrameworkEvents.TradingCurrencyChanged -= onChanged;
+            }
+
+            if (!result.Succeeded
+                || saveData.player.tradingCurrency != 1100
+                || saveData.player.developmentCurrency != 200
+                || save.SaveCalls != 1
+                || eventCount != 1
+                || eventValue != 1100)
+            {
+                throw new InvalidOperationException("Trading currency success transaction check failed.");
+            }
+        }
+
+        private static void RunDevelopmentCurrencySuccessCheck()
+        {
+            var saveData = new SaveData();
+            saveData.player.tradingCurrency = 1000;
+            saveData.player.developmentCurrency = 200;
+            var save = new ConfigurableSaveService();
+            var commands = new FrameworkDebugCommands(null, () => saveData, save);
+            var tradingEventCount = 0;
+            Action<long> onChanged = _ => tradingEventCount++;
+            FrameworkEvents.TradingCurrencyChanged += onChanged;
+            SaveResult result;
+            try
+            {
+                result = commands.TryAddDevelopmentCurrency(100);
+            }
+            finally
+            {
+                FrameworkEvents.TradingCurrencyChanged -= onChanged;
+            }
+
+            if (!result.Succeeded
+                || saveData.player.developmentCurrency != 300
+                || saveData.player.tradingCurrency != 1000
+                || save.SaveCalls != 1
+                || tradingEventCount != 0)
+            {
+                throw new InvalidOperationException("Development currency success transaction check failed.");
+            }
+        }
+
+        private static void RunCurrencyValidationChecks()
+        {
+            VerifyRejectedCurrencyAmount(0);
+            VerifyRejectedCurrencyAmount(-1);
+        }
+
+        private static void VerifyRejectedCurrencyAmount(long amount)
+        {
+            var saveData = new SaveData();
+            var save = new ConfigurableSaveService();
+            var commands = new FrameworkDebugCommands(null, () => saveData, save);
+            var tradingBefore = saveData.player.tradingCurrency;
+            var developmentBefore = saveData.player.developmentCurrency;
+            var eventCount = 0;
+            Action<long> onChanged = _ => eventCount++;
+            FrameworkEvents.TradingCurrencyChanged += onChanged;
+            try
+            {
+                var tradingResult = commands.TryAddTradingCurrency(amount);
+                var developmentResult = commands.TryAddDevelopmentCurrency(amount);
+                if (tradingResult.Succeeded
+                    || developmentResult.Succeeded
+                    || tradingResult.FailureReason != SaveFailureReason.InvalidData
+                    || developmentResult.FailureReason != SaveFailureReason.InvalidData
+                    || saveData.player.tradingCurrency != tradingBefore
+                    || saveData.player.developmentCurrency != developmentBefore
+                    || save.SaveCalls != 0
+                    || eventCount != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Currency amount {amount} was not rejected without side effects.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.TradingCurrencyChanged -= onChanged;
+            }
+        }
+
+        private static void RunCurrencyOverflowChecks()
+        {
+            var saveData = new SaveData();
+            saveData.player.tradingCurrency = long.MaxValue;
+            saveData.player.developmentCurrency = long.MaxValue;
+            var save = new ConfigurableSaveService();
+            var commands = new FrameworkDebugCommands(null, () => saveData, save);
+            var eventCount = 0;
+            Action<long> onChanged = _ => eventCount++;
+            FrameworkEvents.TradingCurrencyChanged += onChanged;
+            try
+            {
+                var tradingResult = commands.TryAddTradingCurrency(1);
+                var developmentResult = commands.TryAddDevelopmentCurrency(1);
+                if (tradingResult.Succeeded
+                    || developmentResult.Succeeded
+                    || saveData.player.tradingCurrency != long.MaxValue
+                    || saveData.player.developmentCurrency != long.MaxValue
+                    || save.SaveCalls != 0
+                    || eventCount != 0)
+                {
+                    throw new InvalidOperationException("Currency overflow was not rejected before mutation.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.TradingCurrencyChanged -= onChanged;
+            }
+        }
+
+        private static void RunCurrencySaveRollbackChecks()
+        {
+            VerifyCurrencySaveRollback(true);
+            VerifyCurrencySaveRollback(false);
+        }
+
+        private static void VerifyCurrencySaveRollback(bool trading)
+        {
+            var saveData = new SaveData();
+            saveData.player.tradingCurrency = 1000;
+            saveData.player.developmentCurrency = 200;
+            var player = saveData.player;
+            var save = new ConfigurableSaveService { ShouldSucceed = false };
+            var commands = new FrameworkDebugCommands(null, () => saveData, save);
+            var eventCount = 0;
+            Action<long> onChanged = _ => eventCount++;
+            FrameworkEvents.TradingCurrencyChanged += onChanged;
+            try
+            {
+                var result = trading
+                    ? commands.TryAddTradingCurrency(100)
+                    : commands.TryAddDevelopmentCurrency(100);
+                if (result.Succeeded
+                    || result.FailureReason != SaveFailureReason.WriteFailed
+                    || !ReferenceEquals(saveData.player, player)
+                    || saveData.player.tradingCurrency != 1000
+                    || saveData.player.developmentCurrency != 200
+                    || save.SaveCalls != 1
+                    || eventCount != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{(trading ? "Trading" : "Development")} currency save rollback check failed.");
+                }
+            }
+            finally
+            {
+                FrameworkEvents.TradingCurrencyChanged -= onChanged;
+            }
+        }
+
+        private static void RunCurrencyMissingDependencyCheck()
+        {
+            var commands = new FrameworkDebugCommands(null, () => null, null);
+            var result = commands.TryAddTradingCurrency(100);
+            if (result.Succeeded
+                || result.FailureReason != SaveFailureReason.InvalidData
+                || result.FailedDataCategory != "tradingCurrency")
+            {
+                throw new InvalidOperationException("Missing currency command dependency was not rejected.");
+            }
         }
 
         private static void RunTradePreparationCommitChecks()
@@ -668,6 +868,171 @@ namespace ND.Framework.Editor
             SaveDataLookup.TryGetCaravan(context.SaveData, caravanId, out var caravanSave);
             if (string.IsNullOrWhiteSpace(caravanSave.currentTownId))
                 throw new InvalidOperationException("Claim did not retain the destination currentTownId.");
+        }
+
+        private static void RunExactForcedTradeCompletionChecks()
+        {
+            RunExactForcedTradeSuccessAndIsolationCheck();
+            RunExactForcedTradeValidationChecks();
+            RunExactForcedTradeSaveRollbackCheck();
+        }
+
+        private static void RunExactForcedTradeSuccessAndIsolationCheck()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var caravanA = context.SaveData.selectedCaravanId;
+            var caravanB = "force-arrival-b";
+            var runtimeA = AddForcedTradeFixture(context, caravanA, "force-trade-a");
+            var runtimeB = AddForcedTradeFixture(context, caravanB, "force-trade-b");
+            context.SaveData.selectedCaravanId = caravanB;
+            var selectedBefore = context.SaveData.selectedCaravanId;
+            var saveB = JsonUtility.ToJson(runtimeB);
+            var savesBefore = save.SaveCalls;
+            var ready = new List<string>();
+            Action<string, string, JourneyResultData> onReady =
+                (caravanId, tradeId, _) => ready.Add(caravanId + ":" + tradeId);
+            FrameworkEvents.TradeSettlementReady += onReady;
+            ForcedTradeCompletionResult result;
+            try
+            {
+                result = context.Coordinator.TryForceCompleteTrade(caravanA, "force-trade-a");
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onReady;
+            }
+
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanA, out var progressA);
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanB, out var progressB);
+            if (!result.Succeeded
+                || result.FailureReason != ForcedTradeCompletionFailureReason.None
+                || progressA.state != TradeProgressState.SettlementPending
+                || progressB.state != TradeProgressState.Traveling
+                || runtimeA.state != JourneyState.Settling
+                || JsonUtility.ToJson(runtimeB) != saveB
+                || context.SaveData.selectedCaravanId != selectedBefore
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    context.SaveData, caravanA, "force-trade-a", out _)
+                || SaveDataLookup.TryGetPendingSettlement(
+                    context.SaveData, caravanB, "force-trade-b", out _)
+                || save.SaveCalls != savesBefore + 1
+                || ready.Count != 1
+                || ready[0] != caravanA + ":force-trade-a")
+            {
+                throw new InvalidOperationException(
+                    "Exact force arrival did not preserve identity, lifecycle, selection, isolation, save, or event ordering.");
+            }
+
+            var duplicate = context.Coordinator.TryForceCompleteTrade(caravanA, "force-trade-a");
+            if (duplicate.Succeeded
+                || duplicate.FailureReason != ForcedTradeCompletionFailureReason.NotTraveling
+                || save.SaveCalls != savesBefore + 1
+                || ready.Count != 1)
+            {
+                throw new InvalidOperationException("Duplicate exact force arrival was not rejected before save.");
+            }
+        }
+
+        private static void RunExactForcedTradeValidationChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            var caravanA = context.SaveData.selectedCaravanId;
+            AddForcedTradeFixture(context, caravanA, "force-validation-a");
+            var snapshot = JsonUtility.ToJson(context.SaveData);
+            var mismatch = context.Coordinator.TryForceCompleteTrade(
+                caravanA, "force-validation-other");
+            if (mismatch.Succeeded
+                || mismatch.FailureReason != ForcedTradeCompletionFailureReason.TradeIdentityMismatch
+                || JsonUtility.ToJson(context.SaveData) != snapshot
+                || save.SaveCalls != 0)
+            {
+                throw new InvalidOperationException("Exact force arrival identity mismatch mutated or saved state.");
+            }
+
+            SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanA, out var progress);
+            progress.state = TradeProgressState.SettlementPending;
+            snapshot = JsonUtility.ToJson(context.SaveData);
+            var invalidState = context.Coordinator.TryForceCompleteTrade(
+                caravanA, "force-validation-a");
+            if (invalidState.Succeeded
+                || invalidState.FailureReason != ForcedTradeCompletionFailureReason.NotTraveling
+                || JsonUtility.ToJson(context.SaveData) != snapshot
+                || save.SaveCalls != 0)
+            {
+                throw new InvalidOperationException("Exact force arrival invalid state mutated or saved state.");
+            }
+        }
+
+        private static void RunExactForcedTradeSaveRollbackCheck()
+        {
+            var save = new ConfigurableSaveService { ShouldSucceed = false };
+            var context = TestContext.Create(save);
+            var caravanA = context.SaveData.selectedCaravanId;
+            var caravanB = "force-rollback-b";
+            var runtimeA = AddForcedTradeFixture(context, caravanA, "force-rollback-a");
+            var runtimeB = AddForcedTradeFixture(context, caravanB, "force-rollback-b");
+            context.SaveData.selectedCaravanId = caravanB;
+            var saveSnapshot = JsonUtility.ToJson(context.SaveData);
+            var runtimeASnapshot = JsonUtility.ToJson(runtimeA);
+            var runtimeBSnapshot = JsonUtility.ToJson(runtimeB);
+            var readyCount = 0;
+            Action<string, string, JourneyResultData> onReady = (_, __, ___) => readyCount++;
+            FrameworkEvents.TradeSettlementReady += onReady;
+            ForcedTradeCompletionResult result;
+            try
+            {
+                result = context.Coordinator.TryForceCompleteTrade(caravanA, "force-rollback-a");
+            }
+            finally
+            {
+                FrameworkEvents.TradeSettlementReady -= onReady;
+            }
+
+            if (result.Succeeded
+                || result.FailureReason != ForcedTradeCompletionFailureReason.SaveFailed
+                || result.SaveResult == null
+                || JsonUtility.ToJson(context.SaveData) != saveSnapshot
+                || JsonUtility.ToJson(runtimeA) != runtimeASnapshot
+                || JsonUtility.ToJson(runtimeB) != runtimeBSnapshot
+                || context.Coordinator.LastSettlementResult != null
+                || !string.IsNullOrEmpty(context.Coordinator.LastSettlementTradeId)
+                || save.SaveCalls != 1
+                || readyCount != 0)
+            {
+                throw new InvalidOperationException(
+                    "Exact force arrival save failure did not fully roll back or suppress publication.");
+            }
+        }
+
+        private static CaravanData AddForcedTradeFixture(
+            TestContext context,
+            string caravanId,
+            string tradeId)
+        {
+            if (!SaveDataLookup.TryGetCaravan(context.SaveData, caravanId, out var caravanSave))
+            {
+                caravanSave = new CaravanSaveData { caravanId = caravanId };
+                context.SaveData.caravans.Add(caravanSave);
+            }
+
+            var runtime = CreateSampleCaravan(context.GameTime);
+            runtime.caravanId = caravanId;
+            runtime.state = JourneyState.Traveling;
+            runtime.progress01 = 0.25f;
+            CaravanSaveDataMapper.CopyToSave(runtime, caravanSave);
+            context.SaveData.tradeProgressEntries.Add(new TradeProgressSaveData
+            {
+                caravanId = caravanId,
+                activeTradeId = tradeId,
+                activeRouteId = "deterministic-force-arrival-route",
+                state = TradeProgressState.Traveling,
+                tradeStartUtcTick = context.GameTime.CurrentUtc.AddMinutes(-1).Ticks,
+                expectedTradeEndUtcTick = context.GameTime.CurrentUtc.AddMinutes(1).Ticks
+            });
+            context.Coordinator.SetActiveCaravan(runtime);
+            return runtime;
         }
 
         private static void RunSettlementPresentationIdentityChecks()

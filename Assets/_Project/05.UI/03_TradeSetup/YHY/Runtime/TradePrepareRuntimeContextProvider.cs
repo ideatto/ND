@@ -12,7 +12,6 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 {
     [Header("Official content data")]
     [SerializeField] private TownData[] towns = Array.Empty<TownData>();
-    [SerializeField] private RouteData[] routes = Array.Empty<RouteData>();
     [SerializeField] private TradeItemData[] tradeItems = Array.Empty<TradeItemData>();
     [SerializeField] private WagonData[] wagons = Array.Empty<WagonData>();
     [SerializeField] private DraftAnimalData[] draftAnimals = Array.Empty<DraftAnimalData>();
@@ -324,7 +323,6 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
             saveData = saveData,
             caravanOptions = GetLatestCaravanOptions(),
             towns = towns ?? Array.Empty<TownData>(),
-            routes = routes ?? Array.Empty<RouteData>(),
             tradeItems = tradeItems ?? Array.Empty<TradeItemData>(),
             wagons = wagons ?? Array.Empty<WagonData>(),
             draftAnimals = draftAnimals ?? Array.Empty<DraftAnimalData>(),
@@ -389,7 +387,6 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     private void OnValidate()
     {
         WarnSandboxAssets(towns);
-        WarnSandboxAssets(routes);
         WarnSandboxAssets(tradeItems);
         WarnSandboxAssets(wagons);
         WarnSandboxAssets(draftAnimals);

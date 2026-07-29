@@ -99,6 +99,20 @@
   수정: 금지 (필요 시 VendorOverrides/에셋이름)
   담당: 천성욱
 
+- 에셋이름: CharacterEffects v1.1 / .unitypackage
+  위치: TeamDrive/Packages/CharacterEffects_v1.1_20260728
+  Import: Assets/_ExternalPackages/CharacterEffects
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: ToonScapesSpring v1.02 / .unitypackage
+  위치: TeamDrive/Packages/ToonScapesSpring_v1.02_20260728
+  Import: Assets/_ExternalPackages/ToonScapesSpring
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
 ---
 
 ## UPM(Package Manager) 패키지

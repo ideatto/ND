@@ -7,7 +7,6 @@ public sealed class TradePrepareTemporaryUI : MonoBehaviour
 {
     [Header("Temporary UI Data Sources")]
     [SerializeField] private TownData[] towns = new TownData[0];
-    [SerializeField] private RouteData[] routes = new RouteData[0];
     [SerializeField] private TradeItemData[] tradeItems = new TradeItemData[0];
     [SerializeField] private WagonData[] wagons = new WagonData[0];
     [SerializeField] private DraftAnimalData[] draftAnimals = new DraftAnimalData[0];
@@ -32,14 +31,12 @@ public sealed class TradePrepareTemporaryUI : MonoBehaviour
 
     public void ConfigureData(
         TownData[] townData,
-        RouteData[] routeData,
         TradeItemData[] itemData,
         WagonData[] wagonData,
         DraftAnimalData[] animalData,
         MercenaryData[] mercenaryData)
     {
         towns = townData ?? new TownData[0];
-        routes = routeData ?? new RouteData[0];
         tradeItems = itemData ?? new TradeItemData[0];
         wagons = wagonData ?? new WagonData[0];
         draftAnimals = animalData ?? new DraftAnimalData[0];
@@ -80,7 +77,6 @@ public sealed class TradePrepareTemporaryUI : MonoBehaviour
             // Read-only input. This temporary UI never creates or mutates SaveData.
             saveData = saveData,
             towns = towns ?? new TownData[0],
-            routes = routes ?? new RouteData[0],
             tradeItems = tradeItems ?? new TradeItemData[0],
             wagons = wagons ?? new WagonData[0],
             draftAnimals = draftAnimals ?? new DraftAnimalData[0],

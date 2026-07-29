@@ -1,5 +1,8 @@
 #if UNITY_EDITOR
+using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 namespace ND.Framework.Editor
 {
@@ -8,7 +11,7 @@ namespace ND.Framework.Editor
         [Test]
         public void Process_SplitAndSingleDistanceProduceSameCursorAndEvents()
         {
-            var route = CreateWeatherRoute();
+            var route = CreateLuckyRoute();
             var split = CreateTravelingCaravan();
             split.progress01 = 0.2f;
             var first = TradeRouteEventProcessor.Process(split, route, "trade-a", 10f, 1f);
@@ -30,7 +33,7 @@ namespace ND.Framework.Editor
         {
             var caravan = CreateTravelingCaravan();
             caravan.progress01 = 0.5f;
-            var route = CreateWeatherRoute();
+            var route = CreateLuckyRoute();
 
             var first = TradeRouteEventProcessor.Process(caravan, route, "trade-b", 10f, 1f);
             var second = TradeRouteEventProcessor.Process(caravan, route, "trade-b", 10f, 1f);
@@ -47,11 +50,61 @@ namespace ND.Framework.Editor
             caravan.runEventChecksProcessed = 3;
 
             var result = TradeRouteEventProcessor.ProcessForced(
-                caravan, CreateWeatherRoute(), "trade-c", "weather");
+                caravan, CreateLuckyRoute(), "trade-c", "lucky");
 
             Assert.That(result.Succeeded, Is.True);
             Assert.That(caravan.runEventChecksProcessed, Is.EqualTo(3));
             Assert.That(caravan.runEventsOccurred, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RouteData_NormalizePreservesConfiguredChanceInsteadOfCombatPower()
+        {
+            var route = ScriptableObject.CreateInstance<global::RouteData>();
+            try
+            {
+                var serialized = new SerializedObject(route);
+                serialized.FindProperty("baseRiskLevel").floatValue = 0.35f;
+                var events = serialized.FindProperty("routeEvents");
+                events.arraySize = 1;
+                var routeEvent = events.GetArrayElementAtIndex(0);
+                routeEvent.FindPropertyRelative("eventType").enumValueIndex =
+                    (int)global::RouteEvent.Combat;
+                routeEvent.FindPropertyRelative("eventValue").intValue = 90;
+                routeEvent.FindPropertyRelative("banditCombatPower").intValue = 120;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                MethodInfo normalize = typeof(global::RouteData).GetMethod(
+                    "NormalizeRouteEvents",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(normalize, Is.Not.Null);
+                normalize.Invoke(route, null);
+
+                Assert.That(route.BaseRiskLevel, Is.EqualTo(0.35f).Within(0.0001f));
+                Assert.That(route.RouteEvents[0].BanditCombatPower, Is.EqualTo(120));
+            }
+            finally
+            {
+                Object.DestroyImmediate(route);
+            }
+        }
+
+        [Test]
+        public void RouteData_BaseRiskLevelClampsToProbabilityRange()
+        {
+            var route = ScriptableObject.CreateInstance<global::RouteData>();
+            try
+            {
+                var serialized = new SerializedObject(route);
+                serialized.FindProperty("baseRiskLevel").floatValue = 2f;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                Assert.That(route.BaseRiskLevel, Is.EqualTo(1f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(route);
+            }
         }
 
         private static CaravanData CreateTravelingCaravan()
@@ -65,7 +118,7 @@ namespace ND.Framework.Editor
             };
         }
 
-        private static SharedRouteDefinition CreateWeatherRoute()
+        private static SharedRouteDefinition CreateLuckyRoute()
         {
             return new SharedRouteDefinition
             {
@@ -77,8 +130,8 @@ namespace ND.Framework.Editor
                 {
                     new SharedRouteEventDefinition
                     {
-                        Id = "weather",
-                        EventType = RouteEvent.Weather
+                        Id = "lucky",
+                        EventType = RouteEvent.Lucky
                     }
                 }
             };
