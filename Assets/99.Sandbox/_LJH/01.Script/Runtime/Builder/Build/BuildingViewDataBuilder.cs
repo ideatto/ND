@@ -112,11 +112,6 @@ public class BuildingViewDataBuilder
             targetLevel = targetLevel,
             isConstruction = safeCurrentLevel == 0,
 
-            previewPrefab = targetLevelData.buildPrefab,
-
-            currencyRequirement = requirementResult.currencyRequirement,
-            itemRequirements = requirementResult.itemRequirements,
-
             canConfirm = requirementResult.isSatisfied,
             disabledReason = requirementResult.disabledReason
         };
