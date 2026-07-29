@@ -19,10 +19,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using ND.Framework;
 
 /// <summary>RawImage 클릭 → 마을 카메라 광선 → 건물 집기/드래그 이동/스크롤 회전.</summary>
 public class BuildingPlacementController : MonoBehaviour,
-    IPointerDownHandler, IDragHandler, IScrollHandler
+    IPointerDownHandler, IPointerUpHandler, IDragHandler, IScrollHandler
 {
     [SerializeField] private RawImage view;            // RT를 그리는 RawImage(비면 자기 자신)
     [SerializeField] private Camera villageCamera;     // 마을 카메라(비면 런타임 탐색)
@@ -48,6 +49,20 @@ public class BuildingPlacementController : MonoBehaviour,
     // 선택 하이라이트 복원용(집은 건물의 렌더러 원래 색 저장)
     private readonly List<Renderer> tintedRenderers = new List<Renderer>();
     private readonly List<Color> tintedOriginals = new List<Color>();
+    private bool isDraggingBuilding;
+    private bool isPlacementCommitInProgress;
+    private PlacementSnapshot placementSnapshot;
+
+    private struct PlacementSnapshot
+    {
+        public Transform Building;
+        public Vector3 Position;
+        public Quaternion Rotation;
+        public int CellX;
+        public int CellZ;
+        public int SizeX;
+        public int SizeZ;
+    }
 
     private void Awake()
     {
@@ -62,7 +77,6 @@ public class BuildingPlacementController : MonoBehaviour,
         // [중요] 마을(Village_Home)은 additive로 나중에 로드되므로, Awake 시점엔 건물이 없다.
         //        씬이 로드될 때마다 등록을 다시 시도하고, 이미 로드돼 있으면 지금 바로 등록한다.
         UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnAnySceneLoaded;
-        RegisterExistingBuildings();   // 이미 로드된 상태면 지금 등록
     }
 
     private void OnDestroy()
@@ -88,8 +102,6 @@ public class BuildingPlacementController : MonoBehaviour,
 
     private void OnAnySceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
     {
-        RegisterExistingBuildings();   // 마을 씬이 올라온 뒤 건물들을 등록·정렬
-
         // 마을 씬이 올라왔고 건물 등록이 끝났으면, NPC를 한 번만 스폰(건물 칸을 피해 배회).
         if (!npcSpawned && registered.Count > 0)
         {
@@ -113,7 +125,8 @@ public class BuildingPlacementController : MonoBehaviour,
     /// </summary>
     private void RegisterExistingBuildings()
     {
-        foreach (PlaceableBuilding pb in FindObjectsByType<PlaceableBuilding>(FindObjectsSortMode.None))
+        PlaceableBuilding[] found = FindObjectsByType<PlaceableBuilding>();
+        foreach (PlaceableBuilding pb in found)
         {
             Transform t = pb.transform;
             if (!registered.Add(t)) continue;   // 이미 등록된 건물은 건너뜀
@@ -134,6 +147,123 @@ public class BuildingPlacementController : MonoBehaviour,
 
             grid.Occupy(cx, cz, sx, sz, t);
             t.position = grid.CellToWorldCenter(cx, cz, sx, sz);   // 칸 중심으로 정렬(겹침 해소)
+        }
+    }
+
+    /// <summary>
+    /// Registry가 저장 레벨과 누락 인스턴스를 복원한 뒤 전체 점유를 한 번 재구축한다.
+    /// 유효한 저장 배치를 먼저 점유하고, 나머지는 authored 위치 또는 nearest-free 위치를 사용한다.
+    /// 로드 중 SaveData를 변경하거나 저장하지 않는다.
+    /// </summary>
+    public void RestoreAndRegisterExistingBuildings()
+    {
+        grid = new VillageGrid(gridWidth, gridHeight);
+        registered.Clear();
+        npcBuildingList.Clear();
+
+        PlaceableBuilding[] all = FindObjectsByType<PlaceableBuilding>();
+        var pending = new List<PlaceableBuilding>(all);
+        FrameworkRoot root = FrameworkRoot.Instance;
+        List<VillageBuildingSaveData> saved =
+            root != null && root.CurrentSaveData != null && root.CurrentSaveData.player != null
+                ? root.CurrentSaveData.player.villageBuildings
+                : null;
+
+        if (saved != null)
+        {
+            foreach (VillageBuildingSaveData entry in saved)
+            {
+                if (entry == null || !entry.hasPlacement) continue;
+                if (CountSavedMatches(saved, entry.displayName) != 1)
+                {
+                    Debug.LogWarning(
+                        $"Village placement restore rejected. displayName={entry.displayName}, " +
+                        $"cell=({entry.gridCellX},{entry.gridCellZ}), yawStep={entry.yawStep}, " +
+                        "reason=duplicate save entries; fallback=authored/default.");
+                    continue;
+                }
+
+                PlaceableBuilding placeable = FindRuntimeBuilding(pending, entry.displayName);
+                if (placeable == null)
+                {
+                    Debug.LogWarning(
+                        $"Village placement restore skipped. displayName={entry.displayName}, " +
+                        $"cell=({entry.gridCellX},{entry.gridCellZ}), yawStep={entry.yawStep}, " +
+                        "reason=runtime building mismatch; fallback=unavailable.");
+                    continue;
+                }
+
+                int normalizedYaw = BuildingPlacementCommand.NormalizeYawStep(entry.yawStep);
+                Quaternion authoredRotation = placeable.transform.rotation;
+                placeable.transform.rotation = Quaternion.Euler(0f, normalizedYaw * GridRotateStep, 0f);
+                placeable.GetRotatedCells(out int sx, out int sz);
+                if (!grid.CanPlace(entry.gridCellX, entry.gridCellZ, sx, sz, placeable.transform))
+                {
+                    placeable.transform.rotation = authoredRotation;
+                    Debug.LogWarning(
+                        $"Village placement restore rejected. displayName={entry.displayName}, " +
+                        $"cell=({entry.gridCellX},{entry.gridCellZ}), yawStep={entry.yawStep}, " +
+                        "reason=out of bounds or overlap; fallback=authored/default.");
+                    continue;
+                }
+
+                placeable.transform.position =
+                    grid.CellToWorldCenter(entry.gridCellX, entry.gridCellZ, sx, sz);
+                RegisterAt(placeable, entry.gridCellX, entry.gridCellZ, sx, sz);
+                pending.Remove(placeable);
+            }
+        }
+
+        foreach (PlaceableBuilding placeable in pending)
+            RegisterAtAuthoredOrNearest(placeable);
+    }
+
+    private static int CountSavedMatches(List<VillageBuildingSaveData> saved, string displayName)
+    {
+        int count = 0;
+        foreach (VillageBuildingSaveData entry in saved)
+            if (entry != null && entry.displayName == displayName) count++;
+        return count;
+    }
+
+    private static PlaceableBuilding FindRuntimeBuilding(
+        List<PlaceableBuilding> candidates,
+        string displayName)
+    {
+        VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
+        if (registry == null) return null;
+        foreach (PlaceableBuilding candidate in candidates)
+            if (registry.TryGetDisplayName(candidate, out string candidateName)
+                && candidateName == displayName)
+                return candidate;
+        return null;
+    }
+
+    private void RegisterAtAuthoredOrNearest(PlaceableBuilding placeable)
+    {
+        Transform t = placeable.transform;
+        placeable.GetRotatedCells(out int sx, out int sz);
+        GetLogicalCell(t, sx, sz, out int cx, out int cz);
+        if (!grid.CanPlace(cx, cz, sx, sz, t)
+            && !grid.FindNearestFree(cx, cz, sx, sz, t, out cx, out cz))
+        {
+            Debug.LogWarning($"Village building registration failed. name={t.name}, reason=no free cell.");
+            return;
+        }
+
+        t.position = grid.CellToWorldCenter(cx, cz, sx, sz);
+        RegisterAt(placeable, cx, cz, sx, sz);
+    }
+
+    private void RegisterAt(PlaceableBuilding placeable, int cx, int cz, int sx, int sz)
+    {
+        Transform t = placeable.transform;
+        grid.Occupy(cx, cz, sx, sz, t);
+        registered.Add(t);
+        if (!npcBuildingList.Contains(placeable))
+        {
+            npcBuildingList.Add(placeable);
+            AssignNeed(placeable);
         }
     }
 
@@ -162,6 +292,7 @@ public class BuildingPlacementController : MonoBehaviour,
     public void OnDrag(PointerEventData e)
     {
         if (selected == null) { PanCamera(e.delta); return; }   // 빈 곳 드래그 → 마을 패닝
+        if (!isDraggingBuilding) BeginPlacementPreview(selected);
         if (IsOverButton(e.position)) return;   // 버튼 위에서의 드래그로 건물이 튀지 않게
         if (!TryMakeRay(e.position, out Ray ray)) return;
 
@@ -175,6 +306,17 @@ public class BuildingPlacementController : MonoBehaviour,
             SnapToGrid(selected, h.point);   // 광선 지점 → 가장 가까운 칸에 스냅(빈 칸일 때만)
             return;
         }
+    }
+
+    /// <summary>
+    /// 건물 드래그가 끝날 때 현재 preview를 검증하고 저장을 한 번 호출한다.
+    /// 저장 실패 시 Transform, 회전, 원래 점유를 함께 복원한다.
+    /// </summary>
+    public void OnPointerUp(PointerEventData e)
+    {
+        if (!isDraggingBuilding) return;
+        isDraggingBuilding = false;
+        CommitCurrentPlacement();
     }
 
     /// <summary>
@@ -196,6 +338,25 @@ public class BuildingPlacementController : MonoBehaviour,
         grid.Clear(building);                                    // 이전 칸 비우고
         grid.Occupy(cx, cz, sx, sz, building);                   // 새 칸 점유
         building.position = grid.CellToWorldCenter(cx, cz, sx, sz);  // 칸 중심으로 스냅
+    }
+
+    private void BeginPlacementPreview(Transform building)
+    {
+        PlaceableBuilding placeable = building.GetComponent<PlaceableBuilding>();
+        if (placeable == null) return;
+        placeable.GetRotatedCells(out int sx, out int sz);
+        GetLogicalCell(building, sx, sz, out int cx, out int cz);
+        placementSnapshot = new PlacementSnapshot
+        {
+            Building = building,
+            Position = building.position,
+            Rotation = building.rotation,
+            CellX = cx,
+            CellZ = cz,
+            SizeX = sx,
+            SizeZ = sz
+        };
+        isDraggingBuilding = true;
     }
 
     /// <summary>스크롤: 선택한 건물을 90°씩 회전(격자 방향).</summary>
@@ -344,7 +505,9 @@ public class BuildingPlacementController : MonoBehaviour,
     /// </summary>
     private void ApplyYaw(float deg)
     {
-        if (selected == null) return;
+        if (selected == null || isPlacementCommitInProgress) return;
+        bool commitImmediately = !isDraggingBuilding;
+        if (commitImmediately) BeginPlacementPreview(selected);
 
         PlaceableBuilding pb = selected.GetComponent<PlaceableBuilding>();
         Quaternion before = selected.rotation;
@@ -367,7 +530,94 @@ public class BuildingPlacementController : MonoBehaviour,
         else
         {
             selected.rotation = before;   // 회전하면 겹침 → 취소
+            if (commitImmediately) isDraggingBuilding = false;
+            return;
         }
+
+        if (commitImmediately)
+        {
+            isDraggingBuilding = false;
+            CommitCurrentPlacement();
+        }
+    }
+
+    private void CommitCurrentPlacement()
+    {
+        if (isPlacementCommitInProgress || placementSnapshot.Building == null) return;
+        Transform building = placementSnapshot.Building;
+        PlaceableBuilding placeable = building.GetComponent<PlaceableBuilding>();
+        VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (placeable == null || registry == null
+            || !registry.TryGetDisplayName(placeable, out string displayName)
+            || root == null || root.BuildingPlacement == null)
+        {
+            RollbackRuntimePlacement();
+            Debug.LogWarning(
+                $"Village placement commit rejected. name={building.name}, reason=integration unavailable.");
+            return;
+        }
+
+        placeable.GetRotatedCells(out int sx, out int sz);
+        GetLogicalCell(building, sx, sz, out int cx, out int cz);
+        if (!grid.CanPlace(cx, cz, sx, sz, building))
+        {
+            RollbackRuntimePlacement();
+            return;
+        }
+
+        int yawStep = Mathf.RoundToInt(
+            Mathf.Repeat(building.eulerAngles.y, 360f) / GridRotateStep) % 4;
+        isPlacementCommitInProgress = true;
+        try
+        {
+            grid.Clear(building);
+            grid.Occupy(cx, cz, sx, sz, building);
+            BuildingPlacementResult result =
+                root.BuildingPlacement.Execute(displayName, cx, cz, yawStep);
+            if (!result.Succeeded)
+            {
+                RollbackRuntimePlacement();
+                string saveMessage = result.SaveResult != null ? result.SaveResult.Message : string.Empty;
+                Debug.LogWarning(
+                    $"Village placement save failed. displayName={displayName}, cell=({cx},{cz}), " +
+                    $"yawStep={yawStep}, reason={result.FailureReason}, saveMessage={saveMessage}");
+            }
+        }
+        finally
+        {
+            placementSnapshot = default;
+            isPlacementCommitInProgress = false;
+        }
+    }
+
+    private void RollbackRuntimePlacement()
+    {
+        Transform building = placementSnapshot.Building;
+        if (building == null) return;
+        grid.Clear(building);
+        building.position = placementSnapshot.Position;
+        building.rotation = placementSnapshot.Rotation;
+        grid.Occupy(
+            placementSnapshot.CellX,
+            placementSnapshot.CellZ,
+            placementSnapshot.SizeX,
+            placementSnapshot.SizeZ,
+            building);
+    }
+
+    private static void GetLogicalCell(
+        Transform building,
+        int sx,
+        int sz,
+        out int cx,
+        out int cz)
+    {
+        Vector3 corner =
+            building.position - new Vector3(sx * 0.5f, 0f, sz * 0.5f) * VillageGrid.CellSize;
+        // 모든 controller 인스턴스는 동일한 VillageGrid 좌표 규칙을 사용한다.
+        cx = Mathf.FloorToInt(corner.x / VillageGrid.CellSize);
+        cz = Mathf.FloorToInt(corner.z / VillageGrid.CellSize);
     }
 
     // ── 선택 + 하이라이트 ──

@@ -4,8 +4,157 @@ using ND.Economy;
 
 namespace ND.Framework
 {
+    public enum BuildingPlacementFailureReason
+    {
+        None,
+        InvalidArgument,
+        SaveDataUnavailable,
+        BuildingCollectionUnavailable,
+        BuildingNotFound,
+        DuplicateBuildingEntry,
+        SaveServiceUnavailable,
+        SaveFailed
+    }
+
+    /// <summary>건물 배치 SaveData 변경과 영속 저장의 결과를 반환한다.</summary>
+    public sealed class BuildingPlacementResult
+    {
+        private BuildingPlacementResult(
+            bool succeeded,
+            BuildingPlacementFailureReason failureReason,
+            SaveResult saveResult)
+        {
+            Succeeded = succeeded;
+            FailureReason = failureReason;
+            SaveResult = saveResult;
+        }
+
+        public bool Succeeded { get; }
+        public BuildingPlacementFailureReason FailureReason { get; }
+        public SaveResult SaveResult { get; }
+
+        internal static BuildingPlacementResult Success(SaveResult saveResult)
+            => new BuildingPlacementResult(true, BuildingPlacementFailureReason.None, saveResult);
+
+        internal static BuildingPlacementResult Failure(
+            BuildingPlacementFailureReason failureReason,
+            SaveResult saveResult = null)
+            => new BuildingPlacementResult(false, failureReason, saveResult);
+    }
+
+    /// <summary>
+    /// 이미 건설된 한 건물의 격자 배치만 변경하고 저장한다.
+    /// 저장 실패 또는 예외 시 네 배치 필드를 명령 실행 전 값으로 복원한다.
+    /// </summary>
+    public sealed class BuildingPlacementCommand
+    {
+        private readonly Func<SaveData> getSaveData;
+        private readonly ISaveService saveService;
+
+        public BuildingPlacementCommand(Func<SaveData> getSaveData, ISaveService saveService)
+        {
+            this.getSaveData = getSaveData;
+            this.saveService = saveService;
+        }
+
+        /// <returns>
+        /// 디스크 저장까지 완료된 경우에만 성공한다. 예상 가능한 검증 실패는 예외 대신
+        /// FailureReason으로 반환하며, 저장 실패 시 SaveResult도 함께 반환한다.
+        /// </returns>
+        public BuildingPlacementResult Execute(string displayName, int gridCellX, int gridCellZ, int yawStep)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+                return BuildingPlacementResult.Failure(BuildingPlacementFailureReason.InvalidArgument);
+
+            SaveData saveData = getSaveData != null ? getSaveData() : null;
+            if (saveData == null || saveData.player == null)
+                return BuildingPlacementResult.Failure(BuildingPlacementFailureReason.SaveDataUnavailable);
+            if (saveData.player.villageBuildings == null)
+                return BuildingPlacementResult.Failure(BuildingPlacementFailureReason.BuildingCollectionUnavailable);
+            if (saveService == null)
+                return BuildingPlacementResult.Failure(BuildingPlacementFailureReason.SaveServiceUnavailable);
+
+            VillageBuildingSaveData target = null;
+            int matchCount = 0;
+            foreach (VillageBuildingSaveData entry in saveData.player.villageBuildings)
+            {
+                if (entry == null || !string.Equals(entry.displayName, displayName, StringComparison.Ordinal))
+                    continue;
+                target = entry;
+                matchCount++;
+            }
+
+            if (matchCount == 0)
+                return BuildingPlacementResult.Failure(BuildingPlacementFailureReason.BuildingNotFound);
+            if (matchCount != 1)
+                return BuildingPlacementResult.Failure(BuildingPlacementFailureReason.DuplicateBuildingEntry);
+
+            bool previousHasPlacement = target.hasPlacement;
+            int previousGridCellX = target.gridCellX;
+            int previousGridCellZ = target.gridCellZ;
+            int previousYawStep = target.yawStep;
+
+            try
+            {
+                target.hasPlacement = true;
+                target.gridCellX = gridCellX;
+                target.gridCellZ = gridCellZ;
+                target.yawStep = NormalizeYawStep(yawStep);
+
+                SaveResult saveResult = saveService.Save(saveData);
+                if (saveResult != null && saveResult.Succeeded)
+                    return BuildingPlacementResult.Success(saveResult);
+
+                RestorePlacement(
+                    target,
+                    previousHasPlacement,
+                    previousGridCellX,
+                    previousGridCellZ,
+                    previousYawStep);
+                return BuildingPlacementResult.Failure(
+                    BuildingPlacementFailureReason.SaveFailed,
+                    saveResult);
+            }
+            catch (Exception exception)
+            {
+                RestorePlacement(
+                    target,
+                    previousHasPlacement,
+                    previousGridCellX,
+                    previousGridCellZ,
+                    previousYawStep);
+                return BuildingPlacementResult.Failure(
+                    BuildingPlacementFailureReason.SaveFailed,
+                    SaveResult.Failure(
+                        SaveFailureReason.Unknown,
+                        "Building placement save failed: " + exception.Message,
+                        "VillageBuildingPlacement"));
+            }
+        }
+
+        internal static int NormalizeYawStep(int yawStep)
+        {
+            int normalized = yawStep % 4;
+            return normalized < 0 ? normalized + 4 : normalized;
+        }
+
+        private static void RestorePlacement(
+            VillageBuildingSaveData target,
+            bool hasPlacement,
+            int gridCellX,
+            int gridCellZ,
+            int yawStep)
+        {
+            target.hasPlacement = hasPlacement;
+            target.gridCellX = gridCellX;
+            target.gridCellZ = gridCellZ;
+            target.yawStep = yawStep;
+        }
+    }
+
     /// <summary>
     /// 본기지 Caravan cargo의 건축 재료 차감과 건물 레벨 변경을 하나의 저장 경계로 처리한다.
+    /// 저장 실패 시 건물 레벨과 내구 배치 정보를 명령 실행 전 스냅샷으로 복원한다.
     /// 씬 오브젝트와 UI는 성공 결과를 받은 뒤 별도로 갱신한다.
     /// </summary>
     public static class CaravanBuildingConstructionCommand
@@ -250,7 +399,11 @@ namespace ND.Framework
                 clone.Add(new VillageBuildingSaveData
                 {
                     displayName = building.displayName,
-                    level = building.level
+                    level = building.level,
+                    hasPlacement = building.hasPlacement,
+                    gridCellX = building.gridCellX,
+                    gridCellZ = building.gridCellZ,
+                    yawStep = building.yawStep
                 });
             }
 
