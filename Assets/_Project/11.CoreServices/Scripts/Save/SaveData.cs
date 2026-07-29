@@ -243,6 +243,26 @@ namespace ND.Framework
         /// 건물 레벨이다. 0 이하는 미건축, 1 이상은 보유 레벨이다.
         /// </summary>
         public int level;
+
+        /// <summary>
+        /// 저장된 배치 정보가 있으면 true다. false면 작성된 기본 배치를 사용해야 한다.
+        /// </summary>
+        public bool hasPlacement;
+
+        /// <summary>
+        /// VillageGrid의 논리 X 셀 좌표다. 저장 정규화에서 범위를 제한하지 않는다.
+        /// </summary>
+        public int gridCellX;
+
+        /// <summary>
+        /// VillageGrid의 논리 Z 셀 좌표다. 저장 정규화에서 범위를 제한하지 않는다.
+        /// </summary>
+        public int gridCellZ;
+
+        /// <summary>
+        /// Y축 기준 90도 회전 단계다. 저장 정규화 후 범위는 0~3이다.
+        /// </summary>
+        public int yawStep;
     }
 
     /// <summary>

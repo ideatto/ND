@@ -6,6 +6,7 @@ namespace ND.Framework
 {
     /// <summary>
     /// 본기지 Caravan cargo의 건축 재료 차감과 건물 레벨 변경을 하나의 저장 경계로 처리한다.
+    /// 저장 실패 시 건물 레벨과 내구 배치 정보를 명령 실행 전 스냅샷으로 복원한다.
     /// 씬 오브젝트와 UI는 성공 결과를 받은 뒤 별도로 갱신한다.
     /// </summary>
     public static class CaravanBuildingConstructionCommand
@@ -250,7 +251,11 @@ namespace ND.Framework
                 clone.Add(new VillageBuildingSaveData
                 {
                     displayName = building.displayName,
-                    level = building.level
+                    level = building.level,
+                    hasPlacement = building.hasPlacement,
+                    gridCellX = building.gridCellX,
+                    gridCellZ = building.gridCellZ,
+                    yawStep = building.yawStep
                 });
             }
 

@@ -288,6 +288,8 @@ namespace ND.Framework
                 {
                     building.level = 0;
                 }
+
+                building.yawStep = ((building.yawStep % 4) + 4) % 4;
             }
 
             if (data.caravans == null)
