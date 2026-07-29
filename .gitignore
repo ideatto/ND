@@ -159,3 +159,6 @@ crashlytics-build.properties
 # External Asset Local Import Area
 /[Aa]ssets/_ExternalPackages/*
 !/[Aa]ssets/_ExternalPackages/.gitkeep
+
+# Unity 크래시 복구 임시 폴더 (자동 생성 잡파일 — 추적 안 함)
+/[Aa]ssets/_Recovery/

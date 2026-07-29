@@ -125,7 +125,17 @@ public class BuildingPlacementController : MonoBehaviour,
     /// </summary>
     private void RegisterExistingBuildings()
     {
-        PlaceableBuilding[] found = FindObjectsByType<PlaceableBuilding>();
+        // 핫 리로드(플레이 중 재컴파일)로 격자(비직렬화 필드)가 null이 되면 재생성 + 재등록되게 초기화.
+        // 개발 중 재컴파일 복구용 — 실제 빌드에선 발생 안 함.
+        if (grid == null)
+        {
+            grid = new VillageGrid(gridWidth, gridHeight);
+            registered.Clear();
+            npcBuildingList.Clear();
+        }
+
+        // (dev2) 조회 결과를 변수로 추출. 정렬 불필요 → None(성능).
+        PlaceableBuilding[] found = FindObjectsByType<PlaceableBuilding>(FindObjectsSortMode.None);
         foreach (PlaceableBuilding pb in found)
         {
             Transform t = pb.transform;
