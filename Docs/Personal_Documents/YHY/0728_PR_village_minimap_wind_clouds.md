@@ -45,6 +45,8 @@
 
 관련 스크립트: `01.Core/07_Village/YHY/` — `BuildingPlacementController`, `VillageNpc`, `MinimapCameraController`, `MinimapTownClickRouter`, `MinimapMultiCaravanMarkers`, `TradeTownCameraMover`, `HomeViewButton`, `CurrentTownNameLabel`, `MinimapCaravanTestPanel`, 🆕 `MinimapGrid`·`MinimapCell`·`MinimapGridDebug`·`MinimapGridPainter`·`MinimapWind`·`MinimapWindDebug`·`MinimapClouds`·`MinimapEventPlacer`·`MinimapDebugToolsInstaller`
 
+> ⚠️ **경로 갱신(0729)**: 위 미니맵·날씨 스크립트는 이후 `01.Core/08_Minimap/`(미니맵)·`01.Core/09_Weather/`(바람·구름·날씨이벤트)로 분리됨(GUID 유지). `BuildingPlacementController`·`VillageNpc`만 `07_Village`에 잔류. 자세히는 [[0729_weather_reorg_and_systems]].
+
 ## 6. 실제 씬(InGame) 통합 방법 — 상세 (설정방법)
 
 > ⚠️ `MainUICanvas.prefab`은 공유 프리팹이라 Apply(프리팹 반영) 금지. 아래는 전부 씬 안에서의 작업(씬 오버라이드)입니다.
