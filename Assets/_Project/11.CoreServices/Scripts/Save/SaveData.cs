@@ -98,6 +98,12 @@ namespace ND.Framework
         public List<PendingSettlementSaveData> pendingSettlements = new List<PendingSettlementSaveData>();
 
         /// <summary>
+        /// Caravan별 출발, 전투 조우, 도착 이력을 발생 순서대로 보관하는 추가 저장 목록이다.
+        /// </summary>
+        public List<CaravanActivityLogEntrySaveData> caravanActivityLogs =
+            new List<CaravanActivityLogEntrySaveData>();
+
+        /// <summary>
         /// 마지막으로 선택한 caravan ID이다. 기존 단일 runtime은 이 caravan을 active caravan으로 사용한다.
         /// </summary>
         public string selectedCaravanId = string.Empty;
@@ -165,6 +171,28 @@ namespace ND.Framework
         /// 튜토리얼 진행 상태를 저장하는 데이터이다.
         /// </summary>
         public TutorialSaveData tutorial = new TutorialSaveData();
+    }
+
+    [Serializable]
+    public sealed class CaravanActivityLogEntrySaveData
+    {
+        public long sequence;
+        public long occurredUtcTicks;
+        public string caravanId = string.Empty;
+        public string tradeId = string.Empty;
+        public string routeId = string.Empty;
+        public string townId = string.Empty;
+        public string routeEventId = string.Empty;
+        public CaravanActivityLogType eventType;
+    }
+
+    public enum CaravanActivityLogType
+    {
+        Departure = 0,
+        CombatEncounter = 1,
+        CombatVictory = 2,
+        CombatDefeat = 3,
+        Arrival = 4
     }
 
     /// <summary>

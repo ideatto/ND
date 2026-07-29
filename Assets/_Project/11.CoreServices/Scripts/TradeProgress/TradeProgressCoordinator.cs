@@ -588,6 +588,7 @@ namespace ND.Framework
             dirty |= SyncElapsedInGameSeconds(progress, caravanSave, runtimeCaravan, evaluationUtc);
             JourneyRunner.SetProgress(runtimeCaravan, CalculateProgress(progress, evaluationUtc));
             routeEventStateChanged = ProcessRouteEvents(
+                saveData,
                 progress,
                 runtimeCaravan,
                 isOfflineRestore,
@@ -806,6 +807,10 @@ namespace ND.Framework
                     normalizedCaravanId, normalizedTradeId, normalizedEventId);
             }
 
+            var activityLogSnapshot = saveData.caravanActivityLogs != null
+                ? new List<CaravanActivityLogEntrySaveData>(saveData.caravanActivityLogs)
+                : new List<CaravanActivityLogEntrySaveData>();
+            RecordRouteEventLogs(saveData, progress, route, processResult);
             CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
             var saveResult = saveService?.Save(saveData)
                 ?? SaveResult.Failure(
@@ -814,6 +819,7 @@ namespace ND.Framework
                     nameof(CaravanSaveData));
             if (!saveResult.Succeeded)
             {
+                saveData.caravanActivityLogs = activityLogSnapshot;
                 try
                 {
                     JsonUtility.FromJsonOverwrite(runtimeSnapshot, runtimeCaravan);
@@ -1025,6 +1031,7 @@ namespace ND.Framework
         }
 
         private bool ProcessRouteEvents(
+            SaveData saveData,
             TradeProgressSaveData progress,
             CaravanData runtimeCaravan,
             bool isOfflineRestore,
@@ -1054,6 +1061,7 @@ namespace ND.Framework
                 return false;
             }
 
+            RecordRouteEventLogs(saveData, progress, route, result);
             for (var index = 0; index < result.Occurrences.Count; index++)
             {
                 var occurrence = result.Occurrences[index];
@@ -1067,6 +1075,69 @@ namespace ND.Framework
                     occurrence.IsFatal));
             }
             return result.Changed;
+        }
+
+        private static List<CaravanActivityLogEntrySaveData> RecordRouteEventLogs(
+            SaveData saveData,
+            TradeProgressSaveData progress,
+            SharedRouteDefinition route,
+            RouteEventProcessResult processResult)
+        {
+            var addedEntries = new List<CaravanActivityLogEntrySaveData>();
+            if (saveData == null || progress == null || route?.Events == null
+                || processResult?.Occurrences == null)
+            {
+                return addedEntries;
+            }
+
+            for (var occurrenceIndex = 0;
+                 occurrenceIndex < processResult.Occurrences.Count;
+                 occurrenceIndex++)
+            {
+                var occurrence = processResult.Occurrences[occurrenceIndex];
+                if (occurrence == null)
+                {
+                    FrameworkLog.Warning(
+                        $"Route event activity log skipped because the occurrence is missing. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}, RouteId: {progress.activeRouteId}");
+                    continue;
+                }
+                SharedRouteEventDefinition definition = null;
+                for (var definitionIndex = 0; definitionIndex < route.Events.Length; definitionIndex++)
+                {
+                    var candidate = route.Events[definitionIndex];
+                    if (candidate != null
+                        && string.Equals(candidate.Id, occurrence.EventId, StringComparison.Ordinal))
+                    {
+                        definition = candidate;
+                        break;
+                    }
+                }
+
+                if (definition == null)
+                {
+                    FrameworkLog.Warning(
+                        $"Route event activity log skipped because its definition is missing. CaravanId: {progress.caravanId}, TradeId: {progress.activeTradeId}, RouteId: {progress.activeRouteId}, EventId: {occurrence.EventId}");
+                    continue;
+                }
+                if (definition.EventType != RouteEvent.Combat)
+                {
+                    continue;
+                }
+
+                var entry = CaravanActivityLog.Add(
+                    saveData,
+                    CaravanActivityLogType.CombatEncounter,
+                    progress.caravanId,
+                    progress.activeTradeId,
+                    progress.activeRouteId,
+                    routeEventId: occurrence.EventId);
+                if (entry != null)
+                {
+                    addedEntries.Add(entry);
+                }
+            }
+
+            return addedEntries;
         }
 
         private static bool RouteContainsEvent(SharedRouteDefinition route, string eventId)
@@ -1888,11 +1959,47 @@ namespace ND.Framework
             }
             saveData.pendingSettlements.Add(pending);
             CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
+            if (result.grade != JourneyResultGrade.Failed)
+            {
+                CaravanActivityLog.Add(
+                    saveData,
+                    CaravanActivityLogType.Arrival,
+                    progress.caravanId,
+                    tradeId,
+                    progress.activeRouteId,
+                    ResolveArrivalDestinationTownId(
+                        progress.caravanId,
+                        tradeId,
+                        progress.activeRouteId));
+            }
 
             LastSettlementTradeId = tradeId;
             LastSettlementResult = result;
             deferredEvents.Add(new SettlementNotification(caravanId, tradeId, result));
             return true;
+        }
+
+        private string ResolveArrivalDestinationTownId(
+            string caravanId,
+            string tradeId,
+            string routeId)
+        {
+            if (exactTradePrepareCommitStore != null
+                && exactTradePrepareCommitStore.TryGet(caravanId, tradeId, out var commit)
+                && commit != null
+                && string.Equals(commit.caravanId, caravanId, StringComparison.Ordinal)
+                && string.Equals(commit.tradeId, tradeId, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(commit.selectedDestinationTownId))
+            {
+                return commit.selectedDestinationTownId;
+            }
+
+            var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
+            return sharedGameData != null
+                && sharedGameData.TryGetRoute(routeId, out var route)
+                && route != null
+                ? route.ToTownId ?? string.Empty
+                : string.Empty;
         }
 
         private static void ApplyRouteMinimumFoodConsumption(

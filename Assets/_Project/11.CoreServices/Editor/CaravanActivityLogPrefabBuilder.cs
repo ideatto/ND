@@ -1,4 +1,3 @@
-/*
 using System.IO;
 using TMPro;
 using UnityEditor;
@@ -197,4 +196,3 @@ public static class CaravanActivityLogPrefabBuilder
         }
     }
 }
-*/

@@ -308,6 +308,17 @@ namespace ND.Framework
                 data.pendingSettlements = new List<PendingSettlementSaveData>();
             }
 
+            if (data.caravanActivityLogs == null)
+            {
+                data.caravanActivityLogs = new List<CaravanActivityLogEntrySaveData>();
+            }
+            var activityLogCountBeforeTrim = data.caravanActivityLogs.Count;
+            CaravanActivityLog.TrimToLimit(data);
+            if (data.caravanActivityLogs.Count != activityLogCountBeforeTrim)
+            {
+                assetDataChanged = true;
+            }
+
             if (data.caravans.Count == 0)
             {
                 data.caravans.Add(new CaravanSaveData());
