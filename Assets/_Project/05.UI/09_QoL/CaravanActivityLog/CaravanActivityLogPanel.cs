@@ -1,4 +1,3 @@
-/*
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -328,4 +327,3 @@ public sealed class CaravanActivityLogPanel : MonoBehaviour
         return palette[slotIndex % palette.Length];
     }
 }
-*/

@@ -1,4 +1,3 @@
-/*
 using ND.Framework;
 using TMPro;
 using UnityEngine;
@@ -30,4 +29,3 @@ public sealed class CaravanActivityLogItemView : MonoBehaviour
         }
     }
 }
-*/
