@@ -46,6 +46,8 @@ public class MinimapClouds : MonoBehaviour
     [SerializeField] private float fixedDt = 0.1f;
     [Tooltip("시뮬 전체 속도 배율. 모든 비율(이동·먹구름화·비·수명·생성)을 유지한 채 느리게/빠르게. 1=기본, 작을수록 전체 느림")]
     [SerializeField] private float simSpeed = 0.2f;
+    [Tooltip("Phase2 캐치업: 미니맵을 닫았다 열 때 '그동안 흘렀을' 만큼 따라잡는 최대 스텝(폭주 방지 상한). 오래 닫혀있으면 여기까지만 재생 후 목표로 점프")]
+    [SerializeField] private int maxCatchupSteps = 3000;
 
     [Header("생성/수명")]
     [SerializeField] private int initialClouds = 12;     // 시작 시 맵 안에 뿌리는 수
@@ -101,6 +103,7 @@ public class MinimapClouds : MonoBehaviour
     private Transform cloudRoot;
     private float spawnTimer;
     private long simStep;        // 몇 번째 '똑딱'(순간). 모든 번호표의 시간 축
+    private static double weatherEpoch = -1;   // Phase2: 날씨 시작 기준 시각(초). static=세션 내 미니맵 닫아도 유지
     private int spawnCounter;    // 몇 번째로 태어난 구름인지(구름마다 고유 씨앗)
     private float acc;           // 실시간 누적(고정스텝으로 잘라 쓰기 위한 통)
     private readonly List<Cloud> clouds = new List<Cloud>();
@@ -137,20 +140,32 @@ public class MinimapClouds : MonoBehaviour
 
         ApplySeasonProfile();   // 계절(온도)에 따라 증발·건조·비확률·개수 배율 갱신
 
-        // 똑딱시계: 실시간을 fixedDt 단위로 잘라, 그 단위만큼만 시뮬을 전진시킨다.
-        // (프레임 속도가 달라도 '몇 번 전진했나'가 같으면 결과가 같다 → 재현 가능)
-        acc += Time.deltaTime;
-        int guard = 0;                        // 폭주 방지(멈췄다 돌아왔을 때 무한루프 차단)
-        while (acc >= fixedDt && guard < 500)
+        // Phase2 벽시계 앵커: 날씨는 'epoch부터 지금까지 벽시계로 몇 스텝'까지 진행돼 있어야 한다.
+        // 미니맵을 닫았다 열어도(simStep=0에서 다시 시작해도) 결정론 리플레이로 목표 스텝까지 따라잡아 '이어진' 상태를 재생성.
+        if (weatherEpoch < 0) weatherEpoch = NowSeconds();
+        long targetStep = (long)((NowSeconds() - weatherEpoch) / fixedDt);
+        int guard = 0;
+        float sdt = fixedDt * simSpeed;        // 시뮬 시간 배율(모든 비율 유지한 채 느리게)
+        while (simStep < targetStep && guard < maxCatchupSteps)
         {
-            float sdt = fixedDt * simSpeed;   // 시뮬 시간 배율: 모든 것(이동·수분·수명·비·생성)이 같은 비율로 느려짐
-            wind.StepSim(sdt);                // ① 바람 먼저 전진(구름이 읽을 바람)
-            StepClouds(a, sdt);               // ② 그 바람으로 구름 전진
-            simStep++;                        // ③ 순간 카운터 +1(번호표 시간 축)
-            acc -= fixedDt;
+            wind.StepSim(sdt);                 // ① 바람 먼저 전진(구름이 읽을 바람)
+            StepClouds(a, sdt);                // ② 그 바람으로 구름 전진
+            simStep++;                         // ③ 순간 카운터 +1
             guard++;
         }
-        if (guard >= 500) acc = 0f;           // 너무 많이 밀렸으면 남은 시간은 버림
+        if (simStep < targetStep) simStep = targetStep;   // 너무 오래 닫혀 상한 초과 → 목표로 점프(근사)
+    }
+
+    /// <summary>날씨 기준 시각(초) = 진짜 벽시계. 유니티가 멈추거나 unfocus·종료돼도 흐른다(캐러밴 오프라인과 동일).
+    /// GameTime(캐러밴 시계, 실UTC)이 있으면 그걸 쓰고(정합), 없으면 OS 시계 DateTime.UtcNow.
+    /// ※ realtimeSinceStartup은 일시정지 때 같이 멈춰서 쓰면 안 됨.</summary>
+    private static double NowSeconds()
+    {
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        long ticks = (fr != null && fr.GameTime != null)
+            ? fr.GameTime.CurrentUtc.Ticks
+            : System.DateTime.UtcNow.Ticks;    // OS 벽시계 — 멈춰도 흐름
+        return ticks / (double)System.TimeSpan.TicksPerSecond;
     }
 
     /// <summary>계절(온도)로 증발·건조·비확률·개수 배율을 정한다. 여름=고온다습, 겨울=저온건조(눈).</summary>
@@ -312,6 +327,41 @@ public class MinimapClouds : MonoBehaviour
         else PurgeClouds();
     }
 
+    /// <summary>테스트용: 지정 월드 위치에 먹구름(수분 높음, 크게) 강제 생성. 캐러밴 날씨 이벤트 확인용.</summary>
+    public void SpawnDarkCloudAt(Vector3 worldPos)
+    {
+        if (!on) SetClouds(true);          // 꺼져있으면 켜서 cloudRoot 확보
+        if (cloudRoot == null) return;
+        float z = grid != null ? grid.Area.center.z : worldPos.z;
+        var go = new GameObject("Cloud");
+        go.transform.SetParent(cloudRoot, false);
+        go.transform.position = new Vector3(worldPos.x, worldPos.y, z);
+        float sc = 1.5f;
+        go.transform.localScale = new Vector3(sc, sc, 1f);
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = CloudSprite();
+        Color col = DarkCol; col.a = darkAlpha;
+        sr.color = col;
+        sr.sortingOrder = darkSortingOrder;
+        sr.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+        clouds.Add(new Cloud { t = go.transform, sr = sr, moisture = 0.95f, age = 0f, life = lifeMax, baseScale = sc });
+    }
+
+    /// <summary>월드 위치가 '먹구름(비구름) 아래'인지 — 캐러밴 날씨 이벤트 판정용(외부 조회). 구름 꺼져있으면 false.</summary>
+    public bool IsRainAt(Vector3 worldPos)
+    {
+        if (!on) return false;
+        for (int i = 0; i < clouds.Count; i++)
+        {
+            Cloud cl = clouds[i];
+            if (cl.t == null || cl.moisture < darkThreshold) continue;   // 먹구름(수분≥문턱)만 '비'로 취급
+            float r = cl.t.localScale.x * 0.9f;   // 구름 반경(스프라이트 폭 ≈ 스케일). 발밑에 걸치면 비.
+            float dx = cl.t.position.x - worldPos.x, dy = cl.t.position.y - worldPos.y;
+            if (dx * dx + dy * dy <= r * r) return true;
+        }
+        return false;
+    }
+
     private void BuildClouds()
     {
         PurgeClouds();
@@ -327,7 +377,7 @@ public class MinimapClouds : MonoBehaviour
         simStep = 0;
         spawnCounter = 0;
         acc = 0f;
-        if (wind != null) { wind.SetSeed(worldSeed); wind.SetExternallyDriven(true); }
+        if (wind != null) { wind.SetSeed(worldSeed); wind.ResetSim(); wind.SetExternallyDriven(true); }   // 바람도 epoch로 리셋 → 결정론 리플레이
 
         // 맵 영역 크기의 마스크 → 구름이 격자 밖(미니맵 프레임)으로 안 삐져나오고 가장자리에서 잘림
         var maskGo = new GameObject("CloudMask");

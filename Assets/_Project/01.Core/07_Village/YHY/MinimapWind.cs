@@ -229,6 +229,16 @@ public class MinimapWind : MonoBehaviour
     /// <summary>true면 자체 시간전진 정지(구름이 고정스텝으로 몰아줌). 구름 끄면 false로 되돌린다.</summary>
     public void SetExternallyDriven(bool value) => externallyDriven = value;
 
+    /// <summary>바람 소스를 epoch(step 0) 상태로 리셋 — 떠돌이·계절 재시드(DetRng), 드리프트 누적 초기화, 이벤트 제거.
+    /// 결정론 리플레이용: 같은 씨앗 → 항상 같은 시작 바람. 구름이 재생성될 때 호출(그 뒤 캐치업이 같이 리플레이).</summary>
+    public void ResetSim()
+    {
+        if (!EnsureArea()) return;
+        RebuildSeasonal();                                     // 계절 기압 재구성(결정론)
+        SpawnAmbient();                                        // 떠돌이 재시드 → 드리프트 누적 초기화
+        sources.RemoveAll(s => s.kind == SourceKind.Event);    // 이벤트(비결정 사용자 배치)는 리플레이에서 제외
+    }
+
     // ------------------------------------------------------------------ 기압/바람 조회
 
     /// <summary>위치의 기압(기압원 가우시안 합).</summary>
