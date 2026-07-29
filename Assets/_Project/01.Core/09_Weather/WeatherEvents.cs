@@ -20,9 +20,9 @@ public struct WeatherEventOccurrence
     public int cellRow;         // 발생 셀
     public int cellCol;
     public int checkIndex;      // 몇 번째 셀 체크에서 발생했나(결정론 축)
+    public float intensity;     // 먹구름 세기(강수량×크기) — 효과가 이 값에 비례
     public float severity;      // 심각도(표시/연출)
-    public float foodPenaltyRate; // 효과 파라미터(데이터 — 적용은 구독자/협의)
-    public float delayRate;
+    public float delayRate;     // 효과 파라미터(데이터 — 적용은 구독자/협의)
 }
 
 /// <summary>날씨 이벤트 알림 채널. 구독은 static event, 발행은 Raise.</summary>

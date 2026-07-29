@@ -348,18 +348,24 @@ public class MinimapClouds : MonoBehaviour
     }
 
     /// <summary>월드 위치가 '먹구름(비구름) 아래'인지 — 캐러밴 날씨 이벤트 판정용(외부 조회). 구름 꺼져있으면 false.</summary>
-    public bool IsRainAt(Vector3 worldPos)
+    public bool IsRainAt(Vector3 worldPos) => RainIntensityAt(worldPos) > 0f;
+
+    /// <summary>위치의 '비 세기' = 덮은 먹구름 중 가장 센 것의 (강수량 moisture × 크기 scale). 없으면 0. 이벤트 판단용.</summary>
+    public float RainIntensityAt(Vector3 worldPos)
     {
-        if (!on) return false;
+        if (!on) return 0f;
+        float best = 0f;
         for (int i = 0; i < clouds.Count; i++)
         {
             Cloud cl = clouds[i];
-            if (cl.t == null || cl.moisture < darkThreshold) continue;   // 먹구름(수분≥문턱)만 '비'로 취급
-            float r = cl.t.localScale.x * 0.9f;   // 구름 반경(스프라이트 폭 ≈ 스케일). 발밑에 걸치면 비.
+            if (cl.t == null || cl.moisture < darkThreshold) continue;   // 먹구름(수분≥문턱)만
+            float r = cl.t.localScale.x * 0.9f;   // 구름 반경(스프라이트 폭 ≈ 스케일)
             float dx = cl.t.position.x - worldPos.x, dy = cl.t.position.y - worldPos.y;
-            if (dx * dx + dy * dy <= r * r) return true;
+            if (dx * dx + dy * dy > r * r) continue;   // 발밑에 안 걸치면 제외
+            float intensity = cl.moisture * cl.t.localScale.x;   // 세기 = 강수량(젖음) × 크기(폭)
+            if (intensity > best) best = intensity;
         }
-        return false;
+        return best;
     }
 
     private void BuildClouds()

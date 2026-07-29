@@ -48,6 +48,24 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     private readonly Dictionary<string, int> checkCursor = new Dictionary<string, int>();               // 캐러밴별 셀 체크 횟수(결정론 축)
     private GUIStyle btnStyle;
 
+    // 화면 알림 — detector가 '직접' 그린다(효과 컴포넌트가 핫리로드로 안 도는 경우 대비, 신뢰성↑).
+    [SerializeField] private bool showNotices = true;
+    private struct Notice { public string text; public float until; }
+    private readonly List<Notice> notices = new List<Notice>();
+    private GUIStyle noticeStyle;
+
+    [Header("속도 감소(현상)")]
+    [Tooltip("먹구름 세기당 속도 감소량. 세기1.0 × 이 값 만큼 배율↓ (0.3 → 세기1.0에서 x0.7)")]
+    [SerializeField] private float rainSlowdown = 0.3f;
+    [SerializeField, Range(0.1f, 1f)]
+    [Tooltip("속도 배율 하한(아무리 세도 이 밑으론 안 느려짐)")]
+    private float minSpeedMul = 0.5f;
+    [Tooltip("이산 날씨 이벤트 발생(보류 중 — 지금은 속도 감소만). 켜면 셀 진입 이벤트 다시 동작")]
+    [SerializeField] private bool fireEvents = false;
+
+    private readonly Dictionary<string, float> speedMul = new Dictionary<string, float>();   // 캐러밴별 현재 날씨 속도배율(1=정상)
+    private readonly HashSet<string> underRain = new HashSet<string>();                        // 지금 비 맞는 캐러밴(전이 알림용)
+
     private void Awake()
     {
         if (renderRoot == null) renderRoot = transform;
@@ -78,18 +96,31 @@ public class MinimapWeatherEventDetector : MonoBehaviour
             if (route == null) continue;
 
             Vector3 pos = route.EvaluatePosition(CalcProgress(entry));
+            float intensity = clouds.RainIntensityAt(pos);   // 먹구름 세기(0=비 없음)
 
-            // (표시) 먹구름 밑이면 아이콘
-            if (clouds.IsRainAt(pos))
+            // 속도 감소(현상): 세기가 클수록 느려짐. 프레임워크가 이 배율을 여행 속도에 곱해 쓰면 됨(협의).
+            float mul = intensity > 0f ? Mathf.Clamp(1f - intensity * rainSlowdown, minSpeedMul, 1f) : 1f;
+            speedMul[c.caravanId] = mul;
+
+            if (intensity > 0f)
             {
-                SpriteRenderer icon = GetOrCreateIcon(c.caravanId);
+                SpriteRenderer icon = GetOrCreateIcon(c.caravanId);   // 비 아이콘(=지금 느려짐 표시)
                 icon.transform.position = pos + iconOffset;
                 icon.enabled = true;
                 used.Add(c.caravanId);
+                if (!underRain.Contains(c.caravanId))   // 비 진입(전이) 알림
+                {
+                    underRain.Add(c.caravanId);
+                    ShowNotice("☔ 캐러밴 " + Short(c.caravanId) + " 비 진입 — 속도 x" + mul.ToString("F2") + " (세기 " + intensity.ToString("F2") + ")");
+                }
+            }
+            else if (underRain.Remove(c.caravanId))   // 비 벗어남(전이) 알림
+            {
+                ShowNotice("☀ 캐러밴 " + Short(c.caravanId) + " 비 벗어남 — 속도 정상");
             }
 
-            // (이벤트) 새 셀 진입 = 1 이산 체크 → 그 셀 날씨로 판정
-            if (grid.TryGetCellAtWorld(pos, out MinimapCell cell) && cell != null)
+            // (보류) 이산 날씨 이벤트 — fireEvents 켜야 동작(지금은 속도 감소만)
+            if (fireEvents && grid.TryGetCellAtWorld(pos, out MinimapCell cell) && cell != null)
             {
                 Vector2Int cur = new Vector2Int(cell.col, cell.row);
                 if (!lastCell.TryGetValue(c.caravanId, out var prev) || prev != cur)
@@ -106,37 +137,67 @@ public class MinimapWeatherEventDetector : MonoBehaviour
             if (!used.Contains(kv.Key) && kv.Value != null) kv.Value.enabled = false;
     }
 
+    /// <summary>이벤트 1건 발행: 알림 채널(WeatherEvents, 외부 구독자용) + detector 직접 화면 알림(신뢰성).</summary>
+    private void Fire(WeatherEventOccurrence o)
+    {
+        WeatherEvents.Raise(o);   // 외부 구독자(dispatcher/효과)용 알림 채널
+        ShowNotice("☔ '" + o.eventId + "' 캐러밴 " + Short(o.caravanId) + " 셀(" + o.cellRow + "," + o.cellCol + ")"
+                 + " 세기 " + o.intensity.ToString("F2") + " [지연 +" + (o.delayRate * 100f).ToString("F0") + "%]");
+    }
+
+    /// <summary>화면 알림 큐에 추가(4초 표시).</summary>
+    private void ShowNotice(string text)
+    {
+        if (!showNotices) return;
+        notices.Add(new Notice { text = text, until = Time.time + 4f });
+        if (notices.Count > 6) notices.RemoveAt(0);
+    }
+
+    private static string Short(string id)
+        => string.IsNullOrEmpty(id) ? "?" : (id.Length > 6 ? id.Substring(0, 6) : id);
+
+    /// <summary>캐러밴의 현재 날씨 속도 배율(1=정상, 비 아래면 1 미만). 프레임워크가 여행 속도에 곱해 쓰기용(협의).</summary>
+    public float GetWeatherSpeedMultiplier(string caravanId)
+        => speedMul.TryGetValue(caravanId, out var m) ? m : 1f;
+
     /// <summary>한 셀 체크 판정: 그 셀에 비(먹구름)면, 조건 맞는 이벤트를 결정론 확률로 발생시킨다(한 체크당 1건).</summary>
     private void EvaluateCheck(string caravanId, string tradeId, MinimapCell cell, Vector3 pos, int checkIndex)
     {
-        if (!clouds.IsRainAt(pos)) return;   // 지금은 DarkCloud(비) 조건만 지원
+        float intensity = clouds.RainIntensityAt(pos);   // 먹구름 세기 = 강수량(젖음) × 크기
+        if (intensity <= 0f) return;                      // 먹구름 없음
 
         uint tradeHash = FnvHash(tradeId);
         int cellId = cell.row * 100 + cell.col;
 
-        // SO 풀이 비면 기본 rain(확률 1) 이벤트
+        // SO 풀이 비면 기본 rain(세기 그대로)
         if (weatherEvents == null || weatherEvents.Length == 0)
         {
-            WeatherEvents.Raise(new WeatherEventOccurrence {
+            Fire(new WeatherEventOccurrence {
                 caravanId = caravanId, tradeId = tradeId, eventId = "rain",
-                cellRow = cell.row, cellCol = cell.col, checkIndex = checkIndex, severity = 1f });
+                cellRow = cell.row, cellCol = cell.col, checkIndex = checkIndex,
+                intensity = intensity, severity = intensity });
             return;
         }
 
+        // 세기가 minIntensity 이상인 이벤트 중 '가장 센 것'(minIntensity 최대)을 고른다 → 폭우가 약한비를 이김
+        WeatherEventData best = null;
         for (int i = 0; i < weatherEvents.Length; i++)
         {
             var ev = weatherEvents[i];
             if (ev == null || ev.condition != WeatherCondition.DarkCloud) continue;
-            // 결정론: 같은 (trade, check, cell, 이벤트) → 항상 같은 판정. 오프라인 리플레이에서도 동일.
-            var rng = new DetRng(DetRng.Seed(tradeHash, checkIndex, cellId + i * 7919));
-            if (rng.Value() < ev.chance)
-            {
-                WeatherEvents.Raise(new WeatherEventOccurrence {
-                    caravanId = caravanId, tradeId = tradeId, eventId = ev.id,
-                    cellRow = cell.row, cellCol = cell.col, checkIndex = checkIndex,
-                    severity = ev.severity, foodPenaltyRate = ev.foodPenaltyRate, delayRate = ev.delayRate });
-                break;   // 한 체크당 이벤트 1건
-            }
+            if (intensity < ev.minIntensity) continue;                 // 세기 부족 → 이 이벤트 아님
+            if (best == null || ev.minIntensity > best.minIntensity) best = ev;
+        }
+        if (best == null) return;   // 세기가 어떤 이벤트 문턱에도 못 미침
+
+        // 결정론 확률 판정(같은 여행이면 같은 결과)
+        var rng = new DetRng(DetRng.Seed(tradeHash, checkIndex, cellId));
+        if (rng.Value() < best.chance)
+        {
+            Fire(new WeatherEventOccurrence {
+                caravanId = caravanId, tradeId = tradeId, eventId = best.id,
+                cellRow = cell.row, cellCol = cell.col, checkIndex = checkIndex,
+                intensity = intensity, severity = best.severity, delayRate = best.delayRate });
         }
     }
 
@@ -183,12 +244,29 @@ public class MinimapWeatherEventDetector : MonoBehaviour
 
     private void OnGUI()
     {
-        if (!showTestButton) return;
-        if (btnStyle == null) btnStyle = new GUIStyle(GUI.skin.button);
         float s = Mathf.Max(1f, Screen.height / 1080f);
-        btnStyle.fontSize = Mathf.RoundToInt(20f * s);
-        if (GUI.Button(new Rect(545f * s, 655f * s, 190f * s, 58f * s), "☔ 먹구름 테스트", btnStyle))
-            SpawnTestClouds();
+
+        if (showTestButton)
+        {
+            if (btnStyle == null) btnStyle = new GUIStyle(GUI.skin.button);
+            btnStyle.fontSize = Mathf.RoundToInt(20f * s);
+            if (GUI.Button(new Rect(545f * s, 655f * s, 190f * s, 58f * s), "☔ 먹구름 테스트", btnStyle))
+                SpawnTestClouds();
+        }
+
+        // 화면 알림(비 이벤트) — 상단 중앙 + 어두운 배경(패널에 안 가리게)
+        if (showNotices && notices.Count > 0)
+        {
+            for (int i = notices.Count - 1; i >= 0; i--) if (Time.time > notices[i].until) notices.RemoveAt(i);
+            if (notices.Count == 0) return;
+            if (noticeStyle == null) { noticeStyle = new GUIStyle(GUI.skin.label); noticeStyle.fontStyle = FontStyle.Bold; noticeStyle.normal.textColor = new Color(0.78f, 0.9f, 1f); }
+            noticeStyle.fontSize = Mathf.RoundToInt(22f * s);
+            float w = 840f * s, x = (Screen.width - w) * 0.5f, y = 90f * s, lh = 30f * s;
+            GUI.color = new Color(0f, 0f, 0f, 0.6f);   // 어두운 배경 박스
+            GUI.DrawTexture(new Rect(x - 12f * s, y - 8f * s, w + 24f * s, notices.Count * lh + 16f * s), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            for (int i = 0; i < notices.Count; i++) { GUI.Label(new Rect(x, y, w, lh), notices[i].text, noticeStyle); y += lh; }
+        }
     }
 
     private void SpawnTestClouds()

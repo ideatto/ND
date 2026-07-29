@@ -33,13 +33,13 @@ public class WeatherEventData : ScriptableObject
     [Header("발생 조건")]
     [Tooltip("이 셀 상태일 때 발생 후보가 된다")]
     public WeatherCondition condition = WeatherCondition.DarkCloud;
+    [Tooltip("먹구름 세기(강수량×크기)가 이 값 이상일 때만 발생. 약한 비=낮게, 폭우=높게(예: 약한비 0.3 / 폭우 1.0)")]
+    public float minIntensity = 0.3f;
     [Range(0f, 1f)]
     [Tooltip("조건 충족 시 실제 발생 확률. 결정론 hash(tradeId,checkIndex,cellId)로 판정 → 같은 여행이면 같은 결과")]
     public float chance = 1f;
 
     [Header("효과 파라미터 (데이터만 — 실제 적용은 효과 구현/협의)")]
-    [Tooltip("식량 추가 소모율(예시). 지금은 표시/기록만")]
-    public float foodPenaltyRate = 0.05f;
     [Tooltip("이동 지연율(예시). 지금은 표시/기록만")]
     public float delayRate = 0.1f;
     [Range(0f, 3f)]

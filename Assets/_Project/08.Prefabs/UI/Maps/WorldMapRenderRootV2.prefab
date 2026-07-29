@@ -5066,6 +5066,7 @@ MonoBehaviour:
   worldSeed: 12345
   fixedDt: 0.1
   simSpeed: 0.6
+  maxCatchupSteps: 3000
   initialClouds: 12
   maxClouds: 24
   spawnInterval: 0.4
