@@ -1,4 +1,3 @@
-/*
 using ND.Framework;
 using NUnit.Framework;
 
@@ -66,5 +65,55 @@ public sealed class CaravanActivityLogTests
         Assert.That(saveData.caravanActivityLogs, Is.Not.Null);
         Assert.That(saveData.caravanActivityLogs, Is.Empty);
     }
+
+    [Test]
+    public void NormalizeData_TrimsOversizedLogToDefaultLimit()
+    {
+        var saveData = new ND.Framework.SaveData();
+        saveData.caravanActivityLogs.Clear();
+        for (var index = 0; index < CaravanActivityLog.DefaultMaxEntries + 7; index++)
+        {
+            saveData.caravanActivityLogs.Add(new CaravanActivityLogEntrySaveData
+            {
+                sequence = index + 1,
+                occurredUtcTicks = index + 1,
+                caravanId = "caravan-a",
+                tradeId = $"trade-{index}"
+            });
+        }
+
+        var changed = JsonSaveService.NormalizeData(saveData);
+
+        Assert.That(changed, Is.True);
+        Assert.That(
+            saveData.caravanActivityLogs,
+            Has.Count.EqualTo(CaravanActivityLog.DefaultMaxEntries));
+        Assert.That(saveData.caravanActivityLogs[0].tradeId, Is.EqualTo("trade-7"));
+        Assert.That(JsonSaveService.NormalizeData(saveData), Is.False);
+    }
+
+    [Test]
+    public void Add_TwoCaravanIdentitiesRemainIndependent()
+    {
+        var saveData = new ND.Framework.SaveData();
+        saveData.caravanActivityLogs.Clear();
+
+        CaravanActivityLog.Add(
+            saveData,
+            CaravanActivityLogType.Departure,
+            "caravan-a",
+            "trade-a",
+            "route-a");
+        CaravanActivityLog.Add(
+            saveData,
+            CaravanActivityLogType.Departure,
+            "caravan-b",
+            "trade-b",
+            "route-b");
+
+        Assert.That(saveData.caravanActivityLogs[0].caravanId, Is.EqualTo("caravan-a"));
+        Assert.That(saveData.caravanActivityLogs[0].tradeId, Is.EqualTo("trade-a"));
+        Assert.That(saveData.caravanActivityLogs[1].caravanId, Is.EqualTo("caravan-b"));
+        Assert.That(saveData.caravanActivityLogs[1].tradeId, Is.EqualTo("trade-b"));
+    }
 }
-*/

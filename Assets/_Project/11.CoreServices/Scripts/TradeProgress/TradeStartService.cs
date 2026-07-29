@@ -247,6 +247,7 @@ namespace ND.Framework
             var runtimeSnapshot = JsonUtility.ToJson(runtimeCaravan);
             var caravanSnapshot = JsonUtility.ToJson(caravanSave);
             var progressSnapshot = progress != null ? JsonUtility.ToJson(progress) : null;
+            var departureTownId = caravanSave.currentTownId;
             var tradeId = Guid.NewGuid().ToString("D");
             var expectedSeconds = CaravanCalculator.GetTravelSeconds(runtimeCaravan, route.Distance);
             if (tradeProgressRecorder == null || !tradeProgressRecorder.RecordStartedTrade(
@@ -265,6 +266,16 @@ namespace ND.Framework
             }
 
             CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
+            var activityLogSnapshot = saveData.caravanActivityLogs != null
+                ? new List<CaravanActivityLogEntrySaveData>(saveData.caravanActivityLogs)
+                : new List<CaravanActivityLogEntrySaveData>();
+            CaravanActivityLog.Add(
+                saveData,
+                CaravanActivityLogType.Departure,
+                caravanId,
+                tradeId,
+                routeId,
+                ResolveDestinationTownId(route, departureTownId));
             var saveResult = saveService != null
                 ? saveService.Save(saveData)
                 : SaveResult.Failure(SaveFailureReason.InvalidData, "Trade departure save service is missing.");
@@ -272,6 +283,7 @@ namespace ND.Framework
             {
                 RestoreCommandSnapshot(saveData, caravanId, caravanSave, runtimeCaravan,
                     progressSnapshot, caravanSnapshot, runtimeSnapshot);
+                saveData.caravanActivityLogs = activityLogSnapshot;
                 FrameworkLog.Warning($"Trade departure save failed. CaravanId: {caravanId}, TradeId: {tradeId}");
                 return TradeDepartureResult.Departed(tradeId, saveResult);
             }
@@ -402,6 +414,7 @@ namespace ND.Framework
                 : null;
             var caravanSaveSnapshot = JsonUtility.ToJson(targetCaravanSave);
             var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
+            var departureTownId = targetCaravanSave.currentTownId;
             var restrictedPreparationBefore = saveData.rescueLoan != null
                 && saveData.rescueLoan.isRestrictedPreparation;
             var expectedSeconds = CaravanCalculator.GetTravelSeconds(caravan, distanceKm);
@@ -450,6 +463,18 @@ namespace ND.Framework
 
             // 출발 후 runtime 상태도 동일 ID의 영구 Caravan에만 반영한다.
             CaravanSaveDataMapper.CopyToSave(caravan, targetCaravanSave);
+            var activityLogSnapshot = saveData.caravanActivityLogs != null
+                ? new List<CaravanActivityLogEntrySaveData>(saveData.caravanActivityLogs)
+                : new List<CaravanActivityLogEntrySaveData>();
+            SharedRouteDefinition departureRoute = null;
+            getSharedGameData?.Invoke()?.TryGetRoute(routeId, out departureRoute);
+            CaravanActivityLog.Add(
+                saveData,
+                CaravanActivityLogType.Departure,
+                targetCaravanId,
+                tradeId,
+                routeId,
+                ResolveDestinationTownId(departureRoute, departureTownId));
 
             if (saveImmediately)
             {
@@ -465,6 +490,7 @@ namespace ND.Framework
                         caravanSaveSnapshot,
                         runtimeCaravanSnapshot,
                         restrictedPreparationBefore);
+                    saveData.caravanActivityLogs = activityLogSnapshot;
                     LastRecordSucceeded = false;
                     return CreateFrameworkBlockedResult();
                 }
@@ -475,7 +501,7 @@ namespace ND.Framework
                 }
 
                 var saveResult = saveService.Save(saveData);
-                if (!saveResult.Succeeded)
+                if (saveResult == null || !saveResult.Succeeded)
                 {
                     RestoreDepartureSnapshot(
                         saveData,
@@ -486,6 +512,7 @@ namespace ND.Framework
                         caravanSaveSnapshot,
                         runtimeCaravanSnapshot,
                         restrictedPreparationBefore);
+                    saveData.caravanActivityLogs = activityLogSnapshot;
                     LastRecordSucceeded = false;
                     return CreateFrameworkBlockedResult();
                 }
@@ -501,6 +528,20 @@ namespace ND.Framework
             inGameScreenRouter?.RequestScreen(InGameScreenState.Traveling);
 
             return result;
+        }
+
+        private static string ResolveDestinationTownId(
+            SharedRouteDefinition route,
+            string departureTownId)
+        {
+            if (route == null)
+            {
+                return string.Empty;
+            }
+
+            return string.Equals(route.FromTownId, departureTownId, StringComparison.Ordinal)
+                ? route.ToTownId ?? string.Empty
+                : route.FromTownId ?? string.Empty;
         }
 
         /// <summary>
