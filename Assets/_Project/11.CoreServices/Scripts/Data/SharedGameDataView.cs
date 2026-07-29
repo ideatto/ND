@@ -17,6 +17,7 @@
  */
 using System.Collections.Generic;
 using ND.Economy;
+using UnityEngine;
 
 namespace ND.Framework
 {
@@ -142,6 +143,7 @@ namespace ND.Framework
     {
         public string Id;
         public string DisplayName;
+        public Sprite Icon;
         public string Rarity;
         public string Category;
         public long BaseBuyPrice;

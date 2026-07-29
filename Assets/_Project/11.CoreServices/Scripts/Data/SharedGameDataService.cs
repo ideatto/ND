@@ -469,6 +469,7 @@ namespace ND.Framework
                 {
                     Id = id,
                     DisplayName = item.DisplayName,
+                    Icon = item.Icon,
                     Rarity = item.Rarity.ToString(),
                     Category = item.Category.ToString(),
                     BaseBuyPrice = item.BaseBuyPrice,
