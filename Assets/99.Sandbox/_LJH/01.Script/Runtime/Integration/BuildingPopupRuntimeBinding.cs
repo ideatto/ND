@@ -14,7 +14,8 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
     [SerializeField] private BuildingDetailPopupPresenter detailPresenter;
     [SerializeField] private BuildingConfirmPopupPresenter confirmPresenter;
 
-    private readonly BuildingViewDataBuilder viewDataBuilder = new BuildingViewDataBuilder();
+    private readonly BuildingViewDataBuilder viewDataBuilder =
+        new BuildingViewDataBuilder();
 
     private BuildData selectedBuildData;
     private int selectedBuildingCurrentLevel;
@@ -38,30 +39,34 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
 
     private void OnDisable()
     {
-        if(detailPresenter != null)
+        if (detailPresenter != null)
         {
             detailPresenter.BuildRequested -= HandleBuildRequested;
             detailPresenter.CloseRequested -= ClearSelection;
         }
 
-        if(confirmPresenter != null)
+        if (confirmPresenter != null)
         {
             confirmPresenter.ConfirmRequested -= HandleConfirmRequested;
         }
+
+        // Binding이 다시 활성화됐을 때 이전 선택과 Popup 상태가 남지 않게 정리한다.
+        CloseAll();
     }
 
     /// <summary>
-    /// 기존 건물 선택 UI에서 선택한 BuildData를 전달받아 Detail Popup을 표시한다.
+    /// 기존 건물 선택 UI에서 선택한 BuildData와 현재 레벨을 전달받아
+    /// Detail Popup을 표시한다.
     /// </summary>
-    public void OpenDetail(BuildData data)
+    public void OpenDetail(BuildData data, int currentLevel)
     {
-        if(data == null)
+        if (data == null)
         {
             return;
         }
 
         selectedBuildData = data;
-        selectedBuildingCurrentLevel = ResolveCurrentBuildingLevel(data);
+        selectedBuildingCurrentLevel = Mathf.Max(0, currentLevel);
 
         ShowSelectedBuildingDetail();
     }
@@ -83,13 +88,17 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
             return;
         }
 
-        BuildingConfirmViewData viewData = viewDataBuilder.BuildConfirm
-            (selectedBuildData, selectedBuildingCurrentLevel, PlayerMainManager.Instance, FrameworkRoot.Instance?.SharedGameData);
+        BuildingConfirmViewData viewData =
+            viewDataBuilder.BuildConfirm(
+                selectedBuildData,
+                selectedBuildingCurrentLevel,
+                PlayerMainManager.Instance,
+                FrameworkRoot.Instance?.SharedGameData);
 
         confirmPresenter?.Show(viewData);
     }
 
-    // 최종 확인이 끝나면 두 Popup을 닫고 실제 건설 요청을 외부로 전달한다.
+    // 최종 확인이 끝나면 Popup 상태를 정리하고 실제 건설 요청을 외부로 전달한다.
     private void HandleConfirmRequested(string buildId)
     {
         if (!IsCurrentSelection(buildId))
@@ -100,21 +109,26 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
         confirmPresenter?.Hide();
         detailPresenter?.Hide();
 
-        BuildConfirmed?.Invoke(buildId);
-
+        // 구독자가 이벤트 처리 중 새 Detail을 열어도 그 선택을 지우지 않도록
+        // 현재 선택을 먼저 정리한 뒤 외부 실행 계층에 요청을 전달한다.
         ClearSelection();
+        BuildConfirmed?.Invoke(buildId);
     }
 
     // 선택한 BuildData와 현재 레벨을 조합해 Detail 화면을 갱신한다.
     private void ShowSelectedBuildingDetail()
     {
-        if(selectedBuildData == null)
+        if (selectedBuildData == null)
         {
             return;
         }
 
-        BuildingDetailViewData viewData = viewDataBuilder.BuildDetail
-            (selectedBuildData, selectedBuildingCurrentLevel, PlayerMainManager.Instance, FrameworkRoot.Instance?.SharedGameData);
+        BuildingDetailViewData viewData =
+            viewDataBuilder.BuildDetail(
+                selectedBuildData,
+                selectedBuildingCurrentLevel,
+                PlayerMainManager.Instance,
+                FrameworkRoot.Instance?.SharedGameData);
 
         confirmPresenter?.Hide();
         detailPresenter?.Show(viewData);
@@ -123,13 +137,9 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
     // 현재 Popup 흐름에서 선택한 건물과 같은 요청인지 확인한다.
     private bool IsCurrentSelection(string buildId)
     {
-        return selectedBuildData != null && !string.IsNullOrWhiteSpace(buildId) && selectedBuildData.BuildId == buildId;
-    }
-
-    private static int ResolveCurrentBuildingLevel(BuildData data)
-    {
-        // TODO: 건물 진행 SaveData가 구현되면 data.BuildId로 현재 레벨을 조회한다.
-        return 0;
+        return selectedBuildData != null
+            && !string.IsNullOrWhiteSpace(buildId)
+            && selectedBuildData.BuildId == buildId;
     }
 
     // Popup 흐름이 끝날 때 선택한 건물과 레벨 상태를 함께 초기화한다.
