@@ -62,6 +62,118 @@ namespace ND.Framework.Editor
             Debug.Log("Work F currency command focused checks passed");
         }
 
+        [MenuItem("ND/Framework/Run Building Placement Command Checks")]
+        public static void RunBuildingPlacementCommandChecks()
+        {
+            RunBuildingPlacementSuccessCheck();
+            RunBuildingPlacementYawNormalizationCheck();
+            RunBuildingPlacementSaveRollbackCheck();
+            RunBuildingPlacementMissingAndDuplicateChecks();
+            Debug.Log("[Framework Building Placement] All checks passed.");
+        }
+
+        private static void RunBuildingPlacementSuccessCheck()
+        {
+            var saveData = new SaveData();
+            saveData.player.villageBuildings.Add(new VillageBuildingSaveData
+            {
+                displayName = "Workshop",
+                level = 2,
+                hasPlacement = false
+            });
+            var save = new ConfigurableSaveService();
+            var command = new BuildingPlacementCommand(() => saveData, save);
+
+            BuildingPlacementResult result = command.Execute("Workshop", -3, 7, 3);
+            VillageBuildingSaveData building = saveData.player.villageBuildings[0];
+            if (!result.Succeeded || save.SaveCalls != 1 || building.level != 2
+                || !building.hasPlacement || building.gridCellX != -3
+                || building.gridCellZ != 7 || building.yawStep != 3)
+            {
+                throw new InvalidOperationException("Building placement success transaction check failed.");
+            }
+        }
+
+        private static void RunBuildingPlacementYawNormalizationCheck()
+        {
+            int[] inputs = { -1, 4, 5 };
+            int[] expected = { 3, 0, 1 };
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                var saveData = new SaveData();
+                saveData.player.villageBuildings.Add(new VillageBuildingSaveData
+                {
+                    displayName = "Workshop",
+                    level = 1
+                });
+                var command = new BuildingPlacementCommand(
+                    () => saveData,
+                    new ConfigurableSaveService());
+                BuildingPlacementResult result = command.Execute("Workshop", 0, 0, inputs[i]);
+                if (!result.Succeeded
+                    || saveData.player.villageBuildings[0].yawStep != expected[i])
+                {
+                    throw new InvalidOperationException("Building placement yaw normalization check failed.");
+                }
+            }
+        }
+
+        private static void RunBuildingPlacementSaveRollbackCheck()
+        {
+            var saveData = new SaveData();
+            saveData.player.villageBuildings.Add(new VillageBuildingSaveData
+            {
+                displayName = "Workshop",
+                level = 2,
+                hasPlacement = true,
+                gridCellX = 8,
+                gridCellZ = -4,
+                yawStep = 1
+            });
+            var save = new ConfigurableSaveService { ShouldSucceed = false };
+            var command = new BuildingPlacementCommand(() => saveData, save);
+
+            BuildingPlacementResult result = command.Execute("Workshop", -3, 7, 3);
+            VillageBuildingSaveData building = saveData.player.villageBuildings[0];
+            if (result.Succeeded || result.FailureReason != BuildingPlacementFailureReason.SaveFailed
+                || save.SaveCalls != 1 || building.level != 2 || !building.hasPlacement
+                || building.gridCellX != 8 || building.gridCellZ != -4 || building.yawStep != 1)
+            {
+                throw new InvalidOperationException("Building placement save rollback check failed.");
+            }
+        }
+
+        private static void RunBuildingPlacementMissingAndDuplicateChecks()
+        {
+            var missingData = new SaveData();
+            var missingSave = new ConfigurableSaveService();
+            var missingCommand = new BuildingPlacementCommand(() => missingData, missingSave);
+            BuildingPlacementResult missing = missingCommand.Execute("Workshop", 1, 2, 0);
+            if (missing.Succeeded
+                || missing.FailureReason != BuildingPlacementFailureReason.BuildingNotFound
+                || missingSave.SaveCalls != 0)
+            {
+                throw new InvalidOperationException("Missing building placement check failed.");
+            }
+
+            var duplicateData = new SaveData();
+            duplicateData.player.villageBuildings.Add(
+                new VillageBuildingSaveData { displayName = "Workshop", level = 1 });
+            duplicateData.player.villageBuildings.Add(
+                new VillageBuildingSaveData { displayName = "Workshop", level = 2 });
+            var duplicateSave = new ConfigurableSaveService();
+            var duplicateCommand = new BuildingPlacementCommand(() => duplicateData, duplicateSave);
+            BuildingPlacementResult duplicate = duplicateCommand.Execute("Workshop", 1, 2, 0);
+            if (duplicate.Succeeded
+                || duplicate.FailureReason != BuildingPlacementFailureReason.DuplicateBuildingEntry
+                || duplicateSave.SaveCalls != 0
+                || duplicateData.player.villageBuildings[0].hasPlacement
+                || duplicateData.player.villageBuildings[1].hasPlacement)
+            {
+                throw new InvalidOperationException("Duplicate building placement check failed.");
+            }
+        }
+
         private static void RunTradingCurrencySuccessCheck()
         {
             var saveData = new SaveData();

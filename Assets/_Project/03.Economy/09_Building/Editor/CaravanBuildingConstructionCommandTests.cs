@@ -12,9 +12,62 @@ namespace ND.Economy.Editor
     {
         public static void RunAll()
         {
+            VillageBuildingSaveData_OldJsonDefaultsPlacementFields();
+            NormalizeData_NormalizesYawAndPreservesCoordinates();
             Execute_ConsumesCargoAndRaisesBuildingLevel();
+            Execute_PreservesPlacementWhenRaisingBuildingLevel();
             Execute_RollsBackCargoAndBuildingWhenSaveFails();
             Execute_RejectsConstructionOutsideBaseTown();
+        }
+
+        private static void VillageBuildingSaveData_OldJsonDefaultsPlacementFields()
+        {
+            VillageBuildingSaveData building = JsonUtility.FromJson<VillageBuildingSaveData>(
+                "{\"displayName\":\"legacy-building\",\"level\":1}");
+
+            Check(!building.hasPlacement, "Old JSON must not report durable placement.");
+            CheckEqual(0, building.gridCellX, "Old JSON grid X");
+            CheckEqual(0, building.gridCellZ, "Old JSON grid Z");
+            CheckEqual(0, building.yawStep, "Old JSON yaw step");
+        }
+
+        private static void NormalizeData_NormalizesYawAndPreservesCoordinates()
+        {
+            int[] sourceYawSteps = { -1, 0, 1, 4, 5 };
+            int[] expectedYawSteps = { 3, 0, 1, 0, 1 };
+            var saveData = new FrameworkSaveData();
+            saveData.player.villageBuildings.Clear();
+
+            for (int index = 0; index < sourceYawSteps.Length; index++)
+            {
+                saveData.player.villageBuildings.Add(new VillageBuildingSaveData
+                {
+                    displayName = "test-building-" + index,
+                    level = 1,
+                    hasPlacement = index % 2 == 0,
+                    gridCellX = int.MinValue + index,
+                    gridCellZ = int.MaxValue - index,
+                    yawStep = sourceYawSteps[index]
+                });
+            }
+
+            JsonSaveService.NormalizeData(saveData);
+            for (int index = 0; index < expectedYawSteps.Length; index++)
+            {
+                VillageBuildingSaveData building = saveData.player.villageBuildings[index];
+                CheckEqual(expectedYawSteps[index], building.yawStep, "Normalized yaw step");
+                CheckEqual(int.MinValue + index, building.gridCellX, "Preserved grid X");
+                CheckEqual(int.MaxValue - index, building.gridCellZ, "Preserved grid Z");
+            }
+
+            JsonSaveService.NormalizeData(saveData);
+            for (int index = 0; index < expectedYawSteps.Length; index++)
+            {
+                CheckEqual(
+                    expectedYawSteps[index],
+                    saveData.player.villageBuildings[index].yawStep,
+                    "Idempotent yaw step");
+            }
         }
 
         private static void Execute_ConsumesCargoAndRaisesBuildingLevel()
@@ -49,17 +102,43 @@ namespace ND.Economy.Editor
             try
             {
                 FrameworkSaveData saveData = CreateSaveData(5, "BaseCamp");
+                AddPlacedWorkshop(saveData);
                 SaveResult result = CaravanBuildingConstructionCommand.Execute(
                     saveData,
                     new MemorySaveService(false),
                     new[] { material },
-                    CreateDefinition(),
+                    CreateUpgradeDefinition(),
                     "BaseCamp",
                     out _);
 
                 Check(!result.Succeeded, "Failed save must fail the command.");
                 CheckEqual(5, saveData.caravan.cargo[0].quantity, "Rolled-back cargo quantity");
-                CheckEqual(0, saveData.player.villageBuildings.Count, "Rolled-back building count");
+                CheckEqual(1, saveData.player.villageBuildings.Count, "Rolled-back building count");
+                CheckPlacement(saveData.player.villageBuildings[0], 1, "Rolled-back building");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(material);
+            }
+        }
+
+        private static void Execute_PreservesPlacementWhenRaisingBuildingLevel()
+        {
+            TradeItemData material = CreateItem("wood", global::TradeItemCategory.Material);
+            try
+            {
+                FrameworkSaveData saveData = CreateSaveData(5, "BaseCamp");
+                AddPlacedWorkshop(saveData);
+                SaveResult result = CaravanBuildingConstructionCommand.Execute(
+                    saveData,
+                    new MemorySaveService(true),
+                    new[] { material },
+                    CreateUpgradeDefinition(),
+                    "BaseCamp",
+                    out _);
+
+                Check(result.Succeeded, "Building upgrade save should succeed.");
+                CheckPlacement(saveData.player.villageBuildings[0], 2, "Upgraded building");
             }
             finally
             {
@@ -117,6 +196,44 @@ namespace ND.Economy.Editor
                     }
                 }
             };
+        }
+
+        private static BuildingCostDefinition CreateUpgradeDefinition()
+        {
+            BuildingCostDefinition definition = CreateDefinition();
+            definition.MaxLevel = 2;
+            definition.LevelCosts.Add(new BuildingLevelCost
+            {
+                TargetLevel = 2,
+                Materials = { new BuildingMaterialRequirement { ItemId = "wood", Quantity = 3 } }
+            });
+            return definition;
+        }
+
+        private static void AddPlacedWorkshop(FrameworkSaveData saveData)
+        {
+            saveData.player.villageBuildings.Add(new VillageBuildingSaveData
+            {
+                displayName = "Workshop",
+                level = 1,
+                hasPlacement = true,
+                gridCellX = -3,
+                gridCellZ = 7,
+                yawStep = 3
+            });
+        }
+
+        private static void CheckPlacement(
+            VillageBuildingSaveData building,
+            int expectedLevel,
+            string name)
+        {
+            CheckEqual("Workshop", building.displayName, name + " display name");
+            CheckEqual(expectedLevel, building.level, name + " level");
+            Check(building.hasPlacement, name + " placement flag");
+            CheckEqual(-3, building.gridCellX, name + " grid X");
+            CheckEqual(7, building.gridCellZ, name + " grid Z");
+            CheckEqual(3, building.yawStep, name + " yaw step");
         }
 
         private static TradeItemData CreateItem(string itemId, global::TradeItemCategory category)

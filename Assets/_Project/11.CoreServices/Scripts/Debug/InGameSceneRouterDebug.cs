@@ -27,6 +27,7 @@ using UnityEngine;
 /// <summary>
 /// 인게임 화면 상태 변경 이벤트를 로그로 출력하는 debug MonoBehaviour이다.
 /// </summary>
+[System.Obsolete("Use ProjectDebugPanel > Screen Router. This component remains for existing Scene compatibility.")]
 public class InGameSceneRouterDebug : MonoBehaviour
 {
 
