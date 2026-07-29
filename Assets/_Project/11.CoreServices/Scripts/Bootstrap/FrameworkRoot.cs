@@ -278,6 +278,9 @@ namespace ND.Framework
         /// <summary>Caravan 생성, 저장 및 저장 실패 원복을 담당하는 Production command service이다.</summary>
         public CaravanManagementService CaravanManagement { get; private set; }
 
+        /// <summary>마을 건물 배치 변경과 영속 저장을 하나의 SaveData 트랜잭션으로 처리한다.</summary>
+        public BuildingPlacementCommand BuildingPlacement { get; private set; }
+
         /// <summary>구조 대출 발급·상환 및 상태 조회 command service이다.</summary>
         public RescueLoanCommandService RescueLoan { get; private set; }
 
@@ -533,6 +536,7 @@ namespace ND.Framework
                 () => SharedGameData,
                 TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
             CurrentSaveData = SaveService.HasSaveData() ? SaveService.Load() : SaveService.CreateNewGameData();
+            BuildingPlacement = new BuildingPlacementCommand(() => CurrentSaveData, SaveService);
             TradeProgressCoordinator.RebuildRuntimeCaravans();
             CaravanManagement = new CaravanManagementService(
                 () => CurrentSaveData,

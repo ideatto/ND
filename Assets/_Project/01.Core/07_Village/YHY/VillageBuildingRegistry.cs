@@ -81,6 +81,10 @@ public class VillageBuildingRegistry : MonoBehaviour
     private void Start()
     {
         RestoreFromSaveData();
+        BuildingPlacementController placementController =
+            FindAnyObjectByType<BuildingPlacementController>();
+        if (placementController != null)
+            placementController.RestoreAndRegisterExistingBuildings();
     }
 
     private void OnDestroy()
@@ -93,6 +97,29 @@ public class VillageBuildingRegistry : MonoBehaviour
         foreach (Building b in buildings)
             if (b.displayName == name) return b;
         return null;
+    }
+
+    /// <summary>
+    /// Registry가 소유한 runtime 건물과 저장 키를 연결한다.
+    /// 반환되는 문자열은 내부 목록이 보유한 displayName 참조이며 호출자가 변경할 수 없다.
+    /// </summary>
+    public bool TryGetDisplayName(PlaceableBuilding placeable, out string displayName)
+    {
+        displayName = string.Empty;
+        if (placeable == null) return false;
+
+        foreach (Building building in buildings)
+        {
+            if (building == null || building.renderer == null) continue;
+            if (building.renderer.transform.IsChildOf(placeable.transform)
+                || placeable.transform.IsChildOf(building.renderer.transform))
+            {
+                displayName = building.displayName;
+                return !string.IsNullOrWhiteSpace(displayName);
+            }
+        }
+
+        return false;
     }
 
     private CatalogEntry FindCatalogByName(string displayName)
