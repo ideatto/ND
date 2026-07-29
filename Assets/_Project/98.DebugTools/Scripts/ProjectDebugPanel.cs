@@ -36,6 +36,10 @@ namespace ND.DebugTools
         private const string FrameworkRootTypeName = "ND.Framework.FrameworkRoot";
         private const float RefreshIntervalSeconds = 0.25f;
         private const int DebugWindowId = 9801;
+        private const int StatusTab = 0;
+        private const int HomeInventoryTab = 1;
+        private const int ScreenRouterTab = 2;
+        private const int TabCount = 3;
         private static readonly string[] PendingPayloadMemberNames =
             { "hasResult", "result", "settlementResult", "snapshot", "resultSnapshot" };
 
@@ -43,6 +47,9 @@ namespace ND.DebugTools
         private bool visibleOnStart;
 
         private readonly StringBuilder textBuilder = new StringBuilder(4096);
+        private readonly HomeInventoryItemDebugSection homeInventorySection = new HomeInventoryItemDebugSection();
+        private readonly InGameScreenRouterDebugSection screenRouterSection = new InGameScreenRouterDebugSection();
+        private readonly Vector2[] tabScrollPositions = new Vector2[TabCount];
         private Rect windowRect = new Rect(16f, 16f, 560f, 700f);
         private GUIStyle labelStyle;
         private Type frameworkRootType;
@@ -53,7 +60,7 @@ namespace ND.DebugTools
         private string lastCurrencyResult = "No currency command executed.";
         private float nextRefreshTime;
         private bool isVisible;
-        private Vector2 scrollPosition;
+        private int selectedTab;
 
         private void Awake()
         {
@@ -73,6 +80,8 @@ namespace ND.DebugTools
 
         private void Update()
         {
+            screenRouterSection.Tick();
+
             if (Keyboard.current?.f12Key.wasPressedThisFrame == true)
             {
                 isVisible = !isVisible;
@@ -106,10 +115,50 @@ namespace ND.DebugTools
 
         private void DrawWindow(int windowId)
         {
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition);
-            GUILayout.Label(snapshot, labelStyle);
-            DrawForceArrivalControl();
-            DrawCurrencyControls();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Toggle(selectedTab == StatusTab, "Status", GUI.skin.button))
+            {
+                selectedTab = StatusTab;
+            }
+
+            if (GUILayout.Toggle(selectedTab == HomeInventoryTab, "Home Inventory", GUI.skin.button))
+            {
+                if (selectedTab != HomeInventoryTab)
+                {
+                    homeInventorySection.Refresh();
+                }
+
+                selectedTab = HomeInventoryTab;
+            }
+
+            if (GUILayout.Toggle(selectedTab == ScreenRouterTab, "Screen Router", GUI.skin.button))
+            {
+                selectedTab = ScreenRouterTab;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6f);
+            tabScrollPositions[selectedTab] = GUILayout.BeginScrollView(
+                tabScrollPositions[selectedTab],
+                false,
+                true,
+                GUILayout.ExpandHeight(true));
+
+            if (selectedTab == HomeInventoryTab)
+            {
+                homeInventorySection.Draw();
+            }
+            else if (selectedTab == ScreenRouterTab)
+            {
+                screenRouterSection.Draw();
+            }
+            else
+            {
+                GUILayout.Label(snapshot, labelStyle);
+                DrawForceArrivalControl();
+                DrawCurrencyControls();
+            }
+
             GUILayout.EndScrollView();
             GUI.DragWindow(new Rect(0f, 0f, windowRect.width, 24f));
         }
