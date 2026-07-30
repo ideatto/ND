@@ -56,3 +56,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a5d8076319ccb7b4a9f44887ead18cb2, type: 2}
   - {fileID: 11400000, guid: 293b5c3abd77186438b831c8bbbac5e3, type: 2}
   - {fileID: 11400000, guid: e84432ee7ce491e4d943cc0c98b0a48b, type: 2}
+  quests:
+  - {fileID: 11400000, guid: dccc90017d3b6104e8d31abefd3039ea, type: 2}
+  - {fileID: 11400000, guid: 6cbf3fe9eef048b4b9c62884b6795a8c, type: 2}

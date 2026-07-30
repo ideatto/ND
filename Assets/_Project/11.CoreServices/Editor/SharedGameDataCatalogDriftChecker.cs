@@ -78,7 +78,9 @@ namespace ND.Framework.Editor
 
             "t:DraftAnimalData",
 
-            "t:RouteData"
+            "t:RouteData",
+
+            "t:QuestData"
 
         };
 
@@ -325,6 +327,8 @@ namespace ND.Framework.Editor
             AddObjectGuids(catalog.DraftAnimals, guids);
 
             AddObjectGuids(catalog.Routes, guids);
+
+            AddObjectGuids(catalog.Quests, guids);
 
             return guids;
 
@@ -575,6 +579,14 @@ namespace ND.Framework.Editor
                     typeName = nameof(RouteData);
 
                     dataId = route.RouteId;
+
+                    return true;
+
+                case global::QuestData quest:
+
+                    typeName = nameof(QuestData);
+
+                    dataId = quest.QuestId;
 
                     return true;
 

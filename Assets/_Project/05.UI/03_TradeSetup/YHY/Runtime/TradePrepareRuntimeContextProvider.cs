@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using ND.Framework;
@@ -267,12 +268,39 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
             ? CurrentViewData.currentTownId
             : string.Empty;
         TownData currentTown = TradePrepareViewDataBuilder.FindTown(towns, currentTownId);
+        FrameworkSaveData saveData = FrameworkRoot.Instance != null
+            ? FrameworkRoot.Instance.CurrentSaveData
+            : null;
+        TradeItemData[] unlockedSpecialties =
+            GetUnlockedSpecialties(currentTown, saveData);
         return TradePrepareViewDataBuilder.MergeUnique(
-            tradeItems ?? Array.Empty<TradeItemData>(),
-            currentTown != null && currentTown.Market != null
-                ? currentTown.Market.TradeItems
-                : null,
+            TradePrepareViewDataBuilder.MergeUnique(
+                tradeItems ?? Array.Empty<TradeItemData>(),
+                currentTown != null && currentTown.Market != null
+                    ? currentTown.Market.TradeItems
+                    : null,
+                item => item != null ? item.ItemId : string.Empty),
+            unlockedSpecialties,
             item => item != null ? item.ItemId : string.Empty);
+    }
+
+    private static TradeItemData[] GetUnlockedSpecialties(
+        TownData town,
+        FrameworkSaveData saveData)
+    {
+        if (town?.Market == null ||
+            saveData?.world?.unlockedTownSpecialties == null)
+            return Array.Empty<TradeItemData>();
+
+        var unlockedIds = new HashSet<string>(
+            saveData.world.unlockedTownSpecialties
+                .Where(entry => entry != null &&
+                    string.Equals(entry.townId, town.TownId, StringComparison.Ordinal))
+                .Select(entry => entry.itemId),
+            StringComparer.Ordinal);
+        return town.Market.LocalSpecialtyItems
+            .Where(item => item != null && unlockedIds.Contains(item.ItemId))
+            .ToArray();
     }
 
     public MarketData[] GetAvailableMarkets()

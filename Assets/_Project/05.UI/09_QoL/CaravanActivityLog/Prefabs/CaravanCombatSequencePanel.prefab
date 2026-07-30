@@ -397,9 +397,9 @@ MonoBehaviour:
   stageImage: {fileID: 6691812563050831309}
   messageText: {fileID: 3276951339420307662}
   vfxRoot: {fileID: 7195820557077720799}
-  encounterSprite: {fileID: 0}
-  victorySprite: {fileID: 0}
-  defeatSprite: {fileID: 0}
+  encounterSprite: {fileID: 21300000, guid: 7e779798f45e84848b783859f2e6154d, type: 3}
+  victorySprite: {fileID: 21300000, guid: 2fb151be410c99d45ae5869d7cf092df, type: 3}
+  defeatSprite: {fileID: 21300000, guid: 62f790d680719944e9249ec90eae7c6a, type: 3}
   encounterVfxPrefab: {fileID: 0}
   victoryVfxPrefab: {fileID: 0}
   defeatVfxPrefab: {fileID: 0}

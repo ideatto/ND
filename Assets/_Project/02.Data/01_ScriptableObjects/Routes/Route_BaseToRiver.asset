@@ -23,6 +23,24 @@ MonoBehaviour:
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 5
   baseRequiredMercenaryPower: 0
-  baseRiskLevel: 0
-  maxEventCount: 0
-  routeEvents: []
+  baseRiskLevel: 1
+  maxEventCount: 2
+  routeEvents:
+  - eventType: 0
+    routeEventId: BaseToRiver_Bandit
+    displayName: Bandit Ambush
+    description: Bandits ambush the caravan on the dike road.
+    eventValue: 6
+    defaultEvasionPer: 0
+    lossCount: 1
+    eventRewardType: 0
+    eventRewardCurrency:
+      minAmount: 0
+      maxAmount: 0
+    eventRewardItem:
+      itemId:
+      minQuantity: 0
+      maxQuantity: 0
+    banditCombatPower: 6
+    cargoLootRate: 0.2
+    fodderLootRate: 0.2

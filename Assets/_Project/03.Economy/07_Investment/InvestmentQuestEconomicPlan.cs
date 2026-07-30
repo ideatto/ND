@@ -28,6 +28,7 @@ namespace ND.Economy
         private readonly ReadOnlyCollection<InvestmentItemPlan> items;
         private readonly ReadOnlyCollection<string> unlockTownIds;
         private readonly ReadOnlyCollection<string> unlockRouteIds;
+        private readonly ReadOnlyCollection<string> unlockSpecialtyItemIds;
 
         public InvestmentQuestEconomicPlan(
             string questId,
@@ -38,6 +39,35 @@ namespace ND.Economy
             IEnumerable<InvestmentItemPlan> items,
             IEnumerable<string> unlockTownIds,
             IEnumerable<string> unlockRouteIds)
+            : this(
+                questId,
+                caravanId,
+                tradingCurrencyBefore,
+                tradingCurrencyCost,
+                tradingCurrencyAfter,
+                items,
+                unlockTownIds,
+                unlockRouteIds,
+                null,
+                string.Empty,
+                1f,
+                0L)
+        {
+        }
+
+        public InvestmentQuestEconomicPlan(
+            string questId,
+            string caravanId,
+            long tradingCurrencyBefore,
+            long tradingCurrencyCost,
+            long tradingCurrencyAfter,
+            IEnumerable<InvestmentItemPlan> items,
+            IEnumerable<string> unlockTownIds,
+            IEnumerable<string> unlockRouteIds,
+            IEnumerable<string> unlockSpecialtyItemIds,
+            string submissionTownId,
+            float banditEncounterMultiplier,
+            long banditReductionDurationTicks)
         {
             QuestId = questId ?? string.Empty;
             CaravanId = caravanId ?? string.Empty;
@@ -50,6 +80,11 @@ namespace ND.Economy
                 unlockTownIds ?? new string[0]).AsReadOnly();
             this.unlockRouteIds = new List<string>(
                 unlockRouteIds ?? new string[0]).AsReadOnly();
+            this.unlockSpecialtyItemIds = new List<string>(
+                unlockSpecialtyItemIds ?? new string[0]).AsReadOnly();
+            SubmissionTownId = submissionTownId ?? string.Empty;
+            BanditEncounterMultiplier = banditEncounterMultiplier;
+            BanditReductionDurationTicks = banditReductionDurationTicks;
         }
 
         public string QuestId { get; }
@@ -60,6 +95,11 @@ namespace ND.Economy
         public IReadOnlyList<InvestmentItemPlan> Items => items;
         public IReadOnlyList<string> UnlockTownIds => unlockTownIds;
         public IReadOnlyList<string> UnlockRouteIds => unlockRouteIds;
+        public IReadOnlyList<string> UnlockSpecialtyItemIds =>
+            unlockSpecialtyItemIds;
+        public string SubmissionTownId { get; }
+        public float BanditEncounterMultiplier { get; }
+        public long BanditReductionDurationTicks { get; }
     }
 
     public sealed class InvestmentQuestPlanBuildResult
@@ -116,7 +156,11 @@ namespace ND.Economy
                     calculation.TradingCurrencyAfter,
                     items,
                     calculation.UnlockTownIds,
-                    calculation.UnlockRouteIds)
+                    calculation.UnlockRouteIds,
+                    calculation.UnlockSpecialtyItemIds,
+                    input.Definition.SubmissionTownId,
+                    calculation.BanditEncounterMultiplier,
+                    calculation.BanditReductionDurationTicks)
             };
         }
 
