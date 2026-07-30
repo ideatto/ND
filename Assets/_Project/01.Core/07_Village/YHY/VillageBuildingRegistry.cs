@@ -80,6 +80,7 @@ public class VillageBuildingRegistry : MonoBehaviour
     // FrameworkRoot·SaveData가 준비된 뒤 거점 건물 진행을 복원한다.
     private void Start()
     {
+        SeedMissingBuildingsToSave();   // 뉴게임: SaveData에 없는 거점 건물을 채운다(이미 있으면 보존). 이동 저장의 전제.
         RestoreFromSaveData();
         BuildingPlacementController placementController =
             FindAnyObjectByType<BuildingPlacementController>();
@@ -216,6 +217,37 @@ public class VillageBuildingRegistry : MonoBehaviour
             displayName = displayName,
             level = level
         });
+    }
+
+    /// <summary>
+    /// 카탈로그의 거점 건물 중 SaveData에 아직 '없는' 것만 채워 넣는다(뉴게임 시딩).
+    /// 이미 있는 건물은 절대 건드리지 않아(레벨·배치 보존) 매 로드마다 호출해도 안전하다.
+    /// [이유] 미리 씬에 놓인 거점 건물은 지금껏 SaveData에 등록된 적이 없어, 이동 시 저장 계약이
+    ///        displayName으로 못 찾아 BuildingNotFound가 났다. 여기서 한 번 채워주면 이동이 저장까지 된다.
+    /// </summary>
+    private void SeedMissingBuildingsToSave()
+    {
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root == null || root.CurrentSaveData == null || root.CurrentSaveData.player == null)
+            return;
+
+        if (root.CurrentSaveData.player.villageBuildings == null)
+            root.CurrentSaveData.player.villageBuildings = new List<VillageBuildingSaveData>();
+        List<VillageBuildingSaveData> saved = root.CurrentSaveData.player.villageBuildings;
+
+        foreach (Building b in buildings)
+        {
+            if (b == null || string.IsNullOrEmpty(b.displayName) || b.level < 1) continue;
+
+            // 이미 저장돼 있으면(로드된 게임) 건너뛴다 — 레벨·좌표 보존
+            bool exists = false;
+            for (int i = 0; i < saved.Count; i++)
+                if (saved[i] != null && saved[i].displayName == b.displayName) { exists = true; break; }
+            if (exists) continue;
+
+            // 뉴게임(또는 누락): displayName+level만 등록(hasPlacement=false → authored 위치 사용, 첫 이동 시 좌표 저장됨)
+            saved.Add(new VillageBuildingSaveData { displayName = b.displayName, level = b.level });
+        }
     }
 
     /// <summary>index 건물만 강조색, 나머지는 원래 색.</summary>
