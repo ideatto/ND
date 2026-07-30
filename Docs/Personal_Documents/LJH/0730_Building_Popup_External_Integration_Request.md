@@ -4,6 +4,13 @@
 - 작성자: UI & Data / LJH
 - 기준 브랜치: `feature/building-ui-presenter`
 - 상태: 외부 연동 요청
+  - UI Detail/Confirm Popup과 공개 Binding 구현 완료
+  - production 건설 Command 및 카탈로그 연결 미완료
+
+> 이 문서의 목표와 완료 조건은 기존과 동일하다. 아래의 구현 상태 기록은
+> 이미 완료된 UI 범위와 아직 필요한 외부 연동 범위를 구분하기 위한 것이며,
+> 비용 원본, 차감 위치, 저장 경계 또는 성공 후 Scene 반영 순서를 변경하지
+> 않는다.
 
 ## 1. 목적
 
@@ -56,6 +63,30 @@ public event Action<string> BuildConfirmed;
 - 이 이벤트는 실제 건설 성공 이벤트가 아니라 실행 요청이다.
 - 실제 실행 계층은 이벤트를 받은 뒤 현재 SaveData와 비용을 다시 검증한다.
 
+### 2.3 현재 UI 표시 구현 상태
+
+다음 항목은 현재 UI 브랜치에 구현되어 있다. 외부 연동 계층은 이 표시 로직을
+다시 구현하지 않고 `OpenDetail()`에 올바른 `BuildData`와 현재 레벨을 전달한다.
+
+- 단일 `MeshFilter` 건물은 원본 공유 Mesh와 Material을 사용한다.
+- 복수 `MeshFilter` 건물은 모든 submesh와 Material을 런타임 프리뷰 Mesh로
+  결합한다.
+- 런타임에 생성한 프리뷰 Mesh는 다른 프리뷰로 교체하거나 Presenter가
+  파괴될 때 해제한다.
+- RenderTexture 렌더링에 성공하면 `PreviewPlaceholderText`를 숨긴다.
+- 요구 재료 아이콘이 `null`이면 아이콘 Image를 숨기며, 임시 마름모
+  플레이스홀더를 표시하지 않는다.
+
+현재 프리뷰의 제한은 다음과 같다.
+
+- 모델별 정면 Yaw 값은 아직 `BuildData` 또는 `DataPerLevel`에 정의되어 있지
+  않다. 따라서 원본 FBX의 정면 축이 다른 건물은 별도의 프리뷰 방향 데이터가
+  추가되기 전까지 측면으로 보일 수 있다.
+- 현재 프리뷰 결합 대상은 `MeshFilter + MeshRenderer`이며
+  `SkinnedMeshRenderer`는 지원 범위가 아니다.
+
+위 제한은 production 건설 비용 검증, 차감 또는 저장 계약을 변경하지 않는다.
+
 ## 3. 이번 연동의 데이터 기준
 
 ### 3.1 UI 비용 원본
@@ -105,6 +136,27 @@ Caravan의 물품은 먼저 기존 이전 절차를 통해 `homeInventory`로 �
 Gold 요구를 유지한다면 실제 Command도 Gold 검증·차감·rollback을 같은 저장
 경계에서 지원해야 한다. 실제 Command에서 Gold를 지원하지 않기로 결정한다면
 production `BuildData`의 `requireCurrency.isRequired`를 사용해서는 안 된다.
+
+### 3.4 재료 아이콘 연동 의존성
+
+재료 아이콘의 Shared Game Data 매핑은 다음 별도 요청서의 범위다.
+
+`Docs/Personal_Documents/LJH/0729_Shared_TradeItem_Icon_Mapping_Request.md`
+
+현재 브랜치에서는 `SharedTradeItemDefinition.Icon`이 아직 존재한다고 가정하지
+않으며, `BuildingViewDataBuilder`는 재료 아이콘에 `null`을 전달한다.
+
+- 아이콘 매핑 작업이 완료되지 않아도 Popup과 건설 요구조건 조회는 정상
+  동작해야 한다.
+- 아이콘이 `null`인 것은 Shared Game Data 로드 실패나 건설 불가 사유가
+  아니다.
+- UI는 아이콘이 없을 때 빈 아이콘 영역을 허용하고 잘못된 플레이스홀더를
+  표시하지 않는다.
+- `SharedTradeItemDefinition.Icon`이 실제로 병합된 뒤에만 Builder의 아이콘
+  대입을 별도 변경으로 적용한다.
+
+따라서 이 외부 연동 작업은 아이콘 계약의 완료 여부와 독립적으로 진행할 수
+있으며, 완료되지 않은 API를 선참조하여 컴파일을 깨뜨리지 않는다.
 
 ## 4. 전체 외부 작업 대상
 
@@ -158,11 +210,11 @@ public class CatalogEntry
 }
 ```
 
-다음 조회 기능을 제공한다.
+현재 `GetCatalogLevel(int)`은 이미 구현되어 있다. 이를 유지하고 다음
+`BuildData` 조회 기능을 추가한다.
 
 - Catalog index에 대응하는 `BuildData`
 - `buildId`에 대응하는 `BuildData`
-- Catalog 건물의 현재 레벨
 - 저장 성공 후 Scene 반영에 필요한 표시 이름
 
 메서드명은 기존 Core 규칙에 맞출 수 있지만 다음 동작이 가능해야 한다.
@@ -170,6 +222,8 @@ public class CatalogEntry
 ```csharp
 BuildData GetCatalogBuildData(int index);
 BuildData FindBuildData(string buildId);
+
+// 기존 구현 유지
 int GetCatalogLevel(int index);
 ```
 
@@ -429,6 +483,21 @@ HomeInventory 기반 신규 Command에 다음 Editor 테스트를 추가한다.
 - 목표 레벨 데이터 누락 거부
 - 최대 레벨 거부
 - `AddOrUpgrade()` 경로를 호출하지 않음
+
+### 8.4 UI 프리뷰 성능 참고
+
+현재 Editor 환경에서 `BuildingDetailPopupPresenter.Show()`를 반복 측정한
+참고값은 다음과 같다. 요구조건 UI 갱신, 복수 Mesh 결합 및
+`Camera.Render()`가 포함된 값이다.
+
+| 대상 | 평균 | 최대 |
+|---|---:|---:|
+| 단일 Mesh 오두막 | 2.39ms | 4.14ms |
+| 6 Mesh 풍차 | 3.19ms | 3.97ms |
+
+이 수치는 개발 PC의 Editor 측정값이며 타깃 기기의 성능 보장값이 아니다.
+production 완료 전 실제 타깃 기기에서 Popup 최초 열기와 반복 전환을 다시
+측정한다.
 
 ## 9. 완료 조건
 

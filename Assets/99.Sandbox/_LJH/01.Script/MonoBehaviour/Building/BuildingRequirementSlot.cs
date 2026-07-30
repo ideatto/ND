@@ -6,6 +6,7 @@ public class BuildingRequirementSlot : MonoBehaviour
 {
     [Header("UI_References")]
     [SerializeField] private Image iconImage;
+    [SerializeField] private TMP_Text iconPlaceholderText;
     [SerializeField] private TMP_Text nameText;
     [SerializeField] private TMP_Text amountText;
 
@@ -15,6 +16,14 @@ public class BuildingRequirementSlot : MonoBehaviour
 
     private void Awake()
     {
+        if(iconPlaceholderText == null)
+        {
+            Transform placeholderTransform = transform.Find("Icon/IconPlaceholderText");
+            iconPlaceholderText = placeholderTransform != null
+                ? placeholderTransform.GetComponent<TMP_Text>()
+                : null;
+        }
+
         if(amountText != null)
         {
             amountText.richText = true;
@@ -27,8 +36,14 @@ public class BuildingRequirementSlot : MonoBehaviour
 
         if (iconImage != null)
         {
+            iconImage.color = Color.white;
             iconImage.sprite = icon;
             iconImage.enabled = icon != null;
+        }
+
+        if(iconPlaceholderText != null)
+        {
+            iconPlaceholderText.gameObject.SetActive(false);
         }
 
         if (nameText != null)

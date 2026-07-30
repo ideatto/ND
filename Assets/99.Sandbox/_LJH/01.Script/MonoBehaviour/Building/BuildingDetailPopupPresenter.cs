@@ -40,6 +40,7 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     [SerializeField] private Camera previewCamera;
     [SerializeField] private RenderTexture previewRenderTexture;
     [SerializeField] private RawImage previewImage;
+    [SerializeField] private TMP_Text previewPlaceholderText;
 
     [Header("Action")]
     [SerializeField] private Button buildButton;
@@ -49,6 +50,7 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     private List<BuildingRequirementSlot> requirementSlots = new List<BuildingRequirementSlot>();
     private BuildingDetailViewData currentViewData;
     private int activeRequirementSlotCount;
+    private Mesh previewGeneratedMesh;
 
     /// <summary>진행 가능한 건설 버튼을 누르면 선택한 buildId를 전달한다.</summary>
     public event Action<string> BuildRequested;
@@ -58,6 +60,16 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
 
     private void Awake()
     {
+        if(previewPlaceholderText == null && previewImage != null)
+        {
+            Transform placeholderTransform =
+                previewImage.transform.parent?.Find("PreviewPlaceholderText");
+
+            previewPlaceholderText = placeholderTransform != null
+                ? placeholderTransform.GetComponent<TMP_Text>()
+                : null;
+        }
+
         closeBackdropButton?.onClick.AddListener(HandleCloseClicked);
         buildButton?.onClick.AddListener(HandleBuildClicked);
 
@@ -74,6 +86,7 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     {
         closeBackdropButton?.onClick.RemoveListener(HandleCloseClicked);
         buildButton?.onClick.RemoveListener(HandleBuildClicked);
+        ReleasePreviewMesh();
     }
 
     /// <summary>전달받은 화면 데이터를 렌더링하고 Popup을 표시한다.</summary>
@@ -284,7 +297,7 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
         SetPreviewVisible(true);
     }
 
-    // 같은 모델 오브젝트에 속한 Mesh와 Material 조합을 Preview 모델에 복사한다.
+    // Prefab 아래의 모든 Mesh와 Material을 하나의 Preview Mesh로 결합한다.
     private bool TryApplyPreviewAppearance(GameObject buildingPrefab)
     {
         if(buildingPrefab == null || previewMeshFilter == null || previewMeshRenderer == null)
@@ -292,40 +305,140 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
             return false;
         }
 
-        MeshFilter sourceMeshFilter = buildingPrefab.GetComponentInChildren<MeshFilter>(true);
+        MeshFilter[] sourceMeshFilters =
+            buildingPrefab.GetComponentsInChildren<MeshFilter>(true);
 
-        if(sourceMeshFilter == null)
+        if(sourceMeshFilters == null || sourceMeshFilters.Length == 0)
         {
             return false;
         }
 
-        GameObject sourceModelObject = sourceMeshFilter.gameObject;
-        MeshRenderer sourceMeshRenderer = sourceModelObject.GetComponent<MeshRenderer>();
-        Mesh sourceMesh = sourceMeshFilter.sharedMesh;
+        if(sourceMeshFilters.Length == 1)
+        {
+            return TryApplySingleMeshAppearance(
+                buildingPrefab.transform,
+                sourceMeshFilters[0]);
+        }
 
-        if(sourceMeshRenderer == null || sourceMesh == null)
+        var combineInstances = new List<CombineInstance>();
+        var combinedMaterials = new List<Material>();
+        Matrix4x4 rootWorldToLocal = buildingPrefab.transform.worldToLocalMatrix;
+
+        for(int filterIndex = 0; filterIndex < sourceMeshFilters.Length; filterIndex++)
+        {
+            MeshFilter sourceMeshFilter = sourceMeshFilters[filterIndex];
+
+            if(sourceMeshFilter == null || sourceMeshFilter.sharedMesh == null)
+            {
+                continue;
+            }
+
+            MeshRenderer sourceMeshRenderer =
+                sourceMeshFilter.GetComponent<MeshRenderer>();
+
+            if(sourceMeshRenderer == null)
+            {
+                continue;
+            }
+
+            Mesh sourceMesh = sourceMeshFilter.sharedMesh;
+            Material[] sourceMaterials = sourceMeshRenderer.sharedMaterials;
+            int subMeshCount = sourceMesh.subMeshCount;
+
+            for(int subMeshIndex = 0; subMeshIndex < subMeshCount; subMeshIndex++)
+            {
+                if(sourceMaterials == null || subMeshIndex >= sourceMaterials.Length)
+                {
+                    continue;
+                }
+
+                combineInstances.Add(new CombineInstance
+                {
+                    mesh = sourceMesh,
+                    subMeshIndex = subMeshIndex,
+                    transform =
+                        rootWorldToLocal * sourceMeshFilter.transform.localToWorldMatrix
+                });
+
+                combinedMaterials.Add(sourceMaterials[subMeshIndex]);
+            }
+        }
+
+        if(combineInstances.Count == 0)
         {
             return false;
         }
 
-        previewMeshFilter.sharedMesh = sourceMesh;
-        previewMeshRenderer.sharedMaterials = sourceMeshRenderer.sharedMaterials;
+        ReleasePreviewMesh();
 
-        FitPreviewMesh(sourceMesh);
+        previewGeneratedMesh = new Mesh
+        {
+            name = $"{buildingPrefab.name}_PreviewMesh",
+            indexFormat = UnityEngine.Rendering.IndexFormat.UInt32
+        };
+
+        previewGeneratedMesh.CombineMeshes(
+            combineInstances.ToArray(),
+            false,
+            true,
+            false);
+
+        previewGeneratedMesh.RecalculateBounds();
+
+        previewMeshFilter.sharedMesh = previewGeneratedMesh;
+        previewMeshRenderer.sharedMaterials = combinedMaterials.ToArray();
+
+        FitPreviewMesh(previewGeneratedMesh);
         return true;
     }
 
-    // 크기를 정규화하고 X/Z 중앙 및 Y 바닥을 Preview 원점에 맞춘다.
+    private bool TryApplySingleMeshAppearance(
+        Transform prefabRoot,
+        MeshFilter sourceMeshFilter)
+    {
+        if(prefabRoot == null
+            || sourceMeshFilter == null
+            || sourceMeshFilter.sharedMesh == null)
+        {
+            return false;
+        }
+
+        MeshRenderer sourceMeshRenderer =
+            sourceMeshFilter.GetComponent<MeshRenderer>();
+
+        if(sourceMeshRenderer == null)
+        {
+            return false;
+        }
+
+        ReleasePreviewMesh();
+
+        previewMeshFilter.sharedMesh = sourceMeshFilter.sharedMesh;
+        previewMeshRenderer.sharedMaterials =
+            sourceMeshRenderer.sharedMaterials;
+
+        FitPreviewMesh(
+            sourceMeshFilter.sharedMesh,
+            prefabRoot,
+            sourceMeshFilter.transform);
+
+        return true;
+    }
+
+    // 결합된 Mesh의 크기를 정규화하고 X/Z 중앙 및 Y 바닥을 Preview 원점에 맞춘다.
     private void FitPreviewMesh(Mesh mesh)
     {
-        if (previewMeshFilter == null || mesh == null)
+        if(previewMeshFilter == null || mesh == null)
         {
             return;
         }
 
         Bounds bounds = mesh.bounds;
 
-        float largestSize = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+        float largestSize = Mathf.Max(
+            bounds.size.x,
+            bounds.size.y,
+            bounds.size.z);
 
         float scale = largestSize > Mathf.Epsilon ? previewModelSize / largestSize : 1f;
 
@@ -333,7 +446,86 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
 
         previewTransform.localRotation = Quaternion.identity;
         previewTransform.localScale = Vector3.one * scale;
-        previewTransform.localPosition = new Vector3(-bounds.center.x * scale, -bounds.min.y * scale, -bounds.center.z * scale);
+        previewTransform.localPosition = new Vector3(
+            -bounds.center.x * scale,
+            -bounds.min.y * scale,
+            -bounds.center.z * scale);
+    }
+
+    private void FitPreviewMesh(
+        Mesh mesh,
+        Transform prefabRoot,
+        Transform sourceTransform)
+    {
+        if(previewMeshFilter == null
+            || mesh == null
+            || prefabRoot == null
+            || sourceTransform == null)
+        {
+            return;
+        }
+
+        Quaternion sourceRotation =
+            Quaternion.Inverse(prefabRoot.rotation) * sourceTransform.rotation;
+
+        Bounds rotatedBounds =
+            CalculateRotatedBounds(mesh.bounds, sourceRotation);
+
+        float largestSize = Mathf.Max(
+            rotatedBounds.size.x,
+            rotatedBounds.size.y,
+            rotatedBounds.size.z);
+
+        float scale =
+            largestSize > Mathf.Epsilon ? previewModelSize / largestSize : 1f;
+
+        Transform previewTransform = previewMeshFilter.transform;
+
+        previewTransform.localRotation = sourceRotation;
+        previewTransform.localScale = Vector3.one * scale;
+        previewTransform.localPosition = new Vector3(
+            -rotatedBounds.center.x * scale,
+            -rotatedBounds.min.y * scale,
+            -rotatedBounds.center.z * scale);
+    }
+
+    private static Bounds CalculateRotatedBounds(
+        Bounds sourceBounds,
+        Quaternion rotation)
+    {
+        Vector3 center = rotation * sourceBounds.center;
+        Vector3 extents = sourceBounds.extents;
+        Matrix4x4 rotationMatrix = Matrix4x4.Rotate(rotation);
+
+        Vector3 rotatedExtents = new Vector3(
+            Mathf.Abs(rotationMatrix.m00) * extents.x
+                + Mathf.Abs(rotationMatrix.m01) * extents.y
+                + Mathf.Abs(rotationMatrix.m02) * extents.z,
+            Mathf.Abs(rotationMatrix.m10) * extents.x
+                + Mathf.Abs(rotationMatrix.m11) * extents.y
+                + Mathf.Abs(rotationMatrix.m12) * extents.z,
+            Mathf.Abs(rotationMatrix.m20) * extents.x
+                + Mathf.Abs(rotationMatrix.m21) * extents.y
+                + Mathf.Abs(rotationMatrix.m22) * extents.z);
+
+        return new Bounds(center, rotatedExtents * 2f);
+    }
+
+    private void ReleasePreviewMesh()
+    {
+        if(previewGeneratedMesh == null)
+        {
+            return;
+        }
+
+        if(previewMeshFilter != null
+            && previewMeshFilter.sharedMesh == previewGeneratedMesh)
+        {
+            previewMeshFilter.sharedMesh = null;
+        }
+
+        Destroy(previewGeneratedMesh);
+        previewGeneratedMesh = null;
     }
 
     private void SetPreviewVisible(bool visible)
@@ -346,6 +538,11 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
         if(previewImage != null)
         {
             previewImage.enabled = visible;
+        }
+
+        if(previewPlaceholderText != null)
+        {
+            previewPlaceholderText.gameObject.SetActive(!visible);
         }
     }
 
