@@ -19,6 +19,9 @@ public class BuildingDetailViewData
 
     // currentLevel이 0이면 신축, 1 이상이면 증축으로 표시한다.
     public bool isConstruction;
+    // 현재 단계와 다음 단계 중 어느 쪽이 최종 레벨인지 구분해 레벨 문구에 표시한다.
+    public bool isMaxLevel;
+    public bool isTargetMaxLevel;
 
     // 목표 레벨의 3D 건물 외형을 미리보기에 전달한다.
 

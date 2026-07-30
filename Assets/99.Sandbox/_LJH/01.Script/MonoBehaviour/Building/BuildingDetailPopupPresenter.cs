@@ -131,19 +131,26 @@ public void Hide()
 
         if(currentLevelText != null)
         {
-            currentLevelText.text = $"Lv.{viewData.currentLevel}";
+            currentLevelText.text = viewData.isMaxLevel ? $"Lv.{viewData.currentLevel} (MAX)" : $"Lv.{viewData.currentLevel}";
         }
 
         if(nextLevelText != null)
         {
-            nextLevelText.text = $"Lv.{viewData.targetLevel}";
+            nextLevelText.text = viewData.isMaxLevel
+                ? "-"
+                : viewData.isTargetMaxLevel
+                    ? $"Lv.{viewData.targetLevel} (MAX)"
+                    : $"Lv.{viewData.targetLevel}";
         }
 
         if(descriptionText != null)
         {
-            descriptionText.text = string.IsNullOrWhiteSpace(viewData.description)
+            string description = string.IsNullOrWhiteSpace(viewData.description)
                 ? "설명이 없습니다."
                 : viewData.description;
+            descriptionText.text = viewData.isMaxLevel
+                ? $"{description}\n최대 레벨에 도달했습니다."
+                : description;
         }
     }
 
@@ -271,41 +278,52 @@ public void Hide()
         }
     }
 
-    // 선택한 건물 외형을 적용하고 RenderTexture를 한 번만 갱신한다.
-private void RenderPreview(BuildingDetailViewData viewData)
+    // 선택한 건물 외형을 적용하고 카메라를 두 프레임만 활성화해 RenderTexture를 안정적으로 갱신한다.
+    private void RenderPreview(BuildingDetailViewData viewData)
     {
         StopPreviewCameraRender();
+        SetPreviewVisible(false);
 
+        // 프리팹의 Mesh/Renderer 조회는 동기 처리이므로 실패 시 프레임 재시도하지 않는다.
         if(viewData == null || !TryApplyPreviewAppearance(viewData.previewPrefab))
         {
-            SetPreviewVisible(false);
             return;
         }
 
-        // Mesh 구성 방식과 무관하게 마지막에 같은 DataPerLevel 보정을 적용해 RawImage 방향을 통일한다.
         ApplyPreviewPresentation(viewData);
 
         if(previewCamera == null || previewRenderTexture == null)
         {
-            SetPreviewVisible(false);
             return;
         }
 
         previewCamera.targetTexture = previewRenderTexture;
-
         if(previewImage != null)
         {
             previewImage.texture = previewRenderTexture;
         }
 
-        // URP 전용 직접 렌더 API에 의존하지 않고, 카메라를 정상 렌더 루프에 한 프레임 참여시킨다.
-        // 모델과 RawImage를 먼저 활성화해야 이전 실패 상태의 빈 RenderTexture가 다시 캡처되지 않는다.
         SetPreviewVisible(true);
         previewCamera.enabled = true;
-        previewCameraRenderCoroutine = StartCoroutine(DisablePreviewCameraAfterFrame());
+        previewCameraRenderCoroutine = StartCoroutine(DisablePreviewCameraAfterTwoRenders());
     }
 
-private void ApplyPreviewPresentation(BuildingDetailViewData viewData)
+    private IEnumerator DisablePreviewCameraAfterTwoRenders()
+    {
+        // 활성화 직후와 다음 프레임에만 렌더시켜 간헐적인 빈 RenderTexture를 보완하고 상시 렌더 비용은 막는다.
+        yield return new WaitForEndOfFrame();
+        yield return null;
+        yield return new WaitForEndOfFrame();
+
+        if(previewCamera != null)
+        {
+            previewCamera.enabled = false;
+        }
+
+        previewCameraRenderCoroutine = null;
+    }
+
+    private void ApplyPreviewPresentation(BuildingDetailViewData viewData)
     {
         if (viewData == null || previewMeshFilter == null) return;
 
@@ -321,20 +339,7 @@ private void ApplyPreviewPresentation(BuildingDetailViewData viewData)
         previewTransform.localPosition += viewData.previewOffset;
     }
 
-
-private IEnumerator DisablePreviewCameraAfterFrame()
-    {
-        yield return new WaitForEndOfFrame();
-
-        if(previewCamera != null)
-        {
-            previewCamera.enabled = false;
-        }
-
-        previewCameraRenderCoroutine = null;
-    }
-
-private void StopPreviewCameraRender()
+    private void StopPreviewCameraRender()
     {
         if(previewCameraRenderCoroutine != null)
         {
@@ -620,12 +625,14 @@ if(sourceMeshFilters.Length == 1)
     {
         if(buildButton != null)
         {
-            buildButton.interactable = viewData.canProceed;
+            buildButton.interactable = !viewData.isMaxLevel && viewData.canProceed;
         }
 
         if(buildButtonText != null)
         {
-            buildButtonText.text = viewData.isConstruction ? "건설" : "증축";
+            buildButtonText.text = viewData.isMaxLevel
+                ? "최대 레벨"
+                : viewData.isConstruction ? "건설" : "증축";
         }
     }
 

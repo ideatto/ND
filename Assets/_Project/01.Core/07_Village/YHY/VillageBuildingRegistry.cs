@@ -572,12 +572,48 @@ building.originalColor = newRenderer.sharedMaterial != null
         }
 
         GameObject newVisual = Instantiate(levelData.buildPrefab, visualRoot, false);
+        DisableNestedPlacementComponents(newVisual);
         // Prefab이 가진 축 보정(예: BaseCamp X=270)을 보존하고 DataPerLevel 값은 추가 보정으로 적용한다.
         // Wrapper의 배치 Transform은 유지하므로 이동 좌표와 저장 계약에는 영향을 주지 않는다.
         newVisual.transform.localPosition += levelData.visualOffset;
         newVisual.transform.localRotation = Quaternion.Euler(levelData.visualEulerAngles) * newVisual.transform.localRotation;
         newVisual.transform.localScale = Vector3.Scale(newVisual.transform.localScale, levelData.visualScale);
         return newVisual.GetComponentInChildren<Renderer>(true);
+    }
+
+    /// <summary>
+    /// 외형 프리팹에 포함된 배치용 컴포넌트가 wrapper와 별도 건물로 다시 등록되는 것을 막는다.
+    /// Renderer와 애니메이션은 유지하고, 실제 배치/클릭/점유는 공통 wrapper 하나만 담당한다.
+    /// </summary>
+    private static void DisableNestedPlacementComponents(GameObject visual)
+    {
+        if (visual == null)
+        {
+            return;
+        }
+
+        Collider[] nestedColliders = visual.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < nestedColliders.Length; i++)
+        {
+            Collider nestedCollider = nestedColliders[i];
+            if (nestedCollider == null)
+            {
+                continue;
+            }
+
+            // 외형 Collider는 wrapper의 클릭/점유 범위를 침범하지 않도록 비활성화만 한다.
+            nestedCollider.enabled = false;
+        }
+
+        PlaceableBuilding[] nestedPlaceables = visual.GetComponentsInChildren<PlaceableBuilding>(true);
+        for (int i = 0; i < nestedPlaceables.Length; i++)
+        {
+            if (nestedPlaceables[i] != null)
+            {
+                // 외형을 독립 건물로 등록하지 않되 프리팹 구성 자체는 보존한다.
+                nestedPlaceables[i].enabled = false;
+            }
+        }
     }
 
 

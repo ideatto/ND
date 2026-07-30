@@ -152,6 +152,9 @@ public class BuildingPlacementController : MonoBehaviour,
         PlaceableBuilding[] found = FindObjectsByType<PlaceableBuilding>(FindObjectsSortMode.None);
         foreach (PlaceableBuilding pb in found)
         {
+            // Preview/외형 전용으로 비활성화된 PlaceableBuilding은 실제 점유 대상으로 등록하지 않는다.
+            if (pb == null || !pb.isActiveAndEnabled) continue;
+
             Transform t = pb.transform;
             if (!registered.Add(t)) continue;   // 이미 등록된 건물은 건너뜀
 
@@ -172,6 +175,7 @@ public class BuildingPlacementController : MonoBehaviour,
             grid.Occupy(cx, cz, sx, sz, t);
             t.position = grid.CellToWorldCenter(cx, cz, sx, sz);   // 칸 중심으로 정렬(겹침 해소)
         }
+
     }
 
     /// <summary>
@@ -186,7 +190,15 @@ public class BuildingPlacementController : MonoBehaviour,
         npcBuildingList.Clear();
 
         PlaceableBuilding[] all = FindObjectsByType<PlaceableBuilding>();
-        var pending = new List<PlaceableBuilding>(all);
+        var pending = new List<PlaceableBuilding>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            PlaceableBuilding placeable = all[i];
+            if (placeable != null && placeable.isActiveAndEnabled)
+            {
+                pending.Add(placeable);
+            }
+        }
         FrameworkRoot root = FrameworkRoot.Instance;
         List<VillageBuildingSaveData> saved =
             root != null && root.CurrentSaveData != null && root.CurrentSaveData.player != null

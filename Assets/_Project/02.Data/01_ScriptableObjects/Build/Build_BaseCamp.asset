@@ -36,7 +36,7 @@ MonoBehaviour:
       requireItems: []
   - level: 3
     buildPrefab: {fileID: 919132149155446097, guid: f518798c6cc134b45a35e505d31b1148, type: 3}
-    visualScale: {x: 3.4, y: 3.4, z: 3.4}
+    visualScale: {x: 4.2, y: 4.2, z: 4.2}
     visualEulerAngles: {x: 0, y: 0, z: 0}
     visualOffset: {x: 0, y: 0, z: 0}
     footprintCellsX: 4
@@ -45,7 +45,7 @@ MonoBehaviour:
       requireItems: []
   - level: 4
     buildPrefab: {fileID: 919132149155446097, guid: b9d1fc2bd73833d41801a7f597a44ce1, type: 3}
-    visualScale: {x: 3.6, y: 3.6, z: 3.6}
+    visualScale: {x: 4.6, y: 4.6, z: 4.6}
     visualEulerAngles: {x: 0, y: 0, z: 0}
     visualOffset: {x: 0, y: 0, z: 0}
     footprintCellsX: 4
@@ -54,7 +54,7 @@ MonoBehaviour:
       requireItems: []
   - level: 5
     buildPrefab: {fileID: 919132149155446097, guid: 4367c24cf29e1984ebe13a02e80163c0, type: 3}
-    visualScale: {x: 3.8, y: 3.8, z: 3.8}
+    visualScale: {x: 5, y: 5, z: 5}
     visualEulerAngles: {x: 0, y: 0, z: 0}
     visualOffset: {x: 0, y: 0, z: 0}
     footprintCellsX: 4
