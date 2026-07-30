@@ -1,50 +1,50 @@
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using ND.Framework;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
-/// 건축 외형/증축 확인을 위해 Logs와 Stone을 빠르게 지급하는 독립 테스트 버튼이다.
-/// 공용 DebugPanel과 Scene 직렬화를 변경하지 않으며 Editor/Development Build에서만 자동 생성된다.
+/// 건축 테스트용 Logs/Stone 지급 버튼이다.
+/// 일반 UI Button의 클릭 시점에만 인벤토리를 변경하며, Scene에는 자동 생성하지 않는다.
 /// </summary>
+[RequireComponent(typeof(Button))]
 public sealed class BuildingMaterialTestButton : MonoBehaviour
 {
     private const int GrantQuantity = 100;
-    private string status = string.Empty;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void CreateForDevelopment()
+    private void Awake()
     {
-        if (FindFirstObjectByType<BuildingMaterialTestButton>() != null) return;
-
-        GameObject host = new GameObject(nameof(BuildingMaterialTestButton));
-        DontDestroyOnLoad(host);
-        host.AddComponent<BuildingMaterialTestButton>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // Prefab 자체가 클릭 이벤트를 소유해 Scene별 onClick 직렬화가 필요하지 않다.
+        GetComponent<Button>().onClick.AddListener(GrantMaterials);
+#else
+        // Debug Prefab이 실수로 Release Scene에 배치돼도 기능과 UI가 노출되지 않게 한다.
+        gameObject.SetActive(false);
+#endif
     }
 
-    private void OnGUI()
+    /// <summary>
+    /// 건축 완료 흐름을 거치지 않고 테스트 재료만 현재 플레이어 인벤토리에 추가한다.
+    /// </summary>
+    public void GrantMaterials()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         PlayerMainManager player = PlayerMainManager.Instance;
         FrameworkRoot root = FrameworkRoot.Instance;
-        SharedTradeItemDefinition logs = null;
-        SharedTradeItemDefinition stone = null;
-        bool ready = player != null
-            && root != null
-            && root.SharedGameData != null
-            && root.SharedGameData.TryGetTradeItem("Logs", out logs)
-            && root.SharedGameData.TryGetTradeItem("Stone", out stone);
 
-        bool previousEnabled = GUI.enabled;
-        GUI.enabled = ready;
-        if (GUI.Button(new Rect(20f, 20f, 270f, 44f), "TEST: Logs +100 / Stone +100"))
+        if (player == null
+            || root == null
+            || root.SharedGameData == null
+            || !root.SharedGameData.TryGetTradeItem("Logs", out SharedTradeItemDefinition logs)
+            || !root.SharedGameData.TryGetTradeItem("Stone", out SharedTradeItemDefinition stone))
         {
-            player.AddItem(CreateSaveItem(logs), GrantQuantity);
-            player.AddItem(CreateSaveItem(stone), GrantQuantity);
-            status = $"Logs {player.GetItemCount("Logs")} / Stone {player.GetItemCount("Stone")}";
+            Debug.LogWarning("[Building Debug] Logs/Stone 지급에 필요한 데이터가 준비되지 않았습니다.", this);
+            return;
         }
-        GUI.enabled = previousEnabled;
 
-        if (!string.IsNullOrEmpty(status))
-            GUI.Label(new Rect(20f, 66f, 300f, 24f), status);
+        player.AddItem(CreateSaveItem(logs), GrantQuantity);
+        player.AddItem(CreateSaveItem(stone), GrantQuantity);
+        Debug.Log($"[Building Debug] Logs {player.GetItemCount("Logs")} / Stone {player.GetItemCount("Stone")}", this);
+#endif
     }
 
     private static TradeItemSaveData CreateSaveItem(SharedTradeItemDefinition definition)
@@ -59,4 +59,3 @@ public sealed class BuildingMaterialTestButton : MonoBehaviour
         };
     }
 }
-#endif
