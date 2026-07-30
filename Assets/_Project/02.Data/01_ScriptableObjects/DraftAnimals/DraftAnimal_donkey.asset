@@ -15,7 +15,7 @@ MonoBehaviour:
   draftAnimalId: Donkey
   displayName: Donkey
   icon: {fileID: -897165449, guid: 55b2c05e0d2a3a1458148901aee174a8, type: 3}
-  prefab: {fileID: 0}
+  prefab: {fileID: 7293631106169595784, guid: f10ae3d787d19b5439623a7801d8715a, type: 3}
   description: 'Donkey Can pull wagon
 
 '

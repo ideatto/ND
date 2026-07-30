@@ -15,7 +15,7 @@ MonoBehaviour:
   wagonId: Wagon_M
   displayName: Wagon_M
   icon: {fileID: 21300000, guid: 450411227168c1e47a77864b9c404b27, type: 3}
-  prefab: {fileID: 0}
+  prefab: {fileID: 1888460102753451980, guid: ba99e5848ccccb64eb45b1cc65bd9464, type: 3}
   description: Wagon middle size need Hourse or donkey
   wagonType: 1
   maxDurability: 100
