@@ -21,6 +21,11 @@ public class BuildingDetailViewData
     public bool isConstruction;
 
     // 목표 레벨의 3D 건물 외형을 미리보기에 전달한다.
+
+    // 월드 외형과 같은 DataPerLevel 보정값을 사용해 미리보기 방향/비율도 한 곳에서 관리한다.
+    public Vector3 previewScale = Vector3.one;
+    public Vector3 previewEulerAngles = Vector3.zero;
+    public Vector3 previewOffset = Vector3.zero;
     public GameObject previewPrefab;
 
     // PlayerMainManager의 현재 보유량과 BuildData의 재료 요구량을 조합한 결과다.

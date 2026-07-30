@@ -18,10 +18,20 @@ MonoBehaviour:
   dataPerLevels:
   - level: 1
     buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+    visualScale: {x: 6, y: 6, z: 6}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 5
+    footprintCellsZ: 5
     buildRequirements:
       requireItems: []
   - level: 2
     buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+    visualScale: {x: 6, y: 6, z: 6}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 5
+    footprintCellsZ: 5
     buildRequirements:
       requireItems:
       - itemId: Logs
@@ -30,6 +40,11 @@ MonoBehaviour:
         quantity: 10
   - level: 3
     buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+    visualScale: {x: 6, y: 6, z: 6}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 5
+    footprintCellsZ: 5
     buildRequirements:
       requireItems:
       - itemId: Logs

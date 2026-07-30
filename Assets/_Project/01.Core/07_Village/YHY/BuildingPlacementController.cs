@@ -808,4 +808,23 @@ public class BuildingPlacementController : MonoBehaviour,
         }
         return null;
     }
+
+
+/// <summary>
+    /// 다른 UI가 열릴 때 건물 이동 편집 상태를 종료한다.
+    /// 진행 중인 드래그는 UI 클릭으로 암묵 확정하지 않고 시작 위치/점유로 복구한다.
+    /// </summary>
+    public void CancelPlacementSelection()
+    {
+        if (isPlacementCommitInProgress) return;
+
+        if (isDraggingBuilding)
+        {
+            RollbackRuntimePlacement();
+            isDraggingBuilding = false;
+            placementSnapshot = default;
+        }
+
+        SetSelected(null);
+    }
 }

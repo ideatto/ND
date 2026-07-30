@@ -34,6 +34,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: d3e0661c62971554698aecafac846371, type: 2}
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  - {fileID: 11400000, guid: 63af5decbf34d1747ab76c42cf4e8942, type: 2}
+  - {fileID: 11400000, guid: e70021528395dfa4ebac5f411e79ec65, type: 2}
   wagons:
   - {fileID: 11400000, guid: 7de4fcc3bc668084682ba80497b8f8d9, type: 2}
   - {fileID: 11400000, guid: 1f1ec2f7f5822c84a9af199bcccf3565, type: 2}

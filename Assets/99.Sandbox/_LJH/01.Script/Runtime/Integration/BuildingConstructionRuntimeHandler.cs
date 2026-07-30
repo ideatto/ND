@@ -511,7 +511,8 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
 
         foreach(DataPerLevel levelData in buildData.DataPerLevels)
         {
-            if(levelData == null || levelData.level < 1)
+            // 거래·저장이 시작되기 전에 목표 레벨 외형 누락을 거부해 부분 성공을 막는다.
+            if(levelData == null || levelData.level < 1 || levelData.buildPrefab == null)
             {
                 return false;
             }

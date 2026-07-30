@@ -59,6 +59,10 @@ public class BuildingViewDataBuilder
             targetLevel = targetLevel,
             isConstruction = safeCurrentLevel == 0,
 
+            previewScale = targetLevelData.visualScale,
+            previewEulerAngles = targetLevelData.visualEulerAngles,
+            previewOffset = targetLevelData.visualOffset,
+
             previewPrefab = targetLevelData.buildPrefab,
 
             itemRequirements = requirementResult.itemRequirements,
@@ -206,9 +210,9 @@ public class BuildingViewDataBuilder
                 itemId = requirement.itemId,
                 displayName = foundItemDefinition && itemDefinition != null ? itemDefinition.DisplayName : requirement.itemId,
 
-                // TODO: SharedTradeItemDefinition.Icon 매핑 작업이 병합되면
-                // itemDefinition.Icon을 연결한다.
-                icon = null,
+                icon = foundItemDefinition && itemDefinition != null
+                    ? itemDefinition.Icon
+                    : null,
 
                 ownedQuantity = ownedQuantity,
                 requiredQuantity = requirement.quantity,

@@ -18,6 +18,11 @@ MonoBehaviour:
   dataPerLevels:
   - level: 1
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
+    visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 2
+    footprintCellsZ: 2
     buildRequirements:
       requireItems:
       - itemId: Logs
@@ -26,6 +31,11 @@ MonoBehaviour:
         quantity: 3
   - level: 2
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
+    visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 2
+    footprintCellsZ: 2
     buildRequirements:
       requireItems:
       - itemId: Logs
@@ -34,6 +44,11 @@ MonoBehaviour:
         quantity: 5
   - level: 3
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
+    visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 2
+    footprintCellsZ: 2
     buildRequirements:
       requireItems:
       - itemId: Logs
@@ -42,6 +57,11 @@ MonoBehaviour:
         quantity: 10
   - level: 4
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
+    visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 2
+    footprintCellsZ: 2
     buildRequirements:
       requireItems:
       - itemId: Logs
@@ -50,6 +70,11 @@ MonoBehaviour:
         quantity: 20
   - level: 5
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
+    visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 2
+    footprintCellsZ: 2
     buildRequirements:
       requireItems:
       - itemId: Logs

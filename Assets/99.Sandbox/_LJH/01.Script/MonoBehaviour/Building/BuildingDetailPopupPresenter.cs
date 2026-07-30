@@ -1,7 +1,9 @@
-﻿using System;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
@@ -46,7 +48,11 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     private List<BuildingRequirementSlot> requirementSlots = new List<BuildingRequirementSlot>();
     private BuildingDetailViewData currentViewData;
     private int activeRequirementSlotCount;
-    private Mesh previewGeneratedMesh;
+    
+    private Coroutine previewCameraRenderCoroutine;
+
+private GameObject previewPrefabInstance;
+private Mesh previewGeneratedMesh;
 
     /// <summary>진행 가능한 건설 버튼을 누르면 선택한 buildId를 전달한다.</summary>
     public event Action<string> BuildRequested;
@@ -78,15 +84,16 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
         SetVisible(false);
     }
 
-    private void OnDestroy()
+private void OnDestroy()
     {
         closeBackdropButton?.onClick.RemoveListener(HandleCloseClicked);
         buildButton?.onClick.RemoveListener(HandleBuildClicked);
+        StopPreviewCameraRender();
         ReleasePreviewMesh();
     }
 
     /// <summary>전달받은 화면 데이터를 렌더링하고 Popup을 표시한다.</summary>
-    public void Show(BuildingDetailViewData viewData)
+public void Show(BuildingDetailViewData viewData)
     {
         if(viewData == null)
         {
@@ -96,19 +103,21 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
 
         currentViewData = viewData;
 
+        // 비활성 GameObject에서는 코루틴을 시작할 수 없으므로 먼저 Popup을 활성화한다.
+        SetVisible(true);
+
         RenderBuildingInformation(viewData);
         RenderRequirements(viewData);
         RenderBuildButton(viewData);
-        RenderPreview(viewData.previewPrefab);
-
-        SetVisible(true);
+        RenderPreview(viewData);
     }
 
     /// <summary>Popup을 숨기고 사용 중인 요구조건 슬롯을 풀로 반환한다.</summary>
-    public void Hide()
+public void Hide()
     {
         currentViewData = null;
 
+        StopPreviewCameraRender();
         HideAllRequirementSlots();
         SetVisible(false);
     }
@@ -132,7 +141,9 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
 
         if(descriptionText != null)
         {
-            descriptionText.text = viewData.description ?? string.Empty;
+            descriptionText.text = string.IsNullOrWhiteSpace(viewData.description)
+                ? "설명이 없습니다."
+                : viewData.description;
         }
     }
 
@@ -261,13 +272,18 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     }
 
     // 선택한 건물 외형을 적용하고 RenderTexture를 한 번만 갱신한다.
-    private void RenderPreview(GameObject buildingPrefab)
+private void RenderPreview(BuildingDetailViewData viewData)
     {
-        if (!TryApplyPreviewAppearance(buildingPrefab))
+        StopPreviewCameraRender();
+
+        if(viewData == null || !TryApplyPreviewAppearance(viewData.previewPrefab))
         {
             SetPreviewVisible(false);
             return;
         }
+
+        // Mesh 구성 방식과 무관하게 마지막에 같은 DataPerLevel 보정을 적용해 RawImage 방향을 통일한다.
+        ApplyPreviewPresentation(viewData);
 
         if(previewCamera == null || previewRenderTexture == null)
         {
@@ -276,15 +292,63 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
         }
 
         previewCamera.targetTexture = previewRenderTexture;
-        previewCamera.Render();
 
         if(previewImage != null)
         {
             previewImage.texture = previewRenderTexture;
         }
 
+        // URP 전용 직접 렌더 API에 의존하지 않고, 카메라를 정상 렌더 루프에 한 프레임 참여시킨다.
+        // 모델과 RawImage를 먼저 활성화해야 이전 실패 상태의 빈 RenderTexture가 다시 캡처되지 않는다.
         SetPreviewVisible(true);
+        previewCamera.enabled = true;
+        previewCameraRenderCoroutine = StartCoroutine(DisablePreviewCameraAfterFrame());
     }
+
+private void ApplyPreviewPresentation(BuildingDetailViewData viewData)
+    {
+        if (viewData == null || previewMeshFilter == null) return;
+
+        Transform previewTransform = previewMeshFilter.transform;
+        Vector3 visualScale = viewData.previewScale;
+        float largestScale = Mathf.Max(Mathf.Abs(visualScale.x), Mathf.Abs(visualScale.y), Mathf.Abs(visualScale.z));
+        Vector3 previewScaleRatio = largestScale > Mathf.Epsilon ? visualScale / largestScale : Vector3.one;
+
+        // Preview는 고정 프레임 크기를 유지하되 비균일 Scale의 비율과 회전/Offset은 월드 외형과 공유한다.
+        // 따라서 2.4/6 같은 균일 월드 배율 때문에 RawImage가 잘리지 않는다.
+        previewTransform.localScale = Vector3.Scale(previewTransform.localScale, previewScaleRatio);
+        previewTransform.localRotation = Quaternion.Euler(viewData.previewEulerAngles) * previewTransform.localRotation;
+        previewTransform.localPosition += viewData.previewOffset;
+    }
+
+
+private IEnumerator DisablePreviewCameraAfterFrame()
+    {
+        yield return new WaitForEndOfFrame();
+
+        if(previewCamera != null)
+        {
+            previewCamera.enabled = false;
+        }
+
+        previewCameraRenderCoroutine = null;
+    }
+
+private void StopPreviewCameraRender()
+    {
+        if(previewCameraRenderCoroutine != null)
+        {
+            StopCoroutine(previewCameraRenderCoroutine);
+            previewCameraRenderCoroutine = null;
+        }
+
+        if(previewCamera != null)
+        {
+            previewCamera.enabled = false;
+        }
+    }
+
+
 
     // Prefab 아래의 모든 Mesh와 Material을 하나의 Preview Mesh로 결합한다.
     private bool TryApplyPreviewAppearance(GameObject buildingPrefab)
@@ -302,7 +366,17 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
             return false;
         }
 
-        if(sourceMeshFilters.Length == 1)
+        
+        for(int i = 0; i < sourceMeshFilters.Length; i++)
+        {
+            Mesh sourceMesh = sourceMeshFilters[i] != null ? sourceMeshFilters[i].sharedMesh : null;
+            if(sourceMesh != null && !sourceMesh.isReadable)
+            {
+                // Read/Write가 꺼진 다중 Mesh(풍차 등)는 CombineMeshes가 실패하므로 원본 Renderer를 Preview 전용 인스턴스로 사용한다.
+                return TryApplyPrefabInstanceAppearance(buildingPrefab);
+            }
+        }
+if(sourceMeshFilters.Length == 1)
         {
             return TryApplySingleMeshAppearance(
                 buildingPrefab.transform,
@@ -454,8 +528,8 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
             return;
         }
 
-        Quaternion sourceRotation =
-            Quaternion.Inverse(prefabRoot.rotation) * sourceTransform.rotation;
+        // 단일 Mesh도 Prefab 루트의 authored 축 보정을 포함해야 BaseCamp처럼 눕혀진 원본 Mesh가 올바르게 선다.
+        Quaternion sourceRotation = sourceTransform.rotation;
 
         Bounds rotatedBounds =
             CalculateRotatedBounds(mesh.bounds, sourceRotation);
@@ -502,6 +576,13 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
 
     private void ReleasePreviewMesh()
     {
+        if(previewPrefabInstance != null)
+        {
+            previewPrefabInstance.SetActive(false);
+            Destroy(previewPrefabInstance);
+            previewPrefabInstance = null;
+        }
+
         if(previewGeneratedMesh == null)
         {
             return;
@@ -521,7 +602,7 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     {
         if(previewMeshRenderer != null)
         {
-            previewMeshRenderer.enabled = visible;
+            previewMeshRenderer.enabled = visible && previewPrefabInstance == null;
         }
 
         if(previewImage != null)
@@ -565,18 +646,100 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
         Hide();
     }
 
-    // 오브젝트를 유지한 채 CanvasGroup으로 표시와 입력을 함께 제어한다.
+    // Popup은 최초 Awake에서 한 번 초기화한 뒤 숨길 때 GameObject까지 비활성화한다.
+    // Binding은 별도 활성 Runtime 오브젝트에 있으므로 다음 Show 호출에서 안전하게 다시 활성화할 수 있다.
     private void SetVisible(bool visible)
     {
-        if (canvasGroup == null)
+        if(visible && !gameObject.activeSelf)
         {
-            gameObject.SetActive(visible);
-            return;
+            gameObject.SetActive(true);
         }
 
-        canvasGroup.alpha = visible ? 1f : 0f;
-        canvasGroup.interactable = visible;
-        canvasGroup.blocksRaycasts = visible;
+        if(canvasGroup != null)
+        {
+            canvasGroup.alpha = visible ? 1f : 0f;
+            canvasGroup.interactable = visible;
+            canvasGroup.blocksRaycasts = visible;
+        }
+
+        if(!visible && gameObject.activeSelf)
+        {
+            gameObject.SetActive(false);
+        }
     }
 
+
+
+private bool TryApplyPrefabInstanceAppearance(GameObject buildingPrefab)
+    {
+        if(buildingPrefab == null || previewMeshFilter == null) return false;
+
+        ReleasePreviewMesh();
+        previewMeshFilter.sharedMesh = null;
+        previewMeshRenderer.enabled = false;
+
+        Transform previewTransform = previewMeshFilter.transform;
+        previewTransform.localPosition = Vector3.zero;
+        previewTransform.localRotation = Quaternion.identity;
+        previewTransform.localScale = Vector3.one;
+
+        previewPrefabInstance = Instantiate(buildingPrefab, previewTransform, false);
+        SetLayerRecursively(previewPrefabInstance.transform, previewTransform.gameObject.layer);
+
+        // Preview 인스턴스는 외형만 필요하므로 배치·NPC 등 런타임 동작과 Collider는 비활성화한다.
+        foreach(MonoBehaviour behaviour in previewPrefabInstance.GetComponentsInChildren<MonoBehaviour>(true))
+            behaviour.enabled = false;
+        foreach(Collider collider in previewPrefabInstance.GetComponentsInChildren<Collider>(true))
+            collider.enabled = false;
+
+        Renderer[] renderers = previewPrefabInstance.GetComponentsInChildren<Renderer>(true);
+        bool hasBounds = false;
+        Bounds localBounds = default;
+        Matrix4x4 worldToPreview = previewTransform.worldToLocalMatrix;
+        foreach(Renderer renderer in renderers)
+        {
+            if(renderer == null || !renderer.enabled) continue;
+            Bounds bounds = renderer.bounds;
+            Vector3 center = bounds.center;
+            Vector3 extents = bounds.extents;
+            for(int x = -1; x <= 1; x += 2)
+            for(int y = -1; y <= 1; y += 2)
+            for(int z = -1; z <= 1; z += 2)
+            {
+                Vector3 corner = worldToPreview.MultiplyPoint3x4(
+                    center + Vector3.Scale(extents, new Vector3(x, y, z)));
+                if(!hasBounds)
+                {
+                    localBounds = new Bounds(corner, Vector3.zero);
+                    hasBounds = true;
+                }
+                else localBounds.Encapsulate(corner);
+            }
+        }
+
+        if(!hasBounds)
+        {
+            previewPrefabInstance.SetActive(false);
+            Destroy(previewPrefabInstance);
+            previewPrefabInstance = null;
+            return false;
+        }
+
+        float largestSize = Mathf.Max(localBounds.size.x, localBounds.size.y, localBounds.size.z);
+        float scale = largestSize > Mathf.Epsilon ? previewModelSize / largestSize : 1f;
+        previewTransform.localScale = Vector3.one * scale;
+        previewTransform.localPosition = new Vector3(
+            -localBounds.center.x * scale,
+            -localBounds.min.y * scale,
+            -localBounds.center.z * scale);
+        return true;
+    }
+
+    private static void SetLayerRecursively(Transform root, int layer)
+    {
+        if(root == null) return;
+        root.gameObject.layer = layer;
+        for(int i = 0; i < root.childCount; i++)
+            SetLayerRecursively(root.GetChild(i), layer);
+    }
 }
