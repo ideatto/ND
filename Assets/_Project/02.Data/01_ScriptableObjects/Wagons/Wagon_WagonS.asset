@@ -15,7 +15,7 @@ MonoBehaviour:
   wagonId: Wagon_S
   displayName: Wagon_S
   icon: {fileID: 21300000, guid: 450411227168c1e47a77864b9c404b27, type: 3}
-  prefab: {fileID: 0}
+  prefab: {fileID: 2409661924617045558, guid: ac052bd02ad467d40980aa7757061016, type: 3}
   description: Wagon small size
   wagonType: 2
   maxDurability: 100

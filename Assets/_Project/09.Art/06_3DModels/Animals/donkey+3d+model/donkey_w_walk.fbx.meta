@@ -35,7 +35,7 @@ ModelImporter:
       name: rig|Action
       takeName: rig|Action
       internalID: -518154144676478023
-      firstFrame: 12
+      firstFrame: 0
       lastFrame: 60
       wrapMode: 0
       orientationOffsetY: 0
@@ -45,9 +45,9 @@ ModelImporter:
       hasAdditiveReferencePose: 0
       loopTime: 1
       loopBlend: 1
-      loopBlendOrientation: 0
-      loopBlendPositionY: 0
-      loopBlendPositionXZ: 0
+      loopBlendOrientation: 1
+      loopBlendPositionY: 1
+      loopBlendPositionXZ: 1
       keepOriginalOrientation: 0
       keepOriginalPositionY: 1
       keepOriginalPositionXZ: 0
