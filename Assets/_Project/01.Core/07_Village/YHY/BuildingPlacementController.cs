@@ -95,6 +95,20 @@ public class BuildingPlacementController : MonoBehaviour,
         {
             newBuildingScanTimer = 0.25f;   // 0.25초마다 새 건물 체크(건물 수 적어 부담 없음)
             RegisterExistingBuildings();    // registered 셋으로 신규만 처리
+
+            // [NPC 스폰 타이밍] 마을 씬 로드 콜백(OnAnySceneLoaded)은 건물 등록 '전에' 떠서 스폰을 놓친다.
+            // 그래서 여기서(등록 후) 건물이 하나라도 잡히면 NPC를 한 번만 스폰한다. 마을 씬은 그 건물의 소속 씬으로 잡는다.
+            if (!npcSpawned && npcBuildingList.Count > 0)
+            {
+                PlaceableBuilding first = npcBuildingList.Find(b => b != null);
+                if (first != null)
+                {
+                    villageScene = first.gameObject.scene;
+                    villageSceneValid = villageScene.IsValid();
+                    SpawnNpcs();
+                    npcSpawned = true;
+                }
+            }
         }
     }
 
@@ -257,7 +271,10 @@ public class BuildingPlacementController : MonoBehaviour,
         if (!grid.CanPlace(cx, cz, sx, sz, t)
             && !grid.FindNearestFree(cx, cz, sx, sz, t, out cx, out cz))
         {
-            Debug.LogWarning($"Village building registration failed. name={t.name}, reason=no free cell.");
+            // 거점 격자 범위를 완전히 벗어난 건물 = 관리 대상 아닌 먼 마을 건물(윈디타운 등) → 조용히 스킵.
+            // 격자 '안'인데 자리가 없을 때만 경고(그게 진짜 문제).
+            if (grid.InBounds(cx, cz))
+                Debug.LogWarning($"Village building registration failed. name={t.name}, reason=no free cell.");
             return;
         }
 
@@ -587,11 +604,22 @@ public class BuildingPlacementController : MonoBehaviour,
                 root.BuildingPlacement.Execute(displayName, cx, cz, yawStep);
             if (!result.Succeeded)
             {
-                RollbackRuntimePlacement();
                 string saveMessage = result.SaveResult != null ? result.SaveResult.Message : string.Empty;
-                Debug.LogWarning(
-                    $"Village placement save failed. displayName={displayName}, cell=({cx},{cz}), " +
-                    $"yawStep={yawStep}, reason={result.FailureReason}, saveMessage={saveMessage}");
+                // BuildingNotFound = SaveData에 없는 authored 건물(저장 계약 미등록). 이 경우 롤백하지 않고
+                // 이동을 '유지'한다(저장만 생략) — 씬에 authored로 놓인 건물도 자유롭게 옮기게. 이게 "건물 이동 안 됨"의 원인이었음.
+                // 그 외 실패(SaveFailed 등)는 씬↔저장 정합성을 위해 원위치로 롤백.
+                if (result.FailureReason == BuildingPlacementFailureReason.BuildingNotFound)
+                {
+                    Debug.Log(
+                        $"Village placement: '{displayName}' 이동 유지(저장 생략 — SaveData 미등록 authored 건물). cell=({cx},{cz})");
+                }
+                else
+                {
+                    RollbackRuntimePlacement();
+                    Debug.LogWarning(
+                        $"Village placement save failed. displayName={displayName}, cell=({cx},{cz}), " +
+                        $"yawStep={yawStep}, reason={result.FailureReason}, saveMessage={saveMessage}");
+                }
             }
         }
         finally

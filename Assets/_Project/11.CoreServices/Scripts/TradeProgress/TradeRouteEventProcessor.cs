@@ -22,16 +22,22 @@ namespace ND.Framework
 {
     public sealed class RouteEventOccurrence
     {
-        public RouteEventOccurrence(int checkIndex, string eventId, bool isFatal)
+        public RouteEventOccurrence(
+            int checkIndex,
+            string eventId,
+            bool isFatal,
+            bool? combatVictory)
         {
             CheckIndex = checkIndex;
             EventId = eventId ?? string.Empty;
             IsFatal = isFatal;
+            CombatVictory = combatVictory;
         }
 
         public int CheckIndex { get; }
         public string EventId { get; }
         public bool IsFatal { get; }
+        public bool? CombatVictory { get; }
     }
 
     public sealed class RouteEventProcessResult
@@ -121,13 +127,22 @@ namespace ND.Framework
 
                 var eventIndex = (int)(StableHash(tradeId, checkIndex, "select") % (uint)route.Events.Length);
                 var routeEvent = route.Events[eventIndex];
-                if (!TryApply(caravan, routeEvent, StableHash(tradeId, checkIndex, "apply"), out var failureReason))
+                if (!TryApply(
+                        caravan,
+                        routeEvent,
+                        StableHash(tradeId, checkIndex, "apply"),
+                        out var failureReason,
+                        out var combatVictory))
                     return RouteEventProcessResult.Failure(failureReason);
 
                 caravan.runEventsOccurred++;
                 eventsOccurred++;
                 var isFatal = IsFatal(caravan);
-                occurrences.Add(new RouteEventOccurrence(checkIndex, routeEvent.Id, isFatal));
+                occurrences.Add(new RouteEventOccurrence(
+                    checkIndex,
+                    routeEvent.Id,
+                    isFatal,
+                    combatVictory));
                 if (isFatal) break;
             }
 
@@ -166,7 +181,12 @@ namespace ND.Framework
             if (selectedFailure != null) return RouteEventProcessResult.Failure(selectedFailure);
 
             var wasFatal = IsFatal(caravan);
-            if (!TryApply(caravan, selected, StableHash(tradeId, -1, selected.Id), out var failureReason))
+            if (!TryApply(
+                    caravan,
+                    selected,
+                    StableHash(tradeId, -1, selected.Id),
+                    out var failureReason,
+                    out var combatVictory))
                 return RouteEventProcessResult.Failure(failureReason);
 
             caravan.runEventsOccurred++;
@@ -177,7 +197,7 @@ namespace ND.Framework
                 1,
                 !wasFatal && isFatal,
                 caravan.runFatalReason.ToString(),
-                new[] { new RouteEventOccurrence(-1, selected.Id, isFatal) });
+                new[] { new RouteEventOccurrence(-1, selected.Id, isFatal, combatVictory) });
         }
 
         private static RouteEventProcessResult ValidateCommon(
@@ -198,9 +218,11 @@ namespace ND.Framework
             CaravanData caravan,
             SharedRouteEventDefinition routeEvent,
             uint seed,
-            out string failureReason)
+            out string failureReason,
+            out bool? combatVictory)
         {
             failureReason = string.Empty;
+            combatVictory = null;
             if (routeEvent == null || string.IsNullOrWhiteSpace(routeEvent.Id))
             {
                 failureReason = "Route event definition or ID is missing.";
@@ -221,6 +243,7 @@ namespace ND.Framework
                         failureReason = "Combat event application was rejected.";
                         return false;
                     }
+                    combatVictory = combat.passedSafely;
                     return true;
 
                 case RouteEvent.Lucky:
