@@ -50,8 +50,7 @@ namespace ND.UI.WorldMap
             new Dictionary<string, CaravanMapMarker>();
         private readonly HashSet<string> seenCaravanIds = new HashSet<string>();
         private readonly HashSet<string> warnedDuplicateCaravanIds = new HashSet<string>();
-        private readonly HashSet<string> warnedEmptyRouteCaravanIds = new HashSet<string>();
-        private readonly HashSet<string> warnedMissingRouteIds = new HashSet<string>();
+        private readonly HashSet<string> warnedDisplayIssues = new HashSet<string>();
         private readonly RouteMapPresentationResolver presentationResolver = new RouteMapPresentationResolver();
 
         private string selectedTownId = string.Empty;
@@ -108,6 +107,7 @@ private void OnEnable()
         /// </summary>
         public void RefreshAll()
         {
+            warnedDisplayIssues.Clear();
             BuildLookups();
             RefreshPresentationFromSave();
             SyncCaravanMarkers();
@@ -409,6 +409,9 @@ private void BuildLookups()
 
             var coordinator = FrameworkRoot.Instance?.TradeProgressCoordinator;
             var snapshots = coordinator?.GetMapProgressSnapshots();
+            var root = FrameworkRoot.Instance;
+            var save = root?.CurrentSaveData;
+            var shared = root?.SharedGameData;
             if (snapshots == null)
             {
                 HideUnseenCaravanMarkers();
@@ -447,29 +450,31 @@ private void BuildLookups()
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(snapshot.ActiveRouteId))
+                if (!SaveDataLookup.TryGetCaravan(save, snapshot.CaravanId, out var caravan)
+                    || !SaveDataLookup.TryGetTradeProgress(save, snapshot.CaravanId, out var progress)
+                    || !string.Equals(progress.activeTradeId, snapshot.ActiveTradeId, StringComparison.Ordinal))
                 {
                     HideCaravanMarker(snapshot.CaravanId);
-                    if (warnedEmptyRouteCaravanIds.Add(snapshot.CaravanId))
-                    {
-                        Debug.LogWarning(
-                            $"[WorldMap] Caravan '{snapshot.CaravanId}' has an empty ActiveRouteId.",
-                            this);
-                    }
-
+                    WarnDisplayIssue(
+                        snapshot.CaravanId,
+                        snapshot.ActiveTradeId,
+                        CaravanMapDisplayIssue.InvalidIdentity);
                     continue;
                 }
 
-                if (!routesById.TryGetValue(snapshot.ActiveRouteId, out var route))
+                if (!CaravanMapDisplayResolver.TryResolve(
+                        save,
+                        shared,
+                        caravan,
+                        progress,
+                        snapshot.Progress01,
+                        out var display))
                 {
                     HideCaravanMarker(snapshot.CaravanId);
-                    if (warnedMissingRouteIds.Add(snapshot.ActiveRouteId))
-                    {
-                        Debug.LogWarning(
-                            $"[WorldMap] No RouteVisual exists for active route '{snapshot.ActiveRouteId}'.",
-                            this);
-                    }
-
+                    WarnDisplayIssue(
+                        snapshot.CaravanId,
+                        snapshot.ActiveTradeId,
+                        CaravanMapDisplayIssue.InvalidIdentity);
                     continue;
                 }
 
@@ -479,11 +484,56 @@ private void BuildLookups()
                     continue;
                 }
 
-                marker.SetRoute(route);
-                marker.SetProgress(snapshot.Progress01);
+                if (display.Issue != CaravanMapDisplayIssue.None)
+                    WarnDisplayIssue(display.CaravanId, display.TradeId, display.Issue);
+
+                if (display.Mode == CaravanMapDisplayMode.Route)
+                {
+                    if (!routesById.TryGetValue(display.RouteId, out var route))
+                    {
+                        HideCaravanMarker(snapshot.CaravanId);
+                        WarnDisplayIssue(
+                            display.CaravanId,
+                            display.TradeId,
+                            CaravanMapDisplayIssue.MissingRoute);
+                        continue;
+                    }
+
+                    marker.SetRoute(route);
+                    marker.SetProgress(display.Progress01);
+                }
+                else
+                {
+                    if (!townsById.TryGetValue(display.TownId, out var town))
+                    {
+                        HideCaravanMarker(snapshot.CaravanId);
+                        WarnDisplayIssue(
+                            display.CaravanId,
+                            display.TradeId,
+                            CaravanMapDisplayIssue.UnresolvedDestination);
+                        continue;
+                    }
+
+                    marker.SetWorldPosition(town.transform.position);
+                }
             }
 
             HideUnseenCaravanMarkers();
+        }
+
+        private void WarnDisplayIssue(string caravanId, string tradeId, CaravanMapDisplayIssue issue)
+        {
+            if (warnedDisplayIssues.Count >= 64)
+                warnedDisplayIssues.Clear();
+
+            string key = caravanId + "\n" + tradeId + "\n" + issue;
+            if (warnedDisplayIssues.Add(key))
+            {
+                Debug.LogWarning(
+                    $"[WorldMap] Caravan map placement used a fallback or was skipped. "
+                    + $"CaravanId: {caravanId}, TradeId: {tradeId}, Issue: {issue}.",
+                    this);
+            }
         }
 
         private CaravanMapMarker GetOrCreateCaravanMarker(string caravanId)

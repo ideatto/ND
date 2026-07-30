@@ -45,6 +45,7 @@ public class MinimapMultiCaravanMarkers : MonoBehaviour
     };
 
     private readonly Dictionary<string, SpriteRenderer> markers = new Dictionary<string, SpriteRenderer>();
+    private readonly HashSet<string> warnedDisplayIssues = new HashSet<string>();
     private RouteVisual[] routes;
     private TownWorldView[] towns;
 
@@ -86,40 +87,69 @@ public class MinimapMultiCaravanMarkers : MonoBehaviour
             if (!used.Contains(kv.Key) && kv.Value != null) kv.Value.enabled = false;
     }
 
-    /// <summary>이동 중이면 경로 위 진행 위치, 정박 중이면 현재 마을 위치를 구한다.</summary>
+    /// <summary>공통 지도 표시 정책에 따라 경로 진행 위치 또는 정확한 마을 위치를 구한다.</summary>
     private bool TryResolvePosition(FrameworkSaveData save, FrameworkCaravanSaveData c, out Vector3 pos)
     {
         pos = Vector3.zero;
 
-        // 이동 중 엔트리 찾기
-        FrameworkTradeProgress entry = FindTravelingEntry(save, c.caravanId);
-        if (entry != null)
+        SaveDataLookup.TryGetTradeProgress(save, c.caravanId, out FrameworkTradeProgress entry);
+        float travelingProgress = entry != null && entry.state == FrameworkTradeProgressState.Traveling
+            ? CalcProgress(entry)
+            : 0f;
+        var shared = FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null;
+        if (!CaravanMapDisplayResolver.TryResolve(
+                save,
+                shared,
+                c,
+                entry,
+                travelingProgress,
+                out var display))
         {
-            var route = FindRoute(entry.activeRouteId);
-            if (route != null)
-            {
-                pos = route.EvaluatePosition(CalcProgress(entry));
-                return true;
-            }
-            // route를 못 찾으면 정박 위치로 폴백
+            WarnDisplayIssue(
+                c.caravanId,
+                entry != null ? entry.activeTradeId : string.Empty,
+                CaravanMapDisplayIssue.InvalidIdentity);
+            return false;
         }
 
-        // 정박: 현재 마을 위
-        var town = FindTown(c.currentTownId);
+        if (display.Issue != CaravanMapDisplayIssue.None)
+            WarnDisplayIssue(display.CaravanId, display.TradeId, display.Issue);
+
+        if (display.Mode == CaravanMapDisplayMode.Route)
+        {
+            var route = FindRoute(display.RouteId);
+            if (route != null)
+            {
+                pos = route.EvaluatePosition(display.Progress01);
+                return true;
+            }
+
+            WarnDisplayIssue(display.CaravanId, display.TradeId, CaravanMapDisplayIssue.MissingRoute);
+            return false;
+        }
+
+        var town = FindTown(display.TownId);
         if (town != null) { pos = town.transform.position; return true; }
+        WarnDisplayIssue(
+            display.CaravanId,
+            display.TradeId,
+            CaravanMapDisplayIssue.UnresolvedDestination);
         return false;
     }
 
-    private static FrameworkTradeProgress FindTravelingEntry(FrameworkSaveData save, string caravanId)
+    private void WarnDisplayIssue(string caravanId, string tradeId, CaravanMapDisplayIssue issue)
     {
-        if (save.tradeProgressEntries == null) return null;
-        for (int i = 0; i < save.tradeProgressEntries.Count; i++)
+        if (warnedDisplayIssues.Count >= 64)
+            warnedDisplayIssues.Clear();
+
+        string key = caravanId + "\n" + tradeId + "\n" + issue;
+        if (warnedDisplayIssues.Add(key))
         {
-            var e = save.tradeProgressEntries[i];
-            if (e != null && e.caravanId == caravanId && e.state == FrameworkTradeProgressState.Traveling)
-                return e;
+            Debug.LogWarning(
+                $"[Minimap] Caravan map placement used a fallback or was skipped. "
+                + $"CaravanId: {caravanId}, TradeId: {tradeId}, Issue: {issue}.",
+                this);
         }
-        return null;
     }
 
     /// <summary>진행률 = (now - start) / (end - start), 0~1. TryGetMapProgress와 동일 공식.</summary>
