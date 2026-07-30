@@ -10,6 +10,7 @@ public static class CaravanActivityLogPrefabBuilder
         "Assets/_Project/05.UI/09_QoL/CaravanActivityLog/Prefabs";
     private const string ItemPath = FolderPath + "/CaravanActivityLogItem.prefab";
     private const string PanelPath = FolderPath + "/CaravanActivityLogPanel.prefab";
+    private const string CombatPanelPath = FolderPath + "/CaravanCombatSequencePanel.prefab";
 
     [MenuItem("ND/UI/Create Caravan Activity Log Prefabs")]
     public static void CreatePrefabs()
@@ -17,9 +18,11 @@ public static class CaravanActivityLogPrefabBuilder
         EnsureFolders(FolderPath);
         var itemPrefab = CreateItemPrefab();
         CreatePanelPrefab(itemPrefab);
+        CreateCombatPanelPrefab();
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log($"[Caravan Activity Log] Created {ItemPath} and {PanelPath}.");
+        Debug.Log(
+            $"[Caravan Activity Log] Created {ItemPath}, {PanelPath}, and {CombatPanelPath}.");
     }
 
     private static CaravanActivityLogItemView CreateItemPrefab()
@@ -149,6 +152,73 @@ public static class CaravanActivityLogPrefabBuilder
         SetObjectReference(panel, "contentRoot", content);
         SetObjectReference(panel, "itemPrefab", itemPrefab);
         PrefabUtility.SaveAsPrefabAsset(root.gameObject, PanelPath);
+        Object.DestroyImmediate(root.gameObject);
+    }
+
+    private static void CreateCombatPanelPrefab()
+    {
+        var root = CreateRect("CaravanCombatSequencePanel");
+        Stretch(root, Vector2.zero, Vector2.zero);
+        var canvasGroup = root.gameObject.AddComponent<CanvasGroup>();
+        canvasGroup.alpha = 0f;
+        canvasGroup.interactable = false;
+        canvasGroup.blocksRaycasts = false;
+
+        var dimmer = root.gameObject.AddComponent<Image>();
+        dimmer.color = new Color(0f, 0f, 0f, 0.28f);
+        dimmer.raycastTarget = false;
+
+        var card = CreateRect("CombatCard", root);
+        card.anchorMin = new Vector2(0.5f, 0.5f);
+        card.anchorMax = new Vector2(0.5f, 0.5f);
+        card.pivot = new Vector2(0.5f, 0.5f);
+        card.sizeDelta = new Vector2(760f, 430f);
+        var cardBackground = card.gameObject.AddComponent<Image>();
+        cardBackground.sprite =
+            AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+        cardBackground.type = Image.Type.Sliced;
+        cardBackground.color = new Color(0.18f, 0.16f, 0.13f, 0.94f);
+        cardBackground.raycastTarget = false;
+
+        var artworkRect = CreateRect("StageArtwork", card);
+        artworkRect.anchorMin = new Vector2(0.5f, 1f);
+        artworkRect.anchorMax = new Vector2(0.5f, 1f);
+        artworkRect.pivot = new Vector2(0.5f, 1f);
+        artworkRect.anchoredPosition = new Vector2(0f, -34f);
+        artworkRect.sizeDelta = new Vector2(640f, 280f);
+        var artwork = artworkRect.gameObject.AddComponent<Image>();
+        artwork.color = Color.white;
+        artwork.enabled = false;
+        artwork.preserveAspect = true;
+        artwork.raycastTarget = false;
+
+        var messageRect = CreateRect("Message", card);
+        messageRect.anchorMin = new Vector2(0f, 0f);
+        messageRect.anchorMax = new Vector2(1f, 0f);
+        messageRect.pivot = new Vector2(0.5f, 0f);
+        messageRect.offsetMin = new Vector2(32f, 28f);
+        messageRect.offsetMax = new Vector2(-32f, 126f);
+        var message = messageRect.gameObject.AddComponent<TextMeshProUGUI>();
+        message.alignment = TextAlignmentOptions.Center;
+        message.fontSize = 36f;
+        message.fontStyle = FontStyles.Bold;
+        message.color = Color.white;
+        message.enableWordWrapping = true;
+        message.raycastTarget = false;
+
+        var vfxRoot = CreateRect("StageVfxRoot", card);
+        Stretch(vfxRoot, Vector2.zero, Vector2.zero);
+        vfxRoot.SetAsLastSibling();
+
+        var panel = root.gameObject.AddComponent<CaravanCombatSequencePanel>();
+        SetObjectReference(panel, "canvasGroup", canvasGroup);
+        SetObjectReference(panel, "cardRoot", card);
+        SetObjectReference(panel, "backgroundImage", cardBackground);
+        SetObjectReference(panel, "stageImage", artwork);
+        SetObjectReference(panel, "messageText", message);
+        SetObjectReference(panel, "vfxRoot", vfxRoot);
+
+        PrefabUtility.SaveAsPrefabAsset(root.gameObject, CombatPanelPath);
         Object.DestroyImmediate(root.gameObject);
     }
 
