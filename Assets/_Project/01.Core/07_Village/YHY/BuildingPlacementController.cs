@@ -95,6 +95,20 @@ public class BuildingPlacementController : MonoBehaviour,
         {
             newBuildingScanTimer = 0.25f;   // 0.25초마다 새 건물 체크(건물 수 적어 부담 없음)
             RegisterExistingBuildings();    // registered 셋으로 신규만 처리
+
+            // [NPC 스폰 타이밍] 마을 씬 로드 콜백(OnAnySceneLoaded)은 건물 등록 '전에' 떠서 스폰을 놓친다.
+            // 그래서 여기서(등록 후) 건물이 하나라도 잡히면 NPC를 한 번만 스폰한다. 마을 씬은 그 건물의 소속 씬으로 잡는다.
+            if (!npcSpawned && npcBuildingList.Count > 0)
+            {
+                PlaceableBuilding first = npcBuildingList.Find(b => b != null);
+                if (first != null)
+                {
+                    villageScene = first.gameObject.scene;
+                    villageSceneValid = villageScene.IsValid();
+                    SpawnNpcs();
+                    npcSpawned = true;
+                }
+            }
         }
     }
 
