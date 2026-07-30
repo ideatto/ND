@@ -10,13 +10,21 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe788a43db47f334c8b4adc7f173c672, type: 3}
-  m_Name: Build_Dummy
+  m_Name: Build_Windmill
   m_EditorClassIdentifier: Assembly-CSharp::BuildData
-  buildId: dummybuild
-  displayName: "\uB354\uBBF8 \uAC74\uBB3C"
-  description: "\uB354\uBBF8\uC6A9\uC73C\uB85C \uC81C\uC791\uB41C \uAC74\uBB3C\uC785\uB2C8\uB2E4."
+  buildId: Windmill
+  displayName: "\uD48D\uCC28"
+  description: 
   dataPerLevels:
   - level: 1
-    buildPrefab: {fileID: 0}
+    buildPrefab: {fileID: 3136727155675721361, guid: fa572a195ad2d054082cc5bac7fd7097, type: 3}
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Logs
+        quantity: 20
+  - level: 2
+    buildPrefab: {fileID: 3136727155675721361, guid: fa572a195ad2d054082cc5bac7fd7097, type: 3}
+    buildRequirements:
+      requireItems:
+      - itemId: Logs
+        quantity: 40

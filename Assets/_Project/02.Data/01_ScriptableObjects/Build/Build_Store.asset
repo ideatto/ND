@@ -10,38 +10,29 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe788a43db47f334c8b4adc7f173c672, type: 3}
-  m_Name: Build_Farm
+  m_Name: Build_Store
   m_EditorClassIdentifier: Assembly-CSharp::BuildData
-  buildId: Farm
-  displayName: "\uBAA9\uC7A5"
+  buildId: Store
+  displayName: "\uC0C1\uC810"
   description: 
   dataPerLevels:
   - level: 1
-    buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+    buildPrefab: {fileID: 2872888364240210295, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 1
-        value: 5000
       requireItems: []
   - level: 2
-    buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+    buildPrefab: {fileID: 2872888364240210295, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems:
       - itemId: Logs
-        quantity: 10
+        quantity: 20
       - itemId: Stone
-        quantity: 10
+        quantity: 30
   - level: 3
-    buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+    buildPrefab: {fileID: 2872888364240210295, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems:
       - itemId: Logs
-        quantity: 20
+        quantity: 40
       - itemId: Stone
-        quantity: 20
+        quantity: 50

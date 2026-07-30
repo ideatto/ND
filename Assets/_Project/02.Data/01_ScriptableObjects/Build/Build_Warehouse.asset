@@ -19,29 +19,16 @@ MonoBehaviour:
   - level: 1
     buildPrefab: {fileID: 3207291499333707442, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
-      requireItems:
-      - itemId: Logs
-        quantity: 20
-      - itemId: Stone
-        quantity: 20
+      requireItems: []
   - level: 2
     buildPrefab: {fileID: 3207291499333707442, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems:
       - itemId: Logs
         quantity: 40
   - level: 3
     buildPrefab: {fileID: 3207291499333707442, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 1
-        value: 50000
       requireItems:
       - itemId: Logs
         quantity: 70

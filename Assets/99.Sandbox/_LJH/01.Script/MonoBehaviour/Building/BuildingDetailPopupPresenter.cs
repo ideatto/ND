@@ -27,10 +27,6 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
 
     [SerializeField, Min(0)] private int initialRequirementSlotPoolSize = 6;
 
-    [Header("Currency_Presentation")]
-    [SerializeField] private string currencyDisplayName = "금화";
-    [SerializeField] private Sprite currencyIcon;
-
     [Header("Preview_Model")]
     [SerializeField] private MeshFilter previewMeshFilter;
     [SerializeField] private MeshRenderer previewMeshRenderer;
@@ -143,13 +139,6 @@ public sealed class BuildingDetailPopupPresenter : MonoBehaviour
     private void RenderRequirements(BuildingDetailViewData viewData)
     {
         activeRequirementSlotCount = 0;
-
-        CurrencyRequirementViewData currency = viewData.currencyRequirement;
-
-        if(currency != null && currency.isVisible)
-        {
-            BindNextRequirementSlot(currencyDisplayName, currencyIcon, currency.ownedAmount, currency.requiredAmount, currency.isSatisfied);
-        }
 
         ItemRequirementViewData[] items = viewData.itemRequirements ?? Array.Empty<ItemRequirementViewData>();
 

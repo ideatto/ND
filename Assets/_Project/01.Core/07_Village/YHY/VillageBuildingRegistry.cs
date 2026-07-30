@@ -40,6 +40,9 @@ public class VillageBuildingRegistry : MonoBehaviour
     {
         public string displayName;
         public GameObject prefab;   // 비면 큐브 폴백
+        // 건설 Popup과 실제 비용 처리가 같은 레벨별 요구조건을 사용하도록 BuildData 원본을 직접 연결한다.
+        // 기존 displayName 기반 SaveData 계약은 이번 작업에서 유지하므로 displayName과 함께 보관한다.
+        public BuildData buildData;
     }
 
     [SerializeField] private List<Building> buildings = new List<Building>();
@@ -64,6 +67,71 @@ public class VillageBuildingRegistry : MonoBehaviour
         if (index < 0 || index >= catalog.Count) return 0;
         Building b = FindByName(catalog[index].displayName);
         return b != null ? b.level : 0;
+    }
+
+    /// <summary>
+    /// 카탈로그 UI가 선택한 index에 대응하는 BuildData를 반환한다.
+    /// BuildingAddPopup은 이 값과 현재 레벨을 Detail Popup에 전달하며 여기서는 상태를 변경하지 않는다.
+    /// 잘못된 index, null 항목 또는 미연결 항목은 의도하지 않은 무료 건설로 우회하지 않고 null로 처리한다.
+    /// </summary>
+    public BuildData GetCatalogBuildData(int index)
+    {
+        if(index < 0 || index >= catalog.Count)
+        {
+            return null;
+        }
+
+        CatalogEntry entry = catalog[index];
+        return entry != null ? entry.buildData : null;
+    }
+
+    /// <summary>
+    /// Popup 최종 확인 이벤트의 buildId로 카탈로그 항목을 찾는다.
+    /// BuildData는 다음 레벨 비용 조회에, displayName은 기존 SaveData 및 씬 반영 API에 사용한다.
+    /// 즉, 신규 요청 식별자는 buildId를 사용하되 기존 displayName 저장 계약과 연결하는 호환 경계다.
+    /// 동일 buildId가 중복 등록된 경우 모호한 요청이므로 실패한다.
+    /// </summary>
+    public bool TryGetCatalogEntry(string buildId, out BuildData buildData, out string displayName)
+    {
+        buildData = null;
+        displayName = string.Empty;
+
+        if (string.IsNullOrEmpty(buildId))
+        {
+            return false;
+        }
+
+        CatalogEntry found = null;
+
+        foreach (CatalogEntry entry in catalog)
+        {
+            if(entry == null || entry.buildData == null)
+            {
+                continue;
+            }
+
+            if(!string.Equals(entry.buildData.BuildId, buildId, System.StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if(found != null)
+            {
+                Debug.LogError($"Village building catalog has duplicate buildId '{buildId}'.", this);
+                return false;
+            }
+
+            found = entry;
+        }
+
+        if(found == null || found.buildData == null || string.IsNullOrWhiteSpace(found.displayName))
+        {
+            return false;
+        }
+
+        buildData = found.buildData;
+        displayName = found.displayName;
+        return true;
     }
 
     private void Awake()

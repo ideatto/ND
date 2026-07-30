@@ -1446,8 +1446,6 @@ MonoBehaviour:
   requirementContainer: {fileID: 3172099520624848188}
   requirementSlotPrefab: {fileID: 3591862579835691668, guid: 10dbdc01bcd62d64b9c985925131ea1f, type: 3}
   initialRequirementSlotPoolSize: 6
-  currencyDisplayName: "\uAE08\uD654"
-  currencyIcon: {fileID: 21300000, guid: 65963482d86157945acbc993bf641b31, type: 3}
   previewMeshFilter: {fileID: 7521771997271716310}
   previewMeshRenderer: {fileID: 8586945129496388144}
   previewModelSize: 2

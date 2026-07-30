@@ -19,25 +19,18 @@ MonoBehaviour:
   - level: 1
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 1
-        value: 5000
-      requireItems: []
+      requireItems:
+      - itemId: Logs
+        quantity: 5
   - level: 2
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems:
       - itemId: Bread
         quantity: 10
   - level: 3
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems:
       - itemId: Logs
         quantity: 10
@@ -46,9 +39,6 @@ MonoBehaviour:
   - level: 4
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems:
       - itemId: Logs
         quantity: 20
@@ -57,9 +47,6 @@ MonoBehaviour:
   - level: 5
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     buildRequirements:
-      requireCurrency:
-        isRequired: 1
-        value: 50000
       requireItems:
       - itemId: Logs
         quantity: 30
