@@ -46,7 +46,7 @@ public class BuildingViewDataBuilder
         }
 
         // 상세 UI와 확인 UI가 동일한 기준으로 활성화되도록
-        // 재화와 아이템 요구 조건을 한 번에 평가한다.
+        // 재료 아이템 요구 조건을 한 번에 평가한다.
         RequirementResult requirementResult = EvaluateRequirements(targetLevelData.buildRequirements, player, sharedGameData);
 
         return new BuildingDetailViewData
@@ -61,7 +61,6 @@ public class BuildingViewDataBuilder
 
             previewPrefab = targetLevelData.buildPrefab,
 
-            currencyRequirement = requirementResult.currencyRequirement,
             itemRequirements = requirementResult.itemRequirements,
 
             canProceed = requirementResult.isSatisfied,
@@ -139,7 +138,7 @@ public class BuildingViewDataBuilder
     }
 
     /// <summary>
-    /// 재화와 아이템 요구 조건을 평가하여 UI 표시 데이터,
+    /// 재료 아이템 요구 조건을 평가하여 UI 표시 데이터,
     /// 전체 충족 여부 및 버튼 비활성화 사유를 함께 만든다.
     /// </summary>
     private static RequirementResult EvaluateRequirements(BuildRequirement requirement, PlayerMainManager player, ISharedGameDataProvider sharedGameData)
@@ -153,33 +152,11 @@ public class BuildingViewDataBuilder
             return result;
         }
 
-        BuildCurrencyRequirement(requirement.requireCurrency, player, result);
         BuildItemRequirements(requirement.requireItems, player, sharedGameData, result);
-        result.isSatisfied = !result.hasInvalidData && result.currencyRequirement.isSatisfied && result.areAllItemSatisfied;
+        result.isSatisfied = !result.hasInvalidData && result.areAllItemSatisfied;
         result.disabledReason = ResolveDisabledReason(result);
 
         return result;
-    }
-
-    /// <summary>
-    /// PlayerMainManager의 현재 거래 재화와 건물의 요구 재화를 비교한다.
-    /// isRequired가 false이면 UI에서 숨기고 충족된 조건으로 처리한다.
-    /// </summary>
-    private static void BuildCurrencyRequirement(BuildRequireCurrency requirement, PlayerMainManager player, RequirementResult result)
-    {
-        bool isVisible = requirement != null && requirement.isRequired;
-
-        long requiredAmount = isVisible ? Math.Max(0L, requirement.value) : 0L;
-        long ownedAmount = player != null ? Math.Max(0L, player.Gold) : 0L;
-
-        result.currencyRequirement = new CurrencyRequirementViewData
-        {
-            isVisible = isVisible,
-            ownedAmount = ownedAmount,
-            requiredAmount = requiredAmount,
-
-            isSatisfied = !isVisible || ownedAmount >= requiredAmount
-        };
     }
 
     /// <summary>
@@ -252,10 +229,6 @@ public class BuildingViewDataBuilder
         {
             return "건축 요구 데이터가 올바르지 않습니다.";
         }
-        if (!result.currencyRequirement.isSatisfied)
-        {
-            return "보유 재화가 부족합니다.";
-        }
         if (!result.areAllItemSatisfied)
         {
             return "보유 재료가 부족합니다.";
@@ -300,11 +273,6 @@ public class BuildingViewDataBuilder
     // Builder 내부에서만 전달하기 위한 보조 결과 타입이다.
     private sealed class RequirementResult
     {
-        public CurrencyRequirementViewData currencyRequirement = new CurrencyRequirementViewData
-        {
-            isSatisfied = true
-        };
-
         public ItemRequirementViewData[] itemRequirements = Array.Empty<ItemRequirementViewData>();
 
         public bool areAllItemSatisfied = true;

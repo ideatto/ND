@@ -23,8 +23,7 @@ public class BuildingDetailViewData
     // 목표 레벨의 3D 건물 외형을 미리보기에 전달한다.
     public GameObject previewPrefab;
 
-    // PlayerMainManager의 현재 보유량과 BuildData의 요구량을 조합한 결과다.
-    public CurrencyRequirementViewData currencyRequirement = new CurrencyRequirementViewData();
+    // PlayerMainManager의 현재 보유량과 BuildData의 재료 요구량을 조합한 결과다.
     public ItemRequirementViewData[] itemRequirements = Array.Empty<ItemRequirementViewData>();
 
     // 모든 요구 조건을 만족할 때만 다음 단계 버튼을 활성화한다.

@@ -20,12 +20,38 @@ public class BuildingAddPopup : MonoBehaviour
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private float itemHeight = 60f;
 
+    // 비용 건설 경로에서는 직접 건물을 추가하지 않고 선택한 BuildData를 Detail/Confirm UI에 전달한다.
+    [SerializeField] private BuildingPopupRuntimeBinding popupRuntimeBinding;
+
+    // 기존 무료 즉시 추가 경로와 신규 비용 검증 경로를 함께 보존하기 위한 실행 모드다.
+    // true: AddOrUpgrade 즉시 실행, false: Detail Popup 표시
+    private bool useImmediateAdd;
+
     private Action onAdded;
 
-    /// <summary>팝업 열기(추가 완료 콜백 전달).</summary>
+    /// <summary>
+    /// 기존 즉시 추가 경로로 Popup을 연다.
+    /// 초기 구성, 디버그 또는 명시적인 무료 추가 호출의 기존 동작을 보존한다.
+    /// </summary>
     public void Open(Action onAddedCallback)
     {
+        useImmediateAdd = true;
         onAdded = onAddedCallback;
+        gameObject.SetActive(true);
+        transform.SetAsLastSibling();
+        BuildCatalog();
+    }
+
+    /// <summary>
+    /// 비용 검증이 필요한 사용자 건설 경로로 Popup을 연다.
+    /// 항목 선택 시 AddOrUpgrade를 호출하지 않고 Detail Popup을 표시한다.
+    /// </summary>
+    public void Open()
+    {
+        useImmediateAdd = false;
+        // 이전에 즉시 추가 모드로 열었을 때 받은 콜백이 비용 건설 경로에서 실행되지 않게 한다.
+        onAdded = null;
+
         gameObject.SetActive(true);
         transform.SetAsLastSibling();
         BuildCatalog();
@@ -58,8 +84,39 @@ public class BuildingAddPopup : MonoBehaviour
             Button row = CreateRow($"{reg.GetCatalogName(i)}  Lv.{reg.GetCatalogLevel(i)}");
             row.onClick.AddListener(() =>
             {
-                reg.AddOrUpgrade(idx);   // 있으면 레벨업, 없으면 신축(Lv.1)
-                if (onAdded != null) onAdded.Invoke();
+                if (useImmediateAdd)
+                {
+                    // 기존 호출자를 위한 명시적 무료 추가 경로. 비용 트랜잭션 성공 후에는 사용하지 않는다.
+                    reg.AddOrUpgrade(idx); // 있으면 레벨업, 없으면 신축(Lv.1)
+
+                    if (onAdded != null)
+                    {
+                        onAdded.Invoke();
+                    }
+
+                    Close();
+                    return;
+                }
+
+                // 일반 사용자 건설은 여기서 상태를 변경하지 않고 Popup에 선택 정보만 전달한다.
+                BuildData buildData = reg.GetCatalogBuildData(idx);
+
+                if(buildData == null)
+                {
+                    Debug.LogError($"BuildingAddPopup: no BuildData is assigned to catalog index {idx}.", this);
+                    return;
+                }
+
+                if(popupRuntimeBinding == null)
+                {
+                    Debug.LogError("BuildingAddPopup: BuildingPopupRuntimeBinding is not assigned.", this);
+                    return;
+                }
+
+                int currentLevel = reg.GetCatalogLevel(idx);
+
+                popupRuntimeBinding.OpenDetail(buildData, currentLevel);
+
                 Close();
             });
         }
