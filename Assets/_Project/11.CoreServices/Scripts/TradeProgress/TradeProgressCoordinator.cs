@@ -1135,6 +1135,20 @@ namespace ND.Framework
                 {
                     addedEntries.Add(entry);
                 }
+
+                var outcomeEntry = CaravanActivityLog.Add(
+                    saveData,
+                    occurrence.CombatVictory == true
+                        ? CaravanActivityLogType.CombatVictory
+                        : CaravanActivityLogType.CombatDefeat,
+                    progress.caravanId,
+                    progress.activeTradeId,
+                    progress.activeRouteId,
+                    routeEventId: occurrence.EventId);
+                if (outcomeEntry != null)
+                {
+                    addedEntries.Add(outcomeEntry);
+                }
             }
 
             return addedEntries;

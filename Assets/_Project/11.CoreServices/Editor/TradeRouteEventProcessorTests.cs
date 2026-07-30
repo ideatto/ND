@@ -58,6 +58,53 @@ namespace ND.Framework.Editor
         }
 
         [Test]
+        public void Process_CombatSafePassReportsVictory()
+        {
+            var caravan = CreateTravelingCaravan();
+            caravan.progress01 = 0.1f;
+            caravan.baseSafetyChancePercent = 100f;
+
+            var result = TradeRouteEventProcessor.Process(
+                caravan, CreateCombatRoute(), "trade-victory", 10f, 1f);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.Occurrences, Has.Count.EqualTo(1));
+            Assert.That(result.Occurrences[0].CombatVictory, Is.True);
+            Assert.That(result.Occurrences[0].IsFatal, Is.False);
+        }
+
+        [Test]
+        public void Process_CombatLossReportsDefeatWithoutRequiringFatalState()
+        {
+            var caravan = CreateTravelingCaravan();
+            caravan.progress01 = 0.1f;
+            caravan.baseSafetyChancePercent = 0f;
+
+            var result = TradeRouteEventProcessor.Process(
+                caravan, CreateCombatRoute(), "trade-defeat", 10f, 1f);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.Occurrences, Has.Count.EqualTo(1));
+            Assert.That(result.Occurrences[0].CombatVictory, Is.False);
+            Assert.That(result.Occurrences[0].IsFatal, Is.False);
+            Assert.That(caravan.runFatalReason, Is.EqualTo(JourneyFailureReason.None));
+        }
+
+        [Test]
+        public void ProcessForced_CombatReportsActualOutcome()
+        {
+            var caravan = CreateTravelingCaravan();
+            caravan.baseSafetyChancePercent = 0f;
+
+            var result = TradeRouteEventProcessor.ProcessForced(
+                caravan, CreateCombatRoute(), "trade-forced-defeat", "combat");
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.Occurrences, Has.Count.EqualTo(1));
+            Assert.That(result.Occurrences[0].CombatVictory, Is.False);
+        }
+
+        [Test]
         public void RouteData_NormalizePreservesConfiguredChanceInsteadOfCombatPower()
         {
             var route = ScriptableObject.CreateInstance<global::RouteData>();
@@ -132,6 +179,28 @@ namespace ND.Framework.Editor
                     {
                         Id = "lucky",
                         EventType = RouteEvent.Lucky
+                    }
+                }
+            };
+        }
+
+        private static SharedRouteDefinition CreateCombatRoute()
+        {
+            return new SharedRouteDefinition
+            {
+                Id = "combat-route",
+                Distance = 100f,
+                MaxEventCount = 10,
+                BaseRiskLevel = 1f,
+                Events = new[]
+                {
+                    new SharedRouteEventDefinition
+                    {
+                        Id = "combat",
+                        EventType = RouteEvent.Combat,
+                        BanditCombatPower = 100,
+                        CargoLootRate = 0.25f,
+                        FodderLootRate = 0.25f
                     }
                 }
             };
