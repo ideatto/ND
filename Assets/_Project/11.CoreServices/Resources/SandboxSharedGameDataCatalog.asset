@@ -61,3 +61,12 @@ MonoBehaviour:
   quests:
   - {fileID: 11400000, guid: dccc90017d3b6104e8d31abefd3039ea, type: 2}
   - {fileID: 11400000, guid: 6cbf3fe9eef048b4b9c62884b6795a8c, type: 2}
+  builds:
+  - {fileID: 11400000, guid: 971038b3f7d63734992d6faffe696ba0, type: 2}
+  - {fileID: 11400000, guid: 1c25557e3dff25c44a9619db8fd7b6a7, type: 2}
+  - {fileID: 11400000, guid: b55dc2ae6d125fc4a8cb294bb2e31221, type: 2}
+  - {fileID: 11400000, guid: 0a137ed9d48fedc4ab8b2178af1a0913, type: 2}
+  - {fileID: 11400000, guid: 6a20518e706ff964599a7f000e905d84, type: 2}
+  - {fileID: 11400000, guid: 4b064345be86a5c4bbd3b3d42072321f, type: 2}
+  - {fileID: 11400000, guid: 36370e4bc577148448efe47144bd7cf0, type: 2}
+  - {fileID: 11400000, guid: 8fed33f8956e0bf41bba60cf9ed0d826, type: 2}

@@ -23,6 +23,7 @@ namespace ND.Framework
     /// <summary>
     /// Framework 공용 데이터 초기화에 사용할 Sandbox ScriptableObject 참조 목록이다.
     /// </summary>
+    // Supports Town, Market, TradeItem, Wagon, DraftAnimal, Route, Quest, and Build assets.
     [CreateAssetMenu(fileName = ResourceName, menuName = "ND/Framework/Sandbox Shared Game Data Catalog")]
     public sealed class SandboxSharedGameDataCatalog : ScriptableObject
     {
@@ -35,6 +36,7 @@ namespace ND.Framework
         [SerializeField] private global::DraftAnimalData[] draftAnimals;
         [SerializeField] private global::RouteData[] routes;
         [SerializeField] private global::QuestData[] quests;
+        [SerializeField] private global::BuildData[] builds;
 
         public global::TownData[] Towns => towns != null ? (global::TownData[])towns.Clone() : new global::TownData[0];
 
@@ -49,5 +51,10 @@ namespace ND.Framework
         public global::RouteData[] Routes => routes != null ? (global::RouteData[])routes.Clone() : new global::RouteData[0];
 
         public global::QuestData[] Quests => quests != null ? (global::QuestData[])quests.Clone() : new global::QuestData[0];
+
+        public global::BuildData[] Builds =>
+            builds != null
+                ? (global::BuildData[])builds.Clone()
+                : new global::BuildData[0];
     }
 }
