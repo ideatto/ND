@@ -226,6 +226,7 @@ namespace ND.Framework
         private readonly global::ITradePrepareCommitCompletion tradePrepareCommitCompletion;
         private readonly global::ITradePrepareCommitSource tradePrepareCommitSource;
         private readonly global::IExactTradePrepareCommitStore exactTradePrepareCommitStore;
+        private readonly Action<string> onTownVisited;
         private readonly EconomyM1SettlementBridge economySettlementBridge = new EconomyM1SettlementBridge();
 
         private readonly Dictionary<string, CaravanData> runtimeCaravans =
@@ -253,7 +254,8 @@ namespace ND.Framework
             IInGameTimeProvider inGameTimeProvider = null,
             Func<ISharedGameDataProvider> getSharedGameData = null,
             global::ITradePrepareCommitCompletion tradePrepareCommitCompletion = null,
-            global::ITradePrepareCommitSource tradePrepareCommitSource = null)
+            global::ITradePrepareCommitSource tradePrepareCommitSource = null,
+            Action<string> onTownVisited = null)
         {
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
@@ -264,6 +266,7 @@ namespace ND.Framework
             this.getSharedGameData = getSharedGameData;
             this.tradePrepareCommitCompletion = tradePrepareCommitCompletion;
             this.tradePrepareCommitSource = tradePrepareCommitSource;
+            this.onTownVisited = onTownVisited;
             this.exactTradePrepareCommitStore = tradePrepareCommitSource as global::IExactTradePrepareCommitStore
                 ?? tradePrepareCommitCompletion as global::IExactTradePrepareCommitStore;
 
@@ -591,6 +594,7 @@ namespace ND.Framework
                 saveData,
                 progress,
                 runtimeCaravan,
+                evaluationUtc,
                 isOfflineRestore,
                 deferredRouteEvents);
             CaravanSaveDataMapper.CopyToSave(runtimeCaravan, caravanSave);
@@ -1034,6 +1038,7 @@ namespace ND.Framework
             SaveData saveData,
             TradeProgressSaveData progress,
             CaravanData runtimeCaravan,
+            DateTime evaluationUtc,
             bool isOfflineRestore,
             List<RouteEventNotification> deferredNotifications)
         {
@@ -1048,12 +1053,18 @@ namespace ND.Framework
             }
 
             var intervalKm = route.Distance / route.MaxEventCount;
+            var banditEncounterMultiplier =
+                QuestRuntimeService.ResolveBanditEncounterMultiplier(
+                    saveData.world,
+                    route,
+                    evaluationUtc);
             var result = TradeRouteEventProcessor.Process(
                 runtimeCaravan,
                 route,
                 progress.activeTradeId,
                 intervalKm,
-                route.BaseRiskLevel);
+                route.BaseRiskLevel,
+                banditEncounterMultiplier);
             if (!result.Succeeded)
             {
                 FrameworkLog.Warning(
@@ -1420,6 +1431,7 @@ namespace ND.Framework
             if (LastSettlementTradeId == tradeId) ClearSettlementCache();
             FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
+            onTownVisited?.Invoke(destinationTownId);
             return ClaimSettlementResult.Success(saveResult);
         }
 

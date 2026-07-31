@@ -93,7 +93,8 @@ namespace ND.Framework
             SharedRouteDefinition route,
             string tradeId,
             float eventIntervalKm,
-            float eventChancePerCheck)
+            float eventChancePerCheck,
+            float banditEncounterMultiplier = 1f)
         {
             var validationFailure = ValidateCommon(caravan, route, tradeId);
             if (validationFailure != null) return validationFailure;
@@ -110,6 +111,10 @@ namespace ND.Framework
             var completedCheckCount = Mathf.FloorToInt(traveledDistanceKm / eventIntervalKm);
             var chance = Mathf.Clamp01(
                 float.IsNaN(eventChancePerCheck) ? 0f : eventChancePerCheck);
+            var combatMultiplier = Mathf.Clamp01(
+                float.IsNaN(banditEncounterMultiplier)
+                    ? 1f
+                    : banditEncounterMultiplier);
             var checksProcessed = 0;
             var eventsOccurred = 0;
             var occurrences = new List<RouteEventOccurrence>();
@@ -127,6 +132,12 @@ namespace ND.Framework
 
                 var eventIndex = (int)(StableHash(tradeId, checkIndex, "select") % (uint)route.Events.Length);
                 var routeEvent = route.Events[eventIndex];
+                if (routeEvent.EventType == RouteEvent.Combat &&
+                    ToUnitFloat(StableHash(tradeId, checkIndex, "combat")) >=
+                    combatMultiplier)
+                {
+                    continue;
+                }
                 if (!TryApply(
                         caravan,
                         routeEvent,

@@ -32,6 +32,7 @@ namespace ND.Framework
         private readonly Dictionary<string, SharedWagonDefinition> wagons;
         private readonly Dictionary<string, SharedDraftAnimalDefinition> draftAnimals;
         private readonly Dictionary<string, SharedRouteDefinition> routes;
+        private readonly Dictionary<string, SharedQuestDefinition> quests;
 
         public SharedGameDataView(
             Dictionary<string, SharedTownDefinition> towns,
@@ -39,7 +40,8 @@ namespace ND.Framework
             Dictionary<string, SharedTradeItemDefinition> tradeItems,
             Dictionary<string, SharedWagonDefinition> wagons,
             Dictionary<string, SharedDraftAnimalDefinition> draftAnimals,
-            Dictionary<string, SharedRouteDefinition> routes)
+            Dictionary<string, SharedRouteDefinition> routes,
+            Dictionary<string, SharedQuestDefinition> quests = null)
         {
             this.towns = towns ?? new Dictionary<string, SharedTownDefinition>();
             this.markets = markets ?? new Dictionary<string, SharedMarketDefinition>();
@@ -47,6 +49,7 @@ namespace ND.Framework
             this.wagons = wagons ?? new Dictionary<string, SharedWagonDefinition>();
             this.draftAnimals = draftAnimals ?? new Dictionary<string, SharedDraftAnimalDefinition>();
             this.routes = routes ?? new Dictionary<string, SharedRouteDefinition>();
+            this.quests = quests ?? new Dictionary<string, SharedQuestDefinition>();
         }
 
         public bool IsLoaded => true;
@@ -63,6 +66,8 @@ namespace ND.Framework
 
         public int RouteCount => routes.Count;
 
+        public int QuestCount => quests.Count;
+
         public IReadOnlyList<string> TownIds => new List<string>(towns.Keys);
 
         public IReadOnlyList<string> MarketIds => new List<string>(markets.Keys);
@@ -75,8 +80,10 @@ namespace ND.Framework
 
         public IReadOnlyList<string> RouteIds => new List<string>(routes.Keys);
 
+        public IReadOnlyList<string> QuestIds => new List<string>(quests.Keys);
+
         public string Summary =>
-            $"Towns: {TownCount}, Markets: {MarketCount}, TradeItems: {TradeItemCount}, Wagons: {WagonCount}, DraftAnimals: {DraftAnimalCount}, Routes: {RouteCount}";
+            $"Towns: {TownCount}, Markets: {MarketCount}, TradeItems: {TradeItemCount}, Wagons: {WagonCount}, DraftAnimals: {DraftAnimalCount}, Routes: {RouteCount}, Quests: {QuestCount}";
 
         public bool TryGetTown(string id, out SharedTownDefinition town)
         {
@@ -106,6 +113,31 @@ namespace ND.Framework
         public bool TryGetRoute(string id, out SharedRouteDefinition route)
         {
             return TryGetValue(routes, id, out route);
+        }
+
+        public bool TryGetQuest(string id, out SharedQuestDefinition quest)
+        {
+            return TryGetValue(quests, id, out quest);
+        }
+
+        public IReadOnlyList<SharedQuestDefinition> GetQuestsForTown(string townId)
+        {
+            var result = new List<SharedQuestDefinition>();
+            if (string.IsNullOrWhiteSpace(townId)) return result;
+            foreach (SharedQuestDefinition quest in quests.Values)
+            {
+                if (quest != null &&
+                    string.Equals(
+                        quest.SubmissionTownId,
+                        townId,
+                        System.StringComparison.Ordinal))
+                {
+                    result.Add(quest);
+                }
+            }
+            result.Sort((left, right) =>
+                string.CompareOrdinal(left?.Id, right?.Id));
+            return result;
         }
 
         private static bool TryGetValue<T>(Dictionary<string, T> source, string id, out T value)
@@ -218,5 +250,34 @@ namespace ND.Framework
         public long Reward;
         public long MinReward;
         public long MaxReward;
+    }
+
+    public sealed class SharedQuestDefinition
+    {
+        public string Id;
+        public string DisplayName;
+        public string Description;
+        public QuestType Type;
+        public QuestRepeatPolicy RepeatPolicy;
+        public QuestPaymentPolicy PaymentPolicy;
+        public int RegenerationSeconds;
+        public string SubmissionTownId;
+        public long RequiredTradingCurrency;
+        public SharedQuestItemCost[] RequiredItems = new SharedQuestItemCost[0];
+        public SharedQuestReward[] Rewards = new SharedQuestReward[0];
+    }
+
+    public sealed class SharedQuestItemCost
+    {
+        public string ItemId;
+        public int Quantity;
+    }
+
+    public sealed class SharedQuestReward
+    {
+        public QuestRewardType RewardType;
+        public string RewardId;
+        public long Value;
+        public float EncounterMultiplier;
     }
 }

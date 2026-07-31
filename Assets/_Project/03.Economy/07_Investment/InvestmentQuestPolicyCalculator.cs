@@ -27,11 +27,15 @@ namespace ND.Economy
     public sealed class InvestmentQuestDefinition
     {
         public string QuestId = string.Empty;
+        public string SubmissionTownId = string.Empty;
         public long TradingCurrencyCost;
         public List<InvestmentItemCost> ItemCosts =
             new List<InvestmentItemCost>();
         public List<string> UnlockTownIds = new List<string>();
         public List<string> UnlockRouteIds = new List<string>();
+        public List<string> UnlockSpecialtyItemIds = new List<string>();
+        public float BanditEncounterMultiplier = 1f;
+        public long BanditReductionDurationTicks;
     }
 
     [Serializable]
@@ -83,6 +87,9 @@ namespace ND.Economy
             new List<InvestmentItemDelta>();
         public List<string> UnlockTownIds = new List<string>();
         public List<string> UnlockRouteIds = new List<string>();
+        public List<string> UnlockSpecialtyItemIds = new List<string>();
+        public float BanditEncounterMultiplier = 1f;
+        public long BanditReductionDurationTicks;
     }
 
     public static class InvestmentQuestPolicyCalculator
@@ -127,6 +134,12 @@ namespace ND.Economy
             }
             result.UnlockTownIds.AddRange(townUnlocks);
             result.UnlockRouteIds.AddRange(routeUnlocks);
+            result.UnlockSpecialtyItemIds.AddRange(
+                definition.UnlockSpecialtyItemIds);
+            result.BanditEncounterMultiplier =
+                definition.BanditEncounterMultiplier;
+            result.BanditReductionDurationTicks =
+                definition.BanditReductionDurationTicks;
             if (input.IsAlreadyCompleted)
                 return Fail(result, InvestmentQuestFailureReason.AlreadyCompleted);
             if (!input.CanSubmitCaravanAssets)
@@ -194,16 +207,27 @@ namespace ND.Economy
                 definition.TradingCurrencyCost < 0 ||
                 definition.ItemCosts == null ||
                 definition.UnlockTownIds == null ||
-                definition.UnlockRouteIds == null)
+                definition.UnlockRouteIds == null ||
+                definition.UnlockSpecialtyItemIds == null ||
+                definition.BanditEncounterMultiplier < 0f ||
+                definition.BanditEncounterMultiplier > 1f ||
+                definition.BanditReductionDurationTicks < 0)
             {
                 return false;
             }
 
+            var specialtyCopy = new List<string>();
             return TryCopyUniqueIds(definition.UnlockTownIds, townCopy) &&
                    TryCopyUniqueIds(definition.UnlockRouteIds, routeCopy) &&
+                   TryCopyUniqueIds(
+                       definition.UnlockSpecialtyItemIds,
+                       specialtyCopy) &&
                    (definition.TradingCurrencyCost > 0 ||
                     definition.ItemCosts.Count > 0) &&
-                   (townCopy.Count > 0 || routeCopy.Count > 0);
+                   (townCopy.Count > 0 ||
+                    routeCopy.Count > 0 ||
+                    specialtyCopy.Count > 0 ||
+                    definition.BanditReductionDurationTicks > 0);
         }
 
         private static bool TryCopyUniqueIds(

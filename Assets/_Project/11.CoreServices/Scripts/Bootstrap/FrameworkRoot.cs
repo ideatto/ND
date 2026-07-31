@@ -260,6 +260,10 @@ namespace ND.Framework
         /// </summary>
         public ISharedGameDataProvider SharedGameData { get; private set; }
 
+        public QuestGenerationSettings QuestGenerationSettings { get; private set; }
+
+        public QuestPanelRuntimeBridge QuestPanelBridge { get; private set; }
+
         /// <summary>
         /// debug bridge가 호출하는 framework command 모음이다.
         /// </summary>
@@ -506,6 +510,16 @@ namespace ND.Framework
                     $"InGameTimePolicyConfig was not found at Resources/{InGameTimePolicyConfig.ResourceName}. Using runtime defaults.");
             }
 
+            QuestGenerationSettings = Resources.Load<QuestGenerationSettings>(
+                QuestGenerationSettings.ResourceName);
+            if (QuestGenerationSettings == null)
+            {
+                QuestGenerationSettings =
+                    ScriptableObject.CreateInstance<QuestGenerationSettings>();
+                FrameworkLog.Warning(
+                    $"QuestGenerationSettings was not found at Resources/{QuestGenerationSettings.ResourceName}. Using runtime defaults.");
+            }
+
             GameTime = new GameTimeService(policyConfig);
             SaveService = new JsonSaveService();
             SharedGameDataService = new SharedGameDataService();
@@ -523,7 +537,8 @@ namespace ND.Framework
                 GameTime,
                 () => SharedGameData,
                 TradePrepareCommitStore,
-                TradePrepareCommitStore);
+                TradePrepareCommitStore,
+                townId => RefreshTownQuestsOnVisit(townId));
             TradeStart = new TradeStartService(
                 () => CurrentSaveData,
                 SaveService,
@@ -553,9 +568,26 @@ namespace ND.Framework
                 TradeProgressCoordinator,
                 InGameScreenRouter,
                 autoClaimOnArrival: false);
+            QuestPanelBridge = gameObject.AddComponent<QuestPanelRuntimeBridge>();
+            QuestPanelBridge.Initialize(() => this);
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
 
             FrameworkLog.Info("FrameworkRoot initialized.");
+        }
+
+        public QuestMutationResult RefreshTownQuestsOnVisit(string townId)
+        {
+            QuestMutationResult result = TownQuestFlowService.RefreshOnTownVisited(
+                CurrentSaveData,
+                SaveService,
+                GameTime,
+                SharedGameData,
+                QuestGenerationSettings,
+                townId);
+            if (!result.Succeeded)
+                FrameworkLog.Warning(
+                    $"Quest refresh failed after town visit. TownId: {townId}");
+            return result;
         }
 
         /// <summary>

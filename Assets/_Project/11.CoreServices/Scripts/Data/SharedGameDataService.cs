@@ -123,7 +123,8 @@ namespace ND.Framework
                     catalog.TradeItems,
                     catalog.Wagons,
                     catalog.DraftAnimals,
-                    catalog.Routes);
+                    catalog.Routes,
+                    catalog.Quests);
             }
 
             // Resources catalog가 아직 없을 때도 Editor 통합 단계에서 Sandbox seed data를 검증할 수 있게 한다.
@@ -288,7 +289,8 @@ namespace ND.Framework
                 new[]
                 {
                     LoadAssetAtPath<global::RouteData>(DummyRoutePath)
-                });
+                },
+                new global::QuestData[0]);
         }
 
         private static T LoadAssetAtPath<T>(string path) where T : UnityEngine.Object
@@ -362,6 +364,7 @@ namespace ND.Framework
             var wagons = new Dictionary<string, SharedWagonDefinition>();
             var draftAnimals = new Dictionary<string, SharedDraftAnimalDefinition>();
             var routes = new Dictionary<string, SharedRouteDefinition>();
+            var quests = new Dictionary<string, SharedQuestDefinition>();
 
             AddTowns(source.Towns, towns, errors);
             AddMarkets(source.Markets, markets, errors);
@@ -369,8 +372,10 @@ namespace ND.Framework
             AddWagons(source.Wagons, wagons, errors);
             AddDraftAnimals(source.DraftAnimals, draftAnimals, errors, warnings);
             AddRoutes(source.Routes, routes, errors);
+            AddQuests(source.Quests, quests, errors);
 
-            return new SharedGameDataView(towns, markets, tradeItems, wagons, draftAnimals, routes);
+            return new SharedGameDataView(
+                towns, markets, tradeItems, wagons, draftAnimals, routes, quests);
         }
 
         private static void AddTowns(global::TownData[] source, Dictionary<string, SharedTownDefinition> target, List<string> errors)
@@ -646,6 +651,77 @@ namespace ND.Framework
             return result;
         }
 
+        private static void AddQuests(
+            global::QuestData[] source,
+            Dictionary<string, SharedQuestDefinition> target,
+            List<string> errors)
+        {
+            if (source == null) return;
+            for (var index = 0; index < source.Length; index++)
+            {
+                var item = source[index];
+                if (item == null)
+                {
+                    errors.Add($"QuestData at index {index} is null.");
+                    continue;
+                }
+                var id = item.QuestId;
+                if (!CanAddId(target, id, "QuestData", errors)) continue;
+                target.Add(id, new SharedQuestDefinition
+                {
+                    Id = id,
+                    DisplayName = item.QuestName,
+                    Description = item.Description,
+                    Type = item.Type,
+                    RepeatPolicy = item.RepeatPolicy,
+                    PaymentPolicy = item.PaymentPolicy,
+                    RegenerationSeconds = item.QuestRegenSeconds,
+                    SubmissionTownId = item.SubmissionTownId,
+                    RequiredTradingCurrency = item.RequiredTradingCurrency,
+                    RequiredItems = CopyQuestItemCosts(item.RequiredItems),
+                    Rewards = CopyQuestRewards(item.Rewards)
+                });
+            }
+        }
+
+        private static SharedQuestItemCost[] CopyQuestItemCosts(
+            global::QuestItemCostData[] source)
+        {
+            if (source == null) return new SharedQuestItemCost[0];
+            var result = new SharedQuestItemCost[source.Length];
+            for (var index = 0; index < source.Length; index++)
+            {
+                var item = source[index];
+                if (item == null) continue;
+                result[index] = new SharedQuestItemCost
+                {
+                    ItemId = item.ItemId,
+                    Quantity = item.Quantity
+                };
+            }
+            return result;
+        }
+
+        private static SharedQuestReward[] CopyQuestRewards(
+            global::QuestRewardData[] source)
+        {
+            if (source == null) return new SharedQuestReward[0];
+            var result = new SharedQuestReward[source.Length];
+            for (var index = 0; index < source.Length; index++)
+            {
+                var item = source[index];
+                if (item == null) continue;
+                result[index] = new SharedQuestReward
+                {
+                    RewardType = item.RewardType,
+                    RewardId = item.RewardId,
+                    Value = item.Value,
+                    EncounterMultiplier = item.EncounterMultiplier
+                };
+            }
+            return result;
+        }
+
         private static bool CanAddId<T>(Dictionary<string, T> target, string id, string label, List<string> errors)
         {
             if (string.IsNullOrWhiteSpace(id))
@@ -668,6 +744,7 @@ namespace ND.Framework
             ValidateTownReferences(view, errors);
             ValidateMarketReferences(view, errors);
             ValidateRouteReferences(view, errors);
+            ValidateQuestReferences(view, errors);
         }
 
         private static void ValidateTownReferences(SharedGameDataView view, List<string> errors)
@@ -748,6 +825,112 @@ namespace ND.Framework
                 {
                     errors.Add($"Route '{route.Id}' references missing to-town '{route.ToTownId}'.");
                 }
+            }
+        }
+
+        private static void ValidateQuestReferences(
+            SharedGameDataView view,
+            List<string> errors)
+        {
+            foreach (var questId in view.QuestIds)
+            {
+                if (!view.TryGetQuest(questId, out var quest) || quest == null)
+                    continue;
+                if (string.IsNullOrWhiteSpace(quest.SubmissionTownId) ||
+                    !view.TryGetTown(quest.SubmissionTownId, out _))
+                {
+                    errors.Add(
+                        $"Quest '{quest.Id}' references missing submission town '{quest.SubmissionTownId}'.");
+                }
+                ValidateQuestItemCosts(view, quest, errors);
+                ValidateQuestPaymentPolicy(quest, errors);
+                ValidateQuestRewards(view, quest, errors);
+            }
+        }
+
+        private static void ValidateQuestPaymentPolicy(
+            SharedQuestDefinition quest,
+            List<string> errors)
+        {
+            bool hasCurrency = quest.RequiredTradingCurrency > 0;
+            bool hasItems = quest.RequiredItems != null &&
+                quest.RequiredItems.Length > 0;
+            bool valid;
+            switch (quest.PaymentPolicy)
+            {
+                case QuestPaymentPolicy.TradingCurrencyOnly:
+                    valid = hasCurrency && !hasItems;
+                    break;
+                case QuestPaymentPolicy.CaravanItemsOnly:
+                    valid = !hasCurrency && hasItems;
+                    break;
+                case QuestPaymentPolicy.CurrencyOrItems:
+                    valid = hasCurrency && hasItems;
+                    break;
+                default:
+                    valid = false;
+                    break;
+            }
+            if (!valid)
+            {
+                errors.Add(
+                    $"Quest '{quest.Id}' costs do not match payment policy '{quest.PaymentPolicy}'.");
+            }
+        }
+
+        private static void ValidateQuestItemCosts(
+            SharedGameDataView view,
+            SharedQuestDefinition quest,
+            List<string> errors)
+        {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var cost in quest.RequiredItems)
+            {
+                if (cost == null || string.IsNullOrWhiteSpace(cost.ItemId) ||
+                    cost.Quantity <= 0 || !ids.Add(cost.ItemId) ||
+                    !view.TryGetTradeItem(cost.ItemId, out _))
+                {
+                    errors.Add($"Quest '{quest.Id}' has an invalid item cost.");
+                }
+            }
+        }
+
+        private static void ValidateQuestRewards(
+            SharedGameDataView view,
+            SharedQuestDefinition quest,
+            List<string> errors)
+        {
+            foreach (var reward in quest.Rewards)
+            {
+                if (reward == null)
+                {
+                    errors.Add($"Quest '{quest.Id}' has a null reward.");
+                    continue;
+                }
+                bool valid;
+                switch (reward.RewardType)
+                {
+                    case QuestRewardType.UnlockTown:
+                        valid = view.TryGetTown(reward.RewardId, out _);
+                        break;
+                    case QuestRewardType.UnlockRoute:
+                        valid = view.TryGetRoute(reward.RewardId, out _);
+                        break;
+                    case QuestRewardType.TradeItem:
+                        valid = view.TryGetTradeItem(reward.RewardId, out var tradeItem) &&
+                            tradeItem.LocalSpecialty;
+                        break;
+                    case QuestRewardType.RouteBanditEncounterReduction:
+                        valid = reward.Value > 0 &&
+                            reward.EncounterMultiplier >= 0f &&
+                            reward.EncounterMultiplier <= 1f;
+                        break;
+                    default:
+                        valid = true;
+                        break;
+                }
+                if (!valid)
+                    errors.Add($"Quest '{quest.Id}' has an invalid {reward.RewardType} reward.");
             }
         }
 
@@ -1020,6 +1203,7 @@ namespace ND.Framework
             public readonly global::WagonData[] Wagons;
             public readonly global::DraftAnimalData[] DraftAnimals;
             public readonly global::RouteData[] Routes;
+            public readonly global::QuestData[] Quests;
 
             public SharedGameDataSource(
                 global::TownData[] towns,
@@ -1027,7 +1211,8 @@ namespace ND.Framework
                 global::TradeItemData[] tradeItems,
                 global::WagonData[] wagons,
                 global::DraftAnimalData[] draftAnimals,
-                global::RouteData[] routes)
+                global::RouteData[] routes,
+                global::QuestData[] quests)
             {
                 Towns = towns ?? new global::TownData[0];
                 Markets = markets ?? new global::MarketData[0];
@@ -1035,6 +1220,7 @@ namespace ND.Framework
                 Wagons = wagons ?? new global::WagonData[0];
                 DraftAnimals = draftAnimals ?? new global::DraftAnimalData[0];
                 Routes = routes ?? new global::RouteData[0];
+                Quests = quests ?? new global::QuestData[0];
             }
         }
     }

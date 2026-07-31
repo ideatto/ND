@@ -469,6 +469,24 @@ namespace ND.Framework
                 data.world.unlockedRouteIds = new System.Collections.Generic.List<string>();
             }
 
+            if (data.world.questRuntimeStates == null)
+            {
+                data.world.questRuntimeStates =
+                    new System.Collections.Generic.List<QuestRuntimeSaveData>();
+            }
+
+            if (data.world.unlockedTownSpecialties == null)
+            {
+                data.world.unlockedTownSpecialties =
+                    new System.Collections.Generic.List<TownSpecialtyUnlockSaveData>();
+            }
+
+            if (data.world.townRouteBanditModifiers == null)
+            {
+                data.world.townRouteBanditModifiers =
+                    new System.Collections.Generic.List<TownRouteBanditModifierSaveData>();
+            }
+
             if (data.world.completedRouteIds == null)
             {
                 data.world.completedRouteIds = new System.Collections.Generic.List<string>();

@@ -91,6 +91,70 @@ namespace ND.Framework.Editor
         }
 
         [Test]
+        public void Process_ZeroBanditMultiplierSuppressesCombatOnly()
+        {
+            var combatCaravan = CreateTravelingCaravan();
+            combatCaravan.progress01 = 0.1f;
+            var combat = TradeRouteEventProcessor.Process(
+                combatCaravan,
+                CreateCombatRoute(),
+                "trade-suppressed",
+                10f,
+                1f,
+                0f);
+
+            var luckyCaravan = CreateTravelingCaravan();
+            luckyCaravan.progress01 = 0.1f;
+            var lucky = TradeRouteEventProcessor.Process(
+                luckyCaravan,
+                CreateLuckyRoute(),
+                "trade-lucky",
+                10f,
+                1f,
+                0f);
+
+            Assert.That(combat.Succeeded, Is.True);
+            Assert.That(combat.EventsOccurred, Is.Zero);
+            Assert.That(lucky.Succeeded, Is.True);
+            Assert.That(lucky.EventsOccurred, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void QuestBanditModifier_AppliesToBothConnectedRouteDirectionsUntilExpiry()
+        {
+            var now = new System.DateTime(
+                2026, 7, 30, 12, 0, 0, System.DateTimeKind.Utc);
+            var world = new WorldSaveData();
+            world.townRouteBanditModifiers.Add(
+                new TownRouteBanditModifierSaveData
+                {
+                    sourceQuestId = "quest-a",
+                    townId = "town-a",
+                    encounterMultiplier = 0.5f,
+                    expiresUtcTicks = now.AddHours(1).Ticks
+                });
+            var outbound = CreateCombatRoute();
+            outbound.FromTownId = "town-a";
+            outbound.ToTownId = "town-b";
+            var inbound = CreateCombatRoute();
+            inbound.FromTownId = "town-b";
+            inbound.ToTownId = "town-a";
+
+            Assert.That(
+                QuestRuntimeService.ResolveBanditEncounterMultiplier(
+                    world, outbound, now),
+                Is.EqualTo(0.5f));
+            Assert.That(
+                QuestRuntimeService.ResolveBanditEncounterMultiplier(
+                    world, inbound, now),
+                Is.EqualTo(0.5f));
+            Assert.That(
+                QuestRuntimeService.ResolveBanditEncounterMultiplier(
+                    world, outbound, now.AddHours(2)),
+                Is.EqualTo(1f));
+        }
+
+        [Test]
         public void ProcessForced_CombatReportsActualOutcome()
         {
             var caravan = CreateTravelingCaravan();

@@ -62,12 +62,17 @@ public sealed class QuestRewardData
     // TradingCurrency does not use this field.
     [SerializeField] private string rewardId;
 
+    // RouteBanditEncounterReduction: multiplier applied to Combat encounter chance.
+    // 0.75 means a 25 percent reduction. Other reward types ignore this value.
+    [SerializeField, Range(0f, 1f)] private float encounterMultiplier = 1f;
+
     public QuestRewardType RewardType => rewardType;
 
     // Prevents invalid negative reward values from reaching Runtime.
     public long Value => System.Math.Max(0L, value);
 
     public string RewardId => rewardId;
+    public float EncounterMultiplier => Mathf.Clamp01(encounterMultiplier);
 }
 
 /// <summary>
@@ -79,5 +84,18 @@ public enum QuestRewardType
     TradeItem,
     UnlockTown,
     UnlockRoute,
-    Buff
+    Buff,
+
+    // Append-only: enum values are serialized by Unity.
+    RouteBanditEncounterReduction
+}
+
+/// <summary>
+/// Defines which complete-payment option the player may select.
+/// </summary>
+public enum QuestPaymentPolicy
+{
+    TradingCurrencyOnly,
+    CaravanItemsOnly,
+    CurrencyOrItems
 }

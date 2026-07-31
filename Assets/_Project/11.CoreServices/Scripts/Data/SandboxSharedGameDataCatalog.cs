@@ -34,6 +34,7 @@ namespace ND.Framework
         [SerializeField] private global::WagonData[] wagons;
         [SerializeField] private global::DraftAnimalData[] draftAnimals;
         [SerializeField] private global::RouteData[] routes;
+        [SerializeField] private global::QuestData[] quests;
 
         public global::TownData[] Towns => towns != null ? (global::TownData[])towns.Clone() : new global::TownData[0];
 
@@ -46,5 +47,7 @@ namespace ND.Framework
         public global::DraftAnimalData[] DraftAnimals => draftAnimals != null ? (global::DraftAnimalData[])draftAnimals.Clone() : new global::DraftAnimalData[0];
 
         public global::RouteData[] Routes => routes != null ? (global::RouteData[])routes.Clone() : new global::RouteData[0];
+
+        public global::QuestData[] Quests => quests != null ? (global::QuestData[])quests.Clone() : new global::QuestData[0];
     }
 }
