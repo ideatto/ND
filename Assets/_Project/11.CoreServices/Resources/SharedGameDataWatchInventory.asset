@@ -108,15 +108,15 @@ MonoBehaviour:
     typeName: WagonData
     dataId: Walk
     watchRootKind: 0
-  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
-    typeName: DraftAnimalData
-    dataId: Donkey
-    watchRootKind: 0
   - assetGuid: 76f8d2c8354dee44ba423e15d4531cf5
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_Horse.asset
     typeName: DraftAnimalData
     dataId: Horse
+    watchRootKind: 0
+  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
+    typeName: DraftAnimalData
+    dataId: Donkey
     watchRootKind: 0
   - assetGuid: 65c62a9e92134ab4bb1aae8077ca2b8e
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToRiver.asset
@@ -188,6 +188,11 @@ MonoBehaviour:
     typeName: BuildData
     dataId: Store
     watchRootKind: 0
+  - assetGuid: 78072c77e074f93489908b12b9ae985c
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Test.asset
+    typeName: BuildData
+    dataId: test
+    watchRootKind: 0
   - assetGuid: b55dc2ae6d125fc4a8cb294bb2e31221
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Warehouse.asset
     typeName: BuildData
@@ -198,15 +203,15 @@ MonoBehaviour:
     typeName: BuildData
     dataId: Windmill
     watchRootKind: 0
-  - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
-    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset
-    typeName: TownData
-    dataId: basecamp
-    watchRootKind: 1
   - assetGuid: 2b94a9733de040b4383c1bcfc427585f
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/TownData_Dummy.asset
     typeName: TownData
     dataId: dummytown
+    watchRootKind: 1
+  - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset
+    typeName: TownData
+    dataId: basecamp
     watchRootKind: 1
   - assetGuid: 53ff6f350e87d224aac61db15be826f9
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownMarketSO/Market_DummyTown.asset
@@ -304,3 +309,4 @@ MonoBehaviour:
   - 4b064345be86a5c4bbd3b3d42072321f
   - 36370e4bc577148448efe47144bd7cf0
   - 8fed33f8956e0bf41bba60cf9ed0d826
+  - 78072c77e074f93489908b12b9ae985c
