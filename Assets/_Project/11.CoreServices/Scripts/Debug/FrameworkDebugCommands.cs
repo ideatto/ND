@@ -66,6 +66,33 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// Gets the session-only repair cost multiplier selected in debug tools.
+        /// The repair calculation must explicitly consume this value.
+        /// </summary>
+        public double WagonRepairCostMultiplier =>
+            WagonRepairDebugSettings.RepairCostMultiplier;
+
+        public bool TrySetWagonRepairCostMultiplier(double multiplier)
+        {
+            return WagonRepairDebugSettings.TrySetRepairCostMultiplier(multiplier);
+        }
+
+        public double IncreaseWagonRepairCostMultiplier()
+        {
+            return WagonRepairDebugSettings.IncreaseRepairCostMultiplier();
+        }
+
+        public double DecreaseWagonRepairCostMultiplier()
+        {
+            return WagonRepairDebugSettings.DecreaseRepairCostMultiplier();
+        }
+
+        public double ResetWagonRepairCostMultiplier()
+        {
+            return WagonRepairDebugSettings.ResetRepairCostMultiplier();
+        }
+
+        /// <summary>
         /// Unity time scale을 변경한다.
         /// </summary>
         /// <param name="scale">적용할 time scale.</param>
