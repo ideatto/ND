@@ -247,6 +247,9 @@ namespace ND.Framework
         /// </summary>
         public GameCalendarService GameCalendar { get; private set; }
 
+        /// <summary>The most recent load-time calendar restore result; no public restore event is raised yet.</summary>
+        public CalendarRestoreResult LastCalendarRestoreResult { get; private set; }
+
         /// <summary>
         /// 저장 데이터 생성, 로드, 저장을 담당하는 서비스이다.
         /// </summary>
@@ -447,8 +450,55 @@ namespace ND.Framework
                 && CurrentSaveData.pendingSettlements.Exists(
                     pending => pending != null && pending.hasResult && !pending.claimed);
 
-            // Traveling 이어하기는 모든 명시 entry의 오프라인 경과·완료를 먼저 반영한다.
-            TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
+            var loadUtc = GameTime.CurrentUtc;
+            var restoreContext = GameTime.ResolveOfflineRestoreContext(
+                CurrentSaveData.lastSavedUtcTicks,
+                loadUtc);
+            if (restoreContext.ClockRollbackDetected)
+            {
+                FrameworkEvents.RaiseTimeRollbackDetected();
+                FrameworkLog.Warning(
+                    "Offline progress skipped because load UTC is earlier than lastSavedUtcTicks.");
+            }
+
+            var restoreSnapshot = JsonUtility.ToJson(CurrentSaveData);
+            LastCalendarRestoreResult = GameCalendar.RestoreOffline(
+                CurrentSaveData,
+                restoreContext);
+            var tradeRestore = TradeProgressCoordinator?.PrepareOfflineProgressOnLoad(
+                CurrentSaveData,
+                restoreContext);
+            var restoreDirty = (LastCalendarRestoreResult?.Changed ?? false)
+                || (tradeRestore?.Changed ?? false);
+            var restoreSucceeded = true;
+            if (restoreDirty)
+            {
+                SaveResult restoreSaveResult = null;
+                try
+                {
+                    restoreSaveResult = SaveService?.Save(CurrentSaveData);
+                }
+                catch (Exception exception)
+                {
+                    FrameworkLog.Error($"Offline restore save threw an exception: {exception.Message}");
+                }
+
+                restoreSucceeded = restoreSaveResult != null && restoreSaveResult.Succeeded;
+                if (!restoreSucceeded)
+                {
+                    JsonUtility.FromJsonOverwrite(restoreSnapshot, CurrentSaveData);
+                    tradeRestore?.RollbackRuntime(TradeProgressCoordinator);
+                    GameCalendar.RebuildRuntimeAfterFailedRestore(CurrentSaveData, loadUtc);
+                    LastCalendarRestoreResult = null;
+                    FrameworkLog.Warning(
+                        "Calendar and trade offline restore were rolled back because the merged save failed.");
+                }
+            }
+
+            if (restoreSucceeded)
+            {
+                tradeRestore?.Publish(TradeProgressCoordinator, CurrentSaveData);
+            }
 
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
             if (restorePending)
@@ -459,7 +509,10 @@ namespace ND.Framework
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
-            GameCalendar.BeginOnlineSession(CurrentSaveData, GameTime.CurrentUtc);
+            if (LastCalendarRestoreResult == null && !restoreDirty)
+            {
+                GameCalendar.BeginOnlineSession(CurrentSaveData, loadUtc);
+            }
             // SaveData·SharedData·offline/pending 복구와 load event 처리가 모두 끝난 세션만 online tick을 허용한다.
             isOnlineProgressTickEnabled = true;
             SceneFlow.GoToInGame();

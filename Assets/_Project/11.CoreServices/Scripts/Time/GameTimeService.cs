@@ -227,6 +227,17 @@ namespace ND.Framework
                 out evaluationUtc);
         }
 
+        /// <summary>Resolves the shared load-time restore interval using the configured offline cap.</summary>
+        public OfflineRestoreContext ResolveOfflineRestoreContext(
+            long lastSavedUtcTicks,
+            DateTime loadUtc)
+        {
+            return conversionPolicy.ResolveOfflineRestoreContext(
+                lastSavedUtcTicks,
+                loadUtc,
+                MaxOfflineRealSeconds);
+        }
+
         /// <summary>
         /// 무역 시작 시각과 duration을 더해 예상 종료 시각을 계산한다.
         /// </summary>

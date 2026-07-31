@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ND.Framework
 {
@@ -97,6 +98,184 @@ namespace ND.Framework
             Current = snapshot;
             hasCurrent = true;
             return true;
+        }
+
+        /// <summary>
+        /// Applies whole game days from the shared accepted UTC endpoint without saving or publishing events.
+        /// The online sample is rebased to load UTC so the restored interval cannot be counted again.
+        /// </summary>
+        public CalendarRestoreResult RestoreOffline(
+            SaveData saveData,
+            OfflineRestoreContext context)
+        {
+            var world = saveData?.world;
+            var calendar = world?.calendar;
+            if (calendar == null || calendar.totalElapsedDays < 0L || calendar.dayAnchorUtcTicks <= 0L)
+            {
+                FrameworkLog.Warning("Game calendar offline restore was skipped because save state is invalid.");
+                ResetSession();
+                return null;
+            }
+
+            GameCalendarSnapshot previous;
+            try
+            {
+                previous = new GameCalendarSnapshot(
+                    GameCalendarDate.FromElapsedDays(calendar.totalElapsedDays),
+                    world.currentDisasterId);
+            }
+            catch (Exception exception) when (
+                exception is OverflowException || exception is ArgumentOutOfRangeException)
+            {
+                FrameworkLog.Warning($"Game calendar offline restore was skipped: {exception.Message}");
+                ResetSession();
+                return null;
+            }
+
+            var daysAdvanced = 0L;
+            var nextTotalDays = calendar.totalElapsedDays;
+            var nextAnchorTicks = calendar.dayAnchorUtcTicks;
+            if (!context.ClockRollbackDetected
+                && context.EvaluationUtc.Ticks >= calendar.dayAnchorUtcTicks)
+            {
+                var elapsedTicks = context.EvaluationUtc.Ticks - calendar.dayAnchorUtcTicks;
+                daysAdvanced = elapsedTicks / TicksPerGameDay;
+                try
+                {
+                    nextTotalDays = checked(calendar.totalElapsedDays + daysAdvanced);
+                    nextAnchorTicks = checked(
+                        calendar.dayAnchorUtcTicks + checked(daysAdvanced * TicksPerGameDay));
+                }
+                catch (OverflowException exception)
+                {
+                    FrameworkLog.Warning($"Game calendar offline restore was skipped: {exception.Message}");
+                    daysAdvanced = 0L;
+                    nextTotalDays = calendar.totalElapsedDays;
+                    nextAnchorTicks = calendar.dayAnchorUtcTicks;
+                }
+            }
+
+            GameCalendarDate finalDate;
+            try
+            {
+                finalDate = GameCalendarDate.FromElapsedDays(nextTotalDays);
+            }
+            catch (Exception exception) when (
+                exception is OverflowException || exception is ArgumentOutOfRangeException)
+            {
+                FrameworkLog.Warning($"Game calendar offline restore was skipped: {exception.Message}");
+                finalDate = GameCalendarDate.FromElapsedDays(calendar.totalElapsedDays);
+                daysAdvanced = 0L;
+                nextTotalDays = calendar.totalElapsedDays;
+                nextAnchorTicks = calendar.dayAnchorUtcTicks;
+            }
+
+            var finalDisasterId = disasterResolver.Resolve(
+                world.worldSeed,
+                finalDate.AbsoluteMonthIndex,
+                finalDate.Season,
+                disasterPolicy);
+            var current = new GameCalendarSnapshot(finalDate, finalDisasterId);
+            var passedMonths = BuildPassedMonths(
+                world.worldSeed,
+                previous.AbsoluteMonthIndex,
+                finalDate.AbsoluteMonthIndex,
+                daysAdvanced);
+            var changed = calendar.totalElapsedDays != nextTotalDays
+                || calendar.dayAnchorUtcTicks != nextAnchorTicks
+                || !string.Equals(world.currentSeasonId, current.SeasonId, StringComparison.Ordinal)
+                || !string.Equals(
+                    world.currentDisasterId,
+                    current.ActiveDisasterId,
+                    StringComparison.Ordinal);
+
+            calendar.totalElapsedDays = nextTotalDays;
+            calendar.dayAnchorUtcTicks = nextAnchorTicks;
+            world.currentSeasonId = current.SeasonId;
+            world.currentDisasterId = current.ActiveDisasterId;
+            sessionSaveData = saveData;
+            lastSampleUtcTicks = context.LoadUtc.Ticks;
+            pendingGameTicks = context.EvaluationUtc.Ticks >= nextAnchorTicks
+                ? context.EvaluationUtc.Ticks - nextAnchorTicks
+                : 0L;
+            debugScale = 1f;
+            Current = current;
+            hasCurrent = true;
+
+            return new CalendarRestoreResult(
+                previous,
+                current,
+                passedMonths,
+                daysAdvanced,
+                changed);
+        }
+
+        private IReadOnlyList<MonthlyWorldState> BuildPassedMonths(
+            uint worldSeed,
+            long startingMonthIndex,
+            long finalMonthIndex,
+            long daysAdvanced)
+        {
+            if (finalMonthIndex <= startingMonthIndex || daysAdvanced <= 0L)
+            {
+                return Array.Empty<MonthlyWorldState>();
+            }
+
+            var maximumEntries = checked(daysAdvanced / 30L + 2L);
+            var requestedEntries = finalMonthIndex - startingMonthIndex;
+            if (requestedEntries > maximumEntries || requestedEntries > int.MaxValue)
+            {
+                FrameworkLog.Warning("Game calendar offline month timeline exceeded its safe bound.");
+                return Array.Empty<MonthlyWorldState>();
+            }
+
+            var months = new List<MonthlyWorldState>((int)requestedEntries);
+            for (var monthIndex = startingMonthIndex + 1L;
+                 monthIndex <= finalMonthIndex;
+                 monthIndex++)
+            {
+                var date = GameCalendarDate.FromElapsedDays(checked(monthIndex * 30L));
+                months.Add(new MonthlyWorldState(
+                    monthIndex,
+                    date.Year,
+                    date.Month,
+                    date.Season,
+                    disasterResolver.Resolve(
+                        worldSeed,
+                        monthIndex,
+                        date.Season,
+                        disasterPolicy)));
+            }
+
+            return months.AsReadOnly();
+        }
+
+        internal void RebuildRuntimeAfterFailedRestore(SaveData saveData, DateTime loadUtc)
+        {
+            var calendar = saveData?.world?.calendar;
+            if (calendar == null || calendar.totalElapsedDays < 0L || calendar.dayAnchorUtcTicks <= 0L)
+            {
+                ResetSession();
+                return;
+            }
+
+            try
+            {
+                Current = new GameCalendarSnapshot(
+                    GameCalendarDate.FromElapsedDays(calendar.totalElapsedDays),
+                    saveData.world.currentDisasterId);
+                sessionSaveData = saveData;
+                lastSampleUtcTicks = loadUtc.Ticks;
+                pendingGameTicks = 0L;
+                debugScale = 1f;
+                hasCurrent = true;
+            }
+            catch (Exception exception) when (
+                exception is OverflowException || exception is ArgumentOutOfRangeException)
+            {
+                FrameworkLog.Warning($"Game calendar runtime rollback failed: {exception.Message}");
+                ResetSession();
+            }
         }
 
         /// <summary>
