@@ -82,6 +82,7 @@ namespace ND.Framework
         /// </summary>
         public bool BeginOnlineSession(SaveData saveData, DateTime currentUtc)
         {
+            bool wasInitialized = hasCurrent;
             if (!TryGetCalendar(saveData, currentUtc, out var calendar, out var snapshot))
             {
                 ResetSession();
@@ -104,6 +105,11 @@ namespace ND.Framework
                 saveData.world.currentDisasterId);
             Current = snapshot;
             hasCurrent = true;
+            if (!wasInitialized)
+            {
+                FrameworkEvents.RaiseCalendarInitialized(snapshot);
+            }
+
             return true;
         }
 

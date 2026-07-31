@@ -125,11 +125,24 @@ namespace ND.Framework
         /// </remarks>
         public static event Action<string, string> RouteEventForced;
 
+        /// <summary>
+        /// Raised after a previously unavailable calendar session has a valid current snapshot and synchronized world caches.
+        /// The snapshot is a value copy. Subscribers must unsubscribe when their lifetime ends.
+        /// </summary>
+        public static event Action<GameCalendarSnapshot> CalendarInitialized;
+
         public static event Action<CalendarRestoreResult> CalendarRestored;
         public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> YearChanged;
         public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> MonthChanged;
         public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> SeasonChanged;
         public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> DisasterChanged;
+
+        /// <summary>Publishes the first valid snapshot of a newly initialized online calendar session.</summary>
+        public static void RaiseCalendarInitialized(GameCalendarSnapshot snapshot)
+        {
+            FrameworkLog.Info("CalendarInitialized event raised.");
+            CalendarInitialized?.Invoke(snapshot);
+        }
 
         public static void RaiseCalendarRestored(CalendarRestoreResult result)
         {

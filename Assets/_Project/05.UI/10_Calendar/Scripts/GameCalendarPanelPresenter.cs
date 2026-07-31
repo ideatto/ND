@@ -27,6 +27,7 @@ namespace ND.UI.Calendar
                 return;
             }
 
+            FrameworkEvents.CalendarInitialized += HandleCalendarInitialized;
             FrameworkEvents.CalendarRestored += HandleCalendarRestored;
             FrameworkEvents.YearChanged += HandleCalendarChanged;
             FrameworkEvents.MonthChanged += HandleCalendarChanged;
@@ -42,6 +43,7 @@ namespace ND.UI.Calendar
                 return;
             }
 
+            FrameworkEvents.CalendarInitialized -= HandleCalendarInitialized;
             FrameworkEvents.CalendarRestored -= HandleCalendarRestored;
             FrameworkEvents.YearChanged -= HandleCalendarChanged;
             FrameworkEvents.MonthChanged -= HandleCalendarChanged;
@@ -60,6 +62,11 @@ namespace ND.UI.Calendar
             }
 
             view?.HideUntilInitialized();
+        }
+
+        private void HandleCalendarInitialized(GameCalendarSnapshot snapshot)
+        {
+            view?.Refresh(snapshot);
         }
 
         private void HandleCalendarRestored(CalendarRestoreResult result)
