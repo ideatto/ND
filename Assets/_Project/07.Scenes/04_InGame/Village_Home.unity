@@ -148,34 +148,31 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bab1065cfefdd4846826751078061540, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VillageBuildingRegistry
-  buildings:
-  - displayName: "\uC0C1\uC810"
-    renderer: {fileID: 1389369974}
-    level: 1
-    originalColor: {r: 1, g: 1, b: 1, a: 1}
-  - displayName: "\uCC3D\uACE0"
-    renderer: {fileID: 966003208}
-    level: 1
-    originalColor: {r: 1, g: 1, b: 1, a: 1}
-  - displayName: "\uBAA9\uC7A5"
-    renderer: {fileID: 1639627075}
-    level: 1
-    originalColor: {r: 1, g: 1, b: 1, a: 1}
+  buildings: []
   highlightColor: {r: 1, g: 0.9, b: 0.3, a: 1}
-  fallbackPrefab: {fileID: 736321584928160861, guid: 3444a423b1a7d014db7c2612b30b746b, type: 3}
+  fallbackPrefab: {fileID: 1903349784721984798, guid: 99506894b5613f84e89a2ca059f98ce4, type: 3}
   catalog:
   - displayName: "\uC0C1\uC810"
     prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 1c25557e3dff25c44a9619db8fd7b6a7, type: 2}
   - displayName: "\uCC3D\uACE0"
     prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: b55dc2ae6d125fc4a8cb294bb2e31221, type: 2}
   - displayName: "\uBAA9\uC7A5"
     prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 0a137ed9d48fedc4ab8b2178af1a0913, type: 2}
   - displayName: "\uC624\uB450\uB9C9"
     prefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
+    buildData: {fileID: 11400000, guid: 6a20518e706ff964599a7f000e905d84, type: 2}
   - displayName: "\uD48D\uCC28"
     prefab: {fileID: 3136727155675721361, guid: fa572a195ad2d054082cc5bac7fd7097, type: 3}
+    buildData: {fileID: 11400000, guid: 4b064345be86a5c4bbd3b3d42072321f, type: 2}
   - displayName: "\uBE75\uC9D1"
     prefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
+    buildData: {fileID: 11400000, guid: 36370e4bc577148448efe47144bd7cf0, type: 2}
+  - displayName: "\uBCA0\uC774\uC2A4 \uCEA0\uD504"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 971038b3f7d63734992d6faffe696ba0, type: 2}
 --- !u!4 &903399488
 Transform:
   m_ObjectHideFlags: 0
@@ -255,16 +252,15 @@ PrefabInstance:
       propertyPath: m_Name
       value: Building_B
       objectReference: {fileID: 0}
+    - target: {fileID: 3207291499333707442, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
---- !u!23 &966003208 stripped
-MeshRenderer:
-  m_CorrespondingSourceObject: {fileID: 3665438884104079627, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
-  m_PrefabInstance: {fileID: 966003207}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1012942094
 GameObject:
   m_ObjectHideFlags: 0
@@ -658,6 +654,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Building_A
       objectReference: {fileID: 0}
+    - target: {fileID: 2872888364240210295, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3212575143311463373, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
       propertyPath: m_LocalScale.x
       value: 2.4
@@ -715,11 +715,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
---- !u!23 &1389369974 stripped
-MeshRenderer:
-  m_CorrespondingSourceObject: {fileID: 7109039759212718180, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
-  m_PrefabInstance: {fileID: 1389369973}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1639627074
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -784,6 +779,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Building_C
       objectReference: {fileID: 0}
+    - target: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5012935018063937702, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
       propertyPath: cellsX
       value: 5
@@ -797,11 +796,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
---- !u!23 &1639627075 stripped
-MeshRenderer:
-  m_CorrespondingSourceObject: {fileID: 1351615572995170388, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
-  m_PrefabInstance: {fileID: 1639627074}
-  m_PrefabAsset: {fileID: 0}
 --- !u!21 &1715525616
 Material:
   serializedVersion: 8
@@ -1329,7 +1323,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.62, g: 0.62, b: 0.64, a: 1}
-    - _Color: {r: 0.62, g: 0.62, b: 0.64, a: 1}
+    - _Color: {r: 0.62, g: 0.62, b: 0.6399999, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

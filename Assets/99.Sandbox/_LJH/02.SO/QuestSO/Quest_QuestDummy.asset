@@ -12,13 +12,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8d717a7cb6b02a74daeed2c7319d2e61, type: 3}
   m_Name: Quest_QuestDummy
   m_EditorClassIdentifier: Assembly-CSharp::QuestData
-  questId:
-  questName:
-  description:
-  type: 0
-  repeatPolicy: 0
-  questRegenSeconds: 0
-  submissionTownId:
-  requiredTradingCurrency: 0
+  questId: quest_dummy_basecamp
+  questName: BaseCamp Investment Test
+  description: Shared Quest catalog and town query test content.
+  type: 1
+  repeatPolicy: 1
+  questRegenSeconds: 3600
+  paymentPolicy: 0
+  submissionTownId: BaseCamp
+  requiredTradingCurrency: 100
   requiredItems: []
-  rewards: []
+  rewards:
+  - rewardType: 3
+    value: 0
+    rewardId: BaseToRiver
+    encounterMultiplier: 1

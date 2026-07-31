@@ -612,6 +612,24 @@ namespace ND.Framework
         public List<string> unlockedRouteIds = new List<string>();
 
         /// <summary>
+        /// 전역 Quest 활성/재생성 상태이다. 동일 questId는 하나의 항목만 유지한다.
+        /// </summary>
+        public List<QuestRuntimeSaveData> questRuntimeStates = new List<QuestRuntimeSaveData>();
+
+        /// <summary>
+        /// Quest로 영구 해금된 마을별 특산품 목록이다.
+        /// </summary>
+        public List<TownSpecialtyUnlockSaveData> unlockedTownSpecialties =
+            new List<TownSpecialtyUnlockSaveData>();
+
+        /// <summary>
+        /// 마을에 연결된 양방향 무역로의 산적 조우율을 일시적으로 낮추는 전역 효과이다.
+        /// 동일 sourceQuestId는 완료할 때마다 만료 시각을 갱신한다.
+        /// </summary>
+        public List<TownRouteBanditModifierSaveData> townRouteBanditModifiers =
+            new List<TownRouteBanditModifierSaveData>();
+
+        /// <summary>
         /// 완료된 route ID 목록이다.
         /// </summary>
         public List<string> completedRouteIds = new List<string>();
@@ -625,6 +643,41 @@ namespace ND.Framework
         /// 상점 구매 초안·확정 준비 상태이다. 적재 품목 자체는 caravan.cargo에 저장한다.
         /// </summary>
         public MarketPurchasePreparationSaveData marketPurchasePreparation = new MarketPurchasePreparationSaveData();
+    }
+
+    [Serializable]
+    public sealed class QuestRuntimeSaveData
+    {
+        public string questId = string.Empty;
+        public QuestRuntimePhase phase;
+        public long offeredUtcTicks;
+        public long acceptedUtcTicks;
+        public long lastCompletedUtcTicks;
+        public long nextAvailableUtcTicks;
+        public int completionCount;
+    }
+
+    public enum QuestRuntimePhase
+    {
+        Inactive,
+        Offered,
+        Accepted
+    }
+
+    [Serializable]
+    public sealed class TownSpecialtyUnlockSaveData
+    {
+        public string townId = string.Empty;
+        public string itemId = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class TownRouteBanditModifierSaveData
+    {
+        public string sourceQuestId = string.Empty;
+        public string townId = string.Empty;
+        public float encounterMultiplier = 1f;
+        public long expiresUtcTicks;
     }
 
     /// <summary>

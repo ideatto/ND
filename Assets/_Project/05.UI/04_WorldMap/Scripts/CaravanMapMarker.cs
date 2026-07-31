@@ -74,6 +74,17 @@ namespace ND.UI.WorldMap
         }
 
         /// <summary>
+        /// 마커를 정확한 마을 월드 좌표에 표시하고 이전 route 참조를 해제한다.
+        /// 이후 <see cref="SetRoute"/> 호출로 route 표시를 다시 시작할 수 있다.
+        /// </summary>
+        public void SetWorldPosition(Vector3 position)
+        {
+            activeRoute = null;
+            transform.position = position;
+            gameObject.SetActive(true);
+        }
+
+        /// <summary>
         /// 빌더에서 SpriteRenderer 참조를 주입한다.
         /// </summary>
         public void Configure(SpriteRenderer renderer, bool flipSprite)

@@ -30,6 +30,9 @@ public class BuildingViewDataBuilder
 
         if(targetLevelData == null)
         {
+            DataPerLevel currentLevelData = FindTargetLevelData(buildData, safeCurrentLevel);
+            bool isMaxLevel = currentLevelData != null && !HasLevelAbove(buildData, safeCurrentLevel);
+
             return new BuildingDetailViewData
             {
                 buildId = buildData.BuildId,
@@ -37,16 +40,25 @@ public class BuildingViewDataBuilder
                 description = buildData.Description,
 
                 currentLevel = safeCurrentLevel,
-                targetLevel = targetLevel,
+                targetLevel = isMaxLevel ? safeCurrentLevel : targetLevel,
                 isConstruction = safeCurrentLevel == 0,
+                isMaxLevel = isMaxLevel,
+
+                // 만렙도 현재 외형을 계속 보여 주고, 중간 레벨 데이터 누락은 기존 오류 상태로 남긴다.
+                previewScale = currentLevelData != null ? currentLevelData.visualScale : Vector3.one,
+                previewEulerAngles = currentLevelData != null ? currentLevelData.visualEulerAngles : Vector3.zero,
+                previewOffset = currentLevelData != null ? currentLevelData.visualOffset : Vector3.zero,
+                previewPrefab = currentLevelData != null ? currentLevelData.buildPrefab : null,
 
                 canProceed = false,
-                disabledReason = "최대 레벨이거나 목표 레벨 데이터가 없습니다."
+                disabledReason = isMaxLevel
+                    ? "최대 레벨입니다."
+                    : "목표 레벨 데이터가 없습니다."
             };
         }
 
         // 상세 UI와 확인 UI가 동일한 기준으로 활성화되도록
-        // 재화와 아이템 요구 조건을 한 번에 평가한다.
+        // 재료 아이템 요구 조건을 한 번에 평가한다.
         RequirementResult requirementResult = EvaluateRequirements(targetLevelData.buildRequirements, player, sharedGameData);
 
         return new BuildingDetailViewData
@@ -59,9 +71,14 @@ public class BuildingViewDataBuilder
             targetLevel = targetLevel,
             isConstruction = safeCurrentLevel == 0,
 
+            isTargetMaxLevel = !HasLevelAbove(buildData, targetLevel),
+
+            previewScale = targetLevelData.visualScale,
+            previewEulerAngles = targetLevelData.visualEulerAngles,
+            previewOffset = targetLevelData.visualOffset,
+
             previewPrefab = targetLevelData.buildPrefab,
 
-            currencyRequirement = requirementResult.currencyRequirement,
             itemRequirements = requirementResult.itemRequirements,
 
             canProceed = requirementResult.isSatisfied,
@@ -138,8 +155,25 @@ public class BuildingViewDataBuilder
         return null;
     }
 
+    // 배열 길이나 순서가 아니라 실제 level 값으로 최종 레벨 여부를 판정한다.
+    private static bool HasLevelAbove(BuildData buildData, int currentLevel)
+    {
+        DataPerLevel[] levelDataList = buildData.DataPerLevels;
+
+        for(int i = 0; i < levelDataList.Length; i++)
+        {
+            DataPerLevel levelData = levelDataList[i];
+            if(levelData != null && levelData.level > currentLevel)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
-    /// 재화와 아이템 요구 조건을 평가하여 UI 표시 데이터,
+    /// 재료 아이템 요구 조건을 평가하여 UI 표시 데이터,
     /// 전체 충족 여부 및 버튼 비활성화 사유를 함께 만든다.
     /// </summary>
     private static RequirementResult EvaluateRequirements(BuildRequirement requirement, PlayerMainManager player, ISharedGameDataProvider sharedGameData)
@@ -153,33 +187,11 @@ public class BuildingViewDataBuilder
             return result;
         }
 
-        BuildCurrencyRequirement(requirement.requireCurrency, player, result);
         BuildItemRequirements(requirement.requireItems, player, sharedGameData, result);
-        result.isSatisfied = !result.hasInvalidData && result.currencyRequirement.isSatisfied && result.areAllItemSatisfied;
+        result.isSatisfied = !result.hasInvalidData && result.areAllItemSatisfied;
         result.disabledReason = ResolveDisabledReason(result);
 
         return result;
-    }
-
-    /// <summary>
-    /// PlayerMainManager의 현재 거래 재화와 건물의 요구 재화를 비교한다.
-    /// isRequired가 false이면 UI에서 숨기고 충족된 조건으로 처리한다.
-    /// </summary>
-    private static void BuildCurrencyRequirement(BuildRequireCurrency requirement, PlayerMainManager player, RequirementResult result)
-    {
-        bool isVisible = requirement != null && requirement.isRequired;
-
-        long requiredAmount = isVisible ? Math.Max(0L, requirement.value) : 0L;
-        long ownedAmount = player != null ? Math.Max(0L, player.Gold) : 0L;
-
-        result.currencyRequirement = new CurrencyRequirementViewData
-        {
-            isVisible = isVisible,
-            ownedAmount = ownedAmount,
-            requiredAmount = requiredAmount,
-
-            isSatisfied = !isVisible || ownedAmount >= requiredAmount
-        };
     }
 
     /// <summary>
@@ -229,9 +241,9 @@ public class BuildingViewDataBuilder
                 itemId = requirement.itemId,
                 displayName = foundItemDefinition && itemDefinition != null ? itemDefinition.DisplayName : requirement.itemId,
 
-                // TODO: SharedTradeItemDefinition.Icon 매핑 작업이 병합되면
-                // itemDefinition.Icon을 연결한다.
-                icon = null,
+                icon = foundItemDefinition && itemDefinition != null
+                    ? itemDefinition.Icon
+                    : null,
 
                 ownedQuantity = ownedQuantity,
                 requiredQuantity = requirement.quantity,
@@ -251,10 +263,6 @@ public class BuildingViewDataBuilder
         if (result.hasInvalidData)
         {
             return "건축 요구 데이터가 올바르지 않습니다.";
-        }
-        if (!result.currencyRequirement.isSatisfied)
-        {
-            return "보유 재화가 부족합니다.";
         }
         if (!result.areAllItemSatisfied)
         {
@@ -300,11 +308,6 @@ public class BuildingViewDataBuilder
     // Builder 내부에서만 전달하기 위한 보조 결과 타입이다.
     private sealed class RequirementResult
     {
-        public CurrencyRequirementViewData currencyRequirement = new CurrencyRequirementViewData
-        {
-            isSatisfied = true
-        };
-
         public ItemRequirementViewData[] itemRequirements = Array.Empty<ItemRequirementViewData>();
 
         public bool areAllItemSatisfied = true;

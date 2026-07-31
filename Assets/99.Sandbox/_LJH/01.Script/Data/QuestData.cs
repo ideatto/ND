@@ -28,6 +28,8 @@ public class QuestData : ScriptableObject
     [SerializeField, Min(0)] private int questRegenSeconds;
 
     [Header("Quest Completion Requirements")]
+    [SerializeField] private QuestPaymentPolicy paymentPolicy;
+
     // Defines the town where this quest can be completed.
     [SerializeField] private string submissionTownId;
 
@@ -51,6 +53,7 @@ public class QuestData : ScriptableObject
     public string Description => description;
     public QuestType Type => type;
     public QuestRepeatPolicy RepeatPolicy => repeatPolicy;
+    public QuestPaymentPolicy PaymentPolicy => paymentPolicy;
     public string SubmissionTownId => submissionTownId;
 
     // Prevents an invalid negative currency requirement from reaching Runtime.

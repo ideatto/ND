@@ -19,12 +19,19 @@ public class BuildingDetailViewData
 
     // currentLevel이 0이면 신축, 1 이상이면 증축으로 표시한다.
     public bool isConstruction;
+    // 현재 단계와 다음 단계 중 어느 쪽이 최종 레벨인지 구분해 레벨 문구에 표시한다.
+    public bool isMaxLevel;
+    public bool isTargetMaxLevel;
 
     // 목표 레벨의 3D 건물 외형을 미리보기에 전달한다.
+
+    // 월드 외형과 같은 DataPerLevel 보정값을 사용해 미리보기 방향/비율도 한 곳에서 관리한다.
+    public Vector3 previewScale = Vector3.one;
+    public Vector3 previewEulerAngles = Vector3.zero;
+    public Vector3 previewOffset = Vector3.zero;
     public GameObject previewPrefab;
 
-    // PlayerMainManager의 현재 보유량과 BuildData의 요구량을 조합한 결과다.
-    public CurrencyRequirementViewData currencyRequirement = new CurrencyRequirementViewData();
+    // PlayerMainManager의 현재 보유량과 BuildData의 재료 요구량을 조합한 결과다.
     public ItemRequirementViewData[] itemRequirements = Array.Empty<ItemRequirementViewData>();
 
     // 모든 요구 조건을 만족할 때만 다음 단계 버튼을 활성화한다.

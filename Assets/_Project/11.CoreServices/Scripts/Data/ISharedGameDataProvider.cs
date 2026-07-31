@@ -67,6 +67,8 @@ namespace ND.Framework
         /// </summary>
         int RouteCount { get; }
 
+        int QuestCount { get; }
+
         IReadOnlyList<string> TownIds { get; }
 
         IReadOnlyList<string> MarketIds { get; }
@@ -79,6 +81,8 @@ namespace ND.Framework
 
         IReadOnlyList<string> RouteIds { get; }
 
+        IReadOnlyList<string> QuestIds { get; }
+
         bool TryGetTown(string id, out SharedTownDefinition town);
 
         bool TryGetMarket(string id, out SharedMarketDefinition market);
@@ -90,5 +94,9 @@ namespace ND.Framework
         bool TryGetDraftAnimal(string id, out SharedDraftAnimalDefinition draftAnimal);
 
         bool TryGetRoute(string id, out SharedRouteDefinition route);
+
+        bool TryGetQuest(string id, out SharedQuestDefinition quest);
+
+        IReadOnlyList<SharedQuestDefinition> GetQuestsForTown(string townId);
     }
 }

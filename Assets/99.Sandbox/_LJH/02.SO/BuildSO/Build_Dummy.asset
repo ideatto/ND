@@ -19,7 +19,4 @@ MonoBehaviour:
   - level: 1
     buildPrefab: {fileID: 0}
     buildRequirements:
-      requireCurrency:
-        isRequired: 0
-        value: 0
       requireItems: []

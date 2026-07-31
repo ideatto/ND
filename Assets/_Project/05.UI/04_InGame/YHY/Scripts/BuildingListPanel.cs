@@ -37,9 +37,11 @@ public class BuildingListPanel : MonoBehaviour
             Rebuild();
     }
 
-    /// <summary>리스트를 처음부터 다시 만든다(추가 후에도 호출).</summary>
+    /// <summary>Registry의 현재 건물 상태를 기준으로 리스트를 처음부터 다시 만든다.</summary>
     public void Rebuild()
     {
+        // Registry의 현재 상태를 다시 그리는 메서드다.
+        // 초기 표시와 실제 건설 트랜잭션 성공 후에만 호출하고, 카탈로그 선택만으로는 호출하지 않는다.
         if (content == null) return;
 
         // 기존 항목 제거 — Destroy는 프레임 끝에 처리되므로, 먼저 부모에서 분리(즉시)해
@@ -62,11 +64,14 @@ public class BuildingListPanel : MonoBehaviour
             item.onClick.AddListener(() => reg.Highlight(idx));
         }
 
-        // 맨 아래 [+] 추가 버튼 → 건물 추가 팝업 열기(선택 후 Rebuild)
+        // 맨 아래 [+] 추가 버튼 → 비용 건설용 건물 카탈로그 Popup 열기
+        // 일반 사용자 건설은 비용 검증 경로인 Open()을 사용한다.
+        // Open(Rebuild)는 즉시 AddOrUpgrade하는 기존 무료 경로이므로 이 버튼에서는 호출하지 않는다.
+        // 저장까지 성공한 건설 처리 컴포넌트가 Rebuild()를 호출해 목록을 갱신한다.
         Button addBtn = CreateRow("+", new Color(0.6f, 0.7f, 0.55f));
         addBtn.onClick.AddListener(() =>
         {
-            if (addPopup != null) addPopup.Open(Rebuild);
+            if (addPopup != null) addPopup.Open();
         });
     }
 

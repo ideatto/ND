@@ -73,6 +73,16 @@ MonoBehaviour:
     typeName: TradeItemData
     dataId: Fish
     watchRootKind: 0
+  - assetGuid: e70021528395dfa4ebac5f411e79ec65
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Logs.asset
+    typeName: TradeItemData
+    dataId: Logs
+    watchRootKind: 0
+  - assetGuid: 63af5decbf34d1747ab76c42cf4e8942
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Stone.asset
+    typeName: TradeItemData
+    dataId: Stone
+    watchRootKind: 0
   - assetGuid: d81e172ffdc16d948b37a48d1a89a98a
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Stover.asset
     typeName: TradeItemData
@@ -98,15 +108,15 @@ MonoBehaviour:
     typeName: WagonData
     dataId: Walk
     watchRootKind: 0
-  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
-    typeName: DraftAnimalData
-    dataId: Donkey
-    watchRootKind: 0
   - assetGuid: 76f8d2c8354dee44ba423e15d4531cf5
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_Horse.asset
     typeName: DraftAnimalData
     dataId: Horse
+    watchRootKind: 0
+  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
+    typeName: DraftAnimalData
+    dataId: Donkey
     watchRootKind: 0
   - assetGuid: 65c62a9e92134ab4bb1aae8077ca2b8e
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToRiver.asset
@@ -153,15 +163,55 @@ MonoBehaviour:
     typeName: RouteData
     dataId: WindyToBase
     watchRootKind: 0
-  - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
-    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset
-    typeName: TownData
-    dataId: basecamp
-    watchRootKind: 1
+  - assetGuid: 36370e4bc577148448efe47144bd7cf0
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Bakery.asset
+    typeName: BuildData
+    dataId: Bakery
+    watchRootKind: 0
+  - assetGuid: 971038b3f7d63734992d6faffe696ba0
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_BaseCamp.asset
+    typeName: BuildData
+    dataId: BaseCamp
+    watchRootKind: 0
+  - assetGuid: 6a20518e706ff964599a7f000e905d84
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Cottage.asset
+    typeName: BuildData
+    dataId: Cottage
+    watchRootKind: 0
+  - assetGuid: 0a137ed9d48fedc4ab8b2178af1a0913
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Farm.asset
+    typeName: BuildData
+    dataId: Farm
+    watchRootKind: 0
+  - assetGuid: 1c25557e3dff25c44a9619db8fd7b6a7
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Store.asset
+    typeName: BuildData
+    dataId: Store
+    watchRootKind: 0
+  - assetGuid: 78072c77e074f93489908b12b9ae985c
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Test.asset
+    typeName: BuildData
+    dataId: test
+    watchRootKind: 0
+  - assetGuid: b55dc2ae6d125fc4a8cb294bb2e31221
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Warehouse.asset
+    typeName: BuildData
+    dataId: Warehouse
+    watchRootKind: 0
+  - assetGuid: 4b064345be86a5c4bbd3b3d42072321f
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Windmill.asset
+    typeName: BuildData
+    dataId: Windmill
+    watchRootKind: 0
   - assetGuid: 2b94a9733de040b4383c1bcfc427585f
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/TownData_Dummy.asset
     typeName: TownData
     dataId: dummytown
+    watchRootKind: 1
+  - assetGuid: dedcb317d8ab97d43bee3c540ffd717e
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/Town_BaseCamp.asset
+    typeName: TownData
+    dataId: basecamp
     watchRootKind: 1
   - assetGuid: 53ff6f350e87d224aac61db15be826f9
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownMarketSO/Market_DummyTown.asset
@@ -193,6 +243,21 @@ MonoBehaviour:
     typeName: RouteData
     dataId: dummyroute
     watchRootKind: 1
+  - assetGuid: dccc90017d3b6104e8d31abefd3039ea
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/QuestSO/Quest_QuestDummy.asset
+    typeName: QuestData
+    dataId: quest_dummy_basecamp
+    watchRootKind: 1
+  - assetGuid: 6cbf3fe9eef048b4b9c62884b6795a8c
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/QuestSO/Quest_RiverTownSupply.asset
+    typeName: QuestData
+    dataId: "\uB354\uBBF8\uC6A9 \uB9AC\uBC84\uD0C0\uC6B4"
+    watchRootKind: 1
+  - assetGuid: 8fed33f8956e0bf41bba60cf9ed0d826
+    assetPath: Assets/99.Sandbox/_LJH/02.SO/BuildSO/Build_Dummy.asset
+    typeName: BuildData
+    dataId: dummybuild
+    watchRootKind: 1
   catalogRegisteredGuids:
   - dedcb317d8ab97d43bee3c540ffd717e
   - 0dde79d6f6eee1344bfd9045a5daae76
@@ -213,6 +278,8 @@ MonoBehaviour:
   - d3e0661c62971554698aecafac846371
   - f546f2032fa12be49bb841ec17ba64c8
   - d81e172ffdc16d948b37a48d1a89a98a
+  - 63af5decbf34d1747ab76c42cf4e8942
+  - e70021528395dfa4ebac5f411e79ec65
   - 7de4fcc3bc668084682ba80497b8f8d9
   - 1f1ec2f7f5822c84a9af199bcccf3565
   - d1f29cbc4f6fb5d489d1ac675ed655df
@@ -229,3 +296,17 @@ MonoBehaviour:
   - 10113bd0c38b8394d9cc07cfc15a1443
   - 4adf786d6f18b784b92b05774d23e2d4
   - 73bb5efdd4909b24ea1ec0bc440e0d93
+  - a5d8076319ccb7b4a9f44887ead18cb2
+  - 293b5c3abd77186438b831c8bbbac5e3
+  - e84432ee7ce491e4d943cc0c98b0a48b
+  - dccc90017d3b6104e8d31abefd3039ea
+  - 6cbf3fe9eef048b4b9c62884b6795a8c
+  - 971038b3f7d63734992d6faffe696ba0
+  - 1c25557e3dff25c44a9619db8fd7b6a7
+  - b55dc2ae6d125fc4a8cb294bb2e31221
+  - 0a137ed9d48fedc4ab8b2178af1a0913
+  - 6a20518e706ff964599a7f000e905d84
+  - 4b064345be86a5c4bbd3b3d42072321f
+  - 36370e4bc577148448efe47144bd7cf0
+  - 8fed33f8956e0bf41bba60cf9ed0d826
+  - 78072c77e074f93489908b12b9ae985c

@@ -1184,12 +1184,14 @@ public static class MarketInventoryIntegrationProbe
         public int WagonCount => 0;
         public int DraftAnimalCount => 0;
         public int RouteCount => 0;
+        public int QuestCount => 0;
         public IReadOnlyList<string> TownIds => new[] { town.Id };
         public IReadOnlyList<string> MarketIds => new[] { town.MarketId };
         public IReadOnlyList<string> TradeItemIds => Array.Empty<string>();
         public IReadOnlyList<string> WagonIds => Array.Empty<string>();
         public IReadOnlyList<string> DraftAnimalIds => Array.Empty<string>();
         public IReadOnlyList<string> RouteIds => Array.Empty<string>();
+        public IReadOnlyList<string> QuestIds => Array.Empty<string>();
 
         public bool TryGetTown(string id, out SharedTownDefinition value)
         {
@@ -1202,6 +1204,9 @@ public static class MarketInventoryIntegrationProbe
         public bool TryGetWagon(string id, out SharedWagonDefinition value) { value = null; return false; }
         public bool TryGetDraftAnimal(string id, out SharedDraftAnimalDefinition value) { value = null; return false; }
         public bool TryGetRoute(string id, out SharedRouteDefinition value) { value = null; return false; }
+        public bool TryGetQuest(string id, out SharedQuestDefinition value) { value = null; return false; }
+        public IReadOnlyList<SharedQuestDefinition> GetQuestsForTown(string townId)
+            => Array.Empty<SharedQuestDefinition>();
     }
 
     /// <summary>
