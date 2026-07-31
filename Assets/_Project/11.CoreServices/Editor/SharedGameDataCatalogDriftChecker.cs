@@ -64,6 +64,7 @@ namespace ND.Framework.Editor
 
 
 
+        // Supported catalog/watch types: Town, Market, TradeItem, Wagon, DraftAnimal, Route, Quest, and Build.
         private static readonly string[] WatchedTypeFilters =
 
         {
@@ -80,7 +81,9 @@ namespace ND.Framework.Editor
 
             "t:RouteData",
 
-            "t:QuestData"
+            "t:QuestData",
+
+            "t:BuildData"
 
         };
 
@@ -329,6 +332,8 @@ namespace ND.Framework.Editor
             AddObjectGuids(catalog.Routes, guids);
 
             AddObjectGuids(catalog.Quests, guids);
+
+            AddObjectGuids(catalog.Builds, guids);
 
             return guids;
 
@@ -587,6 +592,14 @@ namespace ND.Framework.Editor
                     typeName = nameof(QuestData);
 
                     dataId = quest.QuestId;
+
+                    return true;
+
+                case global::BuildData build:
+
+                    typeName = nameof(BuildData);
+
+                    dataId = build.BuildId;
 
                     return true;
 
