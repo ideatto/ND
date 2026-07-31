@@ -42,6 +42,30 @@ using UnityEngine;
 
 namespace ND.Framework
 {
+    internal readonly struct OfflineRestoreTransactionResult
+    {
+        public OfflineRestoreTransactionResult(
+            CalendarRestoreResult calendarResult,
+            bool calendarDirty,
+            bool tradeDirty,
+            bool succeeded,
+            SaveResult saveResult)
+        {
+            CalendarResult = calendarResult;
+            CalendarDirty = calendarDirty;
+            TradeDirty = tradeDirty;
+            Succeeded = succeeded;
+            SaveResult = saveResult;
+        }
+
+        public CalendarRestoreResult CalendarResult { get; }
+        public bool CalendarDirty { get; }
+        public bool TradeDirty { get; }
+        public bool Dirty => CalendarDirty || TradeDirty;
+        public bool Succeeded { get; }
+        public SaveResult SaveResult { get; }
+    }
+
     public enum CaravanCreationFailureReason
     {
         None,
@@ -461,44 +485,14 @@ namespace ND.Framework
                     "Offline progress skipped because load UTC is earlier than lastSavedUtcTicks.");
             }
 
-            var restoreSnapshot = JsonUtility.ToJson(CurrentSaveData);
-            LastCalendarRestoreResult = GameCalendar.RestoreOffline(
+            var restoreTransaction = ExecuteOfflineRestore(
                 CurrentSaveData,
-                restoreContext);
-            var tradeRestore = TradeProgressCoordinator?.PrepareOfflineProgressOnLoad(
-                CurrentSaveData,
-                restoreContext);
-            var restoreDirty = (LastCalendarRestoreResult?.Changed ?? false)
-                || (tradeRestore?.Changed ?? false);
-            var restoreSucceeded = true;
-            if (restoreDirty)
-            {
-                SaveResult restoreSaveResult = null;
-                try
-                {
-                    restoreSaveResult = SaveService?.Save(CurrentSaveData);
-                }
-                catch (Exception exception)
-                {
-                    FrameworkLog.Error($"Offline restore save threw an exception: {exception.Message}");
-                }
-
-                restoreSucceeded = restoreSaveResult != null && restoreSaveResult.Succeeded;
-                if (!restoreSucceeded)
-                {
-                    JsonUtility.FromJsonOverwrite(restoreSnapshot, CurrentSaveData);
-                    tradeRestore?.RollbackRuntime(TradeProgressCoordinator);
-                    GameCalendar.RebuildRuntimeAfterFailedRestore(CurrentSaveData, loadUtc);
-                    LastCalendarRestoreResult = null;
-                    FrameworkLog.Warning(
-                        "Calendar and trade offline restore were rolled back because the merged save failed.");
-                }
-            }
-
-            if (restoreSucceeded)
-            {
-                tradeRestore?.Publish(TradeProgressCoordinator, CurrentSaveData);
-            }
+                restoreContext,
+                loadUtc,
+                GameCalendar,
+                TradeProgressCoordinator,
+                SaveService);
+            LastCalendarRestoreResult = restoreTransaction.CalendarResult;
 
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
             if (restorePending)
@@ -509,13 +503,79 @@ namespace ND.Framework
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
-            if (LastCalendarRestoreResult == null && !restoreDirty)
+            if (LastCalendarRestoreResult == null && !restoreTransaction.Dirty)
             {
                 GameCalendar.BeginOnlineSession(CurrentSaveData, loadUtc);
             }
             // SaveData·SharedData·offline/pending 복구와 load event 처리가 모두 끝난 세션만 online tick을 허용한다.
             isOnlineProgressTickEnabled = true;
             SceneFlow.GoToInGame();
+        }
+
+        /// <summary>
+        /// Applies calendar and trade offline restoration as one persistence transaction.
+        /// Deferred trade notifications are published only after the merged save succeeds.
+        /// </summary>
+        /// <returns>
+        /// The domain dirty flags and save outcome. On failure, persisted and runtime state are restored,
+        /// and <see cref="OfflineRestoreTransactionResult.CalendarResult"/> is null.
+        /// </returns>
+        internal static OfflineRestoreTransactionResult ExecuteOfflineRestore(
+            SaveData saveData,
+            OfflineRestoreContext context,
+            DateTime loadUtc,
+            GameCalendarService calendar,
+            TradeProgressCoordinator trade,
+            ISaveService saveService)
+        {
+            var restoreSnapshot = JsonUtility.ToJson(saveData);
+            var calendarResult = calendar?.RestoreOffline(saveData, context);
+            var tradeRestore = trade?.PrepareOfflineProgressOnLoad(saveData, context);
+            var calendarDirty = calendarResult?.Changed ?? false;
+            var tradeDirty = tradeRestore?.Changed ?? false;
+            if (!calendarDirty && !tradeDirty)
+            {
+                tradeRestore?.Publish(trade, saveData);
+                return new OfflineRestoreTransactionResult(
+                    calendarResult,
+                    calendarDirty,
+                    tradeDirty,
+                    true,
+                    null);
+            }
+
+            SaveResult saveResult = null;
+            try
+            {
+                saveResult = saveService?.Save(saveData);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Offline restore save threw an exception: {exception.Message}");
+            }
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(restoreSnapshot, saveData);
+                tradeRestore?.RollbackRuntime(trade);
+                calendar?.RebuildRuntimeAfterFailedRestore(saveData, loadUtc);
+                FrameworkLog.Warning(
+                    "Calendar and trade offline restore were rolled back because the merged save failed.");
+                return new OfflineRestoreTransactionResult(
+                    null,
+                    calendarDirty,
+                    tradeDirty,
+                    false,
+                    saveResult);
+            }
+
+            tradeRestore?.Publish(trade, saveData);
+            return new OfflineRestoreTransactionResult(
+                calendarResult,
+                calendarDirty,
+                tradeDirty,
+                true,
+                saveResult);
         }
 
         /// <summary>
