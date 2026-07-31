@@ -11,10 +11,12 @@
 using System;
 using TMPro;
 using UnityEngine;
+
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>건물 추가 팝업 — 카탈로그 리스트에서 선택.</summary>
-public class BuildingAddPopup : MonoBehaviour
+public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 {
     [SerializeField] private RectTransform content;   // 카탈로그 항목이 쌓일 곳
     [SerializeField] private TMP_FontAsset font;
@@ -35,6 +37,8 @@ public class BuildingAddPopup : MonoBehaviour
     /// </summary>
     public void Open(Action onAddedCallback)
     {
+
+        CancelPlacementSelection();
         useImmediateAdd = true;
         onAdded = onAddedCallback;
         gameObject.SetActive(true);
@@ -48,6 +52,8 @@ public class BuildingAddPopup : MonoBehaviour
     /// </summary>
     public void Open()
     {
+
+        CancelPlacementSelection();
         useImmediateAdd = false;
         // 이전에 즉시 추가 모드로 열었을 때 받은 콜백이 비용 건설 경로에서 실행되지 않게 한다.
         onAdded = null;
@@ -62,6 +68,26 @@ public class BuildingAddPopup : MonoBehaviour
     {
         gameObject.SetActive(false);
     }
+
+/// <summary>
+    /// Popup 바깥의 실제 Backdrop(root Image)을 클릭했을 때만 닫는다.
+    /// Card와 내부 버튼 클릭은 자식 Graphic이 Raycast를 받으므로 여기서 닫히지 않는다.
+    /// </summary>
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData != null && eventData.pointerCurrentRaycast.gameObject == gameObject)
+        {
+            Close();
+        }
+    }
+
+    private void CancelPlacementSelection()
+    {
+        // OnGUI 회전 버튼은 Canvas 정렬과 무관하므로 Popup을 열기 전에 선택 자체를 종료해야 한다.
+        BuildingPlacementController placementController = FindAnyObjectByType<BuildingPlacementController>();
+        placementController?.CancelPlacementSelection();
+    }
+
 
     private void BuildCatalog()
     {

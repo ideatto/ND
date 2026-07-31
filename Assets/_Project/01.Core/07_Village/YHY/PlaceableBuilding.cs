@@ -42,4 +42,15 @@ public class PlaceableBuilding : MonoBehaviour
         if (quarter == 0) { x = CellsX; z = CellsZ; }
         else { x = CellsZ; z = CellsX; }
     }
+
+
+/// <summary>
+    /// 공통 Building_RuntimeRoot가 현재 레벨 외형 Bounds에서 계산한 점유 크기를 적용한다.
+    /// 기존 전용 prefab의 Inspector 설정은 Registry가 이 메서드를 호출하지 않으므로 그대로 유지된다.
+    /// </summary>
+    public void ConfigureFootprint(int x, int z)
+    {
+        cellsX = Mathf.Max(1, x);
+        cellsZ = Mathf.Max(1, z);
+    }
 }

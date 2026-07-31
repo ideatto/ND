@@ -109,18 +109,26 @@ public class BuildingConfirmPopupPresenter : MonoBehaviour
         Hide();
     }
 
-    // 오브젝트를 유지한 채 CanvasGroup으로 표시와 입력을 함께 제어한다.
+    // Popup은 최초 Awake에서 한 번 초기화한 뒤 숨길 때 GameObject까지 비활성화한다.
+    // Binding은 별도 활성 Runtime 오브젝트에 있으므로 다음 Show 호출에서 안전하게 다시 활성화할 수 있다.
     private void SetVisible(bool visible)
     {
-        if(canvasGroup == null)
+        if(visible && !gameObject.activeSelf)
         {
-            gameObject.SetActive(visible);
-            return;
+            gameObject.SetActive(true);
         }
 
-        canvasGroup.alpha = visible ? 1f : 0f;
-        canvasGroup.interactable = visible;
-        canvasGroup.blocksRaycasts = visible;
+        if(canvasGroup != null)
+        {
+            canvasGroup.alpha = visible ? 1f : 0f;
+            canvasGroup.interactable = visible;
+            canvasGroup.blocksRaycasts = visible;
+        }
+
+        if(!visible && gameObject.activeSelf)
+        {
+            gameObject.SetActive(false);
+        }
     }
 
     // 완성형 한글의 종성 인덱스를 이용해 마지막 글자의 받침 여부를 확인한다.

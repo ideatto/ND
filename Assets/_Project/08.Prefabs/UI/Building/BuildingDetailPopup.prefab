@@ -645,7 +645,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 145, y: 0}
-  m_SizeDelta: {x: 290, y: 0}
+  m_SizeDelta: {x: 290, y: 76}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &3542796968343173922
 CanvasRenderer:
@@ -1030,10 +1030,12 @@ MonoBehaviour:
   m_text: "\uAC74\uCD95 / \uC99D\uCD95"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 77d5be160e835be46a88f3320153f667, type: 2}
-  m_sharedMaterial: {fileID: 6296086657079295246, guid: 77d5be160e835be46a88f3320153f667, type: 2}
-  m_fontSharedMaterials: []
+  m_sharedMaterial: {fileID: 0}
+  m_fontSharedMaterials:
+  - {fileID: 0}
   m_fontMaterial: {fileID: 0}
-  m_fontMaterials: []
+  m_fontMaterials:
+  - {fileID: 0}
   m_fontColor32:
     serializedVersion: 2
     rgba: 4280693573
@@ -1167,10 +1169,12 @@ MonoBehaviour:
   m_text: "\uC0C1\uC810"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 77d5be160e835be46a88f3320153f667, type: 2}
-  m_sharedMaterial: {fileID: 6296086657079295246, guid: 77d5be160e835be46a88f3320153f667, type: 2}
-  m_fontSharedMaterials: []
+  m_sharedMaterial: {fileID: 0}
+  m_fontSharedMaterials:
+  - {fileID: 0}
   m_fontMaterial: {fileID: 0}
-  m_fontMaterials: []
+  m_fontMaterials:
+  - {fileID: 0}
   m_fontColor32:
     serializedVersion: 2
     rgba: 4280557852
@@ -1271,7 +1275,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: -145, y: 0}
-  m_SizeDelta: {x: 290, y: 0}
+  m_SizeDelta: {x: 290, y: 76}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &684470773701512968
 CanvasRenderer:
@@ -1439,7 +1443,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingDetailPopupPresenter
   canvasGroup: {fileID: 5370378094390937742}
   closeBackdropButton: {fileID: 4927497595299839844}
-  buildingNameText: {fileID: 6724833023045146107}
+  buildingNameText: {fileID: 2173491143933760017}
   currentLevelText: {fileID: 6224333084256950291}
   nextLevelText: {fileID: 873332895488650847}
   descriptionText: {fileID: 8086089836805456214}
@@ -1452,6 +1456,7 @@ MonoBehaviour:
   previewCamera: {fileID: 3608965125172043516}
   previewRenderTexture: {fileID: 8400000, guid: 857ece1a02d57a44f9f2dddbdbc19299, type: 2}
   previewImage: {fileID: 5738739870864752383}
+  previewPlaceholderText: {fileID: 0}
   buildButton: {fileID: 5911959200500668727}
   buildButtonText: {fileID: 3200230509691520031}
 --- !u!1 &4655044082234266609

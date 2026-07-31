@@ -14,6 +14,22 @@ public class DataPerLevel
     [Tooltip("해당 레벨의 실제 건물 외형 및 UI 미리보기에 사용할 Prefab")]
     public GameObject buildPrefab;
 
+    [Header("Visual Presentation")]
+    [Tooltip("Prefab 원본 Scale에 곱하는 레벨별 배율입니다. 최종 Scale 값을 직접 입력하지 않습니다.")]
+    public Vector3 visualScale = Vector3.one;
+
+    [Tooltip("월드 외형과 UI 미리보기에 공통 적용할 레벨별 회전 보정")]
+    public Vector3 visualEulerAngles = Vector3.zero;
+
+    [Tooltip("월드 외형과 UI 미리보기에 공통 적용할 레벨별 위치 보정")]
+    public Vector3 visualOffset = Vector3.zero;
+
+    [Tooltip("0이면 보정된 외형 Bounds로 자동 계산하고, 1 이상이면 해당 축의 점유 Cell 수를 고정")]
+    [Min(0)] public int footprintCellsX;
+
+    [Tooltip("0이면 보정된 외형 Bounds로 자동 계산하고, 1 이상이면 해당 축의 점유 Cell 수를 고정")]
+    [Min(0)] public int footprintCellsZ;
+
     [Tooltip("현재 레벨에서 이 목표 레벨로 올라갈 때 필요한 재료 아이템")]
     public BuildRequirement buildRequirements = new BuildRequirement();
 }

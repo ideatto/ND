@@ -31,6 +31,17 @@ public class VillageBuildingRegistry : MonoBehaviour
         public string displayName;
         public Renderer renderer;
         public int level = 1;
+        
+        
+        // [BuildData 외형 연동]
+        // 증축 시 배치 좌표를 가진 루트는 유지하고 시각 자식만 교체하기 위한 런타임 전용 상태다.
+        // 기존 Scene/Prefab 직렬화 계약을 바꾸지 않도록 NonSerialized로 둔다.
+        [System.NonSerialized] public GameObject instanceRoot;
+        
+        // 다중 Renderer 외형의 하이라이트와 원색 복원을 위한 런타임 캐시다.
+        [System.NonSerialized] public Renderer[] renderers;
+        [System.NonSerialized] public Color[] originalColors;
+[System.NonSerialized] public bool usesRuntimeRoot;
         [HideInInspector] public Color originalColor;
     }
 
@@ -134,7 +145,7 @@ public class VillageBuildingRegistry : MonoBehaviour
         return true;
     }
 
-    private void Awake()
+private void Awake()
     {
         Instance = this;
         foreach (Building b in buildings)
@@ -234,24 +245,31 @@ public class VillageBuildingRegistry : MonoBehaviour
     /// </summary>
     /// <param name="displayName">건물 종류 키(카탈로그 displayName과 일치).</param>
     /// <param name="targetLevel">저장에 확정된 목표 레벨(1 이상).</param>
-    public void ApplySavedBuildingLevel(string displayName, int targetLevel)
+public void ApplySavedBuildingLevel(string displayName, int targetLevel)
     {
         if (string.IsNullOrEmpty(displayName) || targetLevel < 1) return;
+
+        CatalogEntry catalogEntry = FindCatalogByName(displayName);
+        DataPerLevel levelData = ResolveLevelData(catalogEntry, targetLevel);
+        if (catalogEntry != null && catalogEntry.buildData != null && levelData == null)
+        {
+            // 외형 없이 레벨만 적용되는 부분 성공을 막는 Registry 최종 방어다.
+            Debug.LogError($"Building appearance is missing. name={displayName}, level={targetLevel}.", this);
+            return;
+        }
 
         Building existing = FindByName(displayName);
         if (existing != null)
         {
-            existing.level = targetLevel;   // 증가가 아니라 설정
+            bool appearanceChanged = ReplaceBuildingAppearance(existing, levelData);
+            if (existing.usesRuntimeRoot && !appearanceChanged) return;
+
+            existing.level = targetLevel;
+            if (appearanceChanged) RefreshPlacementRegistration();
             return;
         }
 
-        // 아직 씬에 없으면 새로 세우고 저장된 레벨을 입힌다.
-        CatalogEntry catalogEntry = FindCatalogByName(displayName);
-        GameObject prefab = catalogEntry != null && catalogEntry.prefab != null
-            ? catalogEntry.prefab
-            : fallbackPrefab;
-        BuildNew(prefab, displayName);
-
+        BuildNew(ResolveRuntimeRootPrefab(catalogEntry), levelData, displayName);
         Building built = FindByName(displayName);
         if (built != null) built.level = targetLevel;
     }
@@ -319,21 +337,40 @@ public class VillageBuildingRegistry : MonoBehaviour
     }
 
     /// <summary>index 건물만 강조색, 나머지는 원래 색.</summary>
-    public void Highlight(int index)
+public void Highlight(int index)
     {
         for (int i = 0; i < buildings.Count; i++)
         {
-            Building b = buildings[i];
-            if (b.renderer == null) continue;
-            b.renderer.material.color = (i == index) ? highlightColor : b.originalColor;
+            Building building = buildings[i];
+            CacheBuildingRenderers(building);
+            if (building.renderers == null) continue;
+
+            for (int rendererIndex = 0; rendererIndex < building.renderers.Length; rendererIndex++)
+            {
+                Renderer renderer = building.renderers[rendererIndex];
+                if (renderer == null) continue;
+                renderer.material.color = i == index
+                    ? highlightColor
+                    : GetOriginalColor(building, rendererIndex);
+            }
         }
     }
 
     /// <summary>모든 건물 원래 색으로.</summary>
-    public void ClearHighlight()
+public void ClearHighlight()
     {
-        foreach (Building b in buildings)
-            if (b.renderer != null) b.renderer.material.color = b.originalColor;
+        foreach (Building building in buildings)
+        {
+            CacheBuildingRenderers(building);
+            if (building.renderers == null) continue;
+
+            for (int rendererIndex = 0; rendererIndex < building.renderers.Length; rendererIndex++)
+            {
+                Renderer renderer = building.renderers[rendererIndex];
+                if (renderer != null)
+                    renderer.material.color = GetOriginalColor(building, rendererIndex);
+            }
+        }
     }
 
     /// <summary>
@@ -344,56 +381,357 @@ public class VillageBuildingRegistry : MonoBehaviour
     ///    <b>Command 성공 뒤에 이 메서드를 호출하면 안 된다</b> — 레벨이 중복 증가하고
     ///    SaveData를 두 번 쓰게 된다. 그 경우엔 ApplySavedBuildingLevel()을 쓸 것.
     /// </summary>
-    public void AddOrUpgrade(int catalogIndex)
+public void AddOrUpgrade(int catalogIndex)
     {
         if (catalogIndex < 0 || catalogIndex >= catalog.Count) return;
         CatalogEntry entry = catalog[catalogIndex];
-
         Building existing = FindByName(entry.displayName);
+        int targetLevel = existing != null ? existing.level + 1 : 1;
+        DataPerLevel levelData = ResolveLevelData(entry, targetLevel);
+
+        if (entry.buildData != null && levelData == null)
+        {
+            // 누락 prefab이면 외형·레벨·SaveData를 모두 그대로 유지한다.
+            Debug.LogError($"Building appearance is missing. name={entry.displayName}, level={targetLevel}.", this);
+            return;
+        }
+
         if (existing != null)
         {
-            existing.level++;   // 이미 있으면 레벨업만
+            if (!ReplaceBuildingAppearance(existing, levelData)) return;
+
+            existing.level = targetLevel;
+            RefreshPlacementRegistration();
             WriteBuildingToSave(existing.displayName, existing.level);
             return;
         }
-        // 없으면 새로 짓기(Lv.1)
-        BuildNew(entry.prefab != null ? entry.prefab : fallbackPrefab, entry.displayName);
+
+        BuildNew(ResolveRuntimeRootPrefab(entry), levelData, entry.displayName);
         Building built = FindByName(entry.displayName);
-        if (built != null)
-            WriteBuildingToSave(built.displayName, built.level);
+        if (built != null) WriteBuildingToSave(built.displayName, built.level);
     }
 
-    private void BuildNew(GameObject prefab, string displayName)
+private void BuildNew(GameObject rootPrefab, DataPerLevel levelData, string displayName)
     {
         int n = buildings.Count;
-        GameObject go;
-        if (prefab != null)
-        {
-            go = Instantiate(prefab);
-        }
-        else
-        {
-            go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.transform.localScale = new Vector3(1.8f, 2f, 1.8f);
-            Material m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            m.color = new Color(0.72f, 0.68f, 0.62f);
-            go.GetComponent<Renderer>().sharedMaterial = m;
-        }
+        GameObject go = rootPrefab != null
+            ? Instantiate(rootPrefab)
+            : GameObject.CreatePrimitive(PrimitiveType.Cube);
+
         go.name = "Building_" + displayName;
         UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, gameObject.scene);
-        // 바닥(y=0)에 놓는다. x·z는 임시값 — 배치 컨트롤러의 격자 등록이 곧 빈 칸으로 재배치한다.
-        // (예전엔 y=1로 띄웠으나, 그러면 격자 등록 전까지 공중에 떠 보여서 0으로 내림.)
+
         float x = -4f + (n % 4) * 2.6f;
         float z = -4f + (n / 4) * 2.6f;
         go.transform.position = new Vector3(x, 0f, z);
 
-        Renderer r = go.GetComponentInChildren<Renderer>();
-        buildings.Add(new Building
+        bool usesRuntimeRoot = go.transform.Find("VisualRoot") != null;
+        Renderer renderer = usesRuntimeRoot
+            ? ApplyAppearanceToRuntimeRoot(go, levelData)
+            : go.GetComponentInChildren<Renderer>();
+
+        // 외형을 먼저 넣은 뒤 Bounds를 계산해야 공통 wrapper의 Collider와 footprint가 유효하다.
+        if (usesRuntimeRoot)
+        {
+            RefreshRuntimeRootCollider(go, levelData);
+        }
+
+        var building = new Building
         {
             displayName = displayName,
-            renderer = r,
+            renderer = renderer,
             level = 1,
-            originalColor = (r != null && r.sharedMaterial != null) ? r.sharedMaterial.color : Color.white
-        });
+            originalColor = renderer != null && renderer.sharedMaterial != null
+                ? renderer.sharedMaterial.color
+                : Color.white,
+            instanceRoot = go,
+            usesRuntimeRoot = usesRuntimeRoot
+        };
+
+        buildings.Add(building);
+        CacheBuildingRenderers(building);
+    }
+
+
+/// <summary>
+    /// 실제 생성 외형은 건축 UI와 동일하게 BuildData의 레벨별 prefab만 조회한다.
+    /// 월드 배치 루트 선택은 ResolveRuntimeRootPrefab에서 별도로 처리해 외형과 배치 책임을 분리한다.
+    /// </summary>
+    private DataPerLevel ResolveLevelData(CatalogEntry entry, int targetLevel)
+    {
+        if (entry == null || entry.buildData == null)
+        {
+            return null;
+        }
+
+        DataPerLevel[] levelDataList = entry.buildData.DataPerLevels;
+        for (int i = 0; i < levelDataList.Length; i++)
+        {
+            DataPerLevel levelData = levelDataList[i];
+            if (levelData != null &&
+                levelData.level == targetLevel &&
+                levelData.buildPrefab != null)
+            {
+                // Prefab과 같은 레벨의 외형/점유 보정값을 함께 전달한다.
+                return levelData;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// BuildData 건물은 fallbackPrefab 슬롯의 공통 Building_RuntimeRoot를 사용한다.
+    /// BuildData가 없는 레거시 항목만 catalog.prefab을 생성해 이전 동작을 보존한다.
+    /// </summary>
+    private GameObject ResolveRuntimeRootPrefab(CatalogEntry entry)
+    {
+        if (entry != null && entry.buildData == null && entry.prefab != null)
+        {
+            return entry.prefab;
+        }
+
+        return fallbackPrefab;
+    }
+
+
+/// <summary>
+    /// 건물의 배치 루트와 위치·회전은 유지하고, 목표 레벨의 시각 모델만 교체한다.
+    /// Registry가 보관하는 Renderer도 새 모델로 갱신해 하이라이트와 배치 저장 연결이 끊기지 않게 한다.
+    /// </summary>
+// [최소 연동 범위]
+    // Registry만 실제 생성 인스턴스와 내부 Renderer 참조를 소유하므로 외부 어댑터에서 안전하게 교체할 수 없다.
+    // 따라서 생성/복원/증축 진입점은 유지하고, 이 메서드에서 외형과 Renderer 참조만 갱신한다.
+    
+private bool ReplaceBuildingAppearance(Building building, DataPerLevel levelData)
+    {
+        if (building == null || levelData == null || levelData.buildPrefab == null)
+        {
+            return false;
+        }
+
+        GameObject root = building.instanceRoot;
+        if (root == null && building.renderer != null)
+        {
+            PlaceableBuilding placeable = building.renderer.GetComponentInParent<PlaceableBuilding>();
+            root = placeable != null ? placeable.gameObject : null;
+            building.instanceRoot = root;
+        }
+
+        if (root == null || root.transform.Find("VisualRoot") == null)
+        {
+            // 기존 개별 prefab에는 VisualRoot 계약이 없으므로 외형을 임의로 파괴하지 않는다.
+            return false;
+        }
+
+        Renderer newRenderer = ApplyAppearanceToRuntimeRoot(root, levelData);
+        if (newRenderer == null)
+        {
+            return false;
+        }
+
+        
+        building.renderers = null;
+        building.originalColors = null;
+building.renderer = newRenderer;
+        
+        CacheBuildingRenderers(building);
+building.originalColor = newRenderer.sharedMaterial != null
+            ? newRenderer.sharedMaterial.color
+            : Color.white;
+        RefreshRuntimeRootCollider(root, levelData);
+        return true;
+    }
+
+    /// <summary>
+    /// 공통 wrapper의 배치 컴포넌트와 Transform은 유지하고 VisualRoot 자식만 교체한다.
+    /// Registry의 Renderer 참조는 반환된 새 외형으로 갱신한다.
+    /// </summary>
+    private Renderer ApplyAppearanceToRuntimeRoot(GameObject root, DataPerLevel levelData)
+    {
+        if (root == null || levelData == null || levelData.buildPrefab == null)
+        {
+            return null;
+        }
+
+        Transform visualRoot = root.transform.Find("VisualRoot");
+        if (visualRoot == null)
+        {
+            return null;
+        }
+
+        for (int i = visualRoot.childCount - 1; i >= 0; i--)
+        {
+            GameObject oldVisual = visualRoot.GetChild(i).gameObject;
+            Renderer[] oldRenderers = oldVisual.GetComponentsInChildren<Renderer>(true);
+            for (int rendererIndex = 0; rendererIndex < oldRenderers.Length; rendererIndex++)
+            {
+                oldRenderers[rendererIndex].enabled = false;
+            }
+            Destroy(oldVisual);
+        }
+
+        GameObject newVisual = Instantiate(levelData.buildPrefab, visualRoot, false);
+        DisableNestedPlacementComponents(newVisual);
+        // Prefab이 가진 축 보정(예: BaseCamp X=270)을 보존하고 DataPerLevel 값은 추가 보정으로 적용한다.
+        // Wrapper의 배치 Transform은 유지하므로 이동 좌표와 저장 계약에는 영향을 주지 않는다.
+        newVisual.transform.localPosition += levelData.visualOffset;
+        newVisual.transform.localRotation = Quaternion.Euler(levelData.visualEulerAngles) * newVisual.transform.localRotation;
+        newVisual.transform.localScale = Vector3.Scale(newVisual.transform.localScale, levelData.visualScale);
+        return newVisual.GetComponentInChildren<Renderer>(true);
+    }
+
+    /// <summary>
+    /// 외형 프리팹에 포함된 배치용 컴포넌트가 wrapper와 별도 건물로 다시 등록되는 것을 막는다.
+    /// Renderer와 애니메이션은 유지하고, 실제 배치/클릭/점유는 공통 wrapper 하나만 담당한다.
+    /// </summary>
+    private static void DisableNestedPlacementComponents(GameObject visual)
+    {
+        if (visual == null)
+        {
+            return;
+        }
+
+        Collider[] nestedColliders = visual.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < nestedColliders.Length; i++)
+        {
+            Collider nestedCollider = nestedColliders[i];
+            if (nestedCollider == null)
+            {
+                continue;
+            }
+
+            // 외형 Collider는 wrapper의 클릭/점유 범위를 침범하지 않도록 비활성화만 한다.
+            nestedCollider.enabled = false;
+        }
+
+        PlaceableBuilding[] nestedPlaceables = visual.GetComponentsInChildren<PlaceableBuilding>(true);
+        for (int i = 0; i < nestedPlaceables.Length; i++)
+        {
+            if (nestedPlaceables[i] != null)
+            {
+                // 외형을 독립 건물로 등록하지 않되 프리팹 구성 자체는 보존한다.
+                nestedPlaceables[i].enabled = false;
+            }
+        }
+    }
+
+
+/// <summary>
+    /// 공통 Building_RuntimeRoot의 BoxCollider를 현재 레벨 외형의 로컬 Bounds에 맞춘다.
+    /// 개별 레거시 prefab은 VisualRoot 계약이 없어 이 메서드까지 진입하지 않는다.
+    /// </summary>
+private void RefreshRuntimeRootCollider(GameObject root, DataPerLevel levelData)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        BoxCollider boxCollider = root.GetComponent<BoxCollider>();
+        PlaceableBuilding placeable = root.GetComponent<PlaceableBuilding>();
+        if (boxCollider == null || placeable == null)
+        {
+            return;
+        }
+
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        bool hasBounds = false;
+        Bounds localBounds = default;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || !renderer.enabled)
+            {
+                continue;
+            }
+
+            Bounds worldBounds = renderer.bounds;
+            Vector3 center = worldBounds.center;
+            Vector3 extents = worldBounds.extents;
+
+            for (int x = -1; x <= 1; x += 2)
+            for (int y = -1; y <= 1; y += 2)
+            for (int z = -1; z <= 1; z += 2)
+            {
+                Vector3 worldCorner = center + Vector3.Scale(extents, new Vector3(x, y, z));
+                Vector3 localCorner = root.transform.InverseTransformPoint(worldCorner);
+
+                if (!hasBounds)
+                {
+                    localBounds = new Bounds(localCorner, Vector3.zero);
+                    hasBounds = true;
+                }
+                else
+                {
+                    localBounds.Encapsulate(localCorner);
+                }
+            }
+        }
+
+        if (!hasBounds)
+        {
+            return;
+        }
+
+        boxCollider.center = localBounds.center;
+        boxCollider.size = localBounds.size;
+
+        // Collider의 실제 외형 크기를 그리드 CellSize 단위로 올림해 모델이 점유 범위를 벗어나지 않게 한다.
+        int automaticCellsX = Mathf.Max(1, Mathf.CeilToInt(localBounds.size.x / VillageGrid.CellSize));
+        int automaticCellsZ = Mathf.Max(1, Mathf.CeilToInt(localBounds.size.z / VillageGrid.CellSize));
+        // 0은 Bounds 자동 계산, 1 이상은 authored prefab의 명시적 점유 크기를 계승한다.
+        int cellsX = levelData != null && levelData.footprintCellsX > 0 ? levelData.footprintCellsX : automaticCellsX;
+        int cellsZ = levelData != null && levelData.footprintCellsZ > 0 ? levelData.footprintCellsZ : automaticCellsZ;
+        placeable.ConfigureFootprint(cellsX, cellsZ);
+    }
+
+/// <summary>
+    /// 증축으로 점유 크기가 바뀐 뒤 기존 grid 점유 정보를 새 footprint로 다시 구축한다.
+    /// 저장 데이터는 변경하지 않고 현재 저장 좌표를 우선 복원한다.
+    /// </summary>
+    private void RefreshPlacementRegistration()
+    {
+        BuildingPlacementController placementController =
+            FindAnyObjectByType<BuildingPlacementController>();
+        if (placementController != null)
+        {
+            placementController.RestoreAndRegisterExistingBuildings();
+        }
+    }
+
+
+
+private void CacheBuildingRenderers(Building building)
+    {
+        if (building == null || building.renderers != null) return;
+
+        GameObject root = building.instanceRoot;
+        if (root == null && building.renderer != null)
+        {
+            PlaceableBuilding placeable = building.renderer.GetComponentInParent<PlaceableBuilding>();
+            root = placeable != null ? placeable.gameObject : building.renderer.gameObject;
+            building.instanceRoot = root;
+        }
+
+        building.renderers = root != null
+            ? root.GetComponentsInChildren<Renderer>(true)
+            : new Renderer[0];
+        building.originalColors = new Color[building.renderers.Length];
+        for (int i = 0; i < building.renderers.Length; i++)
+        {
+            Renderer renderer = building.renderers[i];
+            building.originalColors[i] = renderer != null && renderer.sharedMaterial != null
+                ? renderer.sharedMaterial.color
+                : Color.white;
+        }
+    }
+
+    private static Color GetOriginalColor(Building building, int rendererIndex)
+    {
+        return building.originalColors != null && rendererIndex < building.originalColors.Length
+            ? building.originalColors[rendererIndex]
+            : building.originalColor;
     }
 }

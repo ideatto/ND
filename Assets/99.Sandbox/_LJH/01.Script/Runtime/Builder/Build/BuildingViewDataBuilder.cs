@@ -30,6 +30,9 @@ public class BuildingViewDataBuilder
 
         if(targetLevelData == null)
         {
+            DataPerLevel currentLevelData = FindTargetLevelData(buildData, safeCurrentLevel);
+            bool isMaxLevel = currentLevelData != null && !HasLevelAbove(buildData, safeCurrentLevel);
+
             return new BuildingDetailViewData
             {
                 buildId = buildData.BuildId,
@@ -37,11 +40,20 @@ public class BuildingViewDataBuilder
                 description = buildData.Description,
 
                 currentLevel = safeCurrentLevel,
-                targetLevel = targetLevel,
+                targetLevel = isMaxLevel ? safeCurrentLevel : targetLevel,
                 isConstruction = safeCurrentLevel == 0,
+                isMaxLevel = isMaxLevel,
+
+                // 만렙도 현재 외형을 계속 보여 주고, 중간 레벨 데이터 누락은 기존 오류 상태로 남긴다.
+                previewScale = currentLevelData != null ? currentLevelData.visualScale : Vector3.one,
+                previewEulerAngles = currentLevelData != null ? currentLevelData.visualEulerAngles : Vector3.zero,
+                previewOffset = currentLevelData != null ? currentLevelData.visualOffset : Vector3.zero,
+                previewPrefab = currentLevelData != null ? currentLevelData.buildPrefab : null,
 
                 canProceed = false,
-                disabledReason = "최대 레벨이거나 목표 레벨 데이터가 없습니다."
+                disabledReason = isMaxLevel
+                    ? "최대 레벨입니다."
+                    : "목표 레벨 데이터가 없습니다."
             };
         }
 
@@ -58,6 +70,12 @@ public class BuildingViewDataBuilder
             currentLevel = safeCurrentLevel,
             targetLevel = targetLevel,
             isConstruction = safeCurrentLevel == 0,
+
+            isTargetMaxLevel = !HasLevelAbove(buildData, targetLevel),
+
+            previewScale = targetLevelData.visualScale,
+            previewEulerAngles = targetLevelData.visualEulerAngles,
+            previewOffset = targetLevelData.visualOffset,
 
             previewPrefab = targetLevelData.buildPrefab,
 
@@ -137,6 +155,23 @@ public class BuildingViewDataBuilder
         return null;
     }
 
+    // 배열 길이나 순서가 아니라 실제 level 값으로 최종 레벨 여부를 판정한다.
+    private static bool HasLevelAbove(BuildData buildData, int currentLevel)
+    {
+        DataPerLevel[] levelDataList = buildData.DataPerLevels;
+
+        for(int i = 0; i < levelDataList.Length; i++)
+        {
+            DataPerLevel levelData = levelDataList[i];
+            if(levelData != null && levelData.level > currentLevel)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// 재료 아이템 요구 조건을 평가하여 UI 표시 데이터,
     /// 전체 충족 여부 및 버튼 비활성화 사유를 함께 만든다.
@@ -206,9 +241,9 @@ public class BuildingViewDataBuilder
                 itemId = requirement.itemId,
                 displayName = foundItemDefinition && itemDefinition != null ? itemDefinition.DisplayName : requirement.itemId,
 
-                // TODO: SharedTradeItemDefinition.Icon 매핑 작업이 병합되면
-                // itemDefinition.Icon을 연결한다.
-                icon = null,
+                icon = foundItemDefinition && itemDefinition != null
+                    ? itemDefinition.Icon
+                    : null,
 
                 ownedQuantity = ownedQuantity,
                 requiredQuantity = requirement.quantity,
