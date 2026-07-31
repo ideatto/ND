@@ -125,6 +125,29 @@ namespace ND.Framework
         /// </remarks>
         public static event Action<string, string> RouteEventForced;
 
+        public static event Action<CalendarRestoreResult> CalendarRestored;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> YearChanged;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> MonthChanged;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> SeasonChanged;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> DisasterChanged;
+
+        public static void RaiseCalendarRestored(CalendarRestoreResult result)
+        {
+            if (result == null) return;
+            FrameworkLog.Info($"CalendarRestored event raised. DaysAdvanced: {result.DaysAdvanced}, PassedMonths: {result.PassedMonths.Count}");
+            CalendarRestored?.Invoke(result);
+        }
+
+        /// <summary>Publishes a committed live transition in year, month, season, then disaster order.</summary>
+        public static void RaiseCalendarTransition(GameCalendarSnapshot previous, GameCalendarSnapshot current)
+        {
+            if (previous.Year != current.Year) YearChanged?.Invoke(previous, current);
+            if (previous.AbsoluteMonthIndex != current.AbsoluteMonthIndex) MonthChanged?.Invoke(previous, current);
+            if (previous.Season != current.Season) SeasonChanged?.Invoke(previous, current);
+            if (!string.Equals(previous.ActiveDisasterId, current.ActiveDisasterId, StringComparison.Ordinal))
+                DisasterChanged?.Invoke(previous, current);
+        }
+
         /// <summary>
         /// 공용 기준 데이터 준비 완료 이벤트를 발행한다.
         /// </summary>

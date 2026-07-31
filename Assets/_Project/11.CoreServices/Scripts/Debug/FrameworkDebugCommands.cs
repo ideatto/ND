@@ -47,6 +47,8 @@ namespace ND.Framework
         private readonly GameTimeService gameTimeService;
         private readonly Func<SaveData> getCurrentSaveData;
         private readonly ISaveService saveService;
+        private readonly GameCalendarService calendarService;
+        private readonly Action<CalendarRestoreResult> retainRestoreResult;
 
         private string pendingForcedRouteEventId = string.Empty;
         private string pendingForcedRouteEventTradeId = string.Empty;
@@ -58,11 +60,97 @@ namespace ND.Framework
         public FrameworkDebugCommands(
             GameTimeService gameTimeService,
             Func<SaveData> getCurrentSaveData = null,
-            ISaveService saveService = null)
+            ISaveService saveService = null,
+            GameCalendarService calendarService = null,
+            Action<CalendarRestoreResult> retainRestoreResult = null)
         {
             this.gameTimeService = gameTimeService;
             this.getCurrentSaveData = getCurrentSaveData;
             this.saveService = saveService;
+            this.calendarService = calendarService;
+            this.retainRestoreResult = retainRestoreResult;
+        }
+
+        public bool TrySetCalendarDebugScale(float scale)
+        {
+            var calendar = calendarService ?? FrameworkRoot.Instance?.GameCalendar;
+            var succeeded = calendar != null && calendar.TrySetDebugScale(scale);
+            if (!succeeded) FrameworkLog.Warning($"Calendar debug scale rejected. Scale: {scale}");
+            return succeeded;
+        }
+
+        public CalendarAdvanceResult AdvanceOneGameDay() => AdvanceCalendarDays(1L);
+
+        public CalendarAdvanceResult AdvanceOneGameMonth() => AdvanceCalendarDays(30L);
+
+        public CalendarAdvanceResult AdvanceToMonth(int month)
+        {
+            var calendar = calendarService ?? FrameworkRoot.Instance?.GameCalendar;
+            if (month < 1 || month > 12 || calendar == null || !calendar.TryGetCurrent(out var current))
+                return default;
+            var monthDelta = (month - current.Month + 12) % 12;
+            if (monthDelta == 0) monthDelta = 12;
+            return AdvanceCalendarDays(checked(monthDelta * 30L));
+        }
+
+        private CalendarAdvanceResult AdvanceCalendarDays(long days)
+        {
+            var root = FrameworkRoot.Instance;
+            var data = getCurrentSaveData != null ? getCurrentSaveData() : root?.CurrentSaveData;
+            var persistence = saveService ?? root?.SaveService;
+            var calendar = calendarService ?? root?.GameCalendar;
+            return calendar != null ? calendar.AdvanceDebugDays(data, days, persistence) : default;
+        }
+
+        public CalendarRestoreResult SimulateCalendarOffline(double realSeconds)
+        {
+            if (double.IsNaN(realSeconds) || double.IsInfinity(realSeconds) || realSeconds < 0d) return null;
+            var root = FrameworkRoot.Instance;
+            var data = getCurrentSaveData != null ? getCurrentSaveData() : root?.CurrentSaveData;
+            var persistence = saveService ?? root?.SaveService;
+            var calendar = calendarService ?? root?.GameCalendar;
+            if (data == null || persistence == null || calendar == null) return null;
+            var accepted = Math.Min(realSeconds, gameTimeService.MaxOfflineRealSeconds);
+            var loadUtc = gameTimeService.CurrentUtc;
+            var anchorUtc = new DateTime(data.world.calendar.dayAnchorUtcTicks, DateTimeKind.Utc);
+            DateTime evaluationUtc;
+            try { evaluationUtc = anchorUtc.AddSeconds(accepted); }
+            catch (ArgumentOutOfRangeException) { return null; }
+            var context = new OfflineRestoreContext(
+                anchorUtc, loadUtc, evaluationUtc,
+                TimeSpan.FromSeconds(accepted), false, accepted != realSeconds);
+            var snapshot = UnityEngine.JsonUtility.ToJson(data);
+            var result = calendar.RestoreOffline(data, context);
+            SaveResult saved = null;
+            try { saved = persistence.Save(data); } catch (Exception exception) { FrameworkLog.Error(exception.Message); }
+            if (result == null || saved == null || !saved.Succeeded)
+            {
+                UnityEngine.JsonUtility.FromJsonOverwrite(snapshot, data);
+                calendar.RebuildRuntimeAfterFailedRestore(data, loadUtc);
+                return null;
+            }
+            retainRestoreResult?.Invoke(result);
+            FrameworkEvents.RaiseCalendarRestored(result);
+            return result;
+        }
+
+        public void LogCalendarState()
+        {
+            var root = FrameworkRoot.Instance;
+            var data = getCurrentSaveData != null ? getCurrentSaveData() : root?.CurrentSaveData;
+            var calendar = calendarService ?? root?.GameCalendar;
+            if (data?.world?.calendar == null || calendar == null || !calendar.TryGetCurrent(out var current))
+            { FrameworkLog.Warning("Calendar state is unavailable."); return; }
+            FrameworkLog.Info($"Calendar state. TotalElapsedDays: {current.TotalElapsedDays}, Year: {current.Year}, Month: {current.Month}, Day: {current.Day}, AbsoluteMonthIndex: {current.AbsoluteMonthIndex}, Season: {current.Season}, SeasonId: {current.SeasonId}, ActiveDisasterId: {current.ActiveDisasterId}, WorldSeed: {data.world.worldSeed}, DayAnchorUtc: {new DateTime(data.world.calendar.dayAnchorUtcTicks, DateTimeKind.Utc):O}, DebugScale: {calendar.DebugScale}");
+        }
+
+        public void LogCalendarRestoreTimeline(CalendarRestoreResult result = null)
+        {
+            result ??= FrameworkRoot.Instance?.LastCalendarRestoreResult;
+            if (result == null) { FrameworkLog.Warning("Calendar restore timeline is unavailable."); return; }
+            FrameworkLog.Info($"Calendar restore timeline. Previous: {result.Previous.Year}-{result.Previous.Month}-{result.Previous.Day}, Current: {result.Current.Year}-{result.Current.Month}-{result.Current.Day}, DaysAdvanced: {result.DaysAdvanced}, PassedMonths: {result.PassedMonths.Count}");
+            foreach (var month in result.PassedMonths)
+                FrameworkLog.Info($"Calendar restore month. AbsoluteMonthIndex: {month.AbsoluteMonthIndex}, Year: {month.Year}, Month: {month.Month}, Season: {month.Season}, DisasterId: {month.DisasterId}");
         }
 
         /// <summary>
@@ -245,7 +333,7 @@ namespace ND.Framework
             root.SaveService.Save(root.CurrentSaveData);
 
             FrameworkLog.Info(
-                $"ForceSeason applied. TradeId: {tradeId}, SeasonId: {normalizedSeasonId}");
+                $"ForceSeason legacy cache applied. TradeId: {tradeId}, SeasonId: {normalizedSeasonId}. Calendar queries remain authoritative and the next calendar mutation replaces this cache.");
             return true;
         }
 
@@ -269,7 +357,7 @@ namespace ND.Framework
             root.SaveService.Save(root.CurrentSaveData);
 
             FrameworkLog.Info(
-                $"ForceDisaster applied. TradeId: {tradeId}, DisasterId: '{normalizedDisasterId}'");
+                $"ForceDisaster legacy cache applied. TradeId: {tradeId}, DisasterId: '{normalizedDisasterId}'. Calendar queries remain authoritative and the next calendar mutation replaces this cache.");
             return true;
         }
 

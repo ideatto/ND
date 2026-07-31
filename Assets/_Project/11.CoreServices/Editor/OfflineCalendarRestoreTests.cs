@@ -253,6 +253,54 @@ namespace ND.Framework
         }
 
         [Test]
+        public void MergedRestore_PublishesCalendarExactlyOnce()
+        {
+            var fixture = TransactionFixture.Create();
+            fixture.MakeTradeTraveling(EpochUtc, EpochUtc.AddMinutes(1d));
+            var order = new System.Collections.Generic.List<string>();
+            Action<CalendarRestoreResult> calendar = _ => order.Add("Calendar");
+            Action<string> trade = _ => order.Add("Trade");
+            Action<string, string, JourneyResultData> ready = (_, __, ___) => order.Add("Trade");
+            FrameworkEvents.CalendarRestored += calendar;
+            FrameworkEvents.TradeOfflineCompleted += trade;
+            FrameworkEvents.TradeSettlementReady += ready;
+            try
+            {
+                var result = fixture.Execute(EpochUtc.AddSeconds(120d));
+                Assert.That(result.Succeeded, Is.True);
+                Assert.That(order[0], Is.EqualTo("Calendar"));
+                Assert.That(order.FindAll(value => value == "Calendar"), Has.Count.EqualTo(1));
+            }
+            finally
+            {
+                FrameworkEvents.CalendarRestored -= calendar;
+                FrameworkEvents.TradeOfflineCompleted -= trade;
+                FrameworkEvents.TradeSettlementReady -= ready;
+            }
+        }
+
+        [Test]
+        public void MergedRestore_NoChangePublishesCalendarAndFailurePublishesNothing()
+        {
+            var success = TransactionFixture.Create();
+            var calls = 0;
+            Action<CalendarRestoreResult> handler = _ => calls++;
+            FrameworkEvents.CalendarRestored += handler;
+            try
+            {
+                var unchanged = success.Execute(EpochUtc);
+                Assert.That(unchanged.Succeeded, Is.True);
+                Assert.That(calls, Is.EqualTo(1));
+
+                var failure = TransactionFixture.Create();
+                failure.Save.ShouldSucceed = false;
+                failure.Execute(EpochUtc.AddSeconds(120d));
+                Assert.That(calls, Is.EqualTo(1));
+            }
+            finally { FrameworkEvents.CalendarRestored -= handler; }
+        }
+
+        [Test]
         public void MergedSave_BothDirty_SaveException_RollsBack()
         {
             var fixture = TransactionFixture.Create();

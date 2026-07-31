@@ -67,7 +67,14 @@ namespace ND.Framework
         }
 
         public GameCalendarSnapshot Current { get; private set; }
+        public bool HasCurrent => hasCurrent;
         public float DebugScale => debugScale;
+
+        public bool TryGetCurrent(out GameCalendarSnapshot snapshot)
+        {
+            snapshot = Current;
+            return hasCurrent;
+        }
 
         /// <summary>
         /// Starts or replaces the active online session and repairs season/disaster caches in memory.
@@ -419,7 +426,7 @@ namespace ND.Framework
             }
 
             pendingGameTicks = remainderTicks;
-            return new CalendarAdvanceResult(
+            var result = new CalendarAdvanceResult(
                 true,
                 daysAdvanced,
                 previous,
@@ -428,6 +435,58 @@ namespace ND.Framework
                 previous.Year != nextSnapshot.Year,
                 previous.Season != nextSnapshot.Season,
                 saveResult);
+            FrameworkEvents.RaiseCalendarTransition(previous, nextSnapshot);
+            return result;
+        }
+
+        /// <summary>Advances an exact number of synthetic game days, saves once, and preserves online remainder.</summary>
+        public CalendarAdvanceResult AdvanceDebugDays(SaveData saveData, long days, ISaveService saveService)
+        {
+            if (days <= 0L || !hasCurrent || !ReferenceEquals(sessionSaveData, saveData)) return Unchanged();
+            var world = saveData?.world;
+            var calendar = world?.calendar;
+            if (calendar == null) return Unchanged();
+            long nextDays;
+            GameCalendarSnapshot next;
+            try
+            {
+                nextDays = checked(calendar.totalElapsedDays + days);
+                var date = GameCalendarDate.FromElapsedDays(nextDays);
+                var disaster = Current.AbsoluteMonthIndex == date.AbsoluteMonthIndex
+                    ? Current.ActiveDisasterId
+                    : disasterResolver.Resolve(world.worldSeed, date.AbsoluteMonthIndex, date.Season, disasterPolicy);
+                next = new GameCalendarSnapshot(date, disaster);
+            }
+            catch (Exception exception) when (exception is OverflowException || exception is ArgumentOutOfRangeException)
+            {
+                FrameworkLog.Warning($"Calendar debug advancement rejected: {exception.Message}");
+                return Unchanged();
+            }
+
+            var previous = Current;
+            var previousDays = calendar.totalElapsedDays;
+            var previousSeason = world.currentSeasonId;
+            var previousDisaster = world.currentDisasterId;
+            calendar.totalElapsedDays = nextDays;
+            world.currentSeasonId = next.SeasonId;
+            world.currentDisasterId = next.ActiveDisasterId;
+            Current = next;
+            SaveResult saveResult = null;
+            try { saveResult = saveService?.Save(saveData); }
+            catch (Exception exception) { FrameworkLog.Error($"Calendar debug save threw an exception: {exception.Message}"); }
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                calendar.totalElapsedDays = previousDays;
+                world.currentSeasonId = previousSeason;
+                world.currentDisasterId = previousDisaster;
+                Current = previous;
+                return new CalendarAdvanceResult(false, 0L, previous, previous, false, false, false, saveResult);
+            }
+
+            FrameworkEvents.RaiseCalendarTransition(previous, next);
+            return new CalendarAdvanceResult(true, days, previous, next,
+                previous.AbsoluteMonthIndex != next.AbsoluteMonthIndex,
+                previous.Year != next.Year, previous.Season != next.Season, saveResult);
         }
 
         private bool TryAddScaledDelta(long rawDelta)

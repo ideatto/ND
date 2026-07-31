@@ -535,6 +535,7 @@ namespace ND.Framework
             var tradeDirty = tradeRestore?.Changed ?? false;
             if (!calendarDirty && !tradeDirty)
             {
+                FrameworkEvents.RaiseCalendarRestored(calendarResult);
                 tradeRestore?.Publish(trade, saveData);
                 return new OfflineRestoreTransactionResult(
                     calendarResult,
@@ -569,6 +570,7 @@ namespace ND.Framework
                     saveResult);
             }
 
+            FrameworkEvents.RaiseCalendarRestored(calendarResult);
             tradeRestore?.Publish(trade, saveData);
             return new OfflineRestoreTransactionResult(
                 calendarResult,
@@ -645,7 +647,9 @@ namespace ND.Framework
             SaveService = new JsonSaveService();
             SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
-            DebugCommands = new FrameworkDebugCommands(GameTime);
+            DebugCommands = new FrameworkDebugCommands(
+                GameTime, () => CurrentSaveData, SaveService, GameCalendar,
+                result => LastCalendarRestoreResult = result);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime, GameTime);
             InGameScreenRouter = new InGameScreenStateRouter();
             TradePrepareCommitStore = new FrameworkTradePrepareCommitStore(() => CurrentSaveData);

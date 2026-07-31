@@ -284,6 +284,85 @@ namespace ND.Framework
             Assert.That(JsonUtility.ToJson(fixture.Data), Does.Not.Contain("debugScale"));
         }
 
+        [Test]
+        public void LiveTransition_PublishesCommittedStateInApprovedOrder()
+        {
+            var fixture = CreateFixture(89L, new MonthlyDisasterResolver(), new MonthlyDisasterPolicy(1f, 1f));
+            var order = new System.Collections.Generic.List<string>();
+            Action<GameCalendarSnapshot, GameCalendarSnapshot> month = (previous, current) =>
+            {
+                order.Add("Month");
+                Assert.That(fixture.Service.Current.TotalElapsedDays, Is.EqualTo(current.TotalElapsedDays));
+                Assert.That(fixture.Data.world.currentSeasonId, Is.EqualTo(current.SeasonId));
+                Assert.That(fixture.Data.world.currentDisasterId, Is.EqualTo(current.ActiveDisasterId));
+            };
+            Action<GameCalendarSnapshot, GameCalendarSnapshot> season = (previous, current) => order.Add("Season");
+            Action<GameCalendarSnapshot, GameCalendarSnapshot> disaster = (previous, current) => order.Add("Disaster");
+            FrameworkEvents.MonthChanged += month;
+            FrameworkEvents.SeasonChanged += season;
+            FrameworkEvents.DisasterChanged += disaster;
+            try
+            {
+                fixture.Time.Current = EpochUtc.AddSeconds(120);
+                fixture.Service.TickOnline(fixture.Data, fixture.Save);
+                Assert.That(order[0], Is.EqualTo("Month"));
+                Assert.That(order[1], Is.EqualTo("Season"));
+                Assert.That(order.Count, Is.LessThanOrEqualTo(3));
+            }
+            finally
+            {
+                FrameworkEvents.MonthChanged -= month;
+                FrameworkEvents.SeasonChanged -= season;
+                FrameworkEvents.DisasterChanged -= disaster;
+            }
+        }
+
+        [Test]
+        public void LiveTransition_DayOnlyAndFailedSavePublishNothing()
+        {
+            var fixture = CreateFixture(1L);
+            var calls = 0;
+            Action<GameCalendarSnapshot, GameCalendarSnapshot> handler = (previous, current) => calls++;
+            FrameworkEvents.MonthChanged += handler;
+            FrameworkEvents.SeasonChanged += handler;
+            FrameworkEvents.DisasterChanged += handler;
+            FrameworkEvents.YearChanged += handler;
+            try
+            {
+                fixture.Time.Current = EpochUtc.AddSeconds(120);
+                fixture.Service.TickOnline(fixture.Data, fixture.Save);
+                fixture.Save.ShouldSucceed = false;
+                fixture.Time.Current = EpochUtc.AddSeconds(120 * 30);
+                fixture.Service.TickOnline(fixture.Data, fixture.Save);
+                Assert.That(calls, Is.Zero);
+            }
+            finally
+            {
+                FrameworkEvents.MonthChanged -= handler;
+                FrameworkEvents.SeasonChanged -= handler;
+                FrameworkEvents.DisasterChanged -= handler;
+                FrameworkEvents.YearChanged -= handler;
+            }
+        }
+
+        [Test]
+        public void DebugAdvanceDays_PreservesDayAndPublishesOneFinalTransition()
+        {
+            var fixture = CreateFixture(14L);
+            var monthCalls = 0;
+            Action<GameCalendarSnapshot, GameCalendarSnapshot> handler = (previous, current) => monthCalls++;
+            FrameworkEvents.MonthChanged += handler;
+            try
+            {
+                var result = fixture.Service.AdvanceDebugDays(fixture.Data, 30L, fixture.Save);
+                Assert.That(result.Current.Month, Is.EqualTo(4));
+                Assert.That(result.Current.Day, Is.EqualTo(15));
+                Assert.That(fixture.Save.SaveCalls, Is.EqualTo(1));
+                Assert.That(monthCalls, Is.EqualTo(1));
+            }
+            finally { FrameworkEvents.MonthChanged -= handler; }
+        }
+
         private static Fixture CreateFixture(
             long totalElapsedDays = 0L,
             MonthlyDisasterResolver resolver = null,
