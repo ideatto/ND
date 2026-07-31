@@ -583,6 +583,12 @@ namespace ND.Framework
     [Serializable]
     public sealed class WorldSaveData
     {
+        /// <summary>월드 단위 결정성의 루트가 되는 영속 시드다. 0은 미초기화 값이다.</summary>
+        public uint worldSeed;
+
+        /// <summary>UTC 앵커와 누적 일수를 보관하는 달력의 권위 데이터다.</summary>
+        public GameCalendarSaveData calendar;
+
         /// <summary>
         /// Caravan creation is permitted only for these persistent slot indices.
         /// Occupying a slot does not unlock another slot.
@@ -594,7 +600,7 @@ namespace ND.Framework
         /// <summary>
         /// 현재 계절 ID이다. Economy PriceCalculationInput.SeasonId와 연결된다.
         /// </summary>
-        public string currentSeasonId = "summer";
+        public string currentSeasonId = GameCalendarDate.SpringId;
 
         /// <summary>
         /// 현재 재난 ID이다. Economy PriceCalculationInput.DisasterId와 연결된다.
