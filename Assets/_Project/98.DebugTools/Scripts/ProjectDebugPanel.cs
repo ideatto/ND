@@ -58,6 +58,8 @@ namespace ND.DebugTools
         private string tradingCurrencyAmountInput = string.Empty;
         private string developmentCurrencyAmountInput = string.Empty;
         private string lastCurrencyResult = "No currency command executed.";
+        private string wagonRepairMultiplierInput = "1";
+        private string lastWagonRepairMultiplierResult = "No multiplier command executed.";
         private float nextRefreshTime;
         private bool isVisible;
         private int selectedTab;
@@ -157,6 +159,7 @@ namespace ND.DebugTools
                 GUILayout.Label(snapshot, labelStyle);
                 DrawForceArrivalControl();
                 DrawCurrencyControls();
+                DrawWagonRepairMultiplierControl();
             }
 
             GUILayout.EndScrollView();
@@ -250,6 +253,182 @@ namespace ND.DebugTools
             if (addCustom)
             {
                 ExecuteCustomCurrencyGrant(isTradingCurrency, amountInput);
+            }
+        }
+
+        private void DrawWagonRepairMultiplierControl()
+        {
+            var state = ResolveWagonRepairMultiplierState();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[Wagon Repair Cost Multiplier]", labelStyle);
+            GUILayout.Label(
+                $"Current: {(state.HasCurrentValue ? state.CurrentValue.ToString("0.##", CultureInfo.InvariantCulture) + "x" : "N/A")}",
+                labelStyle);
+            GUILayout.Label($"Availability: {(state.CanExecute ? "Ready" : state.DisabledReason)}", labelStyle);
+            GUILayout.Label("Session only. Actual repair calculation is not connected yet.", labelStyle);
+
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && state.CanExecute;
+            GUILayout.BeginHorizontal();
+            var decrease = GUILayout.Button("-0.25x");
+            var increase = GUILayout.Button("+0.25x");
+            var reset = GUILayout.Button("Reset 1x");
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Custom:", labelStyle, GUILayout.Width(64f));
+            wagonRepairMultiplierInput = GUILayout.TextField(wagonRepairMultiplierInput);
+            var apply = GUILayout.Button("Apply", GUILayout.Width(64f));
+            GUILayout.EndHorizontal();
+            GUI.enabled = previousEnabled;
+
+            if (decrease)
+            {
+                ExecuteWagonRepairMultiplierCommand("DecreaseWagonRepairCostMultiplier");
+            }
+            else if (increase)
+            {
+                ExecuteWagonRepairMultiplierCommand("IncreaseWagonRepairCostMultiplier");
+            }
+            else if (reset)
+            {
+                ExecuteWagonRepairMultiplierCommand("ResetWagonRepairCostMultiplier");
+            }
+            else if (apply)
+            {
+                ExecuteWagonRepairMultiplierApply(wagonRepairMultiplierInput);
+            }
+
+            GUILayout.Label($"Last Multiplier Result: {lastWagonRepairMultiplierResult}", labelStyle);
+        }
+
+        private WagonRepairMultiplierState ResolveWagonRepairMultiplierState()
+        {
+            var state = new WagonRepairMultiplierState();
+
+            try
+            {
+                state.Root = GetFrameworkRoot();
+                if (state.Root == null)
+                {
+                    state.DisabledReason = "Framework is unavailable";
+                    return state;
+                }
+
+                state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
+                if (state.DebugCommands == null)
+                {
+                    state.DisabledReason = "DebugCommands is unavailable";
+                    return state;
+                }
+
+                var type = state.DebugCommands.GetType();
+                state.ValueProperty = type.GetProperty(
+                    "WagonRepairCostMultiplier",
+                    BindingFlags.Public | BindingFlags.Instance);
+                state.SetMethod = type.GetMethod(
+                    "TrySetWagonRepairCostMultiplier",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(double) },
+                    null);
+
+                if (state.ValueProperty == null || !state.ValueProperty.CanRead || state.SetMethod == null)
+                {
+                    state.DisabledReason = "Wagon repair multiplier API is unavailable";
+                    return state;
+                }
+
+                var value = state.ValueProperty.GetValue(state.DebugCommands);
+                if (!(value is double currentValue))
+                {
+                    state.DisabledReason = "Wagon repair multiplier value is unavailable";
+                    return state;
+                }
+
+                state.CurrentValue = currentValue;
+                state.HasCurrentValue = true;
+                state.CanExecute = true;
+                state.DisabledReason = string.Empty;
+                return state;
+            }
+            catch (Exception exception)
+            {
+                state.DisabledReason = $"Wagon repair multiplier unavailable: {exception.GetType().Name}";
+                return state;
+            }
+        }
+
+        private void ExecuteWagonRepairMultiplierApply(string input)
+        {
+            if (!double.TryParse(
+                    input?.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var multiplier))
+            {
+                lastWagonRepairMultiplierResult = "Not applied. Enter a number from 0 to 1000.";
+                return;
+            }
+
+            var state = ResolveWagonRepairMultiplierState();
+            if (!state.CanExecute)
+            {
+                lastWagonRepairMultiplierResult = $"Not applied. {state.DisabledReason}.";
+                return;
+            }
+
+            try
+            {
+                var applied = state.SetMethod.Invoke(state.DebugCommands, new object[] { multiplier });
+                lastWagonRepairMultiplierResult = applied is bool succeeded && succeeded
+                    ? $"Applied {multiplier:0.##}x."
+                    : "Not applied. Enter a number from 0 to 1000.";
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+                lastWagonRepairMultiplierResult = $"Invocation failed: {cause.GetType().Name}: {cause.Message}";
+            }
+        }
+
+        private void ExecuteWagonRepairMultiplierCommand(string methodName)
+        {
+            var state = ResolveWagonRepairMultiplierState();
+            if (!state.CanExecute)
+            {
+                lastWagonRepairMultiplierResult = $"Not executed. {state.DisabledReason}.";
+                return;
+            }
+
+            try
+            {
+                var method = state.DebugCommands.GetType().GetMethod(
+                    methodName,
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (method == null)
+                {
+                    lastWagonRepairMultiplierResult = "Multiplier command API is unavailable.";
+                    return;
+                }
+
+                var result = method.Invoke(state.DebugCommands, null);
+                lastWagonRepairMultiplierResult = result is double multiplier
+                    ? $"Applied {multiplier:0.##}x."
+                    : "Multiplier command returned no value.";
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+                lastWagonRepairMultiplierResult = $"Invocation failed: {cause.GetType().Name}: {cause.Message}";
             }
         }
 
@@ -1232,6 +1411,18 @@ namespace ND.DebugTools
             public object DebugCommands;
             public MethodInfo Method;
             public long CurrentValue;
+            public bool HasCurrentValue;
+            public bool CanExecute;
+            public string DisabledReason;
+        }
+
+        private sealed class WagonRepairMultiplierState
+        {
+            public object Root;
+            public object DebugCommands;
+            public PropertyInfo ValueProperty;
+            public MethodInfo SetMethod;
+            public double CurrentValue;
             public bool HasCurrentValue;
             public bool CanExecute;
             public string DisabledReason;
