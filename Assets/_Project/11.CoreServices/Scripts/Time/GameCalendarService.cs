@@ -1,0 +1,286 @@
+using System;
+
+namespace ND.Framework
+{
+    public readonly struct CalendarAdvanceResult
+    {
+        internal CalendarAdvanceResult(
+            bool changed,
+            long daysAdvanced,
+            GameCalendarSnapshot previous,
+            GameCalendarSnapshot current,
+            bool monthChanged,
+            bool yearChanged,
+            bool seasonChanged,
+            SaveResult saveResult)
+        {
+            Changed = changed;
+            DaysAdvanced = daysAdvanced;
+            Previous = previous;
+            Current = current;
+            MonthChanged = monthChanged;
+            YearChanged = yearChanged;
+            SeasonChanged = seasonChanged;
+            SaveResult = saveResult;
+        }
+
+        public bool Changed { get; }
+        public long DaysAdvanced { get; }
+        public GameCalendarSnapshot Previous { get; }
+        public GameCalendarSnapshot Current { get; }
+        public bool MonthChanged { get; }
+        public bool YearChanged { get; }
+        public bool SeasonChanged { get; }
+        public SaveResult SaveResult { get; }
+    }
+
+    /// <summary>
+    /// Advances the authoritative game calendar from sampled UTC while keeping debug scaling local to the session.
+    /// </summary>
+    public sealed class GameCalendarService
+    {
+        public const long TicksPerGameDay = 120L * TimeSpan.TicksPerSecond;
+
+        private readonly IGameTimeProvider timeProvider;
+        private SaveData sessionSaveData;
+        private long lastSampleUtcTicks;
+        private long pendingGameTicks;
+        private float debugScale = 1f;
+        private bool hasCurrent;
+
+        public GameCalendarService(IGameTimeProvider timeProvider)
+        {
+            this.timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        }
+
+        public GameCalendarSnapshot Current { get; private set; }
+        public float DebugScale => debugScale;
+
+        /// <summary>
+        /// Starts or replaces the active online session without mutating persistent calendar data.
+        /// Existing wall time since the day anchor becomes the initial pending progress.
+        /// </summary>
+        public bool BeginOnlineSession(SaveData saveData, DateTime currentUtc)
+        {
+            if (!TryGetCalendar(saveData, currentUtc, out var calendar, out var snapshot))
+            {
+                ResetSession();
+                return false;
+            }
+
+            sessionSaveData = saveData;
+            lastSampleUtcTicks = currentUtc.Ticks;
+            pendingGameTicks = currentUtc.Ticks >= calendar.dayAnchorUtcTicks
+                ? currentUtc.Ticks - calendar.dayAnchorUtcTicks
+                : 0L;
+            Current = snapshot;
+            hasCurrent = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Samples the injected UTC provider and persists at most one calendar mutation for all elapsed whole days.
+        /// A failed save restores authoritative fields and the query snapshot; pending progress remains retryable.
+        /// </summary>
+        public CalendarAdvanceResult TickOnline(SaveData saveData, ISaveService saveService)
+        {
+            return TickOnline(saveData, timeProvider.CurrentUtc, saveService);
+        }
+
+        internal CalendarAdvanceResult TickOnline(
+            SaveData saveData,
+            DateTime currentUtc,
+            ISaveService saveService)
+        {
+            if (!hasCurrent || !ReferenceEquals(sessionSaveData, saveData))
+            {
+                if (!BeginOnlineSession(saveData, currentUtc))
+                {
+                    return default;
+                }
+            }
+
+            var currentUtcTicks = currentUtc.Ticks;
+            if (currentUtcTicks < lastSampleUtcTicks)
+            {
+                FrameworkLog.Warning(
+                    $"Game calendar UTC rollback ignored. Current: {currentUtcTicks}, LastSample: {lastSampleUtcTicks}.");
+                return Unchanged();
+            }
+
+            var rawDelta = currentUtcTicks - lastSampleUtcTicks;
+            lastSampleUtcTicks = currentUtcTicks;
+            if (!TryAddScaledDelta(rawDelta))
+            {
+                FrameworkLog.Warning("Game calendar tick was ignored because scaled UTC accumulation overflowed.");
+                return Unchanged();
+            }
+
+            return AdvancePendingWholeDays(saveData, currentUtcTicks, saveService);
+        }
+
+        /// <summary>
+        /// Accepts exactly 0x, 1x, 2x, or 4x for this service instance. The value is never persisted.
+        /// </summary>
+        public bool TrySetDebugScale(float scale)
+        {
+            if (scale != 0f && scale != 1f && scale != 2f && scale != 4f)
+            {
+                return false;
+            }
+
+            debugScale = scale;
+            return true;
+        }
+
+        private CalendarAdvanceResult AdvancePendingWholeDays(
+            SaveData saveData,
+            long currentUtcTicks,
+            ISaveService saveService)
+        {
+            var daysAdvanced = pendingGameTicks / TicksPerGameDay;
+            if (daysAdvanced <= 0L)
+            {
+                return Unchanged();
+            }
+
+            var world = saveData?.world;
+            var calendar = world?.calendar;
+            if (calendar == null || calendar.totalElapsedDays < 0 || calendar.dayAnchorUtcTicks <= 0)
+            {
+                FrameworkLog.Warning("Game calendar tick was ignored because save calendar state is invalid.");
+                return Unchanged();
+            }
+
+            long newTotalElapsedDays;
+            long consumedTicks;
+            long remainderTicks;
+            long newAnchorUtcTicks;
+            GameCalendarSnapshot nextSnapshot;
+            try
+            {
+                newTotalElapsedDays = checked(calendar.totalElapsedDays + daysAdvanced);
+                consumedTicks = checked(daysAdvanced * TicksPerGameDay);
+                remainderTicks = pendingGameTicks - consumedTicks;
+                newAnchorUtcTicks = checked(currentUtcTicks - remainderTicks);
+                if (newAnchorUtcTicks <= 0L || newAnchorUtcTicks > DateTime.MaxValue.Ticks)
+                {
+                    throw new OverflowException("Derived calendar anchor is outside the DateTime tick range.");
+                }
+
+                var date = GameCalendarDate.FromElapsedDays(newTotalElapsedDays);
+                nextSnapshot = new GameCalendarSnapshot(date, world.currentDisasterId);
+            }
+            catch (Exception exception) when (
+                exception is OverflowException || exception is ArgumentOutOfRangeException)
+            {
+                FrameworkLog.Warning($"Game calendar tick was ignored because advancement is out of range: {exception.Message}");
+                return Unchanged();
+            }
+
+            var previous = Current;
+            var previousDays = calendar.totalElapsedDays;
+            var previousAnchor = calendar.dayAnchorUtcTicks;
+            var previousSeasonId = world.currentSeasonId;
+
+            calendar.totalElapsedDays = newTotalElapsedDays;
+            calendar.dayAnchorUtcTicks = newAnchorUtcTicks;
+            world.currentSeasonId = nextSnapshot.SeasonId;
+            Current = nextSnapshot;
+
+            SaveResult saveResult = null;
+            try
+            {
+                saveResult = saveService?.Save(saveData);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Game calendar save threw an exception: {exception.Message}");
+            }
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                calendar.totalElapsedDays = previousDays;
+                calendar.dayAnchorUtcTicks = previousAnchor;
+                world.currentSeasonId = previousSeasonId;
+                Current = previous;
+                return new CalendarAdvanceResult(
+                    false, 0L, previous, previous, false, false, false, saveResult);
+            }
+
+            pendingGameTicks = remainderTicks;
+            return new CalendarAdvanceResult(
+                true,
+                daysAdvanced,
+                previous,
+                nextSnapshot,
+                previous.AbsoluteMonthIndex != nextSnapshot.AbsoluteMonthIndex,
+                previous.Year != nextSnapshot.Year,
+                previous.Season != nextSnapshot.Season,
+                saveResult);
+        }
+
+        private bool TryAddScaledDelta(long rawDelta)
+        {
+            try
+            {
+                var scale = (long)debugScale;
+                pendingGameTicks = checked(pendingGameTicks + checked(rawDelta * scale));
+                return true;
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+        }
+
+        private CalendarAdvanceResult Unchanged()
+        {
+            return new CalendarAdvanceResult(
+                false, 0L, Current, Current, false, false, false, null);
+        }
+
+        private static bool TryGetCalendar(
+            SaveData saveData,
+            DateTime currentUtc,
+            out GameCalendarSaveData calendar,
+            out GameCalendarSnapshot snapshot)
+        {
+            calendar = saveData?.world?.calendar;
+            snapshot = default;
+            if (calendar == null || calendar.totalElapsedDays < 0 || calendar.dayAnchorUtcTicks <= 0)
+            {
+                FrameworkLog.Warning("Game calendar session could not start because save calendar state is invalid.");
+                return false;
+            }
+
+            if (currentUtc.Ticks < calendar.dayAnchorUtcTicks)
+            {
+                FrameworkLog.Warning(
+                    $"Game calendar UTC rollback ignored. Current: {currentUtc.Ticks}, Anchor: {calendar.dayAnchorUtcTicks}.");
+            }
+
+            try
+            {
+                var date = GameCalendarDate.FromElapsedDays(calendar.totalElapsedDays);
+                snapshot = new GameCalendarSnapshot(date, saveData.world.currentDisasterId);
+                return true;
+            }
+            catch (Exception exception) when (
+                exception is OverflowException || exception is ArgumentOutOfRangeException)
+            {
+                FrameworkLog.Warning($"Game calendar session could not start: {exception.Message}");
+                return false;
+            }
+        }
+
+        private void ResetSession()
+        {
+            sessionSaveData = null;
+            lastSampleUtcTicks = 0L;
+            pendingGameTicks = 0L;
+            Current = default;
+            hasCurrent = false;
+        }
+    }
+}

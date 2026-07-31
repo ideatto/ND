@@ -9,6 +9,7 @@
  * Main Features
  * - BeforeSceneLoad 단계에서 FrameworkRoot GameObject를 자동 생성한다.
  * - GameTime, SaveService, SharedGameData, SceneFlow, TradeProgress, Economy M1 bridge, InGameScreenRouter 서비스를 초기화한다.
+ * - 로딩 완료 이후 실제 UTC 기준 달력 진행과 무역 진행을 독립적으로 polling한다.
  * - 새 게임, 이어하기, 로딩 완료, title 복귀 flow를 제공한다.
  * - SettlementUiBridge를 통해 정산 결과를 UI 계층에 전달한다.
  *
@@ -19,6 +20,7 @@
  *
  * Main Public APIs
  * - Instance: 현재 runtime root singleton.
+ * - GameCalendar: 현재 달력 snapshot과 세션 달력 진행을 제공한다.
  * - SharedGameData: 검증된 공용 기준 데이터 provider.
  * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
  * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
@@ -225,7 +227,7 @@ namespace ND.Framework
     public sealed class FrameworkRoot : MonoBehaviour
     {
         private const string RootObjectName = "FrameworkRoot";
-        private const float TradeProgressCheckIntervalSeconds = 0.2f;
+        private const float OnlineProgressCheckIntervalSeconds = 0.2f;
 
         private float nextTradeProgressCheckUnscaledTime;
         private bool isOnlineProgressTickEnabled;
@@ -239,6 +241,11 @@ namespace ND.Framework
         /// framework 시간 조회와 Unity time scale 제어를 담당하는 서비스이다.
         /// </summary>
         public GameTimeService GameTime { get; private set; }
+
+        /// <summary>
+        /// 실제 UTC 경과를 게임 날짜로 변환하고 현재 달력 snapshot을 제공하는 서비스이다.
+        /// </summary>
+        public GameCalendarService GameCalendar { get; private set; }
 
         /// <summary>
         /// 저장 데이터 생성, 로드, 저장을 담당하는 서비스이다.
@@ -344,18 +351,17 @@ namespace ND.Framework
                     isOnlineProgressTickEnabled,
                     CurrentSaveData,
                     SharedGameData)
-                || TradeProgressCoordinator == null
                 || Time.unscaledTime < nextTradeProgressCheckUnscaledTime)
             {
                 return;
             }
 
             nextTradeProgressCheckUnscaledTime =
-                Time.unscaledTime + TradeProgressCheckIntervalSeconds;
+                Time.unscaledTime + OnlineProgressCheckIntervalSeconds;
 
-            // Runtime progress is derived from the saved UTC range. Intermediate frames do
-            // not need a disk write; settlement creation saves the completed state itself.
-            TradeProgressCoordinator.CheckProgressAndCompletion(saveProgress: false);
+            // 달력과 무역은 같은 경량 polling gate를 공유하지만 각자의 UTC 기준과 저장 정책은 분리한다.
+            GameCalendar?.TickOnline(CurrentSaveData, SaveService);
+            TradeProgressCoordinator?.CheckProgressAndCompletion(saveProgress: false);
         }
 
         private static bool CanRunOnlineProgressTick(
@@ -453,6 +459,7 @@ namespace ND.Framework
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
+            GameCalendar.BeginOnlineSession(CurrentSaveData, GameTime.CurrentUtc);
             // SaveData·SharedData·offline/pending 복구와 load event 처리가 모두 끝난 세션만 online tick을 허용한다.
             isOnlineProgressTickEnabled = true;
             SceneFlow.GoToInGame();
@@ -521,6 +528,7 @@ namespace ND.Framework
             }
 
             GameTime = new GameTimeService(policyConfig);
+            GameCalendar = new GameCalendarService(GameTime);
             SaveService = new JsonSaveService();
             SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
