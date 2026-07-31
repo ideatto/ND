@@ -1370,8 +1370,23 @@ namespace ND.Framework
             var caravan = GetOrCreateRuntimeCaravan(caravanId);
             if (caravan == null)
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SettlementDataInvalid);
-            if (!TryResolveClaimDestination(saveData, caravanId, tradeId, progress, out var destinationTownId))
+
+            string settlementTownId;
+            if (settlementResult.grade == JourneyResultGrade.Failed)
+            {
+                settlementTownId = caravanSave.currentTownId ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(settlementTownId))
+                    return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
+            }
+            else if (!TryResolveClaimDestination(
+                         saveData,
+                         caravanId,
+                         tradeId,
+                         progress,
+                         out settlementTownId))
+            {
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.TownApplyFailed);
+            }
 
             // The destination market commits arrival sales directly to SaveData after the
             // journey runtime has entered Settling. Reconcile those market-owned fields before
@@ -1407,9 +1422,9 @@ namespace ND.Framework
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CoreClaimRejected);
             }
 
-            // Settlement changes only the claimed Caravan's location. The player
-            // remains at the base and must not drive later Caravan route selection.
-            caravan.currentTownId = destinationTownId;
+            // A failed journey returns the claimed Caravan to its saved origin.
+            // Successful settlement still moves only that Caravan to the destination.
+            caravan.currentTownId = settlementTownId;
             if (exactTradePrepareCommitStore == null
                 || !exactTradePrepareCommitStore.TryComplete(caravanId, tradeId, out _))
             {
@@ -1431,7 +1446,7 @@ namespace ND.Framework
             if (LastSettlementTradeId == tradeId) ClearSettlementCache();
             FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);
             inGameScreenRouter?.RequestScreen(InGameScreenState.Town);
-            onTownVisited?.Invoke(destinationTownId);
+            onTownVisited?.Invoke(settlementTownId);
             return ClaimSettlementResult.Success(saveResult);
         }
 

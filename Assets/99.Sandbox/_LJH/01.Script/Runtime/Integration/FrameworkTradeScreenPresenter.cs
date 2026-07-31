@@ -108,13 +108,22 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
         if (!isTradeScreenOpen)
         {
             FrameworkRoot root = FrameworkRoot.Instance;
+            SettlementUiBridge settlementUiBridge = root?.SettlementUiBridge;
+            bool hasFailedSettlement = settlementUiBridge != null
+                && settlementUiBridge.TryGetPendingSettlement(
+                    out _,
+                    out _,
+                    out JourneyResultData pendingResult)
+                && pendingResult != null
+                && pendingResult.grade == JourneyResultGrade.Failed;
             if (state == InGameScreenState.Settlement
-                && root?.SettlementUiBridge != null
-                && root.SettlementUiBridge.IsSettlementPresentationRequested)
+                && settlementUiBridge != null
+                && (settlementUiBridge.IsSettlementPresentationRequested || hasFailedSettlement))
             {
                 // Arrival closes the traveling presentation while it waits for the player to
-                // sell cargo. A successful sale explicitly requests settlement afterwards, so
-                // reopen only the settlement presentation without reopening preparation.
+                // sell cargo. A successful sale explicitly requests settlement afterwards.
+                // Failed travel has no sale step, so its pending result must reopen settlement
+                // even when the traveling presentation was already closed.
                 isTradeScreenOpen = true;
                 view.ShowSettlement();
                 return;
