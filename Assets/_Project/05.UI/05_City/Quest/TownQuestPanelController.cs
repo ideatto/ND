@@ -75,6 +75,8 @@ namespace ND.UI.Quest
             if (caravanRowTemplate != null)
                 caravanRowTemplate.gameObject.SetActive(false);
 
+            Button backdropButton = GetComponent<Button>();
+            backdropButton?.onClick.AddListener(CloseAllPanels);
             acceptButton?.onClick.AddListener(AcceptQuest);
             rejectButton?.onClick.AddListener(CloseCurrentPanel);
             progressCloseButton?.onClick.AddListener(CloseCurrentPanel);
@@ -105,8 +107,14 @@ namespace ND.UI.Quest
 
         public void OpenTownQuestList(string townId)
         {
+            gameObject.SetActive(true);
+            transform.SetAsLastSibling();
             if (!TryBindBridge() || string.IsNullOrWhiteSpace(townId))
+            {
+                gameObject.SetActive(false);
                 return;
+            }
+
             currentTownId = townId;
             SetAllPanels(false);
             SetActive(listPanel, true);
@@ -115,7 +123,13 @@ namespace ND.UI.Quest
 
         public void OpenCaravanSelection()
         {
-            if (!TryBindBridge()) return;
+            gameObject.SetActive(true);
+            transform.SetAsLastSibling();
+            if (!TryBindBridge())
+            {
+                gameObject.SetActive(false);
+                return;
+            }
 
             currentTownId = string.Empty;
             SetAllPanels(false);
@@ -350,16 +364,12 @@ namespace ND.UI.Quest
 
         private void CloseList()
         {
-            CloseDetailPanels();
-            SetActive(listPanel, false);
-            currentTownId = string.Empty;
+            CloseAllPanels();
         }
 
         private void CloseCaravanSelection()
         {
-            ClearRows(caravanSelectionRows);
-            SetActive(caravanSelectionPanel, false);
-            currentTownId = string.Empty;
+            CloseAllPanels();
         }
 
         private void SetAllPanels(bool active)
@@ -437,6 +447,17 @@ namespace ND.UI.Quest
         private static void SetActive(GameObject target, bool active)
         {
             if (target != null) target.SetActive(active);
+        }
+
+        public void CloseAllPanels()
+        {
+            bridge?.CancelPanel();
+            ClearRows(caravanSelectionRows);
+            CloseDetailPanels();
+            SetActive(caravanSelectionPanel, false);
+            SetActive(listPanel, false);
+            currentTownId = string.Empty;
+            gameObject.SetActive(false);
         }
     }
 }
