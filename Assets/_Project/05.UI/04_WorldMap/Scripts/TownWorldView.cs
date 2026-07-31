@@ -27,6 +27,9 @@ namespace ND.UI.WorldMap
         [Tooltip("Shared TownData.TownId와 일치해야 하는 마을 식별자입니다.")]
         [SerializeField] private string townId;
 
+        [Tooltip("트레드밀 도착 연출에서 이 마을로 스폰할 건물 프리팹(예: Building_HarborVillage). 비우면 도착 연출 없이 지형만.")]
+        [SerializeField] private GameObject treadmillBuildingPrefab;
+
         [SerializeField] private SpriteRenderer iconRenderer;
         [SerializeField] private Color unlockedColor = Color.white;
         [SerializeField] private Color lockedColor = new Color(0.45f, 0.45f, 0.45f, 1f);
@@ -40,6 +43,9 @@ namespace ND.UI.WorldMap
         /// Shared / Save와 매칭하는 town ID이다.
         /// </summary>
         public string TownId => townId;
+
+        /// <summary>트레드밀 도착 연출에서 스폰할 이 마을의 건물 프리팹(없으면 null).</summary>
+        public GameObject TreadmillBuildingPrefab => treadmillBuildingPrefab;
 
         /// <summary>
         /// 플레이어가 이 마을을 클릭했을 때 발생한다. 인자는 townId이다.

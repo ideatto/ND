@@ -19,16 +19,16 @@ using UnityEngine;
 public class TreadmillJostle : MonoBehaviour
 {
     [Header("상하 바운스")]
-    [SerializeField] private float bobAmount = 0.04f;   // 상하 흔들림 크기(m)
-    [SerializeField] private float bobSpeed = 9f;       // 상하 빈도
+    [SerializeField] private float bobAmount = 0.10f;   // 상하 흔들림 크기(m)
+    [SerializeField] private float bobSpeed = 11f;      // 상하 빈도
 
     [Header("기울기")]
-    [SerializeField] private float pitchAmount = 1.6f;  // 앞뒤 끄덕임(도)
-    [SerializeField] private float rollAmount = 1.2f;   // 좌우 기울기(도)
-    [SerializeField] private float tiltSpeed = 7f;
+    [SerializeField] private float pitchAmount = 3.2f;  // 앞뒤 끄덕임(도)
+    [SerializeField] private float rollAmount = 2.8f;   // 좌우 기울기(도)
+    [SerializeField] private float tiltSpeed = 8f;
 
     [Range(0f, 1f)]
-    [SerializeField] private float roughness = 0.5f;    // 불규칙(노이즈) 비율(0=매끈한 사인, 1=거친 노면)
+    [SerializeField] private float roughness = 0.7f;    // 불규칙(노이즈) 비율(0=매끈한 사인, 1=거친 노면)
     [SerializeField] private float amplitude = 1f;      // 전체 세기 배율(0이면 정지)
 
     private bool captured;
@@ -55,16 +55,20 @@ public class TreadmillJostle : MonoBehaviour
         float t = Time.time;
         float smooth = 1f - roughness;
 
-        // 상하 바운스 = 규칙(사인) + 불규칙(펄린 노이즈)
-        float bobN = Mathf.PerlinNoise(t * bobSpeed * 0.5f, seed) - 0.5f;
-        float bob = (Mathf.Sin(t * bobSpeed + seed) * smooth + bobN * 2f * roughness) * bobAmount * amplitude;
+        // 상하 바운스 = 규칙 바운스 + 거친 노면(펄린 2겹, 저·고주파) → 툭툭 튀는 느낌
+        float bobRough = (Mathf.PerlinNoise(t * bobSpeed * 1.3f, seed) - 0.5f) * 1.4f
+                       + (Mathf.PerlinNoise(t * bobSpeed * 3.3f, seed + 7f) - 0.5f) * 0.9f;   // 고주파=자잘한 덜컹
+        float bob = (Mathf.Sin(t * bobSpeed + seed) * smooth + bobRough * roughness) * bobAmount * amplitude;
+        // 바퀴가 턱을 넘는 듯 가끔 살짝 튀는 임펄스(양수만, 위로 툭) — 약하게
+        float hop = Mathf.Max(0f, Mathf.PerlinNoise(seed + 3f, t * bobSpeed * 0.7f) - 0.7f) * 1.3f * bobAmount * amplitude;
 
-        // 앞뒤 끄덕임 + 좌우 기울기
-        float pitchN = Mathf.PerlinNoise(seed, t * tiltSpeed * 0.5f) - 0.5f;
-        float pitch = (Mathf.Sin(t * tiltSpeed + seed) * smooth + pitchN * 2f * roughness) * pitchAmount * amplitude;
-        float roll = Mathf.Cos(t * tiltSpeed * 0.85f + seed * 1.3f) * rollAmount * amplitude;
+        // 앞뒤 끄덕임(pitch) + 좌우 기울기(roll) — 각각 다른 노이즈로 비대칭 덜컹
+        float pitchN = (Mathf.PerlinNoise(seed, t * tiltSpeed * 1.1f) - 0.5f) * 2f;
+        float pitch = (Mathf.Sin(t * tiltSpeed + seed) * smooth + pitchN * roughness) * pitchAmount * amplitude;
+        float rollN = (Mathf.PerlinNoise(seed + 11f, t * tiltSpeed * 0.9f) - 0.5f) * 2f;
+        float roll = (Mathf.Cos(t * tiltSpeed * 0.85f + seed * 1.3f) * smooth + rollN * roughness) * rollAmount * amplitude;
 
-        transform.localPosition = basePos + Vector3.up * bob;
+        transform.localPosition = basePos + Vector3.up * (bob + hop);
         transform.localRotation = baseRot * Quaternion.Euler(pitch, 0f, roll);
     }
 

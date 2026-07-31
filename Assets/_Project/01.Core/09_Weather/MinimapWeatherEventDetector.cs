@@ -98,6 +98,9 @@ public class MinimapWeatherEventDetector : MonoBehaviour
             Vector3 pos = route.EvaluatePosition(CalcProgress(entry));
             float intensity = clouds.RainIntensityAt(pos);   // 먹구름 세기(0=비 없음)
 
+            // 연속 비 세기 게시 → 트레드밀 비 연출(TreadmillRain) 등이 폴링해서 사용(느슨한 정적 채널).
+            WeatherState.Report(c.caravanId, intensity);
+
             // 속도 감소(현상): 세기가 클수록 느려짐. 프레임워크가 이 배율을 여행 속도에 곱해 쓰면 됨(협의).
             float mul = intensity > 0f ? Mathf.Clamp(1f - intensity * rainSlowdown, minSpeedMul, 1f) : 1f;
             speedMul[c.caravanId] = mul;
