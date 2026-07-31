@@ -42,6 +42,8 @@ namespace ND.Framework
         public const long TicksPerGameDay = 120L * TimeSpan.TicksPerSecond;
 
         private readonly IGameTimeProvider timeProvider;
+        private readonly MonthlyDisasterResolver disasterResolver;
+        private readonly MonthlyDisasterPolicy disasterPolicy;
         private SaveData sessionSaveData;
         private long lastSampleUtcTicks;
         private long pendingGameTicks;
@@ -49,16 +51,26 @@ namespace ND.Framework
         private bool hasCurrent;
 
         public GameCalendarService(IGameTimeProvider timeProvider)
+            : this(timeProvider, new MonthlyDisasterResolver(), new MonthlyDisasterPolicy())
+        {
+        }
+
+        public GameCalendarService(
+            IGameTimeProvider timeProvider,
+            MonthlyDisasterResolver disasterResolver,
+            MonthlyDisasterPolicy disasterPolicy)
         {
             this.timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+            this.disasterResolver = disasterResolver ?? throw new ArgumentNullException(nameof(disasterResolver));
+            this.disasterPolicy = disasterPolicy ?? throw new ArgumentNullException(nameof(disasterPolicy));
         }
 
         public GameCalendarSnapshot Current { get; private set; }
         public float DebugScale => debugScale;
 
         /// <summary>
-        /// Starts or replaces the active online session without mutating persistent calendar data.
-        /// Existing wall time since the day anchor becomes the initial pending progress.
+        /// Starts or replaces the active online session and repairs season/disaster caches in memory.
+        /// Existing wall time since the day anchor becomes the initial pending progress; repair is not saved here.
         /// </summary>
         public bool BeginOnlineSession(SaveData saveData, DateTime currentUtc)
         {
@@ -73,6 +85,15 @@ namespace ND.Framework
             pendingGameTicks = currentUtc.Ticks >= calendar.dayAnchorUtcTicks
                 ? currentUtc.Ticks - calendar.dayAnchorUtcTicks
                 : 0L;
+            saveData.world.currentSeasonId = snapshot.SeasonId;
+            saveData.world.currentDisasterId = disasterResolver.Resolve(
+                saveData.world.worldSeed,
+                snapshot.AbsoluteMonthIndex,
+                snapshot.Season,
+                disasterPolicy);
+            snapshot = new GameCalendarSnapshot(
+                GameCalendarDate.FromElapsedDays(calendar.totalElapsedDays),
+                saveData.world.currentDisasterId);
             Current = snapshot;
             hasCurrent = true;
             return true;
@@ -169,7 +190,14 @@ namespace ND.Framework
                 }
 
                 var date = GameCalendarDate.FromElapsedDays(newTotalElapsedDays);
-                nextSnapshot = new GameCalendarSnapshot(date, world.currentDisasterId);
+                var disasterId = Current.AbsoluteMonthIndex != date.AbsoluteMonthIndex
+                    ? disasterResolver.Resolve(
+                        world.worldSeed,
+                        date.AbsoluteMonthIndex,
+                        date.Season,
+                        disasterPolicy)
+                    : world.currentDisasterId;
+                nextSnapshot = new GameCalendarSnapshot(date, disasterId);
             }
             catch (Exception exception) when (
                 exception is OverflowException || exception is ArgumentOutOfRangeException)
@@ -182,10 +210,12 @@ namespace ND.Framework
             var previousDays = calendar.totalElapsedDays;
             var previousAnchor = calendar.dayAnchorUtcTicks;
             var previousSeasonId = world.currentSeasonId;
+            var previousDisasterId = world.currentDisasterId;
 
             calendar.totalElapsedDays = newTotalElapsedDays;
             calendar.dayAnchorUtcTicks = newAnchorUtcTicks;
             world.currentSeasonId = nextSnapshot.SeasonId;
+            world.currentDisasterId = nextSnapshot.ActiveDisasterId;
             Current = nextSnapshot;
 
             SaveResult saveResult = null;
@@ -203,6 +233,7 @@ namespace ND.Framework
                 calendar.totalElapsedDays = previousDays;
                 calendar.dayAnchorUtcTicks = previousAnchor;
                 world.currentSeasonId = previousSeasonId;
+                world.currentDisasterId = previousDisasterId;
                 Current = previous;
                 return new CalendarAdvanceResult(
                     false, 0L, previous, previous, false, false, false, saveResult);

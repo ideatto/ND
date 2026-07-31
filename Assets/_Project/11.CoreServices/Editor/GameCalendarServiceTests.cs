@@ -54,7 +54,13 @@ namespace ND.Framework
             Assert.That(result.Current.Day, Is.EqualTo(expectedDay));
             Assert.That(result.SeasonChanged, Is.EqualTo(expectedSeasonChange));
             Assert.That(fixture.Data.world.currentSeasonId, Is.EqualTo(result.Current.SeasonId));
-            Assert.That(fixture.Data.world.currentDisasterId, Is.EqualTo("unchanged-disaster"));
+            Assert.That(
+                fixture.Data.world.currentDisasterId,
+                Is.EqualTo(new MonthlyDisasterResolver().Resolve(
+                    fixture.Data.world.worldSeed,
+                    result.Current.AbsoluteMonthIndex,
+                    result.Current.Season,
+                    new MonthlyDisasterPolicy())));
         }
 
         [Test]
@@ -74,6 +80,29 @@ namespace ND.Framework
 
             Assert.That(result.DaysAdvanced, Is.EqualTo(1L));
             Assert.That(reloaded.world.calendar.dayAnchorUtcTicks, Is.EqualTo(secondTime.Current.Ticks));
+        }
+
+        [Test]
+        public void BeginOnlineSession_ReloadedSameMonth_ReconstructsSameDisasterWithoutSaving()
+        {
+            var policy = new MonthlyDisasterPolicy(1f, 1f);
+            var first = CreateFixture(89L, new MonthlyDisasterResolver(), policy);
+            first.Time.Current = EpochUtc.AddSeconds(120);
+            first.Service.TickOnline(first.Data, first.Save);
+            var expectedDisasterId = first.Data.world.currentDisasterId;
+            var reloaded = JsonUtility.FromJson<SaveData>(JsonUtility.ToJson(first.Data));
+            var secondTime = new FakeTimeProvider { Current = first.Time.Current };
+            var secondSave = new FakeSaveService();
+            var secondService = new GameCalendarService(
+                secondTime,
+                new MonthlyDisasterResolver(),
+                policy);
+
+            Assert.That(secondService.BeginOnlineSession(reloaded, secondTime.Current), Is.True);
+
+            Assert.That(secondService.Current.ActiveDisasterId, Is.EqualTo(expectedDisasterId));
+            Assert.That(reloaded.world.currentDisasterId, Is.EqualTo(expectedDisasterId));
+            Assert.That(secondSave.SaveCalls, Is.Zero);
         }
 
         [Test]
@@ -102,6 +131,73 @@ namespace ND.Framework
             Assert.That(result.Changed, Is.True);
             Assert.That(result.DaysAdvanced, Is.EqualTo(30L));
             Assert.That(result.MonthChanged, Is.True);
+            Assert.That(fixture.Save.SaveCalls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TickOnline_MonthBoundary_ResolvesOnceAndDayOnlyPreservesDisaster()
+        {
+            var resolver = new CountingResolver();
+            var fixture = CreateFixture(
+                89L,
+                resolver,
+                new MonthlyDisasterPolicy(1f, 1f));
+            resolver.ResolveCalls = 0;
+            fixture.Time.Current = EpochUtc.AddSeconds(120);
+
+            var monthResult = fixture.Service.TickOnline(fixture.Data, fixture.Save);
+
+            Assert.That(monthResult.Current.Month, Is.EqualTo(6));
+            Assert.That(monthResult.Current.ActiveDisasterId, Is.EqualTo(MonthlyDisasterResolver.FloodId));
+            Assert.That(resolver.ResolveCalls, Is.EqualTo(1));
+
+            fixture.Time.Current = EpochUtc.AddSeconds(240);
+            var dayResult = fixture.Service.TickOnline(fixture.Data, fixture.Save);
+
+            Assert.That(dayResult.Current.Day, Is.EqualTo(2));
+            Assert.That(dayResult.Current.ActiveDisasterId, Is.EqualTo(MonthlyDisasterResolver.FloodId));
+            Assert.That(resolver.ResolveCalls, Is.EqualTo(1));
+        }
+
+        [TestCase(179L, GameSeason.Autumn, MonthlyDisasterResolver.NoneId)]
+        [TestCase(269L, GameSeason.Winter, MonthlyDisasterResolver.DroughtId)]
+        [TestCase(359L, GameSeason.Spring, MonthlyDisasterResolver.NoneId)]
+        public void TickOnline_SeasonBoundary_UsesApprovedDisasterMatrix(
+            long initialDays,
+            GameSeason expectedSeason,
+            string expectedDisasterId)
+        {
+            var fixture = CreateFixture(
+                initialDays,
+                new MonthlyDisasterResolver(),
+                new MonthlyDisasterPolicy(1f, 1f));
+            fixture.Time.Current = EpochUtc.AddSeconds(120);
+
+            var result = fixture.Service.TickOnline(fixture.Data, fixture.Save);
+
+            Assert.That(result.Current.Season, Is.EqualTo(expectedSeason));
+            Assert.That(result.Current.ActiveDisasterId, Is.EqualTo(expectedDisasterId));
+            Assert.That(fixture.Data.world.currentDisasterId, Is.EqualTo(expectedDisasterId));
+        }
+
+        [Test]
+        public void TickOnline_MultiMonthAdvance_MatchesDirectFinalMonthResolution()
+        {
+            var policy = new MonthlyDisasterPolicy(0.5f, 0.5f);
+            var resolver = new MonthlyDisasterResolver();
+            var fixture = CreateFixture(0L, resolver, policy);
+            fixture.Time.Current = EpochUtc.AddSeconds(120 * 300);
+
+            var result = fixture.Service.TickOnline(fixture.Data, fixture.Save);
+
+            Assert.That(result.Current.TotalElapsedDays, Is.EqualTo(300L));
+            Assert.That(
+                result.Current.ActiveDisasterId,
+                Is.EqualTo(resolver.Resolve(
+                    fixture.Data.world.worldSeed,
+                    result.Current.AbsoluteMonthIndex,
+                    result.Current.Season,
+                    policy)));
             Assert.That(fixture.Save.SaveCalls, Is.EqualTo(1));
         }
 
@@ -162,7 +258,10 @@ namespace ND.Framework
         [Test]
         public void TickOnline_SaveFailure_RollsBackAllCalendarState()
         {
-            var fixture = CreateFixture(89L);
+            var fixture = CreateFixture(
+                89L,
+                new MonthlyDisasterResolver(),
+                new MonthlyDisasterPolicy(1f, 1f));
             fixture.Save.ShouldSucceed = false;
             var before = JsonUtility.ToJson(fixture.Data);
             var previous = fixture.Service.Current;
@@ -185,7 +284,10 @@ namespace ND.Framework
             Assert.That(JsonUtility.ToJson(fixture.Data), Does.Not.Contain("debugScale"));
         }
 
-        private static Fixture CreateFixture(long totalElapsedDays = 0L)
+        private static Fixture CreateFixture(
+            long totalElapsedDays = 0L,
+            MonthlyDisasterResolver resolver = null,
+            MonthlyDisasterPolicy policy = null)
         {
             var time = new FakeTimeProvider { Current = EpochUtc };
             var data = new SaveData();
@@ -198,7 +300,9 @@ namespace ND.Framework
             data.world.currentSeasonId = date.SeasonId;
             data.world.currentDisasterId = "unchanged-disaster";
             var save = new FakeSaveService();
-            var service = new GameCalendarService(time);
+            var service = resolver == null
+                ? new GameCalendarService(time)
+                : new GameCalendarService(time, resolver, policy ?? new MonthlyDisasterPolicy());
             Assert.That(service.BeginOnlineSession(data, time.Current), Is.True);
             return new Fixture(data, time, save, service);
         }
@@ -245,6 +349,21 @@ namespace ND.Framework
                     : SaveResult.Failure(SaveFailureReason.WriteFailed, "test failure");
             }
             public void ResetSaveData() { }
+        }
+
+        private sealed class CountingResolver : MonthlyDisasterResolver
+        {
+            public int ResolveCalls;
+
+            public override string Resolve(
+                uint worldSeed,
+                long absoluteMonthIndex,
+                GameSeason season,
+                MonthlyDisasterPolicy policy)
+            {
+                ResolveCalls++;
+                return base.Resolve(worldSeed, absoluteMonthIndex, season, policy);
+            }
         }
     }
 }
