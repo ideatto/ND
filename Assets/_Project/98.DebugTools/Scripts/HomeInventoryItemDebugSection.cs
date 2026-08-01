@@ -49,18 +49,18 @@ namespace ND.DebugTools
                 RefreshCatalog(sharedData);
             }
 
-            GUILayout.Label($"PlayerMainManager: {(player != null ? "Ready" : "N/A")}");
-            GUILayout.Label($"Trade item catalog: {(sharedData != null ? itemIds.Count.ToString() : "N/A")}");
+            GUILayout.Label($"PlayerMainManager: {(player != null ? "사용 가능" : "N/A")}");
+            GUILayout.Label($"거래 아이템 목록: {(sharedData != null ? itemIds.Count.ToString() : "N/A")}");
 
             using (new GUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Refresh catalog", GUILayout.Height(28f)))
+                if (GUILayout.Button("목록 새로고침", GUILayout.Height(28f)))
                 {
                     RefreshCatalog(sharedData);
                 }
 
                 GUILayout.FlexibleSpace();
-                GUILayout.Label("TradeItemData -> HomeInventory");
+                GUILayout.Label("TradeItemData → 거점 인벤토리");
             }
 
             GUILayout.Space(6f);
@@ -85,7 +85,7 @@ namespace ND.DebugTools
 
         private void DrawItemSelection(object sharedData, object player)
         {
-            GUILayout.Label("Trade item selection");
+            GUILayout.Label("거래 아이템 선택");
 
             if (itemIds.Count == 0)
             {
@@ -121,13 +121,13 @@ namespace ND.DebugTools
             float weight = GetFieldValue(selected, "Weight", 0f);
             int maxCount = GetFieldValue(selected, "MaxCount", 1);
 
-            GUILayout.Label($"Selected: {selectedName} ({selectedId})");
-            GUILayout.Label($"Owned: {ownedQuantity} / Weight: {weight:0.##} / Stack: {maxCount}");
+            GUILayout.Label($"선택: {selectedName} ({selectedId})");
+            GUILayout.Label($"보유 수량: {ownedQuantity} / 무게: {weight:0.##} / 최대 묶음: {maxCount}");
         }
 
         private void DrawQuantityControls()
         {
-            GUILayout.Label("Quantity");
+            GUILayout.Label("수량");
             using (new GUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("-10", GUILayout.Width(58f)))
@@ -167,7 +167,7 @@ namespace ND.DebugTools
             object selected = GetSelectedDefinition(sharedData);
             GUI.enabled = selected != null && player != null;
 
-            if (GUILayout.Button("Add to home inventory", GUILayout.Height(42f)))
+            if (GUILayout.Button("거점 인벤토리에 추가", GUILayout.Height(42f)))
             {
                 AddSelectedItem(player, selected);
             }
@@ -179,14 +179,14 @@ namespace ND.DebugTools
         {
             if (player == null || definition == null)
             {
-                statusMessage = "Failed: PlayerMainManager 또는 선택 아이템이 준비되지 않았습니다.";
+                statusMessage = "실패: PlayerMainManager 또는 선택 아이템이 준비되지 않았습니다.";
                 return;
             }
 
             string itemId = GetStringField(definition, "Id", string.Empty);
             if (string.IsNullOrEmpty(itemId))
             {
-                statusMessage = "Failed: 선택한 아이템 ID가 비어 있습니다.";
+                statusMessage = "실패: 선택한 아이템 ID가 비어 있습니다.";
                 return;
             }
 
@@ -195,7 +195,7 @@ namespace ND.DebugTools
             tradeItemSaveDataType ??= FindType(TradeItemSaveDataTypeName);
             if (tradeItemSaveDataType == null)
             {
-                statusMessage = "Failed: TradeItemSaveData 타입을 찾지 못했습니다.";
+                statusMessage = "실패: TradeItemSaveData 타입을 찾지 못했습니다.";
                 return;
             }
 
@@ -215,14 +215,14 @@ namespace ND.DebugTools
 
             if (addItem == null)
             {
-                statusMessage = "Failed: PlayerMainManager.AddItem API를 찾지 못했습니다.";
+                statusMessage = "실패: PlayerMainManager.AddItem API를 찾지 못했습니다.";
                 return;
             }
 
             addItem.Invoke(player, new[] { saveItem, (object)quantity });
             string itemName = GetStringField(definition, "DisplayName", itemId);
             statusMessage =
-                $"Added {quantity} x {itemName} ({itemId}). Owned: {GetOwnedQuantity(player, itemId)}";
+                $"{itemName} ({itemId}) {quantity}개를 추가했습니다. 보유 수량: {GetOwnedQuantity(player, itemId)}";
         }
 
         private void RefreshCatalog(object sharedData)
@@ -237,7 +237,7 @@ namespace ND.DebugTools
             if (sharedData == null || !GetPropertyValue(sharedData, "IsLoaded", false))
             {
                 selectedIndex = -1;
-                statusMessage = "SharedGameData is not loaded.";
+                statusMessage = "SharedGameData가 로드되지 않았습니다.";
                 return;
             }
 
@@ -265,8 +265,8 @@ namespace ND.DebugTools
             }
 
             statusMessage = itemIds.Count > 0
-                ? $"Loaded {itemIds.Count} TradeItemData entries."
-                : "No TradeItemData entries were loaded.";
+                ? $"TradeItemData {itemIds.Count}개를 불러왔습니다."
+                : "불러온 TradeItemData가 없습니다.";
         }
 
         private object GetSelectedDefinition(object sharedData)
