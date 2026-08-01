@@ -81,30 +81,55 @@ namespace ND.Framework
             double maxOfflineRealSeconds,
             out DateTime evaluationUtc)
         {
-            if (lastSavedUtcTicks <= 0)
+            var context = ResolveOfflineRestoreContext(
+                lastSavedUtcTicks,
+                loadUtc,
+                maxOfflineRealSeconds);
+            evaluationUtc = context.EvaluationUtc;
+            return context.ClockRollbackDetected;
+        }
+
+        /// <summary>
+        /// Resolves the accepted offline interval once so calendar and trade use the same UTC endpoint.
+        /// A clock rollback preserves the existing trade behavior by evaluating at load UTC while accepting no elapsed time.
+        /// </summary>
+        public OfflineRestoreContext ResolveOfflineRestoreContext(
+            long lastSavedUtcTicks,
+            DateTime loadUtc,
+            double maxOfflineRealSeconds)
+        {
+            if (lastSavedUtcTicks <= 0L)
             {
-                evaluationUtc = loadUtc;
-                return false;
+                return new OfflineRestoreContext(
+                    loadUtc, loadUtc, loadUtc, TimeSpan.Zero, false, false);
             }
 
             var lastSavedUtc = new DateTime(lastSavedUtcTicks, DateTimeKind.Utc);
             if (loadUtc < lastSavedUtc)
             {
-                evaluationUtc = loadUtc;
-                return true;
+                return new OfflineRestoreContext(
+                    lastSavedUtc, loadUtc, loadUtc, TimeSpan.Zero, true, false);
             }
 
-            evaluationUtc = loadUtc;
+            var evaluationUtc = loadUtc;
+            var wasClamped = false;
             if (maxOfflineRealSeconds > 0d)
             {
                 var cappedUtc = lastSavedUtc.AddSeconds(maxOfflineRealSeconds);
                 if (evaluationUtc > cappedUtc)
                 {
                     evaluationUtc = cappedUtc;
+                    wasClamped = true;
                 }
             }
 
-            return false;
+            return new OfflineRestoreContext(
+                lastSavedUtc,
+                loadUtc,
+                evaluationUtc,
+                evaluationUtc - lastSavedUtc,
+                false,
+                wasClamped);
         }
 
         /// <summary>

@@ -76,10 +76,17 @@ namespace ND.Framework
         /// <returns>기본값과 생성 시각이 반영된 SaveData.</returns>
         public SaveData CreateNewGameData()
         {
+            var createdUtcTicks = DateTime.UtcNow.Ticks;
             var data = new SaveData
             {
                 version = SaveData.CurrentVersion,
-                lastSavedUtcTicks = DateTime.UtcNow.Ticks
+                lastSavedUtcTicks = createdUtcTicks
+            };
+            data.world.worldSeed = GameCalendarSeed.Create();
+            data.world.calendar = new GameCalendarSaveData
+            {
+                totalElapsedDays = 0,
+                dayAnchorUtcTicks = createdUtcTicks
             };
 
             // New games begin at the default town used by the initial trade routes.
@@ -516,9 +523,45 @@ namespace ND.Framework
                 data.world.marketPurchasePreparation = new MarketPurchasePreparationSaveData();
             }
 
-            if (string.IsNullOrEmpty(data.world.currentSeasonId))
+            if (data.world.worldSeed == 0)
             {
-                data.world.currentSeasonId = "summer";
+                data.world.worldSeed = GameCalendarSeed.Create();
+                assetDataChanged = true;
+            }
+
+            if (data.world.calendar == null)
+            {
+                data.world.calendar = new GameCalendarSaveData
+                {
+                    totalElapsedDays = 0,
+                    dayAnchorUtcTicks = DateTime.UtcNow.Ticks
+                };
+                assetDataChanged = true;
+            }
+
+            if (data.world.calendar.totalElapsedDays < 0)
+            {
+                data.world.calendar.totalElapsedDays = 0;
+                assetDataChanged = true;
+            }
+
+            if (data.world.calendar.dayAnchorUtcTicks <= 0)
+            {
+                data.world.calendar.dayAnchorUtcTicks = DateTime.UtcNow.Ticks;
+                assetDataChanged = true;
+            }
+
+            var calendar = GameCalendarDate.FromElapsedDays(data.world.calendar.totalElapsedDays);
+            if (data.world.currentSeasonId != calendar.SeasonId)
+            {
+                data.world.currentSeasonId = calendar.SeasonId;
+                assetDataChanged = true;
+            }
+
+            if (data.world.currentDisasterId == null)
+            {
+                data.world.currentDisasterId = string.Empty;
+                assetDataChanged = true;
             }
 
             if (data.tutorial == null)

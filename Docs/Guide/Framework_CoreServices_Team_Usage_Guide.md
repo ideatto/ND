@@ -67,6 +67,7 @@ M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/0711_m2-pause-failed-forc
 | 프로퍼티 | 용도 |
 |----------|------|
 | `GameTime` | UTC / 인게임 배율 / pause |
+| `GameCalendar` | 게임 년/월/일 · 계절 · 월별 재난 |
 | `SaveService` | Load / Save / Reset / HasSaveData |
 | `CurrentSaveData` | 현재 공유 SaveData 참조 |
 | `SharedGameData` | ID → 기준 데이터 조회 (`ISharedGameDataProvider`) |
@@ -222,6 +223,18 @@ Pause 중에는 `TradeProgressCoordinator.CheckProgressAndCompletion()`이 `prog
 Release 빌드에서는 runtime 배율 변경이 제한될 수 있다.  
 상세: [`Framework_InGame_Time_Multiplier_API_Guide.md`](./Framework_InGame_Time_Multiplier_API_Guide.md)
 
+### 게임 달력 · 계절 (별도 축)
+
+년/월/일·계절·월별 재난은 **달력 축**(`GameCalendar`)이 권위를 가진다. 인게임 배율 Day와는 무관하다.
+
+```csharp
+FrameworkRoot.Instance.GameCalendar.TryGetCurrent(out var snap);
+// snap.Year / Month / Day / SeasonId / ActiveDisasterId
+```
+
+이벤트: `CalendarInitialized`, `CalendarRestored`, `YearChanged`, `MonthChanged`, `SeasonChanged`, `DisasterChanged`  
+상세: [`Framework_Game_Calendar_and_Seasons_API_Guide.md`](./Framework_Game_Calendar_and_Seasons_API_Guide.md)
+
 ---
 
 ## 7. 무역 루프 (출발 → 진행 → 정산 → Claim)
@@ -362,8 +375,13 @@ UI 팀 할 일:
 | `RouteEventForced` | debug ForceRouteEvent `(tradeId, eventId)` |
 | `TradeOfflineCompleted` | Offline settle 성공 시 1회 `(tradeId)`. Traveling→SettlementPending 전환 직후. 재로드 시 중복 발행하지 않음 |
 | `TimeRollbackDetected` | Continue/Load 시 `CurrentUtc < lastSavedUtcTicks`이면 발행. Offline 적용은 스킵 |
+| `CalendarInitialized` | 온라인 달력 세션 최초 준비 |
+| `CalendarRestored` | 오프라인 달력 복구 결과 (`PassedMonths` 포함) |
+| `YearChanged` / `MonthChanged` / `SeasonChanged` / `DisasterChanged` | 달력 전환 `(previous, current)` 스냅샷. 순서: Year → Month → Season → Disaster |
 
-인자는 공유 참조일 수 있으므로 구독자가 함부로 수정하지 않는다.
+달력 이벤트 상세: [`Framework_Game_Calendar_and_Seasons_API_Guide.md`](./Framework_Game_Calendar_and_Seasons_API_Guide.md)
+
+인자는 공유 참조일 수 있으므로 구독자가 함부로 수정하지 않는다. (달력 스냅샷은 값 복사)
 
 ---
 
@@ -485,6 +503,7 @@ if (FrameworkRoot.Instance.TradeProgressCoordinator.TryGetMapProgress(out var sn
 |------|------|
 | [`Framework_Shared_Game_Data_Guide.md`](./Framework_Shared_Game_Data_Guide.md) | 공용 기준 데이터 |
 | [`Framework_InGame_Time_Multiplier_API_Guide.md`](./Framework_InGame_Time_Multiplier_API_Guide.md) | 인게임 시간 배율 |
+| [`Framework_Game_Calendar_and_Seasons_API_Guide.md`](./Framework_Game_Calendar_and_Seasons_API_Guide.md) | 게임 달력 · 계절 · 월별 재난 |
 | [`Settlement_UI_Data_Connection_Guide.md`](./Settlement_UI_Data_Connection_Guide.md) | 정산 UI |
 | [`Framework_World_Force_Debug_API_Guide.md`](./Framework_World_Force_Debug_API_Guide.md) | ForceSeason/Disaster/RouteEvent |
 | [`Framework_World_Map_Usage_Guide.md`](./Framework_World_Map_Usage_Guide.md) | 월드맵 사용법 · 마을/루트 추가 · 무역 감지 |
@@ -502,6 +521,7 @@ if (FrameworkRoot.Instance.TradeProgressCoordinator.TryGetMapProgress(out var sn
 | `Docs/Personal_Documents/CSU/0711_m2-pause-failed-force-smoke.md` | M2 Pause / Failed / Force* 통합 검증 (Pass) |
 | `Docs/Personal_Documents/CSU/0712_m3-pending-settlement-persist.md` | M3 PendingSettlement 영속화·복구 로직 |
 | `Docs/Personal_Documents/CSU/0712_m3-offline-progress-pipeline.md` | M3 Traveling 오프라인 복구·완료·역행/상한 |
+| `Docs/Personal_Documents/CSU/0731_game_calendar_and_seasons_logic.md` | 달력·계절 구현·오프라인 병합 상세 |
 | `Docs/Personal_Documents/CSU/0715_world_map_phase1_spline_implementation.md` | 월드맵 Phase1+Spline 구현 로직 |
 
 ### 테스트 씬 (선택)

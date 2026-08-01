@@ -283,6 +283,9 @@ namespace ND.Framework
         /// </summary>
         public JourneyResultData LastSettlementResult { get; private set; }
 
+        /// <summary>The shared UTC endpoint consumed by the most recent offline restore attempt.</summary>
+        public DateTime LastOfflineEvaluationUtc { get; private set; }
+
         /// <summary>
         /// 선택된 caravan ID에 대응하는 UI 호환용 runtime caravan 데이터이다.
         /// </summary>
@@ -634,7 +637,7 @@ namespace ND.Framework
         public bool ApplyOfflineProgressOnLoad(SaveData saveData = null)
         {
             saveData = saveData ?? GetSaveData();
-            if (saveData?.tradeProgressEntries == null || gameTimeProvider == null)
+            if (saveData == null || gameTimeProvider == null)
             {
                 if (gameTimeProvider == null)
                     FrameworkLog.Warning("Offline progress skipped because game time provider is missing.");
@@ -642,8 +645,8 @@ namespace ND.Framework
             }
 
             var loadUtc = gameTimeProvider.CurrentUtc;
-            var isRollback = ResolveOfflineEvaluationUtc(saveData, loadUtc, out var evaluationUtc);
-            if (isRollback)
+            var context = ResolveOfflineRestoreContext(saveData, loadUtc);
+            if (context.ClockRollbackDetected)
             {
                 FrameworkEvents.RaiseTimeRollbackDetected();
                 FrameworkLog.Warning(
@@ -651,7 +654,49 @@ namespace ND.Framework
                 return false;
             }
 
+            var snapshot = JsonUtility.ToJson(saveData);
+            var result = PrepareOfflineProgressOnLoad(saveData, context);
+            if (!result.Changed)
+            {
+                result.Publish(this, saveData);
+                return result.Settled;
+            }
+
+            SaveResult saveResult = null;
+            try
+            {
+                saveResult = saveService?.Save(saveData);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Offline progress save threw an exception: {exception.Message}");
+            }
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(snapshot, saveData);
+                result.RollbackRuntime(this);
+                FrameworkLog.Warning("Offline progress events were suppressed because the batch save failed.");
+                return false;
+            }
+
+            result.Publish(this, saveData);
+            return result.Settled;
+        }
+
+        internal TradeOfflineRestoreResult PrepareOfflineProgressOnLoad(
+            SaveData saveData,
+            OfflineRestoreContext context)
+        {
+            LastOfflineEvaluationUtc = context.EvaluationUtc;
+            if (saveData?.tradeProgressEntries == null || context.ClockRollbackDetected)
+            {
+                return new TradeOfflineRestoreResult();
+            }
+
             var entries = new List<TradeProgressSaveData>(saveData.tradeProgressEntries);
+            var previousSettlementTradeId = LastSettlementTradeId;
+            var previousSettlementResult = LastSettlementResult;
             var processed = new HashSet<TradeProgressSaveData>();
             var dirty = false;
             var settled = false;
@@ -685,9 +730,9 @@ namespace ND.Framework
                 try
                 {
                     if (!TryProcessTravelingEntry(
-                            saveData,
-                            progress,
-                            evaluationUtc,
+                             saveData,
+                             progress,
+                             context.EvaluationUtc,
                             isOfflineRestore: true,
                             deferredEvents,
                             deferredRouteEvents,
@@ -708,22 +753,13 @@ namespace ND.Framework
                 }
             }
 
-            var saveSucceeded = !dirty;
-            if (dirty)
-            {
-                var saveResult = saveService?.Save(saveData);
-                saveSucceeded = saveResult != null && saveResult.Succeeded;
-                if (!saveSucceeded)
-                    FrameworkLog.Warning("Offline progress events were suppressed because the batch save failed.");
-            }
-
-            if (saveSucceeded)
-            {
-                PublishSettlementNotifications(saveData, deferredEvents, isOfflineRestore: true);
-                PublishRouteEventNotifications(deferredRouteEvents);
-            }
-
-            return settled;
+            return new TradeOfflineRestoreResult(
+                dirty,
+                settled,
+                deferredEvents,
+                deferredRouteEvents,
+                previousSettlementTradeId,
+                previousSettlementResult);
         }
 
         /// <summary>
@@ -1839,21 +1875,20 @@ namespace ND.Framework
             SettleActiveTrade(saveData, caravan);
         }
 
-        private bool ResolveOfflineEvaluationUtc(SaveData saveData, DateTime loadUtc, out DateTime evaluationUtc)
+        private OfflineRestoreContext ResolveOfflineRestoreContext(SaveData saveData, DateTime loadUtc)
         {
             var lastSavedUtcTicks = saveData != null ? saveData.lastSavedUtcTicks : 0L;
             if (gameTimeProvider is GameTimeService gameTimeService)
             {
-                return gameTimeService.TryResolveOfflineEvaluationUtc(lastSavedUtcTicks, loadUtc, out evaluationUtc);
+                return gameTimeService.ResolveOfflineRestoreContext(lastSavedUtcTicks, loadUtc);
             }
 
             var conversionPolicy = new InGameTimeConversionPolicy();
             var maxOffline = InGameTimePolicyConfig.DefaultMaxOfflineRealSeconds;
-            return conversionPolicy.TryResolveOfflineEvaluationUtc(
+            return conversionPolicy.ResolveOfflineRestoreContext(
                 lastSavedUtcTicks,
                 loadUtc,
-                maxOffline,
-                out evaluationUtc);
+                maxOffline);
         }
 
         private bool SettleActiveTrade(SaveData saveData, CaravanData caravan)
@@ -2364,7 +2399,7 @@ namespace ND.Framework
             return changed;
         }
 
-        private readonly struct SettlementNotification
+        internal readonly struct SettlementNotification
         {
             public SettlementNotification(string caravanId, string tradeId, JourneyResultData result)
             {
@@ -2378,7 +2413,7 @@ namespace ND.Framework
             public JourneyResultData Result { get; }
         }
 
-        private readonly struct RouteEventNotification
+        internal readonly struct RouteEventNotification
         {
             public RouteEventNotification(
                 string caravanId,
@@ -2405,6 +2440,63 @@ namespace ND.Framework
             public int CheckIndex { get; }
             public bool IsOffline { get; }
             public bool IsFatal { get; }
+        }
+
+        internal sealed class TradeOfflineRestoreResult
+        {
+            private readonly List<SettlementNotification> settlementNotifications;
+            private readonly List<RouteEventNotification> routeEventNotifications;
+
+            public TradeOfflineRestoreResult()
+                : this(
+                    false,
+                    false,
+                    new List<SettlementNotification>(),
+                    new List<RouteEventNotification>(),
+                    string.Empty,
+                    null)
+            {
+            }
+
+            internal TradeOfflineRestoreResult(
+                bool changed,
+                bool settled,
+                List<SettlementNotification> settlementNotifications,
+                List<RouteEventNotification> routeEventNotifications,
+                string previousSettlementTradeId,
+                JourneyResultData previousSettlementResult)
+            {
+                Changed = changed;
+                Settled = settled;
+                this.settlementNotifications = settlementNotifications;
+                this.routeEventNotifications = routeEventNotifications;
+                PreviousSettlementTradeId = previousSettlementTradeId;
+                PreviousSettlementResult = previousSettlementResult;
+            }
+
+            public bool Changed { get; }
+            public bool Settled { get; }
+            private string PreviousSettlementTradeId { get; }
+            private JourneyResultData PreviousSettlementResult { get; }
+
+            public void Publish(
+                TradeProgressCoordinator coordinator,
+                SaveData saveData)
+            {
+                coordinator.PublishSettlementNotifications(
+                    saveData,
+                    settlementNotifications,
+                    isOfflineRestore: true);
+                PublishRouteEventNotifications(routeEventNotifications);
+            }
+
+            public void RollbackRuntime(TradeProgressCoordinator coordinator)
+            {
+                coordinator.RebuildRuntimeCaravans();
+                coordinator.LastSettlementTradeId = PreviousSettlementTradeId;
+                coordinator.LastSettlementResult = PreviousSettlementResult;
+                coordinator.economySettlementBridge.ClearPending();
+            }
         }
     }
 }

@@ -39,6 +39,33 @@ namespace ND.Framework
     {
         [SerializeField] private float debugTimeScale = 10f;
         [SerializeField] private float debugInGameTimeMultiplier = 60f;
+        [Tooltip("달력 전용 배속입니다. 0, 1, 2, 4만 허용됩니다.")]
+        [SerializeField] private float calendarDebugScale = 1f;
+        [Tooltip("앞으로 이동할 목표 월입니다. 1~12 범위입니다.")]
+        [SerializeField] private int calendarTargetMonth = 1;
+        [Tooltip("달력 전용 오프라인 복구를 모의 실행할 실제 경과 초입니다.")]
+        [SerializeField] private double calendarOfflineSeconds = 3600d;
+
+        [ContextMenu("Framework/Calendar/Set Debug Scale")]
+        public void SetCalendarDebugScale() { if (TryGetDebugCommands(out var commands)) commands.TrySetCalendarDebugScale(calendarDebugScale); }
+
+        [ContextMenu("Framework/Calendar/Advance One Day")]
+        public void AdvanceOneGameDay() { if (TryGetDebugCommands(out var commands)) commands.AdvanceOneGameDay(); }
+
+        [ContextMenu("Framework/Calendar/Advance One Month")]
+        public void AdvanceOneGameMonth() { if (TryGetDebugCommands(out var commands)) commands.AdvanceOneGameMonth(); }
+
+        [ContextMenu("Framework/Calendar/Advance To Month")]
+        public void AdvanceToCalendarMonth() { if (TryGetDebugCommands(out var commands)) commands.AdvanceToMonth(calendarTargetMonth); }
+
+        [ContextMenu("Framework/Calendar/Simulate Offline")]
+        public void SimulateCalendarOffline() { if (TryGetDebugCommands(out var commands)) commands.SimulateCalendarOffline(calendarOfflineSeconds); }
+
+        [ContextMenu("Framework/Calendar/Log State")]
+        public void LogCalendarState() { if (TryGetDebugCommands(out var commands)) commands.LogCalendarState(); }
+
+        [ContextMenu("Framework/Calendar/Log Restore Timeline")]
+        public void LogCalendarRestoreTimeline() { if (TryGetDebugCommands(out var commands)) commands.LogCalendarRestoreTimeline(); }
 
         [Tooltip("ForceSeason ContextMenu에 사용할 계절 ID입니다.")]
         [SerializeField] private string debugSeasonId = "winter";
