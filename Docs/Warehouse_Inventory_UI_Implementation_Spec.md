@@ -408,5 +408,31 @@ Save 성공 --HomeInventoryChanged + CaravanCargoChanged(caravanId)--> Presenter
 - 같은 아이템을 같은 가격에 여러 번 획득하면 하나의 UI 그룹과 하나의 이동 단위로 합산한다.
 - 거래별 계보, 동일 가격 lot 분리, FIFO/LIFO 원가 추적이 필요해질 때만 `lotId`를 별도 도입한다. 그 경우에도 UI 가격 행은 여러 lot을 가격별로 합산할 수 있다.
 - 이번 최소 구현은 Warehouse의 ViewData/Resolver/Capacity/원자적 Transfer 경계까지다. Prefab 버튼과 기존 Quantity/Notice UI의 runtime 바인딩은 후속 작업이다.
-- 시장 매수/매도 정책은 Warehouse 범위를 벗어나므로 변경하지 않았다. 현재 시장 코드가 실제 구매가를 `purchaseUnitPrice`에 기록하고 가격 그룹을 보존하도록 만드는 일은 시장 담당자와 병합해야 하는 외부 통합 항목이다.
+- 시장 매수/매도 가격 묶음 보존은 이후 11절에서 통합 범위로 확정했다. 판매 수익·원가 정책과 가격 묶음 선택 UI는 여전히 범위 밖이다.
 - 공용 DTO에 필드를 추가한 결과 발생할 수 있는 데이터 유실을 막기 위해 Save/runtime Mapper 및 rollback clone에는 구매가 복사를 추가했다.
+
+## 11. 시장 가격 묶음 통합 확정 (2026-08-03)
+
+Warehouse의 가격 묶음이 시장 거래 뒤에도 유지되도록 시장 Cargo mutation을 연결한다.
+
+### 매수
+
+- 매수 계산에 사용된 현재 시장 재고 단가를 `purchaseUnitPrice`로 저장한다.
+- `itemId + purchaseUnitPrice`가 같은 Cargo 행에만 수량을 더한다.
+- 다른 단가로 다시 매수하면 별도 행을 만든다.
+- `basePrice`는 시장 실구매가로 덮지 않고 카탈로그 기본가를 유지한다.
+
+### 매도
+
+- 기존 Market UI는 `itemId` 총수량만 선택하며 가격 묶음을 선택하지 않는다.
+- 따라서 저장된 동일 itemId 묶음 순서대로 판매 수량을 차감한다.
+- 완전히 소진된 묶음만 삭제하고, 남은 묶음은 서로 병합하지 않는다.
+- 저장 순서는 획득 시각 계약이 아니므로 이 규칙을 회계상 FIFO라고 정의하지 않는다.
+- 판매 단가와 수익 계산은 기존 Economy 계산 결과를 그대로 사용한다. 구매가 기반 손익 정책은 이번 범위가 아니다.
+
+### 데이터 보존
+
+- 시장 저장 실패 rollback은 거래 전 `purchaseUnitPrice`를 포함한 모든 가격 묶음을 복원한다.
+- 물리 Cargo 슬롯과 무게 계산은 계속 itemId 총수량 기준이다. 가격 묶음 개수가 슬롯을 추가 소비하지 않는다.
+
+이 절은 10절의 "시장 매수/매도 정책은 변경하지 않았다" 제한을 대체한다.

@@ -503,7 +503,13 @@ namespace ND.Framework.CargoLoading
             {
                 foreach (ND.Economy.MarketTransactionItemResult itemResult in calculation.Items)
                 {
-                    ApplyCargoDelta(itemResult.ItemId, itemResult.BuyQuantity - itemResult.SellQuantity);
+                    MarketStockSaveData transactionStock = FindStock(itemResult.ItemId);
+                    ApplyCargoDelta(
+                        itemResult.ItemId,
+                        itemResult.BuyQuantity - itemResult.SellQuantity,
+                        itemResult.BuyQuantity > 0
+                            ? Math.Max(0L, transactionStock?.unitPrice ?? 0L)
+                            : 0L);
                     MarketStockSaveData stock = itemResult.SellQuantity > 0
                         ? GetOrCreateStock(itemResult.ItemId)
                         : FindStock(itemResult.ItemId);
@@ -776,52 +782,63 @@ namespace ND.Framework.CargoLoading
             }
         }
 
-        private void ApplyCargoDelta(string itemId, int delta)
+        private void ApplyCargoDelta(string itemId, int delta, long purchaseUnitPrice = 0L)
         {
             List<CargoEntrySaveData> entries = targetCaravan.cargo
-                .Where(candidate => candidate?.item != null && candidate.item.itemId == itemId)
+                .Where(candidate => candidate?.item != null &&
+                    string.Equals(candidate.item.itemId, itemId, StringComparison.Ordinal))
                 .ToList();
-            CargoEntrySaveData entry = entries.FirstOrDefault();
-            int quantityAfter = checked(entries.Sum(candidate => Math.Max(0, candidate.quantity)) + delta);
-            if (quantityAfter < 0)
-            {
-                throw new InvalidOperationException(ErrorInsufficientCargo);
-            }
 
-            if (quantityAfter == 0)
+            if (delta < 0)
             {
-                foreach (CargoEntrySaveData existing in entries)
+                // The current Market UI sells an itemId total and does not select a price group.
+                // Drain persisted group order only as a deterministic inventory mutation rule;
+                // sale revenue remains owned by the existing Economy calculator.
+                int remainingToSell = -delta;
+                foreach (CargoEntrySaveData entry in entries)
                 {
-                    targetCaravan.cargo.Remove(existing);
+                    int removed = Math.Min(remainingToSell, Math.Max(0, entry.quantity));
+                    entry.quantity -= removed;
+                    remainingToSell -= removed;
+                    if (entry.quantity <= 0)
+                        targetCaravan.cargo.Remove(entry);
+                    if (remainingToSell == 0)
+                        break;
                 }
 
+                if (remainingToSell > 0)
+                    throw new InvalidOperationException(ErrorInsufficientCargo);
                 return;
             }
 
-            if (entry == null)
+            if (delta == 0)
+                return;
+
+            // A purchase creates or extends only the exact acquisition-price group. Equal-price
+            // purchases merge; different prices remain separate while physical slots still use
+            // the itemId aggregate calculated elsewhere.
+            long normalizedPrice = Math.Max(0L, purchaseUnitPrice);
+            CargoEntrySaveData matchingGroup = entries.FirstOrDefault(entry =>
+                Math.Max(0L, entry.item.purchaseUnitPrice) == normalizedPrice);
+            if (matchingGroup == null)
             {
                 TradeItemData item = catalogById[itemId];
-                MarketStockSaveData stock = FindStock(itemId);
-                entry = new CargoEntrySaveData
+                matchingGroup = new CargoEntrySaveData
                 {
                     item = new TradeItemSaveData
                     {
                         itemId = item.ItemId,
                         itemName = item.DisplayName,
                         weight = item.Weight,
-                        basePrice = Math.Max(0L, stock?.unitPrice ?? item.BaseBuyPrice),
+                        basePrice = Math.Max(0L, item.BaseBuyPrice),
+                        purchaseUnitPrice = normalizedPrice,
                         maxCount = item.MaxCount
                     }
                 };
-                targetCaravan.cargo.Add(entry);
+                targetCaravan.cargo.Add(matchingGroup);
             }
 
-            foreach (CargoEntrySaveData duplicate in entries.Skip(1))
-            {
-                targetCaravan.cargo.Remove(duplicate);
-            }
-
-            entry.quantity = quantityAfter;
+            matchingGroup.quantity = checked(matchingGroup.quantity + delta);
         }
 
         private MarketStockSaveData GetOrCreateStock(string itemId)
@@ -857,7 +874,7 @@ namespace ND.Framework.CargoLoading
                             itemId = entry.item.itemId,
                             itemName = entry.item.itemName,
                             weight = entry.item.weight,
-                            // Snapshot clones must preserve a price group even though market sale policy is unchanged.
+                            // Rollback must restore the same acquisition-price groups as before the transaction.
                             purchaseUnitPrice = entry.item.purchaseUnitPrice,
                             basePrice = entry.item.basePrice,
                             maxCount = entry.item.maxCount
