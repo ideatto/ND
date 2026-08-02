@@ -857,6 +857,8 @@ namespace ND.Framework.CargoLoading
                             itemId = entry.item.itemId,
                             itemName = entry.item.itemName,
                             weight = entry.item.weight,
+                            // Snapshot clones must preserve a price group even though market sale policy is unchanged.
+                            purchaseUnitPrice = entry.item.purchaseUnitPrice,
                             basePrice = entry.item.basePrice,
                             maxCount = entry.item.maxCount
                         }

@@ -175,6 +175,7 @@ namespace ND.Framework
     {
         public string Id;
         public string DisplayName;
+        public string Description;
         public Sprite Icon;
         public string Rarity;
         public string Category;
@@ -256,6 +257,7 @@ namespace ND.Framework
     {
         public string Id;
         public string DisplayName;
+        /// <summary>Catalog description exposed so UI does not depend on the source ScriptableObject.</summary>
         public string Description;
         public QuestType Type;
         public QuestRepeatPolicy RepeatPolicy;
