@@ -36,6 +36,7 @@ public sealed class WarehouseInventoryTransferTests
     public void Transfer_SaveFailure_RestoresBothInventories()
     {
         FrameworkSaveData save = new FrameworkSaveData();
+        save.player.currentTownId = WarehouseFunction.BaseTownId;
         save.player.homeInventory.Add(Entry("apple", 10, 5));
         var caravan = new FrameworkCaravanSaveData
         {
@@ -57,6 +58,33 @@ public sealed class WarehouseInventoryTransferTests
         Assert.That(SaveDataLookup.TryGetCaravan(save, "caravan-test", out FrameworkCaravanSaveData restored), Is.True);
         Assert.That(restored.cargo, Is.Empty);
     }
+
+[Test]
+    public void Transfer_NonPrepareCaravan_IsRejectedBeforeMutation()
+    {
+        FrameworkSaveData save = new FrameworkSaveData();
+        save.player.currentTownId = WarehouseFunction.BaseTownId;
+        save.player.homeInventory.Add(Entry("apple", 10, 5));
+        var caravan = new FrameworkCaravanSaveData
+        {
+            caravanId = "caravan-busy",
+            currentTownId = WarehouseFunction.BaseTownId,
+            state = JourneyState.Traveling
+        };
+        save.caravans.Add(caravan);
+        var request = new WarehouseTransferRequest(
+            caravan.caravanId, WarehouseFunction.BaseTownId, "apple", 10, 1,
+            WarehouseTransferDirection.HomeToCargo, 30, 12, 100f);
+
+        bool succeeded = WarehouseInventoryTransferService.TryTransfer(
+            save, new FailingSaveService(), request, out WarehouseTransferFailure failure);
+
+        Assert.That(succeeded, Is.False);
+        Assert.That(failure, Is.EqualTo(WarehouseTransferFailure.CaravanBusy));
+        Assert.That(WarehousePriceGroupResolver.Resolve(save.player.homeInventory, "apple").Single().Quantity,
+            Is.EqualTo(5));
+    }
+
 
     private static CargoEntrySaveData Entry(string id, long price, int quantity) =>
         new CargoEntrySaveData

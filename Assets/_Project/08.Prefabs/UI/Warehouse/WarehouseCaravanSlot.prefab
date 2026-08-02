@@ -438,6 +438,7 @@ GameObject:
   - component: {fileID: 1837494280409976824}
   - component: {fileID: 2960359280089808401}
   - component: {fileID: 4101380677650749141}
+  - component: {fileID: 8941621577340054876}
   m_Layer: 0
   m_Name: WarehouseCaravanSlot
   m_TagString: Untagged
@@ -585,6 +586,18 @@ MonoBehaviour:
   m_EffectColor: {r: 0.48, g: 0.42, b: 0.34, a: 0.26}
   m_EffectDistance: {x: 0.65, y: -0.65}
   m_UseGraphicAlpha: 1
+--- !u!114 &8941621577340054876
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5812018580242176061}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbac908d1256f5e4d9bf43b4d6be9ef2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.InGame.Warehouse.WarehouseCaravanSlotView
 --- !u!1 &6065431179689907782
 GameObject:
   m_ObjectHideFlags: 0

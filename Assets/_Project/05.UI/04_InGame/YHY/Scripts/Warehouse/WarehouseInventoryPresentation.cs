@@ -127,7 +127,8 @@ namespace ND.UI.InGame.Warehouse
         public WarehouseSelectionPanel Panel { get; private set; }
         public WarehousePriceGroup SelectedGroup { get; private set; }
 
-public WarehousePriceGroupModalViewData SelectItem(
+/// <summary>Clears the previous group and chooses the next panel from the new item's group count.</summary>
+        public WarehousePriceGroupModalViewData SelectItem(
             IEnumerable<CargoEntrySaveData> source,
             string itemId,
             ISharedGameDataProvider catalog)
@@ -149,6 +150,7 @@ public WarehousePriceGroupModalViewData SelectItem(
             return data;
         }
 
+        /// <summary>Commits a price group only while the presenter is in the price-selection state.</summary>
         public void SelectPriceGroup(WarehousePriceGroup group)
         {
             if (Panel != WarehouseSelectionPanel.PriceGroup) return;

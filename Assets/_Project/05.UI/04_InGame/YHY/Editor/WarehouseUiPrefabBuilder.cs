@@ -12,7 +12,9 @@ namespace ND.UI.InGame.Warehouse.Editor
         private const string PopupPath = Folder + "/WarehouseInventoryPopup.prefab";
         private const string RowPath = Folder + "/WarehousePriceGroupRow.prefab";
         private const string ModalPath = Folder + "/WarehousePriceGroupModal.prefab";
-        private const string TooltipPath = Folder + "/WarehouseItemTooltip.prefab";
+        
+        private const string QuantityPath = Folder + "/WarehouseQuantityModal.prefab";
+private const string TooltipPath = Folder + "/WarehouseItemTooltip.prefab";
 
         private static TMP_FontAsset font;
         private static readonly Color Dark = new Color32(30, 29, 27, 248);
@@ -45,7 +47,9 @@ namespace ND.UI.InGame.Warehouse.Editor
             GameObject root = Panel("WarehousePriceGroupRow", null, new Color32(48, 45, 40, 255));
             SetRect(root.GetComponent<RectTransform>(), 0, 0, 460, 54);
             root.GetComponent<Image>().raycastTarget = true;
-            root.AddComponent<Button>();
+            
+            root.AddComponent<WarehousePriceGroupRowView>();
+root.AddComponent<Button>();
 
             HorizontalLayoutGroup layout = root.AddComponent<HorizontalLayoutGroup>();
             layout.padding = new RectOffset(16, 16, 6, 6);
@@ -205,9 +209,10 @@ namespace ND.UI.InGame.Warehouse.Editor
             GameObject priceModal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(ModalPath), selectionLayer.transform);
             priceModal.name = "PriceGroupModal";
             priceModal.SetActive(false);
-            Transform quantityModal = popup.transform.Find("QuantityModal");
-            if (quantityModal != null)
-                quantityModal.SetParent(selectionLayer.transform, false);
+            GameObject quantityModal = (GameObject)PrefabUtility.InstantiatePrefab(
+                AssetDatabase.LoadAssetAtPath<GameObject>(QuantityPath), selectionLayer.transform);
+            quantityModal.name = "WarehouseQuantityModal";
+            quantityModal.SetActive(false);
 
             PrefabUtility.SaveAsPrefabAsset(popup, PopupPath);
             PrefabUtility.UnloadPrefabContents(popup);

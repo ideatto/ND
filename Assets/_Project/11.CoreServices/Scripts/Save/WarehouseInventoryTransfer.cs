@@ -206,9 +206,12 @@ private static int MaxAdditionalBySlots(
                 return Fail(WarehouseTransferFailure.InvalidFramework, out failure);
             if (!SaveDataLookup.TryGetCaravan(saveData, request.CaravanId, out CaravanSaveData caravan))
                 return Fail(WarehouseTransferFailure.InvalidCaravan, out failure);
-            if (string.IsNullOrWhiteSpace(request.BaseTownId) ||
-                !string.Equals(caravan.currentTownId, request.BaseTownId, StringComparison.Ordinal))
+            if (!string.Equals(request.BaseTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal)
+                || !string.Equals(saveData.player.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal)
+                || !string.Equals(caravan.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal))
                 return Fail(WarehouseTransferFailure.NotAtBaseCamp, out failure);
+            if (caravan.state != JourneyState.Prepare)
+                return Fail(WarehouseTransferFailure.CaravanBusy, out failure);
             if (SaveDataLookup.TryGetTradeProgress(saveData, request.CaravanId, out TradeProgressSaveData progress) &&
                 (progress.state == TradeProgressState.Traveling ||
                  progress.state == TradeProgressState.SettlementPending))

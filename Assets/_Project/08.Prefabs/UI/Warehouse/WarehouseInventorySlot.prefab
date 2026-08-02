@@ -165,6 +165,7 @@ GameObject:
   - component: {fileID: 136579373218602775}
   - component: {fileID: 8278959638542082772}
   - component: {fileID: 5009227375803845058}
+  - component: {fileID: 3921012138223148301}
   m_Layer: 0
   m_Name: WarehouseInventorySlot
   m_TagString: Untagged
@@ -311,6 +312,18 @@ MonoBehaviour:
   m_EffectColor: {r: 0.48, g: 0.42, b: 0.34, a: 0.34}
   m_EffectDistance: {x: 1.15, y: -1.15}
   m_UseGraphicAlpha: 1
+--- !u!114 &3921012138223148301
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5706207146876989830}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84b5fa4987577224f99a560eb3c3cc2a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.InGame.Warehouse.WarehouseInventorySlotView
 --- !u!1 &8246878301007239303
 GameObject:
   m_ObjectHideFlags: 0
