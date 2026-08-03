@@ -30,6 +30,7 @@ public class TreadmillLane : MonoBehaviour
     [System.NonSerialized] public TreadmillTownArrival arrival;
     [System.NonSerialized] public TreadmillRain rain;
     [System.NonSerialized] public TreadmillWaitingRoom waitingRoom;
+    [System.NonSerialized] public TreadmillCombat combat;
     [System.NonSerialized] public Camera cam;
 
     private void Awake() => Resolve();
@@ -43,6 +44,7 @@ public class TreadmillLane : MonoBehaviour
         if (arrival == null) arrival = GetComponentInChildren<TreadmillTownArrival>(true);
         if (rain == null) rain = GetComponentInChildren<TreadmillRain>(true);
         if (waitingRoom == null) waitingRoom = GetComponentInChildren<TreadmillWaitingRoom>(true);
+        if (combat == null) combat = GetComponentInChildren<TreadmillCombat>(true);
         if (cam == null) cam = GetComponentInChildren<Camera>(true);
     }
 

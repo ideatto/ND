@@ -157,6 +157,12 @@ public class TreadmillRoad : MonoBehaviour
     /// <summary>도착 정지 상태인지.</summary>
     public bool IsArrived => arrived;
 
+    private bool combatHold;   // 전투 충돌 순간 '잠깐 멈춤'(산적과 부딪혀 정지). 결과 나오면 해제.
+    /// <summary>전투 멈춤 on/off. 켜면 시각 스크롤만 잠깐 멈춘다(동물·바닥 정지).
+    /// ★시각 전용 게이트라 실제 무역 진행도·도착 타이밍엔 영향 없다(스크롤은 velocity 기반 분리 구동).
+    /// 도착(arrived)과 별개 플래그라 도착 접근 로직을 건드리지 않는다.</summary>
+    public void SetCombatHold(bool on) => combatHold = on;
+
     private bool terrainVisible = true;   // 도로 지형(길·나무·풀) 렌더 표시 여부
     /// <summary>도로 지형 렌더 on/off. 대기실 표시 중엔 꺼서 나무·풀이 대기실을 뚫지 않게 한다.
     /// (변경될 때만 렌더러를 훑어 성능 안전. 로직·위치엔 영향 없음, 오직 렌더만.)</summary>
@@ -278,6 +284,7 @@ public class TreadmillRoad : MonoBehaviour
     {
         if (!Application.isPlaying || active == null) return;
         if (roomMode) { lastDz = 0f; return; }   // 대기실 표시 중엔 지형 스크롤·전환 안 함(정지)
+        if (combatHold) { lastDz = 0f; return; } // 전투 충돌 순간 잠깐 멈춤(결과 나오면 해제)
 
         float dz;
         if (externalDrive)

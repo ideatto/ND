@@ -25,6 +25,7 @@ public class TreadmillProgressSync : MonoBehaviour
     [SerializeField] private TreadmillRoad road;
     [SerializeField] private TreadmillTownArrival arrival;
     [SerializeField] private TreadmillRain rain;
+    [SerializeField] private TreadmillCombat combat;   // 전투 연출(이동 중 전투 미리 등장→충돌)
     [Tooltip("목적지 마을이 다가오기 시작하는 '남은 셀 수'. 이 안이면 마을 등장(예: 1.5 = 마지막 1.5칸).")]
     [SerializeField] private float arriveWindowCells = 1.5f;
 
@@ -60,12 +61,14 @@ public class TreadmillProgressSync : MonoBehaviour
             if (road == null) road = lane.road;
             if (arrival == null) arrival = lane.arrival;
             if (rain == null) rain = lane.rain;
+            if (combat == null) combat = lane.combat;
             return;
         }
         if (stage == null) stage = Object.FindFirstObjectByType<TreadmillStage>(FindObjectsInactive.Include);
         if (road == null) road = Object.FindFirstObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
         if (arrival == null) arrival = Object.FindFirstObjectByType<TreadmillTownArrival>(FindObjectsInactive.Include);
         if (rain == null) rain = Object.FindFirstObjectByType<TreadmillRain>(FindObjectsInactive.Include);
+        if (combat == null) combat = Object.FindFirstObjectByType<TreadmillCombat>(FindObjectsInactive.Include);
     }
 
     private void LateUpdate()   // 스테이지 Update(스크롤/걷기) 뒤에 표시상태로 덮어씀
@@ -103,9 +106,20 @@ public class TreadmillProgressSync : MonoBehaviour
         if (onRoute) DriveRoute(cid, routeId, p);   // 이동 중: 경로 지형 + 진행도 + 목적지 접근
         else DriveTown(townId, tradeState);         // 정박: 대기실 표시 + 정지
 
-        // 대기실 그리드 전환(마지막에 확정). 이동 중이 아니면(마을 진입·대기·파괴) 도로가
+        // 대기실 그리드 전환(핵심 — 먼저 확정). 이동 중이 아니면(마을 진입·대기·파괴) 도로가
         // 지형 그리드를 전부 숨기고 11번째 '대기실 그리드'만 세운다(나무 안 뚫음, 별도 공간).
         if (road != null) road.ShowWaitingRoom(!onRoute);
+
+        // 전투 연출(부가 기능 — 맨 마지막, 예외가 나도 핵심 스크롤/대기실을 절대 못 깨게 try로 감쌈).
+        if (combat != null)
+        {
+            try
+            {
+                if (onRoute && !debugFakeProgress) combat.Drive(cid, p);
+                else combat.Clear();
+            }
+            catch (System.Exception ex) { Debug.LogWarning("[TreadmillCombat] 연출 오류(무시): " + ex.Message); }
+        }
     }
 
     // 이동 중: 경로 지형을 진행도로 스크롤하고, 끝에서 목적지 마을이 다가와 정지.

@@ -138,26 +138,32 @@ public static class TreadmillRouteSampler
     public static string SampleRouteTerrainByRouteId(string routeId, int samples = 400)
     {
         if (string.IsNullOrEmpty(routeId)) return string.Empty;
-        RouteVisual route = null;
-        foreach (var rv in Object.FindObjectsByType<RouteVisual>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            if (rv != null && rv.RouteId == routeId) { route = rv; break; }
-        if (route == null) return string.Empty;
         var grid = Object.FindAnyObjectByType<MinimapGrid>(FindObjectsInactive.Include);
         if (grid == null) return string.Empty;
         if (!grid.CellsBuilt) grid.BuildCells();
 
-        var sb = new System.Text.StringBuilder();
-        int lastRow = int.MinValue, lastCol = int.MinValue, n = Mathf.Max(1, samples);
-        for (int i = 0; i <= n; i++)
+        // ★같은 routeId의 RouteVisual이 여러 개일 수 있다(월드맵용 + 미니맵 격자용). 이 중 실제로
+        //   미니맵 격자에 얹히는(WorldToCell 성공) 것만 유효하다. 첫 번째만 쓰면 격자 밖(월드맵)
+        //   RouteVisual이 걸려 빈 문자열이 나오고 → 트레드밀이 안 흐르는 버그가 있었다.
+        //   → 매칭되는 RouteVisual을 모두 시도해, 지형이 실제로 나오는 첫 번째를 사용한다.
+        int n = Mathf.Max(1, samples);
+        foreach (var rv in Object.FindObjectsByType<RouteVisual>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
-            Vector3 w = route.EvaluatePosition((float)i / n);
-            if (!grid.WorldToCell(w, out int row, out int col)) continue;
-            if (row == lastRow && col == lastCol) continue;
-            lastRow = row; lastCol = col;
-            var cell = grid.GetCell(row, col);
-            if (cell != null) sb.Append(MinimapCell.ToChar(cell.terrain));
+            if (rv == null || rv.RouteId != routeId) continue;
+            var sb = new System.Text.StringBuilder();
+            int lastRow = int.MinValue, lastCol = int.MinValue;
+            for (int i = 0; i <= n; i++)
+            {
+                Vector3 w = rv.EvaluatePosition((float)i / n);
+                if (!grid.WorldToCell(w, out int row, out int col)) continue;
+                if (row == lastRow && col == lastCol) continue;
+                lastRow = row; lastCol = col;
+                var cell = grid.GetCell(row, col);
+                if (cell != null) sb.Append(MinimapCell.ToChar(cell.terrain));
+            }
+            if (sb.Length > 0) return sb.ToString();   // 격자에 얹힌 RouteVisual을 찾음 → 사용
         }
-        return sb.ToString();
+        return string.Empty;
     }
 
     /// <summary>townId 마을이 놓인 격자 셀의 지형을 구한다(정박 중 그 마을 지형 표시용).</summary>
