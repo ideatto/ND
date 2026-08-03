@@ -122,7 +122,11 @@ public class MinimapClouds : MonoBehaviour
     private static bool resumeCatchupPending;      // 재시작 직후 첫 캐치업은 상한을 크게(공백 전부 되감기)
     private float saveTimer;
     private float acc;           // 실시간 누적(고정스텝으로 잘라 쓰기 위한 통)
-    private readonly List<Cloud> clouds = new List<Cloud>();
+    private List<Cloud> clouds = new List<Cloud>();   // 투영 시 스크래치로 잠깐 교체하므로 readonly 아님
+
+    /// <summary>지금 '출발 시 앞으로 투영' 계산 중인지. 켜지면 구름은 렌더 오브젝트 없이(데이터만) 굴러가고,
+    /// 낙뢰 행운(detector)·번개 연출은 스킵된다(투영은 계산 전용 — 라이브 화면/카운트에 영향 없음).</summary>
+    public static bool IsProjecting { get; private set; }
     private readonly List<Vector3> waterCells = new List<Vector3>();   // 강/호수/다리 셀 월드좌표(물 위 생성용)
     private static Sprite cloudSprite;
     private static Sprite maskSprite;
@@ -367,6 +371,57 @@ public class MinimapClouds : MonoBehaviour
         }
     }
 
+    /// <summary>현재 날씨 상태에서 durationSec만큼 앞으로 '투영'한다(라이브 화면·상태 미변경, 렌더 오브젝트 안 만듦).
+    /// 각 스텝마다 perStep(simStep, 그 스텝의 벽시계초)을 호출 — 그 안에서 RainIntensityAt로 '그 미래 시각의
+    /// 투영된 비'를 샘플할 수 있다(출발 시 이동시간 penalty 계산용). 번개/불도 결정론으로 재현된다.
+    /// ★결정론이라 여기서 미리 계산한 날씨 = 실제로 겪을 날씨와 동일. 끝나면 라이브 상태로 완전 복원.</summary>
+    public void ProjectForward(double startWallSec, float durationSec, System.Action<long, double> perStep)
+    {
+        if (wind == null || grid == null || durationSec <= 0f) return;
+        Bounds a = grid.Area; if (a.size.x <= 0f) return;
+        ApplySeasonProfile();
+
+        // 라이브 상태 저장
+        var savedClouds = clouds;
+        long savedSimStep = simStep; int savedSpawnCounter = spawnCounter; float savedSpawnTimer = spawnTimer;
+        var savedWind = wind.SnapshotState();
+
+        // 스크래치(데이터 전용) = 라이브 구름 데이터 복제 → 이걸로 투영(라이브 오브젝트 안 건드림)
+        var scratch = new List<Cloud>(savedClouds.Count);
+        for (int i = 0; i < savedClouds.Count; i++) scratch.Add(CloneData(savedClouds[i]));
+        clouds = scratch;
+        IsProjecting = true;
+        try
+        {
+            float sdt = fixedDt * simSpeed;
+            int steps = Mathf.Min(200000, Mathf.RoundToInt(durationSec / fixedDt));
+            for (int k = 0; k < steps; k++)
+            {
+                wind.StepSim(sdt);
+                StepClouds(a, sdt);
+                simStep++;
+                double wall = startWallSec + (k + 1) * fixedDt;
+                if (WeatherStepped != null) WeatherStepped(simStep, wall);   // 번개/불 결정론 적용(detector·연출은 IsProjecting로 스킵)
+                perStep?.Invoke(simStep, wall);
+            }
+        }
+        finally
+        {
+            IsProjecting = false;
+            clouds = savedClouds;   // 스크래치 구름은 데이터라 파괴 불필요
+            simStep = savedSimStep; spawnCounter = savedSpawnCounter; spawnTimer = savedSpawnTimer;
+            wind.RestoreState(savedWind);
+        }
+    }
+
+    // 렌더 오브젝트 없는(데이터 전용) 구름 복제 — 투영 스크래치용.
+    private static Cloud CloneData(Cloud c) => new Cloud
+    {
+        t = null, sr = null, pos = c.pos, scale = c.scale, col = c.col, order = c.order,
+        moisture = c.moisture, age = c.age, life = c.life, baseScale = c.baseScale,
+        raining = c.raining, rainT = c.rainT, carryDist = c.carryDist
+    };
+
     private static bool IsWet(TerrainType t) => t == TerrainType.River || t == TerrainType.Water || t == TerrainType.Bridge;
 
     /// <summary>지형별 '적시는 정도'. 호수(큰 물)=많이, 얇은 강/다리=조금 → 강 스친다고 다 먹구름 안 됨.</summary>
@@ -515,21 +570,29 @@ public class MinimapClouds : MonoBehaviour
         else
             pos = new Vector3(rng.Range(a.min.x, a.max.x), rng.Range(a.min.y, a.max.y), a.center.z);
 
-        var go = new GameObject("Cloud");
-        go.transform.SetParent(cloudRoot, false);
-        go.transform.position = pos;
+        // rng 소비 순서는 투영 여부와 무관하게 동일해야 결정론 유지 → sc·life를 먼저 뽑는다.
         float sc = rng.Range(cloudScaleMin, cloudScaleMax);
-        go.transform.localScale = new Vector3(sc, sc, 1f);
+        float life = rng.Range(lifeMin, lifeMax);
+        Color initCol = new Color(WhiteCol.r, WhiteCol.g, WhiteCol.b, 0f);   // 처음엔 투명 → 페이드인
 
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = CloudSprite();
-        sr.color = new Color(WhiteCol.r, WhiteCol.g, WhiteCol.b, 0f);   // 처음엔 투명 → 페이드인
-        sr.sortingOrder = normalSortingOrder;
-        sr.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;   // 맵 영역 안에서만 보이게(프레임 밖 클리핑)
+        Transform t = null; SpriteRenderer sr = null;
+        if (!IsProjecting)   // ★투영 계산 중이면 렌더 오브젝트 안 만든다(데이터만)
+        {
+            var go = new GameObject("Cloud");
+            go.transform.SetParent(cloudRoot, false);
+            go.transform.position = pos;
+            go.transform.localScale = new Vector3(sc, sc, 1f);
+            sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = CloudSprite();
+            sr.color = initCol;
+            sr.sortingOrder = normalSortingOrder;
+            sr.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;   // 맵 영역 안에서만 보이게
+            t = go.transform;
+        }
 
-        clouds.Add(new Cloud { t = go.transform, sr = sr, pos = new Vector2(pos.x, pos.y), scale = sc,
-            col = sr.color, order = normalSortingOrder, moisture = initMoist, age = startAge,
-            life = rng.Range(lifeMin, lifeMax), baseScale = sc });
+        clouds.Add(new Cloud { t = t, sr = sr, pos = new Vector2(pos.x, pos.y), scale = sc,
+            col = initCol, order = normalSortingOrder, moisture = initMoist, age = startAge,
+            life = life, baseScale = sc });
     }
 
     private void RemoveCloud(int i)

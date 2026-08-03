@@ -236,6 +236,7 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     //   ※정산은 GetCount(tradeId) > 0 을 불리언으로 읽어 +10% 한 번 적용(팀 확정 — 스택 없음).
     private void OnWeatherStep(long simStep, double stepWallSeconds)
     {
+        if (MinimapClouds.IsProjecting) return;   // 투영(속도 계산) 중엔 낙뢰 행운 카운트 안 함
         if (!enableLightningLucky || clouds == null || grid == null) return;
         var fr = FrameworkRoot.Instance;
         var save = fr != null ? fr.CurrentSaveData : null;

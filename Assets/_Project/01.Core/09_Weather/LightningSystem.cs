@@ -133,7 +133,7 @@ public class LightningSystem : MonoBehaviour
         MinimapCell target = candidates[rng.Range(0, candidates.Count)];
         Vector3 pos = grid.CellToWorld(target.row, target.col);
         bool flammable = IsFlammable(target.terrain);
-        bool live = IsLiveStep(wallSeconds);   // 되감기 중 옛 스텝이면 false
+        bool live = !MinimapClouds.IsProjecting && IsLiveStep(wallSeconds);   // 투영/되감기 중이면 연출 안 함(불은 아래서 적용)
 
         // 불 = 시뮬(바람) 교란 → 결정론 재현 위해 되감기 중에도 항상 적용.
         if (flammable)

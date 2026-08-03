@@ -239,6 +239,37 @@ public class MinimapWind : MonoBehaviour
         sources.RemoveAll(s => s.kind == SourceKind.Event);    // 이벤트(비결정 사용자 배치)는 리플레이에서 제외
     }
 
+    // ------------------------------------------------------------------ 투영용 상태 스냅샷/복원
+
+    /// <summary>현재 바람 상태(기압원들 + 이벤트카운터)를 복제해 돌려준다. 출발 시 앞으로 투영할 때
+    /// 라이브 상태를 저장했다가 RestoreState로 되돌리기 위함(바람은 순수 데이터라 오브젝트 없음).</summary>
+    public object SnapshotState()
+    {
+        var copy = new List<Source>(sources.Count);
+        for (int i = 0; i < sources.Count; i++)
+        {
+            var s = sources[i];
+            copy.Add(new Source { pos = s.pos, strength = s.strength, strength0 = s.strength0,
+                radius = s.radius, age = s.age, life = s.life, drift = s.drift, kind = s.kind });
+        }
+        return new object[] { copy, eventCounter };
+    }
+
+    /// <summary>SnapshotState로 저장한 상태로 되돌린다(투영 끝난 뒤 라이브 복원).</summary>
+    public void RestoreState(object state)
+    {
+        if (!(state is object[] arr) || arr.Length < 2) return;
+        sources.Clear();
+        if (arr[0] is List<Source> copy)
+            for (int i = 0; i < copy.Count; i++)
+            {
+                var s = copy[i];
+                sources.Add(new Source { pos = s.pos, strength = s.strength, strength0 = s.strength0,
+                    radius = s.radius, age = s.age, life = s.life, drift = s.drift, kind = s.kind });
+            }
+        eventCounter = (int)arr[1];
+    }
+
     // ------------------------------------------------------------------ 기압/바람 조회
 
     /// <summary>위치의 기압(기압원 가우시안 합).</summary>
