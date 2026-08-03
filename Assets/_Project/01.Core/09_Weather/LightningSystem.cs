@@ -49,7 +49,7 @@ public class LightningSystem : MonoBehaviour
 
     private class Fx { public Transform t; public SpriteRenderer sr; public float age; public float life; public bool isFire; }
     private readonly List<Fx> fxs = new List<Fx>();
-    private readonly List<MinimapCell> candidates = new List<MinimapCell>();
+    private readonly List<Vector3> stormCenters = new List<Vector3>();   // 번개 대상 = 먹구름 '중심'들(가장자리 X)
 
     private static readonly Color BoltCol = new Color(1f, 1f, 0.75f);   // 번개 섬광(밝은 노랑흰)
     private static readonly Color FireCol = new Color(1f, 0.45f, 0.1f);  // 불(주황)
@@ -115,23 +115,21 @@ public class LightningSystem : MonoBehaviour
         if (grid == null || clouds == null || wind == null) return;
         if (simStep % Mathf.Max(1, attemptEverySteps) != 0) return;   // 이 스텝은 시도 주기 아님
 
-        // 폭풍(먹구름 세기≥문턱) 셀 수집
-        candidates.Clear();
-        for (int r = 0; r < grid.Rows; r++)
-            for (int c = 0; c < grid.Cols; c++)
-            {
-                var cell = grid.GetCell(r, c);
-                if (cell == null) continue;
-                if (clouds.RainIntensityAt(grid.CellToWorld(r, c)) >= minStrikeIntensity)
-                    candidates.Add(cell);
-            }
-        if (candidates.Count == 0) return;
+        // ★번개 대상 = 먹구름(세기≥문턱)의 '중심'. (예전엔 구름 발자국에 걸친 모든 셀을 균등 추첨 →
+        //   구름 반경이 넓어 '앞쪽 가장자리 셀'이 자주 뽑혔고, 거기에 섬광+불 저기압이 생겨 구름을 앞으로
+        //   끌어당겨 "번개 먼저·먹구름 나중에 그쪽으로 이동"처럼 보였다. → 진한 중심에만 치도록 교정.)
+        stormCenters.Clear();
+        clouds.CollectStormCenters(stormCenters, minStrikeIntensity);
+        if (stormCenters.Count == 0) return;
 
         var rng = new DetRng(DetRng.Seed(worldSeed, simStep, 0));   // ★결정론 축 = simStep
         if (rng.Value() >= strikeChance) return;                    // 이번엔 안 침
 
-        MinimapCell target = candidates[rng.Range(0, candidates.Count)];
-        Vector3 pos = grid.CellToWorld(target.row, target.col);
+        Vector3 center = stormCenters[rng.Range(0, stormCenters.Count)];   // 먹구름 하나의 중심
+        if (!grid.WorldToCell(center, out int tr, out int tc)) return;     // 그 중심이 있는 셀
+        MinimapCell target = grid.GetCell(tr, tc);
+        if (target == null) return;
+        Vector3 pos = grid.CellToWorld(tr, tc);   // 셀 중심 = 진한 먹구름 바로 아래(가장자리 아님)
         bool flammable = IsFlammable(target.terrain);
         bool live = !MinimapClouds.IsProjecting && IsLiveStep(wallSeconds);   // 투영/되감기 중이면 연출 안 함(불은 아래서 적용)
 
