@@ -582,6 +582,10 @@ PrefabInstance:
       propertyPath: m_SizeDelta.x
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1472243243932042365, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1713785037550948997, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -606,12 +610,20 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1885342633582612819, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2211988510569370236, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2211988510569370236, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
       propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2211988510569370236, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
+      propertyPath: m_AnchorMin.y
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2478951079449269266, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
@@ -762,6 +774,10 @@ PrefabInstance:
       propertyPath: m_SizeDelta.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5580882004640513404, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5601461388279664547, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -821,6 +837,10 @@ PrefabInstance:
     - target: {fileID: 8845335813084204254, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9211616936121895332, guid: 8f171a81e2d4ed743bfb6f9408708c28, type: 3}
+      propertyPath: m_text
+      value: 
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
