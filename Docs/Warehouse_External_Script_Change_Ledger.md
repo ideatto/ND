@@ -10,7 +10,7 @@
 1. completed 담당자가 같은 파일을 수정했다면 새 구현을 기준으로 아래 계약의 존재 여부부터 비교한다.
 2. 동일 계약이 있으면 과거 hunk를 버리고, 없으면 파일 전체가 아닌 해당 필드·이벤트·검증만 새 구조에 맞게 재적용한다.
 3. 가격 묶음은 별도 lot ID가 아니라 `itemId + purchaseUnitPrice` 파생 키다.
-4. `Build UI.unity`에는 Warehouse 이전부터 다른 dirty 변경이 있었다. Scene 전체 revert를 금지하고 Warehouse object만 선별한다.
+4. Build UI Scene 변경은 다른 담당 작업과 충돌할 위험이 있어 이 PR에서 제외한다. Warehouse는 Prefab과 코드 중심으로 유지하고 실제 Scene 연결은 merge 이후 수행한다.
 
 ## 외부·공용 코드 변경
 
@@ -57,12 +57,12 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
   - Modal backdrop은 Caravan은 유지하고 item·가격·수량만 초기화한다.
 - `WarehouseInventorySlotView.cs`, `WarehouseCaravanSlotView.cs`, `WarehousePriceGroupRowView.cs`: render-only 값과 callback만 보관한다.
 
-### Prefab·Scene
+### Prefab과 Scene 연결 정책
 
 - `WarehouseUiPrefabBuilder.cs`: rebuild 시 PriceGroup row view와 Quantity Modal 연결을 유지한다.
 - `WarehouseInventoryPopup.prefab`: controller, SelectionModalLayer, PriceGroup, Quantity, Tooltip과 runtime prefab 참조를 연결했다.
 - `WarehouseInventorySlot.prefab`, `WarehouseCaravanSlot.prefab`, `WarehousePriceGroupRow.prefab`: 전용 View component 연결.
-- `Build UI.unity`: Warehouse Popup preview 배치. 다른 dirty 변경과 섞여 있으므로 선별 병합한다.
+- Build UI Scene과 MainUI 연결은 이 PR에 포함하지 않는다. Warehouse Popup은 Prefab 상태로 제공하고 merge 이후 실제 게임 Scene에서 연결한다.
 
 ## 제거한 디버그 기능
 
@@ -103,7 +103,7 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 2. completed가 수정한 외부 파일은 새 기준으로 돌리되 Warehouse 신규 파일은 유지한다.
 3. 외부 계약이 새 코드에 이미 있는지 확인하고 빠진 계약만 재작성한다.
 4. controller/presenter/view/prefab 연결을 다시 적용한다.
-5. Build UI Scene은 전체 revert하지 않고 Warehouse override만 재적용한다.
+5. Build UI Scene 변경은 복구 대상에서 제외하고, merge 이후 최신 게임 Scene에 Warehouse Prefab을 새로 연결한다.
 6. compile error 0, 전송 테스트 6/6, 가격 묶음 왕복·rollback을 재검증한다.
 
 ## 최종 체크리스트
@@ -114,5 +114,5 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - [ ] Player/Caravan BaseCamp 및 Caravan Prepare일 때만 이동하는가
 - [ ] save 실패 시 양쪽 inventory가 rollback되는가
 - [ ] rebuild 뒤 Quantity Modal과 View component가 유지되는가
-- [ ] Scene의 다른 담당자 변경을 덮어쓰지 않았는가
+- [ ] PR에 Build UI Scene 삭제·이동·override가 포함되지 않았는가
 - [ ] debug fixture가 코드와 Scene에 남지 않았는가

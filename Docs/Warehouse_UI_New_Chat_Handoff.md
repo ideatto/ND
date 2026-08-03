@@ -3,7 +3,7 @@
 ## 환경과 범위
 
 - 프로젝트: `C:\Users\ADMIN\ND`
-- 테스트 Scene: `Assets/_Project/07.Scenes/Test/Build UI.unity`
+- Scene 정책: Test/InGame Build UI Scene은 이 PR에서 제외하며 Warehouse Prefab과 코드만 유지한다.
 - UI root: `BuildingPopupPreviewCanvas`
 - MainUI 연결은 merge 이후 별도 작업이다.
 
@@ -74,5 +74,5 @@
 - completed 전 변경·복구 장부의 파일 목록을 백업한다.
 - 새 completed 코드를 기준으로 외부 계약의 존재를 확인한다.
 - 과거 파일 전체를 덮지 말고 빠진 계약만 재적용한다.
-- Build UI Scene 전체 revert를 하지 않는다.
+- Build UI Scene 변경을 과거 브랜치에서 재적용하지 않고, merge 이후 최신 게임 Scene에 Warehouse Prefab을 연결한다.
 - 재적용 뒤 compile error 0과 전송 테스트 6/6을 확인한다.
