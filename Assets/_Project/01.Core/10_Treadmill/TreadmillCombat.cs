@@ -220,7 +220,20 @@ public class TreadmillCombat : MonoBehaviour
         ResolveRoad();
         Transform parent = road != null ? road.transform : transform;   // 길과 같은 축
         GameObject go;
-        if (banditPrefab != null) go = Instantiate(banditPrefab, parent);
+        if (banditPrefab != null)
+        {
+            // 마을 NPC 프리팹 등엔 AI 스크립트(VillageNpc 등)가 붙어 있어, 트레드밀에 그대로 스폰하면
+            // 제멋대로 움직이거나 마을 매니저를 찾다 에러를 낼 수 있다. → '비활성 홀더' 밑에서
+            // 인스턴스화(=Awake 안 돎)한 뒤 시각 외 컴포넌트(MonoBehaviour)를 전부 제거해 순수
+            // 정적 소품으로 만든다. 이러면 어떤 NPC 프리팹을 넣어도 안전하게 산적으로 쓸 수 있다.
+            var holder = new GameObject("__banditHolder"); holder.SetActive(false);
+            go = Instantiate(banditPrefab, holder.transform);
+            foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
+                if (mb != null) DestroyImmediate(mb);                     // AI/애니 스크립트 제거(Awake 전)
+            go.transform.SetParent(parent, false);                        // 진짜 부모(길 축)로 이동
+            DestroyImmediate(holder);                                     // 빈 홀더 정리
+            go.SetActive(true);
+        }
         else
         {
             // 임시: 어두운 큐브(산적)
