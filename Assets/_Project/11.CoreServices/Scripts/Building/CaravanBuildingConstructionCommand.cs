@@ -385,6 +385,7 @@ namespace ND.Framework
                 itemId = source.itemId,
                 itemName = source.itemName,
                 weight = source.weight,
+                purchaseUnitPrice = source.purchaseUnitPrice,
                 basePrice = source.basePrice,
                 maxCount = source.maxCount
             };
