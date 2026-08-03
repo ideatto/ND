@@ -23,7 +23,7 @@ namespace ND.Framework
     /// </summary>
     public static class WarehouseFunction
     {
-        
+
         public const string BaseTownId = "BaseCamp";
 public const string BuildingDisplayName = "창고";
 

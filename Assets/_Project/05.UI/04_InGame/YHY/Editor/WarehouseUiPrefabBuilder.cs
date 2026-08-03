@@ -12,7 +12,7 @@ namespace ND.UI.InGame.Warehouse.Editor
         private const string PopupPath = Folder + "/WarehouseInventoryPopup.prefab";
         private const string RowPath = Folder + "/WarehousePriceGroupRow.prefab";
         private const string ModalPath = Folder + "/WarehousePriceGroupModal.prefab";
-        
+
         private const string QuantityPath = Folder + "/WarehouseQuantityModal.prefab";
 private const string TooltipPath = Folder + "/WarehouseItemTooltip.prefab";
 
@@ -47,7 +47,7 @@ private const string TooltipPath = Folder + "/WarehouseItemTooltip.prefab";
             GameObject root = Panel("WarehousePriceGroupRow", null, new Color32(48, 45, 40, 255));
             SetRect(root.GetComponent<RectTransform>(), 0, 0, 460, 54);
             root.GetComponent<Image>().raycastTarget = true;
-            
+
             root.AddComponent<WarehousePriceGroupRowView>();
 root.AddComponent<Button>();
 

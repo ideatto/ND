@@ -94,14 +94,15 @@ namespace ND.Framework
         /// </summary>
         public static event Action<long> TradingCurrencyChanged;
 
+        /// <summary>Raised only after persisted home inventory changes; subscribers re-read SaveData.</summary>
+        public static event Action HomeInventoryChanged;
+
         /// <summary>
         /// Raised after one Caravan's persisted cargo changes successfully.
         /// Subscribers must re-read SaveData instead of treating the event payload as inventory data.
         /// </summary>
-        /// <summary>Raised only after persisted home inventory changes; subscribers re-read SaveData.</summary>
-        public static event Action HomeInventoryChanged;
-
         public static event Action<string> CaravanCargoChanged;
+
 
         /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
         public static event Action<IssueRescueLoanResult> RescueLoanIssued;

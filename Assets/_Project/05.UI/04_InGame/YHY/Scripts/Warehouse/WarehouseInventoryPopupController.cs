@@ -64,7 +64,7 @@ namespace ND.UI.InGame.Warehouse
         private WarehouseTransferDirection selectedDirection;
         private string selectedItemId = string.Empty;
         private int selectedQuantity = 1;
-        
+
         private bool suppressEventRefresh;
 private int selectedMaxQuantity;
 
@@ -81,7 +81,7 @@ private int selectedMaxQuantity;
         {
             FrameworkEvents.LoadCompleted += OnSaveLoaded;
             FrameworkEvents.HomeInventoryChanged += RefreshAll;
-            
+
             FrameworkEvents.CaravanCreated += OnCaravanCreated;
 FrameworkEvents.CaravanCargoChanged += OnCaravanCargoChanged;
         }
@@ -90,7 +90,7 @@ FrameworkEvents.CaravanCargoChanged += OnCaravanCargoChanged;
         {
             FrameworkEvents.LoadCompleted -= OnSaveLoaded;
             FrameworkEvents.HomeInventoryChanged -= RefreshAll;
-            
+
             FrameworkEvents.CaravanCreated -= OnCaravanCreated;
 FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
         }
@@ -633,7 +633,7 @@ private void OnCaravanCreated(string _, int __)
         {
             if (target != null) target.SetActive(active);
         }
-    
+
 
 private void ResetItemSelectionState()
         {
