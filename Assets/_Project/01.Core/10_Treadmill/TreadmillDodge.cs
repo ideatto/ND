@@ -45,12 +45,22 @@ public class TreadmillDodge : MonoBehaviour
 
     private void Awake()
     {
+        if (stage == null || road == null)   // 레인 안이면 형제 부품만(다른 레인과 안 엉키게)
+        {
+            var lane = TreadmillLane.Of(this);
+            if (lane != null) { lane.Resolve(); if (stage == null) stage = lane.stage; if (road == null) road = lane.road; }
+        }
         if (stage == null) stage = Object.FindFirstObjectByType<TreadmillStage>(FindObjectsInactive.Include);
         if (road == null) road = Object.FindFirstObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
     }
 
     private void LateUpdate()   // 스테이지 Update(동물 배치/걷기) 뒤에 조향 적용
     {
+        if (stage == null || road == null)   // 레인 안이면 형제 부품만(다른 레인과 안 엉키게)
+        {
+            var lane = TreadmillLane.Of(this);
+            if (lane != null) { lane.Resolve(); if (stage == null) stage = lane.stage; if (road == null) road = lane.road; }
+        }
         if (stage == null) stage = Object.FindFirstObjectByType<TreadmillStage>(FindObjectsInactive.Include);
         if (road == null) road = Object.FindFirstObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
         if (stage == null || road == null) return;

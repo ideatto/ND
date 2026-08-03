@@ -49,6 +49,7 @@ public class TreadmillTownArrival : MonoBehaviour
 
     private void Awake()
     {
+        if (road == null) { var lane = TreadmillLane.Of(this); if (lane != null) { lane.Resolve(); road = lane.road; } }
         if (road == null) road = Object.FindFirstObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
     }
 
@@ -66,6 +67,7 @@ public class TreadmillTownArrival : MonoBehaviour
     {
         if (town != null) return true;
         if (prefab == null) return false;
+        if (road == null) { var lane = TreadmillLane.Of(this); if (lane != null) { lane.Resolve(); road = lane.road; } }
         if (road == null) road = Object.FindFirstObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
         Transform parent = road != null ? road.transform : transform;   // 길과 같은 축
         var go = Instantiate(prefab, parent);
@@ -115,6 +117,7 @@ public class TreadmillTownArrival : MonoBehaviour
     private void Update()
     {
         if (!approaching || town == null) return;
+        if (road == null) { var lane = TreadmillLane.Of(this); if (lane != null) { lane.Resolve(); road = lane.road; } }
         if (road == null) road = Object.FindFirstObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
 
         float spd = road != null ? road.ForwardSpeed : 0f;   // 길 흐름 속도에 맞춰 다가옴

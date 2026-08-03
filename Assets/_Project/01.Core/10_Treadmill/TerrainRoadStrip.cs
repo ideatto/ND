@@ -69,14 +69,17 @@ public class TerrainRoadStrip : MonoBehaviour
     /// <summary>컨트롤러가 이 길을 특정 지형으로 만든다.</summary>
     public void BuildFor(TerrainType t, float seg, float width, int count, float curv, float backZ,
                          Texture tex, Color tint, Texture dtex, Color dtint, float amount, float tileMeters, float noise,
-                         ScatterLayer[] layers)
+                         ScatterLayer[] layers, float centerPathHalf = 0f)
     {
         terrain = t; segLength = seg; roadWidth = width; pieces = Mathf.Max(1, count); curvature = curv; loopBackZ = backZ;
         groundTex = tex; groundTint = tint; detailTex = dtex; detailTint = dtint; detailAmount = amount;
         groundTileMeters = Mathf.Max(0.5f, tileMeters); noiseScale = noise;
         scatterLayers = layers;
+        roadCenterPathHalf = Mathf.Max(0f, centerPathHalf);   // 전 지형 공통 마차길 반폭
         Rebuild();
     }
+
+    private float roadCenterPathHalf = 0f;   // 도로가 지정한 '전 지형 공통' 마차길 반폭(레이어 값과 큰 쪽 적용)
 
     private void OnEnable()
     {
@@ -313,7 +316,7 @@ public class TerrainRoadStrip : MonoBehaviour
         foreach (var layer in scatterLayers)
         {
             if (layer == null || layer.prefabs == null || layer.prefabs.Length == 0) continue;
-            float path = layer.centerPathHalf;   // 중앙 마차길 반폭(0=길 없음)
+            float path = Mathf.Max(layer.centerPathHalf, roadCenterPathHalf);   // 중앙 마차길 반폭(레이어·도로공통 중 큰 값)
             if (layer.gridSpacing > 0.01f)
             {
                 // 격자(줄맞춤) — 밭·옥수수농장. 각 칸에 약간의 흔들림만.

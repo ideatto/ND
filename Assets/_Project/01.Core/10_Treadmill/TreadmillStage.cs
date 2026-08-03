@@ -93,6 +93,8 @@ public class TreadmillStage : MonoBehaviour
         bool traveling = IsCaravanTraveling(currentKey);
 
         // 길 찾기: 자식에 없으면(프리뷰는 Stage·Road가 형제 루트) 씬 전체에서 찾는다.
+        // 레인 안이면 그 레인의 길만(다른 레인 길과 안 섞이게).
+        if (road == null) { var lane = TreadmillLane.Of(this); if (lane != null) { lane.Resolve(); road = lane.road; } }
         if (road == null) road = GetComponentInChildren<TreadmillRoad>(true);
         if (road == null) road = Object.FindAnyObjectByType<TreadmillRoad>(FindObjectsInactive.Include);
         if (road != null) road.SetScrollEnabled(traveling);
@@ -127,12 +129,12 @@ public class TreadmillStage : MonoBehaviour
         var fr = ND.Framework.FrameworkRoot.Instance;
         var save = fr != null ? fr.CurrentSaveData : null;
         if (save == null || save.caravans == null) return "";
-        int slot; int.TryParse(currentKey, out slot);
+        bool isSlot = int.TryParse(currentKey, out int slot);
         foreach (var c in save.caravans)
         {
             if (c == null) continue;
-            if (c.caravanId == currentKey || (c.slotIndex + 1) == slot || c.slotIndex == slot)
-                return c.caravanId;
+            bool match = isSlot ? ((c.slotIndex + 1) == slot || c.slotIndex == slot) : (c.caravanId == currentKey);
+            if (match) return c.caravanId;
         }
         return "";
     }
@@ -143,12 +145,12 @@ public class TreadmillStage : MonoBehaviour
         var fr = ND.Framework.FrameworkRoot.Instance;
         var save = fr != null ? fr.CurrentSaveData : null;
         if (save == null || save.caravans == null) return false;
-        int slot; int.TryParse(key, out slot);
+        bool isSlot = int.TryParse(key, out int slot);
         foreach (var c in save.caravans)
         {
             if (c == null) continue;
-            if (c.caravanId == key || (c.slotIndex + 1) == slot || c.slotIndex == slot)
-                return c.state.ToString() == "Traveling";
+            bool match = isSlot ? ((c.slotIndex + 1) == slot || c.slotIndex == slot) : (c.caravanId == key);
+            if (match) return c.state.ToString() == "Traveling";
         }
         return false;
     }
@@ -172,11 +174,15 @@ public class TreadmillStage : MonoBehaviour
         var save = fr != null ? fr.CurrentSaveData : null;
         if (save != null && save.caravans != null)
         {
-            int slot; int.TryParse(caravanKey, out slot);
+            // caravanKey가 숫자면 슬롯 라벨("1"~"4"), 아니면 실제 caravanId로 본다.
+            // (실제 id일 땐 슬롯매칭을 쓰면 안 됨 — 파싱 실패로 slot=0이 되어 slotIndex 0 캐러밴이 오매칭됨)
+            bool isSlot = int.TryParse(caravanKey, out int slot);
             foreach (var c in save.caravans)
             {
                 if (c == null) continue;
-                bool match = c.caravanId == caravanKey || (c.slotIndex + 1) == slot || c.slotIndex == slot;
+                bool match = isSlot
+                    ? ((c.slotIndex + 1) == slot || c.slotIndex == slot)   // 슬롯 라벨로 지정
+                    : (c.caravanId == caravanKey);                          // 실제 caravanId로 지정
                 if (!match) continue;
                 if (c.wagon != null) wagonName = c.wagon.wagonName;
                 if (c.animals != null) foreach (var a in c.animals) if (a != null) animalTypes.Add(a.animalType);
@@ -184,12 +190,12 @@ public class TreadmillStage : MonoBehaviour
             }
         }
 
-        // 마차: 중앙 카탈로그에서 ID로 찾아 그 .Prefab을 세운다.
+        // 마차: 중앙 카탈로그에서 ID로 찾아 그 .Prefab을 세운다(비면 기본 마차).
         GameObject wagonPrefab = ResolveWagonPrefab(wagonName);
         Vector3 wagonPos = wagonMount != null ? wagonMount.localPosition : Vector3.zero;
         if (wagonPrefab != null) SpawnLocal(wagonPrefab, wagonPos, WagonRoot());
 
-        // 동물: 마릿수만큼 마차 앞에 편성(세이브 없으면 프리뷰 마릿수).
+        // 동물: 마릿수만큼 편성. 세이브에 동물이 없으면 프리뷰 마릿수로 폴백(빈 화면 방지).
         int count = animalTypes.Count > 0 ? animalTypes.Count : Mathf.Max(0, previewAnimalCount);
         Vector3 basePos = animalMount != null ? animalMount.localPosition : new Vector3(0f, 0f, 2f);
         int perRow = Mathf.Max(1, animalsPerRow);

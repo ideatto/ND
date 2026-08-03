@@ -98,6 +98,100 @@ public static class TreadmillRouteSampler
     }
 
     /// <summary>
+    /// 미니맵과 '동일 정책'(CaravanMapDisplayResolver)으로 이 캐러밴의 표시 상태를 구한다.
+    ///  - onRoute=true  → routeId 위 progress01 진행(이동 중)
+    ///  - onRoute=false → townId 마을에 정박(대기·성공도착·실패귀환 등, 미니맵과 동일)
+    /// 실패 시 목적지가 아니라 '출발 마을'로 나오는 것도 리졸버가 처리한다.
+    /// </summary>
+    public static bool TryResolveDisplay(string caravanId, out bool onRoute, out string routeId, out float progress01, out string townId, out string tradeState)
+    {
+        onRoute = false; routeId = string.Empty; progress01 = 0f; townId = string.Empty; tradeState = string.Empty;
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        var save = fr != null ? fr.CurrentSaveData : null;
+        if (save == null || save.caravans == null) return false;
+
+        ND.Framework.CaravanSaveData c = null;
+        foreach (var cc in save.caravans) if (cc != null && cc.caravanId == caravanId) { c = cc; break; }
+        if (c == null) return false;
+
+        ND.Framework.SaveDataLookup.TryGetTradeProgress(save, caravanId, out ND.Framework.TradeProgressSaveData entry);
+        tradeState = entry != null ? entry.state.ToString() : string.Empty;   // None/Preparing/Traveling/SettlementPending/Completed/Failed
+        float travP = (entry != null && entry.state == ND.Framework.TradeProgressState.Traveling) ? ProgressOf(entry) : 0f;
+        var shared = fr.SharedGameData;
+        if (!ND.Framework.CaravanMapDisplayResolver.TryResolve(save, shared, c, entry, travP, out var display)) return false;
+
+        onRoute = display.Mode == ND.Framework.CaravanMapDisplayMode.Route;
+        routeId = display.RouteId; progress01 = display.Progress01; townId = display.TownId;
+        return true;
+    }
+
+    // 진행률 = (지금-출발)/(예상도착-출발), 0~1 (미니맵 CalcProgress와 동일)
+    private static float ProgressOf(ND.Framework.TradeProgressSaveData e)
+    {
+        if (e.tradeStartUtcTick <= 0 || e.expectedTradeEndUtcTick <= e.tradeStartUtcTick) return 1f;
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        long now = (fr != null && fr.GameTime != null) ? fr.GameTime.CurrentUtc.Ticks : System.DateTime.UtcNow.Ticks;
+        return Mathf.Clamp01((float)(now - e.tradeStartUtcTick) / (e.expectedTradeEndUtcTick - e.tradeStartUtcTick));
+    }
+
+    /// <summary>지정 routeId의 경로를 훑어 지형 문자열을 만든다(캐러밴 상태 무관 — 리졸버 구동용).</summary>
+    public static string SampleRouteTerrainByRouteId(string routeId, int samples = 400)
+    {
+        if (string.IsNullOrEmpty(routeId)) return string.Empty;
+        RouteVisual route = null;
+        foreach (var rv in Object.FindObjectsByType<RouteVisual>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (rv != null && rv.RouteId == routeId) { route = rv; break; }
+        if (route == null) return string.Empty;
+        var grid = Object.FindAnyObjectByType<MinimapGrid>(FindObjectsInactive.Include);
+        if (grid == null) return string.Empty;
+        if (!grid.CellsBuilt) grid.BuildCells();
+
+        var sb = new System.Text.StringBuilder();
+        int lastRow = int.MinValue, lastCol = int.MinValue, n = Mathf.Max(1, samples);
+        for (int i = 0; i <= n; i++)
+        {
+            Vector3 w = route.EvaluatePosition((float)i / n);
+            if (!grid.WorldToCell(w, out int row, out int col)) continue;
+            if (row == lastRow && col == lastCol) continue;
+            lastRow = row; lastCol = col;
+            var cell = grid.GetCell(row, col);
+            if (cell != null) sb.Append(MinimapCell.ToChar(cell.terrain));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>townId 마을이 놓인 격자 셀의 지형을 구한다(정박 중 그 마을 지형 표시용).</summary>
+    public static bool TryGetTownTerrain(string townId, out TerrainType terrain)
+    {
+        terrain = TerrainType.Plain;
+        if (string.IsNullOrEmpty(townId)) return false;
+        var grid = Object.FindAnyObjectByType<MinimapGrid>(FindObjectsInactive.Include);
+        if (grid == null) return false;
+        if (!grid.CellsBuilt) grid.BuildCells();
+        // 같은 townId의 TownWorldView가 여러 개(맵/미니맵 등)일 수 있으니, 격자 안에 드는 것을 사용.
+        foreach (var t in Object.FindObjectsByType<TownWorldView>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (t == null || t.TownId != townId) continue;
+            if (!grid.WorldToCell(t.transform.position, out int row, out int col)) continue;
+            var cell = grid.GetCell(row, col);
+            if (cell == null) continue;
+            terrain = cell.terrain;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>townId로 그 마을의 트레드밀 건물 프리팹을 찾는다(정박 표시용).</summary>
+    public static bool TryGetTownPrefabById(string townId, out GameObject prefab)
+    {
+        prefab = null;
+        if (string.IsNullOrEmpty(townId)) return false;
+        foreach (var tw in Object.FindObjectsByType<TownWorldView>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (tw != null && tw.TownId == townId && tw.TreadmillBuildingPrefab != null) { prefab = tw.TreadmillBuildingPrefab; return true; }
+        return false;
+    }
+
+    /// <summary>
     /// 이 캐러밴의 현재 여행 진행도(0~1)를 반환. 이동 중 아니면 false.
     /// (시간 기반: (지금-출발)/(예상도착-출발) — MinimapWeatherEventDetector와 동일 축.)
     /// </summary>

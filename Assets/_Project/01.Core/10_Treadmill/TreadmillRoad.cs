@@ -60,7 +60,7 @@ public class TreadmillRoad : MonoBehaviour
     [Tooltip("비우면 route로 진행. 한 글자(예: F)를 넣으면 그 지형만 무한 루프(단일 지형 확인용).")]
     [SerializeField] private string loopSingle = "";
     [SerializeField] private float scrollSpeed = 3f;   // 흐름 속도(m/s)
-    [SerializeField] private bool scroll = true;       // 흐름 on/off (캐러밴이 이동 중일 때만 켬)
+    [SerializeField] private bool scroll = false;      // 흐름 on/off (캐러밴이 실제 이동 중일 때만 켬. 기본 정지)
 
     [Header("디버그(수동 지형 전환)")]
     [Tooltip("켜면 스타일이 있는 모든 지형의 길을 미리 만들어 둔다(디버그 버튼으로 아무거나 전환 가능).")]
@@ -71,6 +71,8 @@ public class TreadmillRoad : MonoBehaviour
     [Header("길 모양")]
     [SerializeField] private float segLength = 10f;    // 조각(루프 단위) 길이
     [SerializeField] private float roadWidth = 12f;    // 길 너비
+    [Tooltip("모든 지형에서 가운데 '마차 지나는 길'을 이 반폭(±m)만큼 비운다(스캐터 안 생김). 0=안 비움. 각 레이어의 centerPathHalf와 함께 큰 값이 적용됨.")]
+    [SerializeField] private float centerPathHalf = 2.6f;   // 중앙 마차길 반폭(전 지형 공통)
     [SerializeField] private int piecesPerStrip = 8;   // 한 지형 길의 조각 수(총 길이=이×segLength)
     [SerializeField] private float curvature = 0.0025f;
     [SerializeField] private float viewBack = -10f;    // 루프 창 뒤끝(마차 뒤로 남길 여유)
@@ -106,6 +108,37 @@ public class TreadmillRoad : MonoBehaviour
     private bool transitioning;
     private float traveled;              // 누적 이동거리(m)
 
+    // ── 대기실 그리드(11번째 그리드) ──
+    // 지형 10개(Road_Farmland…)와 똑같이 TreadmillRoad의 자식으로 씬에 놓아 둔 '대기실 그리드'.
+    // 평소엔 다른 그리드처럼 옆(park)에 대기하다가, 이동 중이 아니면 가운데(무대)로 불러온다.
+    // (씬 오브젝트라 에디터에서 자유롭게 편집/교체 가능 — 코드가 생성하지 않는다.)
+    [Header("대기실 그리드(11번째)")]
+    [Tooltip("씬에 만들어 둔 '대기실 그리드' 오브젝트(TreadmillRoad 자식). 이동 중이 아니면 무대로 나온다.")]
+    [SerializeField] private Transform waitingRoomGrid;
+    private bool roomMode;   // true면 대기실 그리드가 무대(가운데), 지형 그리드는 옆으로 치움
+
+    /// <summary>대기실 그리드 on/off. 켜면 대기실 그리드를 무대(가운데)로, 지형 그리드는 옆으로 치운다.
+    /// → 마을 진입·대기·파괴 시 도로 대신 '차고'에 마차가 서 있는 것처럼 보임(나무 안 뚫음).</summary>
+    public void ShowWaitingRoom(bool on)
+    {
+        if (roomMode == on) return;   // 상태 그대로면 무시(매 프레임 호출돼도 안전)
+        roomMode = on;
+        PlaceRoom(on);
+    }
+
+    // 대기실 그리드를 무대(x=0)로 올리거나 옆(park)으로 치운다. 지형 활성 길은 반대로.
+    private void PlaceRoom(bool on)
+    {
+        if (waitingRoomGrid != null)
+            waitingRoomGrid.localPosition = on ? Vector3.zero
+                                               : new Vector3(parkSpacingX * Mathf.Max(1, distinct.Count), 0f, 0f);
+        if (active != null)
+        {
+            if (on) ParkByType(active);        // 지형 길을 자기 슬롯(옆)으로 치워 화면에서 사라지게
+            else MoveRootToStageX(active);     // 다시 무대(가운데)로
+        }
+    }
+
     /// <summary>스크롤(흐름) on/off. 캐러밴이 이동 중일 때만 켜도록 외부에서 제어.</summary>
     public void SetScrollEnabled(bool on) => scroll = on;
 
@@ -118,6 +151,16 @@ public class TreadmillRoad : MonoBehaviour
     public void SetArrived(bool on) => arrived = on;
     /// <summary>도착 정지 상태인지.</summary>
     public bool IsArrived => arrived;
+
+    private bool terrainVisible = true;   // 도로 지형(길·나무·풀) 렌더 표시 여부
+    /// <summary>도로 지형 렌더 on/off. 대기실 표시 중엔 꺼서 나무·풀이 대기실을 뚫지 않게 한다.
+    /// (변경될 때만 렌더러를 훑어 성능 안전. 로직·위치엔 영향 없음, 오직 렌더만.)</summary>
+    public void SetTerrainVisible(bool on)
+    {
+        if (terrainVisible == on) return;
+        terrainVisible = on;
+        foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = on;
+    }
 
     // ── 외부 진행도 구동(실제 여행 progress로 길을 몰기) ──
     // 그리드(어느 셀)는 진행도 p로, 시각 지면 스크롤은 기존 scrollSpeed로 '분리' 구동한다.
@@ -160,6 +203,17 @@ public class TreadmillRoad : MonoBehaviour
         BeginTransition(t);
     }
 
+    /// <summary>슬라이드 없이 즉시 이 지형으로 교체한다(정박 중 마을 주변 지형 표시용).</summary>
+    public void SetTerrainImmediate(TerrainType t)
+    {
+        if (!Application.isPlaying || !strips.ContainsKey(t)) return;
+        if (transitioning) { if (incoming != null) ParkByType(incoming); incoming = null; transitioning = false; }
+        if (active != null && active.Terrain == t) return;   // 이미 그 지형
+        if (active != null) ParkByType(active);
+        active = strips[t];
+        MoveToStage(active);
+    }
+
     /// <summary>지형 순서를 캐러밴 실제 루트로 교체하고 다시 만든다(비면 무시).</summary>
     public void SetRoute(string routeChars)
     {
@@ -175,7 +229,13 @@ public class TreadmillRoad : MonoBehaviour
     [ContextMenu("Rebuild")]
     public void Rebuild()
     {
-        for (int i = transform.childCount - 1; i >= 0; i--) DestroyObj(transform.GetChild(i).gameObject);
+        // 지형 길 자식만 새로 만든다. '대기실 그리드'(씬에 놓아둔 11번째)는 파괴하지 않고 보존한다.
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var child = transform.GetChild(i);
+            if (waitingRoomGrid != null && child == waitingRoomGrid) continue;
+            DestroyObj(child.gameObject);
+        }
         strips.Clear(); distinct.Clear();
         transitioning = false; incoming = null; traveled = 0f;
 
@@ -195,30 +255,36 @@ public class TreadmillRoad : MonoBehaviour
                     { tex = s.texture; tint = s.tint; dtex = s.detailTexture; dtint = s.detailTint; amount = s.detailAmount;
                       layers = s.scatterLayers; break; }
             strip.BuildFor(t, segLength, roadWidth, piecesPerStrip, curvature, viewBack,
-                           tex, tint, dtex, dtint, amount, textureTileMeters, noiseScale, layers);
+                           tex, tint, dtex, dtint, amount, textureTileMeters, noiseScale, layers, centerPathHalf);
             strips[t] = strip;
             Park(strip, slot);   // 에디트에선 X로 나란히(각 지형 길 따로 확인)
         }
 
         active = strips.Count > 0 ? strips[distinct[0]] : null;
         if (Application.isPlaying && active != null) MoveToStage(active);
+
+        // 대기실 그리드(11번째)를 지형 길들 다음 슬롯(옆)에 대기시킨다. 무대로는 ShowWaitingRoom가 부른다.
+        if (waitingRoomGrid != null)
+            PlaceRoom(roomMode);
     }
 
     private void Update()
     {
         if (!Application.isPlaying || active == null) return;
+        if (roomMode) { lastDz = 0f; return; }   // 대기실 표시 중엔 지형 스크롤·전환 안 함(정지)
 
         float dz;
         if (externalDrive)
         {
             if (arrived) { lastDz = 0f; return; }
-            // 진행도가 늘어나는 중일 때만 지면을 '보기 좋은 속도'로 스크롤(그리드는 p가 따로 정함)
-            bool advancing = externalP01 > lastP01 + 1e-5f;
+            // 이동 중(외부구동 + 도착 전)이면 진행도 변화량과 무관하게 지면을 '보기 좋은 속도'로 흘린다.
+            //  (예전엔 프레임당 진행도 delta > 1e-5 일 때만 스크롤 → 진행이 느린 긴 무역은 delta가
+            //   미세해 임계값에 안 걸려 '그리드 셀은 바뀌는데 바닥은 안 흐르는' 문제가 있었다.
+            //   시각 스크롤 속도는 어차피 scrollSpeed로 분리 구동이므로, 도착 전엔 항상 흐르게 한다.)
             lastP01 = externalP01;
-            dz = advancing ? scrollSpeed * Time.deltaTime : 0f;
+            dz = scrollSpeed * Time.deltaTime;
             traveled += dz;                                     // 시각용 누적(피스 스크롤)
             lastDz = dz;
-            if (dz <= 0.0001f && !transitioning) return;        // 정지 중이면 그대로
         }
         else
         {
