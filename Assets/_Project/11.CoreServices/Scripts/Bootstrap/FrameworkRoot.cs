@@ -24,6 +24,7 @@
  * - SharedGameData: 검증된 공용 기준 데이터 provider.
  * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
  * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
+ * - PrepareGameForInGame(): scene 전환 없이 SharedGameData와 loading 복구 절차를 완료한다.
  * - CompleteLoadingAndEnterGame(): SharedGameData 로드 후 오프라인 복구·대기 정산 복구를 하고 in-game scene으로 이동한다.
  * - ReturnToTitle(): 현재 저장 데이터를 저장한 뒤 title scene으로 이동한다.
  *
@@ -255,6 +256,8 @@ namespace ND.Framework
 
         private float nextTradeProgressCheckUnscaledTime;
         private bool isOnlineProgressTickEnabled;
+        private bool isPreparingInGameEntry;
+        private bool isInGameEntryPrepared;
 
         /// <summary>
         /// 현재 활성화된 FrameworkRoot 인스턴스이다.
@@ -411,6 +414,7 @@ namespace ND.Framework
         public void StartNewGame()
         {
             isOnlineProgressTickEnabled = false;
+            isInGameEntryPrepared = false;
             // 새 게임은 기본 저장 데이터를 먼저 디스크에 기록해 이후 loading 단계가 같은 데이터를 사용하게 한다.
             CurrentSaveData = SaveService.CreateNewGameData();
             SaveService.Save(CurrentSaveData);
@@ -438,6 +442,7 @@ namespace ND.Framework
         public void ContinueGame()
         {
             isOnlineProgressTickEnabled = false;
+            isInGameEntryPrepared = false;
             // 이어하기는 저장 데이터를 먼저 확보한 뒤 scene flow를 loading 단계로 넘긴다.
             CurrentSaveData = SaveService.Load();
             SceneFlow.GoToLoading();
@@ -453,6 +458,35 @@ namespace ND.Framework
         /// </remarks>
         public void CompleteLoadingAndEnterGame()
         {
+            var result = PrepareGameForInGame();
+            if (result.Succeeded)
+            {
+                SceneFlow.GoToInGame();
+            }
+        }
+
+        /// <summary>
+        /// Prepares framework data for InGame without starting a scene load.
+        /// </summary>
+        /// <returns>
+        /// Success after all preparation side effects finish. Failure blocks scene loading and may be retried.
+        /// A completed result is reused until a new game flow begins, so callers do not repeat restore or events.
+        /// </returns>
+        public LoadingPreparationResult PrepareGameForInGame()
+        {
+            if (isInGameEntryPrepared)
+            {
+                return LoadingPreparationResult.Success();
+            }
+
+            if (isPreparingInGameEntry)
+            {
+                return LoadingPreparationResult.Failure("InGame preparation is already running.");
+            }
+
+            isPreparingInGameEntry = true;
+            try
+            {
             // 직접 Loading scene에 진입하거나 재호출돼도 복구가 끝나기 전 online tick을 차단한다.
             isOnlineProgressTickEnabled = false;
 
@@ -465,7 +499,7 @@ namespace ND.Framework
             // SaveData의 ID를 해석할 공용 기준 데이터가 준비되지 않으면 InGame에 진입하지 않는다.
             if (!EnsureSharedGameDataLoaded())
             {
-                return;
+                return LoadingPreparationResult.Failure("Shared game data validation failed.");
             }
 
             // 로드 전부터 존재하던 canonical pending을 cache 복구 대상으로 기억한다.
@@ -493,6 +527,10 @@ namespace ND.Framework
                 TradeProgressCoordinator,
                 SaveService);
             LastCalendarRestoreResult = restoreTransaction.CalendarResult;
+            if (!restoreTransaction.Succeeded)
+            {
+                return LoadingPreparationResult.Failure("Offline restoration failed.");
+            }
 
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
             if (restorePending)
@@ -509,7 +547,18 @@ namespace ND.Framework
             }
             // SaveData·SharedData·offline/pending 복구와 load event 처리가 모두 끝난 세션만 online tick을 허용한다.
             isOnlineProgressTickEnabled = true;
-            SceneFlow.GoToInGame();
+            isInGameEntryPrepared = true;
+            return LoadingPreparationResult.Success();
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"InGame preparation failed: {exception.Message}");
+                return LoadingPreparationResult.Failure(exception.Message);
+            }
+            finally
+            {
+                isPreparingInGameEntry = false;
+            }
         }
 
         /// <summary>
