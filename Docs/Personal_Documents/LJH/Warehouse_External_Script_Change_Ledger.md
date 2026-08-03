@@ -93,10 +93,10 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 
 ## 수정한 문서 목록
 
-- `Docs/Warehouse_External_Script_Change_Ledger.md`: 외부·내부·Prefab·Scene·삭제와 복구 절차를 통합했다.
-- `Docs/Warehouse_Runtime_Connection_2026-08-03.md`: 현재 데이터 흐름, 상태 전이, 검증, debug 제거를 반영했다.
-- `Docs/Warehouse_UI_New_Chat_Handoff.md`: 폐기된 capacity asset 안을 제거하고 현재 정책과 남은 작업을 반영했다.
-- `Docs/Cargo_Sell_UI_Status_2026-08-03.md`: Cargo 판매 Popup 외형·Build UI 조립 상태, 보류 데이터 연결, Caravan 정상화 이후 검증을 기록했다.
+- `Docs/Personal_Documents/LJH/Warehouse_External_Script_Change_Ledger.md`: 외부·내부·Prefab·Scene·삭제와 복구 절차를 통합했다.
+- `Docs/Personal_Documents/LJH/Warehouse_Runtime_Connection_2026-08-03.md`: 현재 데이터 흐름, 상태 전이, 검증, debug 제거를 반영했다.
+- `Docs/Personal_Documents/LJH/Warehouse_UI_New_Chat_Handoff.md`: 폐기된 capacity asset 안을 제거하고 현재 정책과 남은 작업을 반영했다.
+- `Docs/Personal_Documents/LJH/Cargo_Sell_UI_Status_2026-08-03.md`: Cargo 판매 Popup 외형·Build UI 조립 상태, 보류 데이터 연결, Caravan 정상화 이후 검증을 기록했다.
 
 ## completed 발생 시 절차
 
@@ -164,5 +164,5 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 
 - `CargoSellPopup.prefab`: Cargo와 판매 대기 목록의 외형 Prefab이다. 실제 시장 transaction 연결은 아직 보류 상태다.
 - `Build UI.unity`: `BuildingPopupPreviewCanvas` 아래에 전체 화면 Stretch·scale 1·초기 비활성 Prefab 인스턴스로 조립했다.
-- 상세한 상호작용과 후속 데이터 연결은 `Docs/Cargo_Sell_UI_Status_2026-08-03.md`를 기준으로 한다.
+- 상세한 상호작용과 후속 데이터 연결은 `Docs/Personal_Documents/LJH/Cargo_Sell_UI_Status_2026-08-03.md`를 기준으로 한다.
 
