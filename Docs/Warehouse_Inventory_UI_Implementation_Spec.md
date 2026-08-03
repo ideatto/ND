@@ -1,3 +1,10 @@
+
+## 문서 상태
+
+- 이 문서는 초기 설계와 구현 결정을 함께 보존한다.
+- Capacity SO와 고정 슬롯 풀 제안은 폐기되었다. 현행 Warehouse 슬롯 정책과 runtime 연결 상태는 `Warehouse_Runtime_Connection_2026-08-03.md`를 우선한다.
+- Cargo 판매 UI의 현재 외형·Build UI 조립과 후속 데이터 연결은 `Cargo_Sell_UI_Status_2026-08-03.md`를 우선한다.
+- 외부 파일 충돌·복구 범위는 `Warehouse_External_Script_Change_Ledger.md`를 우선한다.
 ﻿# Warehouse Inventory UI 구현 명세
 
 ## 1. 목적과 확정 UI
@@ -407,7 +414,7 @@ Save 성공 --HomeInventoryChanged + CaravanCargoChanged(caravanId)--> Presenter
 - 현재 가격 그룹은 별도 영속 ID가 아니라 `itemId + purchaseUnitPrice`로 계산한 파생 그룹이다.
 - 같은 아이템을 같은 가격에 여러 번 획득하면 하나의 UI 그룹과 하나의 이동 단위로 합산한다.
 - 거래별 계보, 동일 가격 lot 분리, FIFO/LIFO 원가 추적이 필요해질 때만 `lotId`를 별도 도입한다. 그 경우에도 UI 가격 행은 여러 lot을 가격별로 합산할 수 있다.
-- 이번 최소 구현은 Warehouse의 ViewData/Resolver/Capacity/원자적 Transfer 경계까지다. Prefab 버튼과 기존 Quantity/Notice UI의 runtime 바인딩은 후속 작업이다.
+- Warehouse ViewData/Resolver/Capacity/원자적 Transfer와 Prefab·Quantity·Notice runtime 바인딩은 완료했다. 실제 Wagon/Cargo 저장 연결이 정상화된 뒤 통합 PlayMode 검증이 남아 있다.
 - 시장 매수/매도 가격 묶음 보존은 이후 11절에서 통합 범위로 확정했다. 판매 수익·원가 정책과 가격 묶음 선택 UI는 여전히 범위 밖이다.
 - 공용 DTO에 필드를 추가한 결과 발생할 수 있는 데이터 유실을 막기 위해 Save/runtime Mapper 및 rollback clone에는 구매가 복사를 추가했다.
 

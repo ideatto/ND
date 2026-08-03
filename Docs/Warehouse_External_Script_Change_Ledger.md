@@ -10,7 +10,7 @@
 1. completed 담당자가 같은 파일을 수정했다면 새 구현을 기준으로 아래 계약의 존재 여부부터 비교한다.
 2. 동일 계약이 있으면 과거 hunk를 버리고, 없으면 파일 전체가 아닌 해당 필드·이벤트·검증만 새 구조에 맞게 재적용한다.
 3. 가격 묶음은 별도 lot ID가 아니라 `itemId + purchaseUnitPrice` 파생 키다.
-4. Build UI Scene 변경은 다른 담당 작업과 충돌할 위험이 있어 이 PR에서 제외한다. Warehouse는 Prefab과 코드 중심으로 유지하고 실제 Scene 연결은 merge 이후 수행한다.
+4. Build UI Scene에는 검토용 `CargoSellPopup` Prefab 인스턴스가 조립되어 있다. Scene 충돌 시 다른 변경을 덮지 말고 해당 인스턴스만 재적용한다.
 
 ## 외부·공용 코드 변경
 
@@ -62,7 +62,7 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - `WarehouseUiPrefabBuilder.cs`: rebuild 시 PriceGroup row view와 Quantity Modal 연결을 유지한다.
 - `WarehouseInventoryPopup.prefab`: controller, SelectionModalLayer, PriceGroup, Quantity, Tooltip과 runtime prefab 참조를 연결했다.
 - `WarehouseInventorySlot.prefab`, `WarehouseCaravanSlot.prefab`, `WarehousePriceGroupRow.prefab`: 전용 View component 연결.
-- Build UI Scene과 MainUI 연결은 이 PR에 포함하지 않는다. Warehouse Popup은 Prefab 상태로 제공하고 merge 이후 실제 게임 Scene에서 연결한다.
+- Warehouse Popup은 `MainUICanvas.prefab`과 실제 MainUI 진입에 연결했다. Build UI Scene에는 별도로 `CargoSellPopup` 검토 인스턴스를 조립했다.
 
 ## 제거한 디버그 기능
 
@@ -96,6 +96,7 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - `Docs/Warehouse_External_Script_Change_Ledger.md`: 외부·내부·Prefab·Scene·삭제와 복구 절차를 통합했다.
 - `Docs/Warehouse_Runtime_Connection_2026-08-03.md`: 현재 데이터 흐름, 상태 전이, 검증, debug 제거를 반영했다.
 - `Docs/Warehouse_UI_New_Chat_Handoff.md`: 폐기된 capacity asset 안을 제거하고 현재 정책과 남은 작업을 반영했다.
+- `Docs/Cargo_Sell_UI_Status_2026-08-03.md`: Cargo 판매 Popup 외형·Build UI 조립 상태, 보류 데이터 연결, Caravan 정상화 이후 검증을 기록했다.
 
 ## completed 발생 시 절차
 
@@ -103,8 +104,8 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 2. completed가 수정한 외부 파일은 새 기준으로 돌리되 Warehouse 신규 파일은 유지한다.
 3. 외부 계약이 새 코드에 이미 있는지 확인하고 빠진 계약만 재작성한다.
 4. controller/presenter/view/prefab 연결을 다시 적용한다.
-5. Build UI Scene 변경은 복구 대상에서 제외하고, merge 이후 최신 게임 Scene에 Warehouse Prefab을 새로 연결한다.
-6. compile error 0, 전송 테스트 6/6, 가격 묶음 왕복·rollback을 재검증한다.
+5. Build UI Scene 충돌 시 `BuildingPopupPreviewCanvas/CargoSellPopup` Prefab 인스턴스만 최신 Scene에 재조립한다.
+6. compile error 0, 관련 EditMode 10/10, 가격 묶음 왕복·rollback을 재검증한다.
 
 ## 최종 체크리스트
 
@@ -114,7 +115,7 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - [ ] Player/Caravan BaseCamp 및 Caravan Prepare일 때만 이동하는가
 - [ ] save 실패 시 양쪽 inventory가 rollback되는가
 - [ ] rebuild 뒤 Quantity Modal과 View component가 유지되는가
-- [ ] PR에 Build UI Scene 삭제·이동·override가 포함되지 않았는가
+- [ ] Build UI Scene의 `CargoSellPopup`이 Prefab 인스턴스로 유지되고 다른 Scene 변경을 덮지 않았는가
 - [ ] debug fixture가 코드와 Scene에 남지 않았는가
 ## 2026-08-03 MainUI 연결·Caravan 슬롯 검증 추가
 
@@ -158,4 +159,10 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - `WarehouseInventoryPopupController.cs`: 창고 진입·Caravan 선택·Framework·아이템 오류를 기존 `NoticeUI`에 사용자 문구로 연결했다.
 - `BuildingConstructionRuntimeHandler.cs`: 건설 실패 사용자 문구와 Console 진단 원인을 분리해 기존 `NoticeUI`로 표시한다.
 - `NoticeUI.prefab`, `MainUICanvas.prefab`: Notice를 화면 상단 중앙 아래 배너로 배치하고 텍스트 여백·자동 크기를 보정했다.
+
+### 2026-08-03 Cargo Sell Build UI 조립
+
+- `CargoSellPopup.prefab`: Cargo와 판매 대기 목록의 외형 Prefab이다. 실제 시장 transaction 연결은 아직 보류 상태다.
+- `Build UI.unity`: `BuildingPopupPreviewCanvas` 아래에 전체 화면 Stretch·scale 1·초기 비활성 Prefab 인스턴스로 조립했다.
+- 상세한 상호작용과 후속 데이터 연결은 `Docs/Cargo_Sell_UI_Status_2026-08-03.md`를 기준으로 한다.
 
