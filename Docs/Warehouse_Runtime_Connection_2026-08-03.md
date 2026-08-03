@@ -88,3 +88,15 @@ HomeInventoryChanged / CaravanCargoChanged
 - merge 중 외부 계약 파일이 변경되면 `Warehouse_External_Script_Change_Ledger.md`를 기준으로 누락된 계약만 재적용하고 컴파일 및 EditMode 6/6을 다시 확인한다.
 
 파일별 복구 정보는 `Warehouse_External_Script_Change_Ledger.md`를 기준으로 한다.
+## 2026-08-03 추가 검증 결과
+
+- Caravan 슬롯의 권위 범위는 0~3이다.
+- 범위 밖 Caravan은 Main UI와 Warehouse 선택 목록에서 제외한다.
+- 동일 슬롯을 둘 이상 점유하면 해당 슬롯의 어느 Caravan도 선택하지 않는다.
+- 최종 선택과 Cargo 조회는 검증을 통과한 `caravanId`로 수행한다.
+- 전송 서비스도 변경 직전에 같은 검증을 반복하여 UI 우회 호출을 차단한다.
+- Tooltip은 hover 슬롯 오른쪽에 배치하며, Root Canvas 오른쪽 경계를 넘을 때 왼쪽으로 전환하고 상하 경계를 보정한다.
+- Caravan 미선택·무효 상태와 `maxTransfer == 0` 실패는 기존 `NoticeUI`를 사용해 문구로 표시한다.
+- 현재 실제 Caravan은 Wagon 저장값이 비어 있고 `maxLoad == 0`이므로 Home→Cargo 수량 선택이 `CargoOverweight`로 차단되는 것이 정상적인 fail-closed 결과다.
+- 컴파일 오류 0, 관련 EditMode 테스트 10/10 통과.
+

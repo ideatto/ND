@@ -116,3 +116,38 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - [ ] rebuild 뒤 Quantity Modal과 View component가 유지되는가
 - [ ] PR에 Build UI Scene 삭제·이동·override가 포함되지 않았는가
 - [ ] debug fixture가 코드와 Scene에 남지 않았는가
+## 2026-08-03 MainUI 연결·Caravan 슬롯 검증 추가
+
+### 내부 변경 (`Assets/99.Sandbox/_LJH`)
+
+- `SaveDataCaravanOverviewProviderBehaviour.cs`: 고정 슬롯 0~3을 공통 검증 결과로 표현하며, 중복 슬롯은 임의 선택하지 않고 오류 상태로 표시한다.
+- `WarehouseMainUiEntry.cs`: 건물 목록의 창고 블록 클릭을 Warehouse Popup 진입으로 연결한다.
+
+### 외부 변경 (`Assets/99.Sandbox/_LJH` 밖)
+
+- `BuildingListPanel.cs`: 동적 건물 블록 클릭 시 건물 표시명을 전달하는 `BuildingClicked` 이벤트를 추가했다.
+- `MainUICanvas.prefab`: Warehouse Popup과 MainUI 진입 바인딩을 조립했다.
+- `WarehouseInventoryPopupController.cs`: 검증된 `caravanId`만 선택·Cargo 조회에 사용한다. Tooltip은 hover 슬롯 옆에 배치하고 화면 경계에서 좌우 반전·상하 보정한다. 무효 Caravan, 가격 묶음 없음, 슬롯·무게·저장 실패를 기존 `NoticeUI`로 알린다.
+- `CaravanSlotValidation.cs`: 유효 슬롯 0~3, 범위 밖 제외, 슬롯 중복·빈 ID·ID 중복 fail-closed 정책을 제공한다. UI와 전송 서비스가 공유하도록 CoreServices에 둔다.
+- `WarehouseInventoryTransfer.cs`: 실제 변경 직전에 공통 슬롯 검증을 다시 수행하고 검증되지 않은 `caravanId`의 이동을 `InvalidCaravan`으로 거절한다.
+- `CaravanSlotValidationTests.cs`: 범위 밖 슬롯, 슬롯 중복, 정상 ID 조회, 중복 슬롯 전송 차단을 검증한다.
+- `WarehouseInventoryTransferTests.cs`: 기존 fixture를 유효한 단일 슬롯 데이터로 명시해 새 슬롯 정책과 기존 rollback·상태 검증을 함께 유지한다.
+
+### 의도적으로 수정하지 않은 보류 파일
+
+- `MarketData.cs`
+- `MarketTradePanelController.cs`
+- `MarketInventoryIntegration.cs`
+- `SaveData.cs`
+- `JsonSaveService.cs`
+- `MarketInventoryIntegrationProbe.cs`
+- `TradeItemData.cs`
+- `SharedGameDataView.cs`
+- `SharedGameDataService.cs`
+- `MarketTravelValidationHarness.cs`
+
+### 후속 선행 작업
+
+- 실제 Caravan 설정 확정 결과가 `CaravanSaveData.wagon`에 저장되어야 정상 Cargo 슬롯·최대 적재량으로 통합 QA할 수 있다.
+- TradeCycle 구매 Draft를 다음 단계에서 `caravan.cargo`에 저장하는 변경은 별도 시장 거래 브랜치에서 검토한다.
+

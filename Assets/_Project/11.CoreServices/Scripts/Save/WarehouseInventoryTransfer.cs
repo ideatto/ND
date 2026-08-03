@@ -204,7 +204,8 @@ private static int MaxAdditionalBySlots(
             failure = WarehouseTransferFailure.None;
             if (saveData?.player == null || saveService == null)
                 return Fail(WarehouseTransferFailure.InvalidFramework, out failure);
-            if (!SaveDataLookup.TryGetCaravan(saveData, request.CaravanId, out CaravanSaveData caravan))
+            CaravanSlotValidationResult slotValidation = CaravanSlotValidation.Validate(saveData.caravans);
+            if (!slotValidation.TryGetCaravan(request.CaravanId, out CaravanSaveData caravan))
                 return Fail(WarehouseTransferFailure.InvalidCaravan, out failure);
             if (!string.Equals(request.BaseTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal)
                 || !string.Equals(saveData.player.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal)
