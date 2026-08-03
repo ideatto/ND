@@ -105,6 +105,16 @@ public class MinimapClouds : MonoBehaviour
     private long simStep;        // 몇 번째 '똑딱'(순간). 모든 번호표의 시간 축
     private static double weatherEpoch = -1;   // Phase2: 날씨 시작 기준 시각(초). static=세션 내 미니맵 닫아도 유지
     private int spawnCounter;    // 몇 번째로 태어난 구름인지(구름마다 고유 씨앗)
+
+    // ── 앱 재시작 이어가기(오프라인 계산) ──
+    // 끄기 전 게임시각을 우리 자체 파일에 저장 → 다시 켜면 epoch을 '이전 종료 시각 - 워밍업'으로 잡아
+    // '그 공백만' 되감아 계산한다(며칠치 전부 X). 결정론이라 같은 seed면 같은 날씨가 재생됨.
+    [Tooltip("재시작 복원 시 구름이 자리잡도록 공백 앞에 미리 되감는 워밍업(초).")]
+    [SerializeField] private float resumeWarmupSeconds = 30f;
+    private static bool anchorLoaded;              // 세션당 1회 로드
+    private static double savedLastGameTime = -1;  // 이전 세션이 마지막 저장한 게임시각(초)
+    private static bool resumeCatchupPending;      // 재시작 직후 첫 캐치업은 상한을 크게(공백 전부 되감기)
+    private float saveTimer;
     private float acc;           // 실시간 누적(고정스텝으로 잘라 쓰기 위한 통)
     private readonly List<Cloud> clouds = new List<Cloud>();
     private readonly List<Vector3> waterCells = new List<Vector3>();   // 강/호수/다리 셀 월드좌표(물 위 생성용)
@@ -122,7 +132,34 @@ public class MinimapClouds : MonoBehaviour
         if (renderRoot == null) renderRoot = transform;
         if (grid == null) grid = GetComponent<MinimapGrid>() ?? GetComponentInChildren<MinimapGrid>(true);
         if (wind == null) wind = GetComponent<MinimapWind>() ?? GetComponentInChildren<MinimapWind>(true);
+        LoadAnchorOnce();   // 앱 재시작이면 이전 종료 시각을 읽어 둔다(그 공백만 되감기 위함)
     }
+
+    // 우리 자체 파일(프레임워크 save와 분리)에서 '이전 세션 마지막 게임시각'을 1회 읽는다.
+    [System.Serializable] private class SimAnchor { public double lastGameTime = -1; }
+    private static string AnchorPath => System.IO.Path.Combine(Application.persistentDataPath, "weather_sim.json");
+    private static void LoadAnchorOnce()
+    {
+        if (anchorLoaded) return;
+        anchorLoaded = true;
+        try
+        {
+            if (System.IO.File.Exists(AnchorPath))
+            {
+                var a = JsonUtility.FromJson<SimAnchor>(System.IO.File.ReadAllText(AnchorPath));
+                if (a != null && a.lastGameTime > 0) savedLastGameTime = a.lastGameTime;
+            }
+        }
+        catch { }
+    }
+    // 현재 게임시각을 저장(끄기 전/주기적) → 다음 실행이 '그 공백만' 되감게 한다.
+    private void SaveAnchor()
+    {
+        try { System.IO.File.WriteAllText(AnchorPath, JsonUtility.ToJson(new SimAnchor { lastGameTime = NowSeconds() })); }
+        catch { }
+    }
+    private void OnApplicationPause(bool paused) { if (paused) SaveAnchor(); }
+    private void OnApplicationQuit() => SaveAnchor();
 
     private void Start()
     {
@@ -147,11 +184,18 @@ public class MinimapClouds : MonoBehaviour
 
         // Phase2 벽시계 앵커: 날씨는 'epoch부터 지금까지 벽시계로 몇 스텝'까지 진행돼 있어야 한다.
         // 미니맵을 닫았다 열어도(simStep=0에서 다시 시작해도) 결정론 리플레이로 목표 스텝까지 따라잡아 '이어진' 상태를 재생성.
-        if (weatherEpoch < 0) weatherEpoch = NowSeconds();
+        if (weatherEpoch < 0)
+        {
+            // 재시작이면 epoch=이전 종료시각-워밍업 → 첫 캐치업이 '그 공백만' 되감음(며칠치 전부 X). 없으면 지금부터.
+            weatherEpoch = savedLastGameTime > 0 ? savedLastGameTime - resumeWarmupSeconds : NowSeconds();
+            if (savedLastGameTime > 0) resumeCatchupPending = true;   // 첫 되감기는 공백 전부 커버하게 상한 크게
+        }
         long targetStep = (long)((NowSeconds() - weatherEpoch) / fixedDt);
         int guard = 0;
+        int catchupCap = resumeCatchupPending ? 200000 : maxCatchupSteps;   // 재시작 첫 되감기만 크게(그 뒤엔 평소 상한)
+        resumeCatchupPending = false;
         float sdt = fixedDt * simSpeed;        // 시뮬 시간 배율(모든 비율 유지한 채 느리게)
-        while (simStep < targetStep && guard < maxCatchupSteps)
+        while (simStep < targetStep && guard < catchupCap)
         {
             wind.StepSim(sdt);                 // ① 바람 먼저 전진(구름이 읽을 바람)
             StepClouds(a, sdt);                // ② 그 바람으로 구름 전진
@@ -161,6 +205,10 @@ public class MinimapClouds : MonoBehaviour
             if (WeatherStepped != null) WeatherStepped(weatherEpoch + simStep * fixedDt);
         }
         if (simStep < targetStep) simStep = targetStep;   // 너무 오래 닫혀 상한 초과 → 목표로 점프(근사)
+
+        // 앵커(게임시각) 주기 저장 → 앱 껐다 켜도 '그 공백만' 되감아 계산.
+        saveTimer += Time.unscaledDeltaTime;
+        if (saveTimer >= 3f) { saveTimer = 0f; SaveAnchor(); }
     }
 
     /// <summary>날씨 기준 시각(초) = 진짜 벽시계. 유니티가 멈추거나 unfocus·종료돼도 흐른다(캐러밴 오프라인과 동일).
