@@ -2,7 +2,7 @@
 
 - 기준일: 2026-08-03
 - 범위: Player Home Inventory ↔ BaseCamp Prepare Caravan Cargo
-- MainUI 연결: merge 이후 별도 작업
+- MainUI 연결: 창고 건물 블록 클릭 → Warehouse Popup 연결 완료
 
 ## 권위 데이터
 
@@ -67,7 +67,7 @@ HomeInventoryChanged / CaravanCargoChanged
 
 ## 검증 상태
 
-- EditMode 전송 테스트: 6/6
+- 관련 EditMode 테스트: 10/10
 - H→C 및 C→H 가격 묶음 왕복: 통과
 - 저장 실패 양쪽 rollback: 통과
 - non-Prepare Caravan mutation 차단: 통과
@@ -75,16 +75,26 @@ HomeInventoryChanged / CaravanCargoChanged
 
 ## 남은 작업
 
-- `WarehouseTransferFailure`를 NoticeUI에 연결하고 실패 원인별 사용자 문구를 확인한다.
-- 정상 게임 진입에서 SharedGameData의 아이템 이름·설명·아이콘 Tooltip을 확인한다.
-- full/overweight/stale state 및 빠른 연속 입력의 실패 UI를 시각 QA한다.
-- 실제 SaveData 저장·불러오기와 재접속 뒤에도 Warehouse level, 양쪽 Inventory와 `itemId + purchaseUnitPrice` 묶음이 유지되는지 확인한다.
-- merge 이후 MainUI Warehouse 진입 패널을 연결한다.
-  - Warehouse level 0: 패널 숨김
-  - Warehouse level 1 이상: 패널 표시
-  - 클릭: `WarehouseInventoryPopupController.TryOpen()` 호출
-  - 열기 직전 최신 SaveData로 Warehouse/BaseCamp 조건 재검증
-- MainUI 연결 후 정상 게임 Scene에서 진입, Caravan 선택, Player ↔ Cargo 전송, 저장, 재접속을 포함한 PlayMode 회귀 테스트를 수행한다.
-- merge 중 외부 계약 파일이 변경되면 `Warehouse_External_Script_Change_Ledger.md`를 기준으로 누락된 계약만 재적용하고 컴파일 및 EditMode 6/6을 다시 확인한다.
+- Caravan/Wagon 저장 연결 정상화 후 `CaravanSaveData.wagon`의 슬롯 수·최대 적재량을 실제 UI에서 검증한다.
+- TradeCycle과 Warehouse가 선택한 `caravanId`의 동일 `caravan.cargo`를 공유하는지 확인한다.
+- 구매 Cargo의 `itemId + purchaseUnitPrice`가 적재·Warehouse 이동·저장·재접속 전 과정에서 유지되는지 확인한다.
+- Wagon 교체로 Cargo가 새 용량을 초과할 때의 정책을 확정하고 full/overweight Notice를 검증한다.
+- 사용자 지정 Caravan 이름 도입 후에도 표시명과 무관하게 `caravanId`로 선택·저장·조회되는지 확인한다.
+- 정상 게임 진입에서 SharedGameData 이름·설명·아이콘 Tooltip과 stale state를 시각 QA한다.
+- merge 중 외부 계약 파일이 변경되면 변경 장부 기준으로 누락된 계약만 재적용하고 컴파일 및 관련 EditMode 10/10을 다시 확인한다.
 
 파일별 복구 정보는 `Warehouse_External_Script_Change_Ledger.md`를 기준으로 한다.
+## 2026-08-03 추가 검증 결과
+
+- Caravan 슬롯의 권위 범위는 0~3이다.
+- 범위 밖 Caravan은 Main UI와 Warehouse 선택 목록에서 제외한다.
+- 동일 슬롯을 둘 이상 점유하면 해당 슬롯의 어느 Caravan도 선택하지 않는다.
+- 최종 선택과 Cargo 조회는 검증을 통과한 `caravanId`로 수행한다.
+- 전송 서비스도 변경 직전에 같은 검증을 반복하여 UI 우회 호출을 차단한다.
+- Tooltip은 hover 슬롯 오른쪽에 배치하며, Root Canvas 오른쪽 경계를 넘을 때 왼쪽으로 전환하고 상하 경계를 보정한다.
+- Caravan 미선택·무효 상태와 `maxTransfer == 0` 실패는 기존 `NoticeUI`를 사용해 문구로 표시한다.
+- 현재 실제 Caravan은 Wagon 저장값이 비어 있고 `maxLoad == 0`이므로 Home→Cargo 수량 선택이 `CargoOverweight`로 차단되는 것이 정상적인 fail-closed 결과다.
+- 컴파일 오류 0, 관련 EditMode 테스트 10/10 통과.
+- Warehouse·건설 실패는 기존 `NoticeUI`에 사용자 문구로 표시하며 Console에는 진단 원인을 유지한다.
+- Notice 배너는 화면 상단 중앙에서 120px 아래에 배치하고 긴 문구는 폭 안에서 자동 축소한다.
+

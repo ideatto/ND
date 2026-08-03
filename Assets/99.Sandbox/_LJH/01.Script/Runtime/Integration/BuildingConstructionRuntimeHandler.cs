@@ -13,6 +13,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
 {
     [SerializeField] private BuildingPopupRuntimeBinding popupBinding;
     [SerializeField] private BuildingListPanel buildingListPanel;
+    [SerializeField] private NoticeUI noticeUI;
 
     // Confirm 연속 입력이 같은 건설 요청을 중복 실행하지 못하도록 동기 실행 구간을 보호한다.
     private bool isProcessing;
@@ -55,7 +56,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                out BuildData buildData,
                out string displayName))
         {
-            Debug.LogError($"Building construction was blocked because buildId '{buildId}' was not found.", this);
+            ShowFailure(
+                "건물 정보를 찾을 수 없어 건설을 진행하지 못했습니다.",
+                $"Building construction was blocked because buildId '{buildId}' was not found.");
             return;
         }
 
@@ -63,7 +66,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
 
         if(root == null || root.CurrentSaveData == null || root.CurrentSaveData.player == null || root.SaveService == null)
         {
-            Debug.LogError("Building construction was blocked because save services are unavailable.", this);
+            ShowFailure(
+                "저장 데이터가 아직 준비되지 않아 건설을 진행할 수 없습니다.",
+                "Building construction was blocked because save services are unavailable.");
             return;
         }
 
@@ -76,9 +81,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             if(!TryGetCurrentLevel(saveData, displayName, out int currentLevel) ||
                !TryBuildDefinition(buildData, out BuildingUpgradeDefinition definition))
             {
-                Debug.LogError(
-                    $"Building construction input could not be created for '{buildId}'.",
-                    this);
+                ShowFailure(
+                    "건설 단계 정보가 올바르지 않아 요청을 처리하지 못했습니다.",
+                    $"Building construction input could not be created for '{buildId}'.");
                 return;
             }
 
@@ -86,9 +91,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
 
             if(player == null)
             {
-                Debug.LogError(
-                    "Building construction was blocked because PlayerMainManager is unavailable.",
-                    this);
+                ShowFailure(
+                    "플레이어 인벤토리가 준비되지 않아 건설을 진행할 수 없습니다.",
+                    "Building construction was blocked because PlayerMainManager is unavailable.");
                 return;
             }
 
@@ -108,9 +113,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                    entry.quantity < 0 ||
                    !itemIds.Add(entry.item.itemId))
                 {
-                    Debug.LogError(
-                        "Building construction was blocked because home inventory is invalid.",
-                        this);
+                    ShowFailure(
+                        "창고 인벤토리 정보가 올바르지 않아 건설을 중단했습니다.",
+                        "Building construction was blocked because home inventory is invalid.");
                     return;
                 }
 
@@ -127,9 +132,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
 
             if(adapted == null || !adapted.Success || adapted.Input == null)
             {
-                Debug.LogError(
-                    $"Building construction input was rejected: {adapted?.FailureReason}.",
-                    this);
+                ShowFailure(
+                    "건설 조건을 충족하지 못했습니다. 필요한 재료와 현재 건물 레벨을 확인해 주세요.",
+                    $"Building construction input was rejected: {adapted?.FailureReason}.");
                 return;
             }
 
@@ -142,9 +147,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
 
             if(result == null || !result.Succeeded)
             {
-                Debug.LogError(
-                    $"Building construction failed: {result?.ErrorCode ?? "NULL_RESULT"}.",
-                    this);
+                ShowFailure(
+                    "건설 처리 중 오류가 발생했습니다. 적용된 변경은 취소되었습니다.",
+                    $"Building construction failed: {result?.ErrorCode ?? "NULL_RESULT"}.");
             }
         }
         finally
@@ -153,6 +158,21 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             processingDisplayName = string.Empty;
             isProcessing = false;
         }
+    }
+
+    /// <summary>
+    /// 플레이어에게는 이해 가능한 문구를 표시하고, 원인 코드는 Console에 별도로 보존한다.
+    /// Scene 참조가 비어 있어도 현재 활성 UI의 기존 NoticeUI를 재사용한다.
+    /// </summary>
+    private void ShowFailure(string userMessage, string diagnosticMessage)
+    {
+        if (noticeUI == null)
+        {
+            noticeUI = FindFirstObjectByType<NoticeUI>(FindObjectsInactive.Include);
+        }
+
+        noticeUI?.Show(userMessage);
+        Debug.LogError(diagnosticMessage, this);
     }
 
     /// <summary>

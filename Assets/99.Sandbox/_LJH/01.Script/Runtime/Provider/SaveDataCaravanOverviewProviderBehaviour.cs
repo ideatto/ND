@@ -19,47 +19,35 @@ public sealed class SaveDataCaravanOverviewProviderBehaviour :
     MonoBehaviour,
     ICaravanOverviewViewDataProvider
 {
-    public const int SlotCount = 4;
+    public const int SlotCount = CaravanSlotValidation.SlotCount;
 
     private FrameworkSaveData saveDataOverrideForTests;
     private bool hasSaveDataOverrideForTests;
 
-    public CaravanOverviewViewData GetOverview()
+public CaravanOverviewViewData GetOverview()
     {
         FrameworkSaveData saveData = ResolveSaveData();
         if (saveData?.caravans == null)
             return CreateUnknownOverview();
 
+        CaravanSlotValidationResult validation = CaravanSlotValidation.Validate(saveData.caravans);
         var slots = new CaravanBlockViewData[SlotCount];
-        var claimedSlots = new bool[SlotCount];
-        for (int index = 0; index < saveData.caravans.Count; index++)
+        for (int slotIndex = 0; slotIndex < SlotCount; slotIndex++)
         {
-            FrameworkCaravanSaveData caravan = saveData.caravans[index];
-            if (caravan == null)
-                continue;
-
-            // slotIndex is persistent identity. SaveData list order is storage detail and must not
-            // be allowed to reroute an existing caravan to another visible slot.
-            int slotIndex = caravan.slotIndex;
-            if (slotIndex < 0 || slotIndex >= SlotCount)
+            // A damaged slot is shown as an error block. We never choose a Caravan by list order.
+            if (validation.IsConflicted(slotIndex))
             {
-                Debug.LogWarning(
-                    $"Caravan '{caravan.caravanId}' has an unsupported slotIndex ({slotIndex}).",
-                    this);
-                continue;
-            }
-
-            if (claimedSlots[slotIndex])
-            {
-                // Normalization should prevent duplicates. If damaged data reaches the UI anyway,
-                // fail this slot closed instead of choosing one caravan by list order.
                 slots[slotIndex] = CreateUnknownBlock(slotIndex);
                 continue;
             }
 
-            claimedSlots[slotIndex] = true;
-            slots[slotIndex] = CreateOccupiedBlock(saveData, caravan, slotIndex);
+            FrameworkCaravanSaveData caravan = validation.GetCaravanAt(slotIndex);
+            if (caravan != null)
+                slots[slotIndex] = CreateOccupiedBlock(saveData, caravan, slotIndex);
         }
+
+        if (validation.HasInvalidEntries)
+            Debug.LogWarning("Invalid Caravan slot data was excluded from the Main UI.", this);
 
         // Unlock ownership remains in persistent progression data. Creating a Caravan changes only
         // occupancy and must never unlock the next slot by itself.
