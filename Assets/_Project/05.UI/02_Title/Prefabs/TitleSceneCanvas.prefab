@@ -906,6 +906,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2946351725133728444}
+  - component: {fileID: 6928633047898953939}
   m_Layer: 0
   m_Name: BackgroundRoot
   m_TagString: Untagged
@@ -935,6 +936,36 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &6928633047898953939
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5870191694288607615}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d5f5970f43b7684cae63dfcf4c72433, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Title.TitleBackgroundAnimationController
+  useUnscaledTime: 1
+  playOnEnable: 1
+  boatEnabled: 1
+  boatTarget: {fileID: 7091213771463451240}
+  boatRotationAmplitude: 1.2
+  boatRotationDuration: 5.2
+  boatVerticalAmplitude: 2
+  boatVerticalDuration: 4.4
+  logoEnabled: 1
+  logoTarget: {fileID: 1264824310661137401}
+  logoRotationAmplitude: 1.2
+  logoWiggleDuration: 1.4
+  logoPauseDuration: 4
+  logoPlayImmediately: 1
+  playerEnabled: 1
+  playerTarget: {fileID: 6651169571511206023}
+  playerScaleAmount: 0.02
+  playerDuration: 3
 --- !u!1 &7823034960719402721
 GameObject:
   m_ObjectHideFlags: 0
