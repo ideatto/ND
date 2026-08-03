@@ -2367,6 +2367,10 @@ PrefabInstance:
       propertyPath: seasonalStrength
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 3270757068816519589, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: drawOverlay
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4683084452933495309, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: m_LocalPosition.x
       value: 2000

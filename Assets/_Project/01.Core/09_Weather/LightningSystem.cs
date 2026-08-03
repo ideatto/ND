@@ -35,6 +35,11 @@ public class LightningSystem : MonoBehaviour
     [SerializeField] private float minStrikeIntensity = 0.4f;
     [SerializeField] private uint worldSeed = 777u;   // 결정론 씨앗
 
+    [Header("마차 낙뢰(행운)")]
+    [Range(0f, 1f)]
+    [Tooltip("번개가 '마차가 있는 셀'을 때렸을 때, 그 마차가 실제로 맞을(=행운 효과) 확률. 0.5=50%. 인스펙터에서 조절.")]
+    [SerializeField] private float caravanHitChance = 0.5f;
+
     [Header("큰불")]
     [Tooltip("불 지속(초). 이 동안 저기압도 유지")]
     [SerializeField] private float fireDuration = 8f;
@@ -46,6 +51,7 @@ public class LightningSystem : MonoBehaviour
     private Transform fxRoot;
     private float timer;
     private long lightningStep;
+    private ND.UI.WorldMap.RouteVisual[] routes;   // 마차 현재 셀 계산용 경로 캐시(최초 1회 탐색)
 
     private class Fx { public Transform t; public SpriteRenderer sr; public float age; public float life; public bool isFire; }
     private readonly List<Fx> fxs = new List<Fx>();
@@ -125,6 +131,8 @@ public class LightningSystem : MonoBehaviour
         SpawnFx(pos, false, 0.22f, 1.3f);                           // ⚡ 섬광
         WeatherState.ReportLightning();                             // 트레드밀 등 연출에 번개 통지
 
+        TryStrikeCaravan(target, rng);                             // ★마차가 이 셀에 있으면 확률로 낙뢰 명중(행운)
+
         if (IsFlammable(target.terrain))
         {
             SpawnFx(pos, true, fireDuration, 1.1f);                 // 🔥 불
@@ -139,6 +147,71 @@ public class LightningSystem : MonoBehaviour
 
     /// <summary>가연 지형: 숲·풀.</summary>
     private static bool IsFlammable(TerrainType t) => t == TerrainType.Forest || t == TerrainType.Grass;
+
+    // ★번개가 떨어진 셀에 '이동 중 마차'가 있으면, caravanHitChance 확률로 그 마차가 낙뢰에 맞는다(행운 효과).
+    //   마차 위치는 미니맵 마커(MinimapMultiCaravanMarkers)와 동일 방식으로 계산한다:
+    //   진행도(now-start)/(end-start) → 그 route의 EvaluatePosition → grid.WorldToCell → (row,col).
+    //   → 어느 마차든/어느 루트든 데이터로 동작(하드코딩 없음).
+    //   ※실시간 반응식이라 인게임에서 무역이 진행되는 동안에만 판정된다(앱 꺼둔 완전 오프라인 무역은 제외).
+    private void TryStrikeCaravan(MinimapCell struckCell, DetRng rng)
+    {
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        var save = fr != null ? fr.CurrentSaveData : null;
+        if (save == null || save.caravans == null) return;
+        var shared = fr.SharedGameData;
+        if (routes == null) routes = renderRoot.GetComponentsInChildren<ND.UI.WorldMap.RouteVisual>(true);
+
+        for (int i = 0; i < save.caravans.Count; i++)
+        {
+            var c = save.caravans[i];
+            if (c == null || string.IsNullOrEmpty(c.caravanId)) continue;
+            if (!ND.Framework.SaveDataLookup.TryGetTradeProgress(save, c.caravanId, out var entry) || entry == null) continue;
+            if (entry.state != ND.Framework.TradeProgressState.Traveling) continue;
+
+            // 이 마차의 현재 셀 계산(미니맵 마커와 동일 정책)
+            float p = CalcProgress(entry.tradeStartUtcTick, entry.expectedTradeEndUtcTick);
+            if (!ND.Framework.CaravanMapDisplayResolver.TryResolve(save, shared, c, entry, p, out var display)) continue;
+            if (display.Mode != ND.Framework.CaravanMapDisplayMode.Route) continue;   // 이동 중(경로 위)만 대상
+            var route = FindRoute(display.RouteId);
+            if (route == null) continue;
+            Vector3 world = route.EvaluatePosition(display.Progress01);
+            if (!grid.WorldToCell(world, out int crow, out int ccol)) continue;
+            if (crow != struckCell.row || ccol != struckCell.col) continue;   // 이 마차 셀엔 안 떨어짐
+
+            // 마차가 있는 셀에 낙뢰! caravanHitChance 확률로 명중.
+            if (rng.Value() < caravanHitChance)
+            {
+                Vector3 hitPos = grid.CellToWorld(struckCell.row, struckCell.col);
+                SpawnFx(hitPos, false, 0.5f, 2.2f);   // 명중 강조(크고 오래가는 섬광)
+                WeatherState.ReportCaravanLightning(c.caravanId, entry.activeTradeId);
+                Debug.Log("[번개] ⚡마차 낙뢰 명중(행운)! caravan=" + c.caravanId + " trade=" + entry.activeTradeId
+                          + " 셀(" + struckCell.row + "," + struckCell.col + ") — 정산 배율 대상(연동 예정)");
+            }
+            else
+            {
+                Debug.Log("[번개] 마차 셀에 번개는 쳤으나 빗나감(명중확률 "
+                          + Mathf.RoundToInt(caravanHitChance * 100f) + "%). caravan=" + c.caravanId);
+            }
+        }
+    }
+
+    // 진행률 = (now - start) / (end - start), 0~1. 미니맵 마커(CalcProgress)와 동일 공식.
+    private static float CalcProgress(long startTick, long endTick)
+    {
+        if (startTick <= 0 || endTick <= startTick) return 1f;
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        long now = (fr != null && fr.GameTime != null) ? fr.GameTime.CurrentUtc.Ticks : System.DateTime.UtcNow.Ticks;
+        return Mathf.Clamp01((float)(now - startTick) / (endTick - startTick));
+    }
+
+    // routeId로 경로(RouteVisual)를 찾는다. 없으면 null.
+    private ND.UI.WorldMap.RouteVisual FindRoute(string routeId)
+    {
+        if (string.IsNullOrEmpty(routeId) || routes == null) return null;
+        for (int i = 0; i < routes.Length; i++)
+            if (routes[i] != null && routes[i].RouteId == routeId) return routes[i];
+        return null;
+    }
 
     private void SpawnFx(Vector3 pos, bool isFire, float life, float scale)
     {

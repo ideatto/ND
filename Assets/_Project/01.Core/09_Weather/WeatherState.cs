@@ -61,4 +61,28 @@ public static class WeatherState
 
     /// <summary>마지막 번개 시각(unscaledTime). 값이 바뀌면 새 번개.</summary>
     public static float LastLightningTime => lastLightning;
+
+    // ── 마차 낙뢰(행운) ──
+    // 번개가 '마차가 있는 셀'을 때려 확률 판정을 통과(=명중)했을 때 통지한다.
+    // 현재는 연출·로그용 펄스 + 이번 세션 임시 기록만 한다.
+    // ★정산 +10% 배율 적용은 다음 단계(저장 영속화 + 경제팀 협의 필요) — 그 전까지 이 기록이 임시 seam.
+    private static float lastCaravanLightning = -999f;   // 마지막 마차 명중 시각(연출 트리거용)
+    private static string lastStruckCaravanId = "";      // 마지막 명중 마차 id
+    private static readonly HashSet<string> struckTradeIds = new HashSet<string>();   // 명중된 무역 id(임시)
+
+    /// <summary>마차 낙뢰 명중(행운) 통지. 번개 시스템이 확률 통과 시 호출.</summary>
+    public static void ReportCaravanLightning(string caravanId, string tradeId)
+    {
+        lastCaravanLightning = Time.unscaledTime;
+        lastStruckCaravanId = caravanId ?? "";
+        if (!string.IsNullOrEmpty(tradeId)) struckTradeIds.Add(tradeId);
+    }
+
+    /// <summary>마지막 마차 낙뢰 시각(unscaledTime). 값이 바뀌면 새 명중(트레드밀 연출 트리거용).</summary>
+    public static float LastCaravanLightningTime => lastCaravanLightning;
+    /// <summary>마지막으로 낙뢰 맞은 마차 id.</summary>
+    public static string LastStruckCaravanId => lastStruckCaravanId;
+    /// <summary>이 무역이 이번 세션에 낙뢰 행운을 받았는지(정산 연동 전 임시 조회).</summary>
+    public static bool WasTradeStruck(string tradeId)
+        => !string.IsNullOrEmpty(tradeId) && struckTradeIds.Contains(tradeId);
 }

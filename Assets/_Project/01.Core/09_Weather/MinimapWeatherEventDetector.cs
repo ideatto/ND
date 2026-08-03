@@ -63,6 +63,15 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     [Tooltip("이산 날씨 이벤트 발생(보류 중 — 지금은 속도 감소만). 켜면 셀 진입 이벤트 다시 동작")]
     [SerializeField] private bool fireEvents = false;
 
+    [Header("번개 낙뢰(행운)")]
+    [Tooltip("켜면 폭풍급 비 셀에 진입할 때 결정론으로 낙뢰 행운을 판정한다(속도감소와 동일한 셀 체크 훅).")]
+    [SerializeField] private bool enableLightningLucky = true;
+    [Tooltip("이 비 세기 이상(폭풍급)에서만 낙뢰 행운 판정. 번개 시스템 minStrikeIntensity(0.4)와 맞춤.")]
+    [SerializeField] private float luckyStormIntensity = 0.4f;
+    [Range(0f, 1f)]
+    [Tooltip("폭풍급 셀에 진입했을 때 낙뢰 행운(정산 배율)이 뜰 확률. 0.5 = 50%. 인스펙터에서 조절.")]
+    [SerializeField] private float luckyChance = 0.5f;
+
     private readonly Dictionary<string, float> speedMul = new Dictionary<string, float>();   // 캐러밴별 현재 날씨 속도배율(1=정상)
     private readonly HashSet<string> underRain = new HashSet<string>();                        // 지금 비 맞는 캐러밴(전이 알림용)
 
@@ -122,8 +131,8 @@ public class MinimapWeatherEventDetector : MonoBehaviour
                 ShowNotice("☀ 캐러밴 " + Short(c.caravanId) + " 비 벗어남 — 속도 정상");
             }
 
-            // (보류) 이산 날씨 이벤트 — fireEvents 켜야 동작(지금은 속도 감소만)
-            if (fireEvents && grid.TryGetCellAtWorld(pos, out MinimapCell cell) && cell != null)
+            // 셀 진입마다 결정론 체크(속도감소와 동일 훅). 낙뢰 행운 또는 이산 날씨 이벤트가 켜져 있으면 동작.
+            if ((fireEvents || enableLightningLucky) && grid.TryGetCellAtWorld(pos, out MinimapCell cell) && cell != null)
             {
                 Vector2Int cur = new Vector2Int(cell.col, cell.row);
                 if (!lastCell.TryGetValue(c.caravanId, out var prev) || prev != cur)
@@ -131,7 +140,10 @@ public class MinimapWeatherEventDetector : MonoBehaviour
                     int ci = checkCursor.TryGetValue(c.caravanId, out var v) ? v + 1 : 0;
                     checkCursor[c.caravanId] = ci;
                     lastCell[c.caravanId] = cur;
-                    EvaluateCheck(c.caravanId, entry.activeTradeId, cell, pos, ci);
+                    // ★낙뢰 행운(결정론): 폭풍급 비 셀이면 확률로 럭키++ → 우리 자체 저장소에 누적 → 정산에서 읽음
+                    if (enableLightningLucky) EvaluateLightningLucky(c.caravanId, entry.activeTradeId, cell, pos, ci);
+                    // (보류) 이산 날씨 이벤트 — fireEvents 켜야 동작
+                    if (fireEvents) EvaluateCheck(c.caravanId, entry.activeTradeId, cell, pos, ci);
                 }
             }
         }
@@ -202,6 +214,26 @@ public class MinimapWeatherEventDetector : MonoBehaviour
                 cellRow = cell.row, cellCol = cell.col, checkIndex = checkIndex,
                 intensity = intensity, severity = best.severity, delayRate = best.delayRate });
         }
+    }
+
+    /// <summary>낙뢰 행운 판정: 폭풍급 비 셀이면 결정론 확률로 럭키 발생 → 우리 자체 저장소(WeatherLuckyStore)에
+    /// 무역별 누적. 비-속도감소 이벤트와 동일한 셀 체크·결정론 hash 방식(다른 salt로 롤 분리).
+    /// ★정산은 WeatherLuckyStore.GetCount(tradeId)를 읽어 +10%×count 적용(경제 쪽 한 줄).</summary>
+    private void EvaluateLightningLucky(string caravanId, string tradeId, MinimapCell cell, Vector3 pos, int checkIndex)
+    {
+        if (string.IsNullOrEmpty(tradeId)) return;
+        float intensity = clouds.RainIntensityAt(pos);       // 비 세기 = 강수량 × 크기
+        if (intensity < luckyStormIntensity) return;          // 폭풍급(번개 치는 강한 비) 아니면 낙뢰 없음
+
+        int cellId = cell.row * 100 + cell.col;
+        // 날씨 이벤트 roll과 겹치지 않게 tradeId에 "|lucky" salt를 섞어 독립 스트림 사용(결정론 유지).
+        var rng = new DetRng(DetRng.Seed(FnvHash(tradeId + "|lucky"), checkIndex, cellId));
+        if (rng.Value() >= luckyChance) return;               // 확률 통과 못함
+
+        int count = WeatherLuckyStore.Add(tradeId);           // 우리 자체 저장소에 누적(저장)
+        WeatherState.ReportCaravanLightning(caravanId, tradeId);   // 연출/트레드밀 트리거(시각용)
+        ShowNotice("⚡ 캐러밴 " + Short(caravanId) + " 낙뢰 행운! (누적 " + count + "회) 셀("
+                 + cell.row + "," + cell.col + ") 세기 " + intensity.ToString("F2"));
     }
 
     // ── 캐러밴 위치 해석(멀티캐러밴과 동일 로직) ──
