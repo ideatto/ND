@@ -8,11 +8,11 @@
  *
  * Main Features
  * - route 비용, season/disaster, growth level, cargo quantity를 Economy 입력으로 변환한다.
- * - JourneyResultData의 durability 손실을 CartRepairCost 임시 규칙으로 반영한다.
+ * - 무역 정산에서는 실제 수리를 수행하지 않으므로 CartRepairCost를 청구하지 않는다.
  *
  * Important Notes
  * - 다품목 정산은 후속 작업이며, 입력 조립 실패 시 null을 반환한다.
- * - CartRepairCost는 durability 1당 1 trade money 임시 규칙을 사용한다.
+ * - durability 손실은 Caravan에 유지되며 Prepare 상태의 별도 수리 흐름에서 처리한다.
  */
 using ND.Economy;
 
@@ -23,11 +23,6 @@ namespace ND.Framework
     /// </summary>
     public static class FrameworkEconomyM1InputBuilder
     {
-        /// <summary>
-        /// 내구도 1당 수리 비용(trade money) 임시 배율이다.
-        /// </summary>
-        public const long DurabilityRepairCostPerPoint = 1L;
-
         /// <summary>
         /// SaveData와 Core 정산 결과를 기반으로 Economy M1 입력을 조립한다.
         /// </summary>
@@ -69,9 +64,6 @@ namespace ND.Framework
                 return null;
             }
 
-            var cartRepairCost = journeyResult.durabilityLost > 0f
-                ? (long)journeyResult.durabilityLost * DurabilityRepairCostPerPoint
-                : 0L;
             long mercenaryCost = routeDefinition.BaseMercenaryCost;
             if (TryGetExactPreparation(
                     saveData,
@@ -95,7 +87,9 @@ namespace ND.Framework
                 // 경로 기본 식량비까지 정산에서 다시 차감하면 같은 먹이를 이중 결제하게 된다.
                 FoodCost = 0L,
                 MercenaryCost = mercenaryCost,
-                CartRepairCost = cartRepairCost,
+                // 정산에서는 수리하지 않으므로 수리비도 청구하지 않는다.
+                // 감소한 내구도는 Caravan에 유지되고 별도 수리 흐름에서 처리한다.
+                CartRepairCost = 0L,
                 LoanRepayment = 0L,
                 DevelopmentCurrencyReward = 0L,
                 PurchaseGrowth = false,

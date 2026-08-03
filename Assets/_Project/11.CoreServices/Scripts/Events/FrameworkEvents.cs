@@ -126,6 +126,42 @@ namespace ND.Framework
         public static event Action<string, string> RouteEventForced;
 
         /// <summary>
+        /// Raised after a previously unavailable calendar session has a valid current snapshot and synchronized world caches.
+        /// The snapshot is a value copy. Subscribers must unsubscribe when their lifetime ends.
+        /// </summary>
+        public static event Action<GameCalendarSnapshot> CalendarInitialized;
+
+        public static event Action<CalendarRestoreResult> CalendarRestored;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> YearChanged;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> MonthChanged;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> SeasonChanged;
+        public static event Action<GameCalendarSnapshot, GameCalendarSnapshot> DisasterChanged;
+
+        /// <summary>Publishes the first valid snapshot of a newly initialized online calendar session.</summary>
+        public static void RaiseCalendarInitialized(GameCalendarSnapshot snapshot)
+        {
+            FrameworkLog.Info("CalendarInitialized event raised.");
+            CalendarInitialized?.Invoke(snapshot);
+        }
+
+        public static void RaiseCalendarRestored(CalendarRestoreResult result)
+        {
+            if (result == null) return;
+            FrameworkLog.Info($"CalendarRestored event raised. DaysAdvanced: {result.DaysAdvanced}, PassedMonths: {result.PassedMonths.Count}");
+            CalendarRestored?.Invoke(result);
+        }
+
+        /// <summary>Publishes a committed live transition in year, month, season, then disaster order.</summary>
+        public static void RaiseCalendarTransition(GameCalendarSnapshot previous, GameCalendarSnapshot current)
+        {
+            if (previous.Year != current.Year) YearChanged?.Invoke(previous, current);
+            if (previous.AbsoluteMonthIndex != current.AbsoluteMonthIndex) MonthChanged?.Invoke(previous, current);
+            if (previous.Season != current.Season) SeasonChanged?.Invoke(previous, current);
+            if (!string.Equals(previous.ActiveDisasterId, current.ActiveDisasterId, StringComparison.Ordinal))
+                DisasterChanged?.Invoke(previous, current);
+        }
+
+        /// <summary>
         /// 공용 기준 데이터 준비 완료 이벤트를 발행한다.
         /// </summary>
         /// <param name="provider">검증을 통과한 공용 데이터 provider.</param>

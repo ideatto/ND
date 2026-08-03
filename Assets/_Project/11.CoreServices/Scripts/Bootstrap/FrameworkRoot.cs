@@ -9,6 +9,7 @@
  * Main Features
  * - BeforeSceneLoad 단계에서 FrameworkRoot GameObject를 자동 생성한다.
  * - GameTime, SaveService, SharedGameData, SceneFlow, TradeProgress, Economy M1 bridge, InGameScreenRouter 서비스를 초기화한다.
+ * - 로딩 완료 이후 실제 UTC 기준 달력 진행과 무역 진행을 독립적으로 polling한다.
  * - 새 게임, 이어하기, 로딩 완료, title 복귀 flow를 제공한다.
  * - SettlementUiBridge를 통해 정산 결과를 UI 계층에 전달한다.
  *
@@ -19,6 +20,7 @@
  *
  * Main Public APIs
  * - Instance: 현재 runtime root singleton.
+ * - GameCalendar: 현재 달력 snapshot과 세션 달력 진행을 제공한다.
  * - SharedGameData: 검증된 공용 기준 데이터 provider.
  * - StartNewGame(): 새 저장 데이터를 생성하고 loading scene으로 이동한다.
  * - ContinueGame(): 저장 데이터를 로드하고 loading scene으로 이동한다.
@@ -40,6 +42,30 @@ using UnityEngine;
 
 namespace ND.Framework
 {
+    internal readonly struct OfflineRestoreTransactionResult
+    {
+        public OfflineRestoreTransactionResult(
+            CalendarRestoreResult calendarResult,
+            bool calendarDirty,
+            bool tradeDirty,
+            bool succeeded,
+            SaveResult saveResult)
+        {
+            CalendarResult = calendarResult;
+            CalendarDirty = calendarDirty;
+            TradeDirty = tradeDirty;
+            Succeeded = succeeded;
+            SaveResult = saveResult;
+        }
+
+        public CalendarRestoreResult CalendarResult { get; }
+        public bool CalendarDirty { get; }
+        public bool TradeDirty { get; }
+        public bool Dirty => CalendarDirty || TradeDirty;
+        public bool Succeeded { get; }
+        public SaveResult SaveResult { get; }
+    }
+
     public enum CaravanCreationFailureReason
     {
         None,
@@ -225,7 +251,7 @@ namespace ND.Framework
     public sealed class FrameworkRoot : MonoBehaviour
     {
         private const string RootObjectName = "FrameworkRoot";
-        private const float TradeProgressCheckIntervalSeconds = 0.2f;
+        private const float OnlineProgressCheckIntervalSeconds = 0.2f;
 
         private float nextTradeProgressCheckUnscaledTime;
         private bool isOnlineProgressTickEnabled;
@@ -239,6 +265,14 @@ namespace ND.Framework
         /// framework 시간 조회와 Unity time scale 제어를 담당하는 서비스이다.
         /// </summary>
         public GameTimeService GameTime { get; private set; }
+
+        /// <summary>
+        /// 실제 UTC 경과를 게임 날짜로 변환하고 현재 달력 snapshot을 제공하는 서비스이다.
+        /// </summary>
+        public GameCalendarService GameCalendar { get; private set; }
+
+        /// <summary>The most recent load-time calendar restore result; no public restore event is raised yet.</summary>
+        public CalendarRestoreResult LastCalendarRestoreResult { get; private set; }
 
         /// <summary>
         /// 저장 데이터 생성, 로드, 저장을 담당하는 서비스이다.
@@ -344,18 +378,17 @@ namespace ND.Framework
                     isOnlineProgressTickEnabled,
                     CurrentSaveData,
                     SharedGameData)
-                || TradeProgressCoordinator == null
                 || Time.unscaledTime < nextTradeProgressCheckUnscaledTime)
             {
                 return;
             }
 
             nextTradeProgressCheckUnscaledTime =
-                Time.unscaledTime + TradeProgressCheckIntervalSeconds;
+                Time.unscaledTime + OnlineProgressCheckIntervalSeconds;
 
-            // Runtime progress is derived from the saved UTC range. Intermediate frames do
-            // not need a disk write; settlement creation saves the completed state itself.
-            TradeProgressCoordinator.CheckProgressAndCompletion(saveProgress: false);
+            // 달력과 무역은 같은 경량 polling gate를 공유하지만 각자의 UTC 기준과 저장 정책은 분리한다.
+            GameCalendar?.TickOnline(CurrentSaveData, SaveService);
+            TradeProgressCoordinator?.CheckProgressAndCompletion(saveProgress: false);
         }
 
         private static bool CanRunOnlineProgressTick(
@@ -441,8 +474,25 @@ namespace ND.Framework
                 && CurrentSaveData.pendingSettlements.Exists(
                     pending => pending != null && pending.hasResult && !pending.claimed);
 
-            // Traveling 이어하기는 모든 명시 entry의 오프라인 경과·완료를 먼저 반영한다.
-            TradeProgressCoordinator?.ApplyOfflineProgressOnLoad(CurrentSaveData);
+            var loadUtc = GameTime.CurrentUtc;
+            var restoreContext = GameTime.ResolveOfflineRestoreContext(
+                CurrentSaveData.lastSavedUtcTicks,
+                loadUtc);
+            if (restoreContext.ClockRollbackDetected)
+            {
+                FrameworkEvents.RaiseTimeRollbackDetected();
+                FrameworkLog.Warning(
+                    "Offline progress skipped because load UTC is earlier than lastSavedUtcTicks.");
+            }
+
+            var restoreTransaction = ExecuteOfflineRestore(
+                CurrentSaveData,
+                restoreContext,
+                loadUtc,
+                GameCalendar,
+                TradeProgressCoordinator,
+                SaveService);
+            LastCalendarRestoreResult = restoreTransaction.CalendarResult;
 
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
             if (restorePending)
@@ -453,9 +503,81 @@ namespace ND.Framework
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
             InGameScreenRouter.RefreshFromSaveData(CurrentSaveData);
             FrameworkEvents.RaiseLoadCompleted(CurrentSaveData);
+            if (LastCalendarRestoreResult == null && !restoreTransaction.Dirty)
+            {
+                GameCalendar.BeginOnlineSession(CurrentSaveData, loadUtc);
+            }
             // SaveData·SharedData·offline/pending 복구와 load event 처리가 모두 끝난 세션만 online tick을 허용한다.
             isOnlineProgressTickEnabled = true;
             SceneFlow.GoToInGame();
+        }
+
+        /// <summary>
+        /// Applies calendar and trade offline restoration as one persistence transaction.
+        /// Deferred trade notifications are published only after the merged save succeeds.
+        /// </summary>
+        /// <returns>
+        /// The domain dirty flags and save outcome. On failure, persisted and runtime state are restored,
+        /// and <see cref="OfflineRestoreTransactionResult.CalendarResult"/> is null.
+        /// </returns>
+        internal static OfflineRestoreTransactionResult ExecuteOfflineRestore(
+            SaveData saveData,
+            OfflineRestoreContext context,
+            DateTime loadUtc,
+            GameCalendarService calendar,
+            TradeProgressCoordinator trade,
+            ISaveService saveService)
+        {
+            var restoreSnapshot = JsonUtility.ToJson(saveData);
+            var calendarResult = calendar?.RestoreOffline(saveData, context);
+            var tradeRestore = trade?.PrepareOfflineProgressOnLoad(saveData, context);
+            var calendarDirty = calendarResult?.Changed ?? false;
+            var tradeDirty = tradeRestore?.Changed ?? false;
+            if (!calendarDirty && !tradeDirty)
+            {
+                FrameworkEvents.RaiseCalendarRestored(calendarResult);
+                tradeRestore?.Publish(trade, saveData);
+                return new OfflineRestoreTransactionResult(
+                    calendarResult,
+                    calendarDirty,
+                    tradeDirty,
+                    true,
+                    null);
+            }
+
+            SaveResult saveResult = null;
+            try
+            {
+                saveResult = saveService?.Save(saveData);
+            }
+            catch (Exception exception)
+            {
+                FrameworkLog.Error($"Offline restore save threw an exception: {exception.Message}");
+            }
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(restoreSnapshot, saveData);
+                tradeRestore?.RollbackRuntime(trade);
+                calendar?.RebuildRuntimeAfterFailedRestore(saveData, loadUtc);
+                FrameworkLog.Warning(
+                    "Calendar and trade offline restore were rolled back because the merged save failed.");
+                return new OfflineRestoreTransactionResult(
+                    null,
+                    calendarDirty,
+                    tradeDirty,
+                    false,
+                    saveResult);
+            }
+
+            FrameworkEvents.RaiseCalendarRestored(calendarResult);
+            tradeRestore?.Publish(trade, saveData);
+            return new OfflineRestoreTransactionResult(
+                calendarResult,
+                calendarDirty,
+                tradeDirty,
+                true,
+                saveResult);
         }
 
         /// <summary>
@@ -521,10 +643,13 @@ namespace ND.Framework
             }
 
             GameTime = new GameTimeService(policyConfig);
+            GameCalendar = new GameCalendarService(GameTime);
             SaveService = new JsonSaveService();
             SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
-            DebugCommands = new FrameworkDebugCommands(GameTime);
+            DebugCommands = new FrameworkDebugCommands(
+                GameTime, () => CurrentSaveData, SaveService, GameCalendar,
+                result => LastCalendarRestoreResult = result);
             TradeProgressRecorder = new TradeProgressRecorder(GameTime, GameTime);
             InGameScreenRouter = new InGameScreenStateRouter();
             TradePrepareCommitStore = new FrameworkTradePrepareCommitStore(() => CurrentSaveData);

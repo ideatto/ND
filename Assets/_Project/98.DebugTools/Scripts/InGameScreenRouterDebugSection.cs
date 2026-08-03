@@ -67,18 +67,18 @@ namespace ND.DebugTools
             object saveData = GetProperty(root, "CurrentSaveData");
             object tradeProgress = GetField(saveData, "tradeProgress");
 
-            GUILayout.Label($"InGameScreenStateRouter: {(router != null ? "Ready" : "N/A")}");
-            GUILayout.Label($"Current Screen State: {FormatValue(GetProperty(router, "CurrentScreenState"))}");
-            GUILayout.Label($"Trade Progress State: {FormatValue(GetField(tradeProgress, "state"))}");
-            GUILayout.Label($"Active Trade ID: {FormatValue(GetField(tradeProgress, "activeTradeId"))}");
-            GUILayout.Label($"Active Route ID: {FormatValue(GetField(tradeProgress, "activeRouteId"))}");
+            GUILayout.Label($"InGameScreenStateRouter: {(router != null ? "사용 가능" : "N/A")}");
+            GUILayout.Label($"현재 화면: {FormatScreenState(GetProperty(router, "CurrentScreenState"))}");
+            GUILayout.Label($"무역 진행 상태: {FormatScreenState(GetField(tradeProgress, "state"))}");
+            GUILayout.Label($"진행 중인 무역 ID: {FormatValue(GetField(tradeProgress, "activeTradeId"))}");
+            GUILayout.Label($"진행 중인 경로 ID: {FormatValue(GetField(tradeProgress, "activeRouteId"))}");
 
             GUILayout.Space(8f);
             using (new GUILayout.HorizontalScope())
             {
-                GUILayout.Label($"Recent transitions ({transitionHistory.Count}/{MaxHistoryCount})");
+                GUILayout.Label($"최근 화면 전환 ({transitionHistory.Count}/{MaxHistoryCount})");
                 GUILayout.FlexibleSpace();
-                if (GUILayout.Button("Clear history", GUILayout.Width(110f)))
+                if (GUILayout.Button("기록 지우기", GUILayout.Width(110f)))
                 {
                     transitionHistory.Clear();
                 }
@@ -136,6 +136,22 @@ namespace ND.DebugTools
         private static string FormatValue(object value)
         {
             return value == null || string.IsNullOrEmpty(value.ToString()) ? "N/A" : value.ToString();
+        }
+
+        private static string FormatScreenState(object value)
+        {
+            var rawValue = FormatValue(value);
+            switch (rawValue)
+            {
+                case "Preparation": return "준비 (Preparation)";
+                case "Traveling": return "이동 중 (Traveling)";
+                case "Selling": return "판매 (Selling)";
+                case "Settlement":
+                case "SettlementPending": return $"정산 대기 ({rawValue})";
+                case "Completed": return "완료 (Completed)";
+                case "Failed": return "실패 (Failed)";
+                default: return rawValue;
+            }
         }
     }
 }

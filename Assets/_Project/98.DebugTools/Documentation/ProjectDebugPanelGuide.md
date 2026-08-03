@@ -1,140 +1,60 @@
-# Project Debug Panel 팀 가이드
+# 프로젝트 디버그 패널 가이드
 
-## 목적
+## 개요
 
-`ProjectDebugPanel`은 SRDebugger 대체품이 아니라 현재 프로젝트 Framework 상태만 읽는 개발용 패널입니다. 상태 변경 명령은 제공하지 않습니다.
+`ProjectDebugPanel`은 Unity Editor의 Play Mode 또는 Development Build에서 `F12`로 열고 닫는 런타임 디버그 패널입니다. 일반 Release Build에는 포함되지 않습니다. 패널은 Framework 공개 멤버를 Reflection으로 조회하며, 명시적인 버튼 입력이 있을 때만 공개 디버그 명령을 실행합니다.
 
-## 소유 구조
+## 탭 구성
 
-| 역할 | 경로 |
-| --- | --- |
-| Runtime 스크립트 | `Assets/_Project/98.DebugTools/Scripts/ProjectDebugPanel.cs` |
-| Prefab creator (Editor) | `Assets/_Project/98.DebugTools/Editor/ProjectDebugPrefabCreator.cs` |
-| 이 가이드 | `Assets/_Project/98.DebugTools/Documentation/ProjectDebugPanelGuide.md` |
-| **런타임 캐논 프리팹** | `Assets/_Project/08.Prefabs/Debug/ProjectDebugPanel.prefab` |
+- `상태`: Framework, 저장 데이터, 공용 게임 데이터, 선택한 Caravan, 진행 중인 무역, 재화와 마차 수리 배율을 표시하고 기존 디버그 명령을 제공합니다.
+- `거점 인벤토리`: 로드된 `TradeItemData`를 선택해 `PlayerMainManager.AddItem`으로 거점 인벤토리에 추가합니다.
+- `화면 전환`: 현재 화면과 무역 진행 상태, 최근 화면 상태 변경 기록을 표시합니다.
+- `달력`: 현재 달력 상태를 확인하고 공개된 `FrameworkDebugCommands` 달력 명령을 실행합니다.
 
-코드·문서·생성기는 `98.DebugTools`가 소유하고, Scene에 배치되는 런타임 프리팹은 `08.Prefabs/Debug`가 소유합니다.
+표시용 제목, 버튼, 안내 및 DebugTools가 생성하는 결과 메시지는 한국어입니다. ID, 원시 enum 값, 오류 코드, API 및 Reflection 멤버 이름은 기술 계약을 보존하기 위해 원문으로 표시될 수 있습니다.
 
-InGame Scene은 캐논 프리팹 GUID를 참조합니다. Scene Owner 조율 없이 Scene을 수정하지 마십시오.
+## 달력 탭
 
-## 사용 조건
+### 상태 표시
 
-- Unity Editor와 `Development Build`에서만 Runtime assembly가 포함됩니다.
-- 일반 Release Build에서는 assembly define constraint에 의해 컴파일 대상에서 제외됩니다.
-- 플레이 중 `F12`로 열고 닫습니다.
-- Inspector `Visible On Start`(`visibleOnStart`)가 false이면 시작 시 숨김 상태이며, F12로 토글합니다.
+초기화 여부, 연·월·일, 계절, 활성 재난, 누적 경과 일수와 현재 달력 디버그 배속을 표시합니다. 알려진 계절 ID와 `flood`는 한국어와 원시 ID를 함께 표시하며, 알려지지 않은 ID는 원문을 유지합니다. Framework 또는 달력이 준비되지 않아도 IMGUI 처리 중 예외가 전파되지 않도록 사용할 수 없는 상태로 표시합니다.
 
-## Inspector 연결
+### 달력 배속
 
-1. **캐논 프리팹** `Assets/_Project/08.Prefabs/Debug/ProjectDebugPanel.prefab`을 테스트용 Scene에 배치합니다.
-2. `ProjectDebugPanel`의 `Visible On Start`를 필요에 따라 설정합니다.
-3. 공유 Scene(예: InGame)에 반영할 때는 Scene 담당자와 별도로 조율합니다.
+`0x 정지`, `1x 기본`, `2x`, `4x` 버튼은 `TrySetCalendarDebugScale(float)`를 호출합니다. 배속은 온라인 달력 진행에만 적용되고 Unity `Time.timeScale`, 무역 시간 및 게임 전체 시간 배율에는 영향을 주지 않습니다. 이 값은 세션 전용이며 저장되지 않습니다.
 
-## Prefab creator 정책
+### 날짜 진행
 
-메뉴: `Tools > ND Debug > Create Project Debug Panel Prefab`
+- `1일 진행`: `AdvanceOneGameDay()`를 호출합니다.
+- `30일 진행`: `AdvanceOneGameMonth()`를 호출합니다. 이 명령은 다음 달 1일로 이동하는 기능이 아니라 정확히 30일을 더합니다.
+- `다음 해당 월까지 진행`: 1~12 사이의 목표 월을 받아 `AdvanceToMonth(int)`를 호출합니다. 현재 월과 같더라도 과거로 이동하지 않고 다음 해의 해당 월까지 앞으로 진행합니다. 예를 들어 현재가 8월이고 목표가 3월이면 다음 해 3월까지 진행합니다.
 
-| 상황 | 동작 |
-| --- | --- |
-| Editor 자동 초기화 + 캐논 프리팹 존재 | 아무 작업 없음 |
-| Editor 자동 초기화 + 캐논 프리팹 없음 | 캐논 경로에 생성 |
-| 메뉴 실행 + 캐논 프리팹 존재 | 덮어쓰기 거부, 경로 안내 |
-| 메뉴 실행 + 캐논 프리팹 없음 | 캐논 경로에 생성 |
+날짜 변경은 Framework 명령의 저장 절차를 사용합니다. `CalendarAdvanceResult.Changed`와 `SaveResult.Succeeded`를 모두 확인하며, 저장 실패 시 Framework가 이전 상태로 복구했다는 결과를 표시합니다.
 
-기존 캐논 프리팹을 삭제·재생성하면 GUID 또는 내부 fileID가 바뀌어 Scene 참조가 깨질 수 있습니다. 덮어쓰기는 의도적으로 지원하지 않습니다.
+### 달력 전용 오프라인 시뮬레이션
 
-## 레거시 중복 프리팹
+현실 경과 시간을 시간 단위로 입력하면 초로 변환해 `SimulateCalendarOffline(double)`을 호출합니다. 빈 값, 숫자가 아닌 값, 0 이하, NaN, Infinity 및 변환 후 유한하지 않은 값은 명령 호출 전에 거부합니다.
 
-다음 에셋은 creator가 예전에 생성하던 경로이며, InGame/TestEditor Scene은 참조하지 않습니다.
+이 기능은 달력만 진행하며 전체 게임 오프라인 복구가 아닙니다. 무역 진행, 무역 도착 시간 및 Unity 배속에는 영향을 주지 않습니다. Framework 정책에 따라 실제 반영 시간은 최대 72시간이며, 성공적인 오프라인 복구 뒤 달력 배속은 `1x`로 재설정될 수 있습니다.
 
-```text
-Assets/_Project/98.DebugTools/Prefabs/ProjectDebugCanvas.prefab
-```
+### 로그
 
-상태: Scene 미참조 중복(생성된 템플릿). Work C에서는 삭제하지 않고 유지합니다. 후속 cleanup에서 참조 재확인 후 제거를 검토하십시오. **캐논으로 사용하지 마십시오.**
+`현재 달력 상태 로그`와 `최근 복구 타임라인 로그`는 각각 `LogCalendarState()`와 `LogCalendarRestoreTimeline()`을 호출해 Unity Console에 출력합니다. 복구 결과가 없을 때 Framework가 경고를 기록할 수 있으므로 패널은 타임라인 데이터의 존재를 단정하지 않고 Console 확인을 안내합니다.
 
-## 표시 값
+## 안전 주의
 
-- Scene, FrameworkRoot/SaveData 존재 상태
-- 선택 Caravan과 전체 Caravan, Trade 진행, Pending Settlement
-- Trading/Development Currency
-- SharedGameData 로드 여부와 Town, Market, TradeItem, Wagon, DraftAnimal, Route 개수
+날짜 진행과 오프라인 시뮬레이션은 저장 데이터의 달력 상태를 변경합니다. 일반 개발 세이브 대신 테스트용 세이브나 백업된 환경에서 사용하는 것을 권장합니다.
 
-값이 아직 초기화되지 않았거나 공개 멤버를 찾지 못하면 `N/A` 또는 `No`로 표시됩니다.
+패널은 SaveData, 달력 필드, 재화 필드, Caravan 및 무역 상태를 직접 수정하지 않습니다. 달력 기능은 `FrameworkRoot.DebugCommands`와 `FrameworkRoot.GameCalendar`의 공개 멤버만 Reflection으로 사용합니다.
 
-## 테스트 절차
+## 런타임 확인 항목
 
-1. FrameworkRoot가 없는 빈 테스트 Scene에 캐논 프리팹을 배치하고 Play Mode에서 F12를 눌러 예외 없이 상태가 표시되는지 확인합니다.
-2. Boot에서 시작해 Title, Loading, InGame으로 이동하며 Scene 이름과 Framework 상태가 갱신되는지 확인합니다.
-3. 무역을 시작해 Caravan·Trade·Pending 섹션이 갱신되는지 확인합니다.
-4. 공용 데이터 로드 뒤 각 데이터 개수가 표시되는지 확인합니다.
-5. Development Build에서 F12 동작을 확인합니다.
-6. Development Build를 끈 Player 빌드에서 `ND.DebugTools.Runtime`과 패널이 포함되지 않는지 확인합니다.
-7. 긴 패널 내용에서 스크롤이 하단까지 도달하는지 확인합니다.
+1. Play Mode에서 `F12`를 눌러 네 탭과 한국어 표시를 확인합니다.
+2. 달력 미초기화 상태에서 예외 없이 사용 불가 안내가 표시되는지 확인합니다.
+3. `0x`, `1x`, `2x`, `4x` 버튼 뒤 표시 배속이 갱신되는지 확인합니다.
+4. 1일·30일·목표 월 진행 후 날짜와 저장 결과가 올바른지 확인합니다.
+5. 72시간 이하와 초과 입력으로 달력 전용 오프라인 시뮬레이션을 확인합니다.
+6. 두 로그 버튼의 Console 출력과 최근 실행 결과를 확인합니다.
+7. 기존 상태·거점 인벤토리·화면 전환 탭의 동작이 유지되는지 회귀 확인합니다.
 
-## 남은 위험
-
-- CoreServices가 asmdef 없이 predefined assembly에 있으므로 Runtime assembly는 Framework 공개 멤버를 리플렉션으로 조회합니다. 공개 타입명이나 멤버명이 바뀌면 해당 값은 `N/A`가 됩니다.
-- F12 입력은 Input System Package의 현재 `Keyboard` 장치를 사용합니다. 키보드 장치가 없는 환경에서는 입력을 안전하게 무시합니다.
-- 프리팹 배치 없이 자동 생성되지는 않습니다. Scene 직접 수정 금지 조건에 따라 각 테스트 Scene에서 명시적으로 배치해야 합니다.
-- Unity Editor 컴파일, 실제 Scene 흐름, Player 빌드 검증은 Unity 환경에서 수행해야 합니다.
-
-## Monitoring behavior
-
-Monitoring sections are read-only. Opening, closing, scrolling, periodic refreshing, IMGUI Layout, and Repaint do not mutate game state.
-
-The panel is compiled only when `UNITY_EDITOR` or `DEVELOPMENT_BUILD` is defined. It is not available in a normal Release build.
-
-## Force Arrival command
-
-`Force Selected Trade to Arrival` is enabled only when the current selected Caravan has an exact matching progress entry whose state is `Traveling` and whose active trade ID is non-empty.
-
-The displayed snapshot is presentation-only. On every click, the panel resolves the current `FrameworkRoot.Instance`, `CurrentSaveData`, `selectedCaravanId`, and matching `tradeProgressEntries` entry again. It validates the entry's exact `caravanId` and `activeTradeId`, then calls:
-
-```text
-TryForceCompleteTrade(caravanId, tradeId)
-```
-
-The persistent `Last Result` area reports structured command, identity, and Save failure details when those properties are available. After an invocation, the monitoring snapshot refreshes once.
-
-## Trade lifecycle warning
-
-The intended lifecycle is:
-
-```text
-Traveling
--> SettlementPending / Settling
--> Arrival Sale
--> Claim
-```
-
-The command does not sell cargo. It does not grant Claim rewards. It does not move the trade directly to `Completed`.
-
-## Legacy command distinction
-
-`ProjectDebugPanel` does not call `CompleteTradeImmediately()`. It calls only the exact-target `TryForceCompleteTrade(caravanId, tradeId)` API through Reflection.
-
-## Currency controls
-
-The panel displays the current player-global Trading Currency and Development Currency values. Each currency has explicit `+100`, `+1,000`, and `+10,000` grant buttons plus a separate custom input and `Add` button.
-
-Custom amounts accept plain positive whole numbers representable by `long`. Empty input, zero, negative values, decimal text, non-numeric text, and values above `long.MaxValue` are rejected without invoking a command. The controls do not subtract, set, or reset currency.
-
-Each explicit grant calls the matching Framework debug command through Reflection:
-
-```text
-TryAddTradingCurrency(long amount)
-TryAddDevelopmentCurrency(long amount)
-```
-
-The panel does not directly edit SaveData and does not call Save itself. A valid Framework grant performs one Save transaction; a failed Save rolls back the candidate currency change. Structured `SaveResult` success or failure details remain visible, and the panel refreshes the current SaveData values after an invocation.
-
-`TradingCurrencyChanged` is emitted only after a successful Save. Development Currency introduces no new event contract.
-
-Currency grants occur only inside explicit preset or `Add` button-click branches. Layout, Repaint, panel open or close, F12 toggling, scrolling, periodic refresh, and text editing do not grant currency.
-
-## Known verification limitations
-
-- Failed-grade visual routing was not manually exercised.
-- Full Play Mode exit/restart was not exercised; the canonical API restore path passed.
-- Currency persistence was verified through the Save transaction and JSON Save/Load round trip, not a full application restart.
+Scene이나 Prefab 배치는 자동으로 변경되지 않으며 `ProjectDebugPrefabCreator`를 실행할 필요가 없습니다.

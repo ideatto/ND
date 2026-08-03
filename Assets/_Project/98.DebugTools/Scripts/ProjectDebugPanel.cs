@@ -39,7 +39,8 @@ namespace ND.DebugTools
         private const int StatusTab = 0;
         private const int HomeInventoryTab = 1;
         private const int ScreenRouterTab = 2;
-        private const int TabCount = 3;
+        private const int CalendarTab = 3;
+        private const int TabCount = 4;
         private static readonly string[] PendingPayloadMemberNames =
             { "hasResult", "result", "settlementResult", "snapshot", "resultSnapshot" };
 
@@ -50,14 +51,19 @@ namespace ND.DebugTools
         private readonly HomeInventoryItemDebugSection homeInventorySection = new HomeInventoryItemDebugSection();
         private readonly InGameScreenRouterDebugSection screenRouterSection = new InGameScreenRouterDebugSection();
         private readonly Vector2[] tabScrollPositions = new Vector2[TabCount];
-        private Rect windowRect = new Rect(16f, 16f, 560f, 700f);
+        private Rect windowRect = new Rect(16f, 16f, 600f, 700f);
         private GUIStyle labelStyle;
         private Type frameworkRootType;
         private string snapshot = string.Empty;
-        private string lastForceArrivalResult = "No command executed.";
+        private string lastForceArrivalResult = "실행한 명령이 없습니다.";
         private string tradingCurrencyAmountInput = string.Empty;
         private string developmentCurrencyAmountInput = string.Empty;
-        private string lastCurrencyResult = "No currency command executed.";
+        private string lastCurrencyResult = "실행한 재화 명령이 없습니다.";
+        private string wagonRepairMultiplierInput = "1";
+        private string lastWagonRepairMultiplierResult = "실행한 배율 명령이 없습니다.";
+        private string calendarTargetMonthInput = string.Empty;
+        private string calendarOfflineHoursInput = string.Empty;
+        private string lastCalendarResult = "실행한 달력 명령이 없습니다.";
         private float nextRefreshTime;
         private bool isVisible;
         private int selectedTab;
@@ -110,18 +116,18 @@ namespace ND.DebugTools
                 richText = false,
                 wordWrap = false
             };
-            windowRect = GUI.Window(DebugWindowId, windowRect, DrawWindow, "Project Debug (F12)");
+            windowRect = GUI.Window(DebugWindowId, windowRect, DrawWindow, "프로젝트 디버그 패널 (F12)");
         }
 
         private void DrawWindow(int windowId)
         {
             GUILayout.BeginHorizontal();
-            if (GUILayout.Toggle(selectedTab == StatusTab, "Status", GUI.skin.button))
+            if (GUILayout.Toggle(selectedTab == StatusTab, "상태", GUI.skin.button))
             {
                 selectedTab = StatusTab;
             }
 
-            if (GUILayout.Toggle(selectedTab == HomeInventoryTab, "Home Inventory", GUI.skin.button))
+            if (GUILayout.Toggle(selectedTab == HomeInventoryTab, "거점 인벤토리", GUI.skin.button))
             {
                 if (selectedTab != HomeInventoryTab)
                 {
@@ -131,9 +137,14 @@ namespace ND.DebugTools
                 selectedTab = HomeInventoryTab;
             }
 
-            if (GUILayout.Toggle(selectedTab == ScreenRouterTab, "Screen Router", GUI.skin.button))
+            if (GUILayout.Toggle(selectedTab == ScreenRouterTab, "화면 전환", GUI.skin.button))
             {
                 selectedTab = ScreenRouterTab;
+            }
+
+            if (GUILayout.Toggle(selectedTab == CalendarTab, "달력", GUI.skin.button))
+            {
+                selectedTab = CalendarTab;
             }
             GUILayout.EndHorizontal();
 
@@ -144,7 +155,11 @@ namespace ND.DebugTools
                 true,
                 GUILayout.ExpandHeight(true));
 
-            if (selectedTab == HomeInventoryTab)
+            if (selectedTab == CalendarTab)
+            {
+                DrawCalendarTab();
+            }
+            else if (selectedTab == HomeInventoryTab)
             {
                 homeInventorySection.Draw();
             }
@@ -157,6 +172,7 @@ namespace ND.DebugTools
                 GUILayout.Label(snapshot, labelStyle);
                 DrawForceArrivalControl();
                 DrawCurrencyControls();
+                DrawWagonRepairMultiplierControl();
             }
 
             GUILayout.EndScrollView();
@@ -168,22 +184,21 @@ namespace ND.DebugTools
             var state = ResolveForceArrivalState();
 
             GUILayout.Space(8f);
-            GUILayout.Label("[Selected Traveling Trade - Force Arrival]", labelStyle);
-            GUILayout.Label($"Selected Caravan ID: {FormatIdentifier(state.SelectedCaravanId)}", labelStyle);
-            GUILayout.Label($"Entry Caravan ID: {FormatIdentifier(state.EntryCaravanId)}", labelStyle);
-            GUILayout.Label($"Active Trade ID: {FormatIdentifier(state.TradeId)}", labelStyle);
-            GUILayout.Label($"State: {FormatIdentifier(state.State)}", labelStyle);
-            GUILayout.Label($"Route ID: {FormatIdentifier(state.RouteId)}", labelStyle);
-            GUILayout.Label($"Progress: {FormatProgress(state.Progress)}", labelStyle);
-            GUILayout.Label($"Availability: {(state.CanExecute ? "Ready" : state.DisabledReason)}", labelStyle);
-            GUILayout.Label("Debug mutation command.", labelStyle);
-            GUILayout.Label("Forces only the exact selected Traveling trade to arrival.", labelStyle);
-            GUILayout.Label("Does not sell cargo, claim rewards, or complete the trade.", labelStyle);
-            GUILayout.Label("The command revalidates caravanId and tradeId at click time.", labelStyle);
+            GUILayout.Label("[선택한 이동 중 무역 - 즉시 도착 처리]", labelStyle);
+            GUILayout.Label($"선택한 Caravan ID: {FormatIdentifier(state.SelectedCaravanId)}", labelStyle);
+            GUILayout.Label($"진행 항목 Caravan ID: {FormatIdentifier(state.EntryCaravanId)}", labelStyle);
+            GUILayout.Label($"진행 중인 무역 ID: {FormatIdentifier(state.TradeId)}", labelStyle);
+            GUILayout.Label($"상태: {FormatIdentifier(state.State)}", labelStyle);
+            GUILayout.Label($"경로 ID: {FormatIdentifier(state.RouteId)}", labelStyle);
+            GUILayout.Label($"진행률: {FormatProgress(state.Progress)}", labelStyle);
+            GUILayout.Label($"사용 가능 여부: {(state.CanExecute ? "사용 가능" : state.DisabledReason)}", labelStyle);
+            GUILayout.Label("선택한 Traveling 무역만 도착 상태로 변경하는 디버그 명령입니다.", labelStyle);
+            GUILayout.Label("화물 판매, 보상 수령, 무역 완료는 수행하지 않습니다.", labelStyle);
+            GUILayout.Label("실행 시 caravanId와 tradeId를 다시 검증합니다.", labelStyle);
 
             var previousEnabled = GUI.enabled;
             GUI.enabled = previousEnabled && state.CanExecute;
-            var clicked = GUILayout.Button("Force Selected Trade to Arrival");
+            var clicked = GUILayout.Button("선택한 무역 즉시 도착 처리");
             GUI.enabled = previousEnabled;
 
             if (clicked)
@@ -191,7 +206,7 @@ namespace ND.DebugTools
                 ExecuteForceArrival();
             }
 
-            GUILayout.Label($"Last Result: {lastForceArrivalResult}", labelStyle);
+            GUILayout.Label($"최근 실행 결과: {lastForceArrivalResult}", labelStyle);
         }
 
         private void DrawCurrencyControls()
@@ -200,11 +215,11 @@ namespace ND.DebugTools
             var developmentState = ResolveCurrencyState("TryAddDevelopmentCurrency", "developmentCurrency");
 
             GUILayout.Space(8f);
-            GUILayout.Label("[Currency Controls]", labelStyle);
-            DrawCurrencyControl("Trading Currency", true, tradingState, ref tradingCurrencyAmountInput);
+            GUILayout.Label("[재화 조정]", labelStyle);
+            DrawCurrencyControl("거래 재화", true, tradingState, ref tradingCurrencyAmountInput);
             GUILayout.Space(4f);
-            DrawCurrencyControl("Development Currency", false, developmentState, ref developmentCurrencyAmountInput);
-            GUILayout.Label($"Last Currency Result:\n{lastCurrencyResult}", labelStyle);
+            DrawCurrencyControl("발전 재화", false, developmentState, ref developmentCurrencyAmountInput);
+            GUILayout.Label($"최근 재화 실행 결과:\n{lastCurrencyResult}", labelStyle);
         }
 
         private void DrawCurrencyControl(
@@ -214,8 +229,8 @@ namespace ND.DebugTools
             ref string amountInput)
         {
             GUILayout.Label(displayName, labelStyle);
-            GUILayout.Label($"Current: {FormatCurrency(state)}", labelStyle);
-            GUILayout.Label($"Availability: {(state.CanExecute ? "Ready" : state.DisabledReason)}", labelStyle);
+            GUILayout.Label($"현재 값: {FormatCurrency(state)}", labelStyle);
+            GUILayout.Label($"사용 가능 여부: {(state.CanExecute ? "사용 가능" : state.DisabledReason)}", labelStyle);
 
             var previousEnabled = GUI.enabled;
             GUI.enabled = previousEnabled && state.CanExecute;
@@ -240,10 +255,10 @@ namespace ND.DebugTools
             }
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Custom:", labelStyle, GUILayout.Width(64f));
+            GUILayout.Label("직접 입력:", labelStyle, GUILayout.Width(72f));
             amountInput = GUILayout.TextField(amountInput);
             GUI.enabled = previousEnabled && state.CanExecute;
-            var addCustom = GUILayout.Button("Add", GUILayout.Width(64f));
+            var addCustom = GUILayout.Button("추가", GUILayout.Width(64f));
             GUI.enabled = previousEnabled;
             GUILayout.EndHorizontal();
 
@@ -251,6 +266,507 @@ namespace ND.DebugTools
             {
                 ExecuteCustomCurrencyGrant(isTradingCurrency, amountInput);
             }
+        }
+
+        private void DrawWagonRepairMultiplierControl()
+        {
+            var state = ResolveWagonRepairMultiplierState();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[마차 수리 비용 배율]", labelStyle);
+            GUILayout.Label(
+                $"현재 값: {(state.HasCurrentValue ? state.CurrentValue.ToString("0.##", CultureInfo.InvariantCulture) + "x" : "N/A")}",
+                labelStyle);
+            GUILayout.Label($"사용 가능 여부: {(state.CanExecute ? "사용 가능" : state.DisabledReason)}", labelStyle);
+            GUILayout.Label("세션에만 적용됩니다. 실제 수리 계산에는 아직 연결되지 않았습니다.", labelStyle);
+
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && state.CanExecute;
+            GUILayout.BeginHorizontal();
+            var decrease = GUILayout.Button("-0.25x");
+            var increase = GUILayout.Button("+0.25x");
+            var reset = GUILayout.Button("1x 초기화");
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("직접 입력:", labelStyle, GUILayout.Width(72f));
+            wagonRepairMultiplierInput = GUILayout.TextField(wagonRepairMultiplierInput);
+            var apply = GUILayout.Button("적용", GUILayout.Width(64f));
+            GUILayout.EndHorizontal();
+            GUI.enabled = previousEnabled;
+
+            if (decrease)
+            {
+                ExecuteWagonRepairMultiplierCommand("DecreaseWagonRepairCostMultiplier");
+            }
+            else if (increase)
+            {
+                ExecuteWagonRepairMultiplierCommand("IncreaseWagonRepairCostMultiplier");
+            }
+            else if (reset)
+            {
+                ExecuteWagonRepairMultiplierCommand("ResetWagonRepairCostMultiplier");
+            }
+            else if (apply)
+            {
+                ExecuteWagonRepairMultiplierApply(wagonRepairMultiplierInput);
+            }
+
+            GUILayout.Label($"최근 배율 실행 결과: {lastWagonRepairMultiplierResult}", labelStyle);
+        }
+
+        private WagonRepairMultiplierState ResolveWagonRepairMultiplierState()
+        {
+            var state = new WagonRepairMultiplierState();
+
+            try
+            {
+                state.Root = GetFrameworkRoot();
+                if (state.Root == null)
+                {
+                    state.DisabledReason = "Framework를 사용할 수 없음";
+                    return state;
+                }
+
+                state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
+                if (state.DebugCommands == null)
+                {
+                    state.DisabledReason = "DebugCommands를 사용할 수 없음";
+                    return state;
+                }
+
+                var type = state.DebugCommands.GetType();
+                state.ValueProperty = type.GetProperty(
+                    "WagonRepairCostMultiplier",
+                    BindingFlags.Public | BindingFlags.Instance);
+                state.SetMethod = type.GetMethod(
+                    "TrySetWagonRepairCostMultiplier",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(double) },
+                    null);
+
+                if (state.ValueProperty == null || !state.ValueProperty.CanRead || state.SetMethod == null)
+                {
+                    state.DisabledReason = "마차 수리 비용 배율 API를 사용할 수 없음";
+                    return state;
+                }
+
+                var value = state.ValueProperty.GetValue(state.DebugCommands);
+                if (!(value is double currentValue))
+                {
+                    state.DisabledReason = "마차 수리 비용 배율 값을 사용할 수 없음";
+                    return state;
+                }
+
+                state.CurrentValue = currentValue;
+                state.HasCurrentValue = true;
+                state.CanExecute = true;
+                state.DisabledReason = string.Empty;
+                return state;
+            }
+            catch (Exception exception)
+            {
+                state.DisabledReason = $"마차 수리 비용 배율을 사용할 수 없음: {exception.GetType().Name}";
+                return state;
+            }
+        }
+
+        private void ExecuteWagonRepairMultiplierApply(string input)
+        {
+            if (!double.TryParse(
+                    input?.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var multiplier))
+            {
+                lastWagonRepairMultiplierResult = "적용하지 않았습니다. 0부터 1000 사이의 숫자를 입력하세요.";
+                return;
+            }
+
+            var state = ResolveWagonRepairMultiplierState();
+            if (!state.CanExecute)
+            {
+                lastWagonRepairMultiplierResult = $"적용하지 않았습니다. {state.DisabledReason}.";
+                return;
+            }
+
+            try
+            {
+                var applied = state.SetMethod.Invoke(state.DebugCommands, new object[] { multiplier });
+                lastWagonRepairMultiplierResult = applied is bool succeeded && succeeded
+                    ? $"{multiplier:0.##}x를 적용했습니다."
+                    : "적용하지 않았습니다. 0부터 1000 사이의 숫자를 입력하세요.";
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+                lastWagonRepairMultiplierResult = $"명령 실행 실패: {cause.GetType().Name}: {cause.Message}";
+            }
+        }
+
+        private void ExecuteWagonRepairMultiplierCommand(string methodName)
+        {
+            var state = ResolveWagonRepairMultiplierState();
+            if (!state.CanExecute)
+            {
+                lastWagonRepairMultiplierResult = $"실행하지 않았습니다. {state.DisabledReason}.";
+                return;
+            }
+
+            try
+            {
+                var method = state.DebugCommands.GetType().GetMethod(
+                    methodName,
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (method == null)
+                {
+                    lastWagonRepairMultiplierResult = "배율 명령 API를 사용할 수 없습니다.";
+                    return;
+                }
+
+                var result = method.Invoke(state.DebugCommands, null);
+                lastWagonRepairMultiplierResult = result is double multiplier
+                    ? $"{multiplier:0.##}x를 적용했습니다."
+                    : "배율 명령이 값을 반환하지 않았습니다.";
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+                lastWagonRepairMultiplierResult = $"명령 실행 실패: {cause.GetType().Name}: {cause.Message}";
+            }
+        }
+
+        private void DrawCalendarTab()
+        {
+            var state = ResolveCalendarState();
+
+            GUILayout.Label("[달력 상태]", labelStyle);
+            GUILayout.Label($"초기화 상태: {(state.HasCurrent ? "완료" : "사용 불가")}", labelStyle);
+            if (state.HasCurrent)
+            {
+                GUILayout.Label($"현재 날짜: {FormatCalendarDate(state.Snapshot)}", labelStyle);
+                GUILayout.Label($"현재 계절: {FormatLocalizedCalendarValue(GetStringMember(state.Snapshot, "SeasonId"), true)}", labelStyle);
+                GUILayout.Label($"현재 재난: {FormatLocalizedCalendarValue(GetStringMember(state.Snapshot, "ActiveDisasterId"), false)}", labelStyle);
+                GUILayout.Label($"누적 경과 일수: {FormatValue(GetMemberValue(state.Snapshot, "TotalElapsedDays"))}일", labelStyle);
+            }
+            else
+            {
+                GUILayout.Label("달력 서비스를 사용할 수 없습니다.", labelStyle);
+            }
+            GUILayout.Label($"달력 디버그 배속: {(state.HasDebugScale ? state.DebugScale.ToString("0.##", CultureInfo.InvariantCulture) + "x" : "N/A")}", labelStyle);
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[달력 배속]", labelStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("0x 정지")) SetCalendarDebugScale(0f);
+            if (GUILayout.Button("1x 기본")) SetCalendarDebugScale(1f);
+            if (GUILayout.Button("2x")) SetCalendarDebugScale(2f);
+            if (GUILayout.Button("4x")) SetCalendarDebugScale(4f);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("배속은 온라인 달력 진행에만 적용되며 세션에 저장되지 않습니다.", labelStyle);
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[날짜 진행]", labelStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("1일 진행")) ExecuteCalendarAdvance("AdvanceOneGameDay", "달력을 1일 진행했습니다.");
+            if (GUILayout.Button("30일 진행")) ExecuteCalendarAdvance("AdvanceOneGameMonth", "달력을 30일 진행했습니다.");
+            GUILayout.EndHorizontal();
+            GUILayout.Label("게임의 한 달은 30일이며 현재 날짜를 기준으로 진행합니다.", labelStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("목표 월", labelStyle, GUILayout.Width(64f));
+            calendarTargetMonthInput = GUILayout.TextField(calendarTargetMonthInput, GUILayout.Width(90f));
+            if (GUILayout.Button("다음 해당 월까지 진행")) ExecuteAdvanceToMonth();
+            GUILayout.EndHorizontal();
+            GUILayout.Label("현재 날짜보다 앞으로 진행하여 다음에 도달하는 해당 월로 이동합니다.", labelStyle);
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[달력 오프라인 시뮬레이션]", labelStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("현실 경과 시간", labelStyle, GUILayout.Width(100f));
+            calendarOfflineHoursInput = GUILayout.TextField(calendarOfflineHoursInput, GUILayout.Width(100f));
+            GUILayout.Label("시간", labelStyle, GUILayout.Width(36f));
+            GUILayout.EndHorizontal();
+            if (GUILayout.Button("달력 오프라인 시간 적용")) ExecuteCalendarOfflineSimulation();
+            GUILayout.Label("이 기능은 달력만 진행합니다. 무역 진행, 무역 도착 시간, Unity 배속에는 영향을 주지 않습니다.", labelStyle);
+            GUILayout.Label("Framework 정책에 따라 최대 72시간까지만 반영합니다.", labelStyle);
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[진단]", labelStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("새로고침")) RefreshSnapshot();
+            if (GUILayout.Button("현재 달력 상태 로그")) ExecuteCalendarLog("LogCalendarState", false);
+            if (GUILayout.Button("최근 복구 타임라인 로그")) ExecuteCalendarLog("LogCalendarRestoreTimeline", true);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[최근 실행 결과]", labelStyle);
+            GUILayout.Label(lastCalendarResult, labelStyle);
+        }
+
+        private CalendarState ResolveCalendarState()
+        {
+            var state = new CalendarState();
+            try
+            {
+                state.Root = GetFrameworkRoot();
+                if (state.Root == null) return state;
+                state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
+                state.Calendar = GetMemberValue(state.Root, "GameCalendar");
+                if (state.Calendar == null) return state;
+                state.HasCurrent = ToBool(GetMemberValue(state.Calendar, "HasCurrent"));
+                if (state.HasCurrent) state.Snapshot = GetMemberValue(state.Calendar, "Current");
+                var scale = GetMemberValue(state.Calendar, "DebugScale");
+                if (scale is float floatScale)
+                {
+                    state.DebugScale = floatScale;
+                    state.HasDebugScale = true;
+                }
+            }
+            catch (Exception exception)
+            {
+                state.Error = exception.GetType().Name;
+            }
+            return state;
+        }
+
+        private void SetCalendarDebugScale(float scale)
+        {
+            var state = ResolveCalendarState();
+            var method = FindInstanceMethod(state.DebugCommands, "TrySetCalendarDebugScale", typeof(float));
+            if (method == null)
+            {
+                lastCalendarResult = "달력 배속 API를 사용할 수 없습니다.";
+                return;
+            }
+            try
+            {
+                var result = method.Invoke(state.DebugCommands, new object[] { scale });
+                lastCalendarResult = result is bool succeeded && succeeded
+                    ? $"달력 배속을 {scale:0.##}x로 변경했습니다."
+                    : "달력 배속 변경에 실패했습니다.";
+            }
+            catch (Exception exception)
+            {
+                lastCalendarResult = $"달력 배속 명령 실행에 실패했습니다. {GetInvocationCause(exception)}";
+            }
+            RefreshSnapshot();
+        }
+
+        private void ExecuteCalendarAdvance(string methodName, string successAction)
+        {
+            var state = ResolveCalendarState();
+            var method = FindInstanceMethod(state.DebugCommands, methodName);
+            if (method == null)
+            {
+                lastCalendarResult = "달력 진행 API를 사용할 수 없습니다.";
+                return;
+            }
+            try
+            {
+                lastCalendarResult = FormatCalendarAdvanceResult(method.Invoke(state.DebugCommands, null), successAction);
+            }
+            catch (Exception exception)
+            {
+                lastCalendarResult = $"달력 진행 명령 실행에 실패했습니다. {GetInvocationCause(exception)}";
+            }
+            RefreshSnapshot();
+        }
+
+        private void ExecuteAdvanceToMonth()
+        {
+            var input = calendarTargetMonthInput?.Trim();
+            if (string.IsNullOrEmpty(input))
+            {
+                lastCalendarResult = "목표 월을 입력하세요.";
+                return;
+            }
+            if (!int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out var month))
+            {
+                lastCalendarResult = "목표 월은 숫자로 입력해야 합니다.";
+                return;
+            }
+            if (month < 1 || month > 12)
+            {
+                lastCalendarResult = "목표 월은 1부터 12 사이여야 합니다.";
+                return;
+            }
+            var state = ResolveCalendarState();
+            var method = FindInstanceMethod(state.DebugCommands, "AdvanceToMonth", typeof(int));
+            if (method == null)
+            {
+                lastCalendarResult = "목표 월 진행 API를 사용할 수 없습니다.";
+                return;
+            }
+            try
+            {
+                lastCalendarResult = FormatCalendarAdvanceResult(
+                    method.Invoke(state.DebugCommands, new object[] { month }),
+                    $"다음 {month}월까지 달력을 진행했습니다.");
+            }
+            catch (Exception exception)
+            {
+                lastCalendarResult = $"목표 월 진행 명령 실행에 실패했습니다. {GetInvocationCause(exception)}";
+            }
+            RefreshSnapshot();
+        }
+
+        private void ExecuteCalendarOfflineSimulation()
+        {
+            var input = calendarOfflineHoursInput?.Trim();
+            if (string.IsNullOrEmpty(input))
+            {
+                lastCalendarResult = "경과 시간을 입력하세요.";
+                return;
+            }
+            if (!double.TryParse(input, NumberStyles.Float, CultureInfo.InvariantCulture, out var hours))
+            {
+                lastCalendarResult = "경과 시간은 숫자로 입력해야 합니다.";
+                return;
+            }
+            if (double.IsNaN(hours) || double.IsInfinity(hours) || hours <= 0d)
+            {
+                lastCalendarResult = "경과 시간은 0보다 커야 합니다.";
+                return;
+            }
+            var seconds = hours * 3600d;
+            if (double.IsInfinity(seconds) || double.IsNaN(seconds))
+            {
+                lastCalendarResult = "경과 시간이 너무 큽니다.";
+                return;
+            }
+            var state = ResolveCalendarState();
+            var method = FindInstanceMethod(state.DebugCommands, "SimulateCalendarOffline", typeof(double));
+            if (method == null)
+            {
+                lastCalendarResult = "달력 오프라인 시뮬레이션 API를 사용할 수 없습니다.";
+                return;
+            }
+            try
+            {
+                var result = method.Invoke(state.DebugCommands, new object[] { seconds });
+                lastCalendarResult = result == null
+                    ? "달력 오프라인 시뮬레이션을 실행하지 못했습니다. 입력값과 달력 초기화 상태를 확인하세요."
+                    : $"달력 오프라인 경과 시간을 적용했습니다.\n요청: {hours:0.##}시간\n현재 날짜: {FormatCalendarDate(GetMemberValue(result, "Current"))}";
+            }
+            catch (Exception exception)
+            {
+                lastCalendarResult = $"달력 오프라인 시뮬레이션 실행에 실패했습니다. {GetInvocationCause(exception)}";
+            }
+            RefreshSnapshot();
+        }
+
+        private void ExecuteCalendarLog(string methodName, bool isTimeline)
+        {
+            var state = ResolveCalendarState();
+            var method = FindCalendarLogMethod(state.DebugCommands, methodName, isTimeline);
+            if (method == null)
+            {
+                lastCalendarResult = "달력 로그 명령을 사용할 수 없습니다.";
+                return;
+            }
+            try
+            {
+                method.Invoke(state.DebugCommands, isTimeline ? new object[] { null } : null);
+                lastCalendarResult = isTimeline
+                    ? "복구 타임라인 로그 출력을 요청했습니다. 세부 결과는 Console에서 확인하세요."
+                    : "현재 달력 상태를 Console에 출력했습니다.";
+            }
+            catch (Exception exception)
+            {
+                lastCalendarResult = $"달력 로그 명령 실행에 실패했습니다. {GetInvocationCause(exception)}";
+            }
+        }
+
+        private static string FormatCalendarAdvanceResult(object result, string successAction)
+        {
+            if (result == null || !(GetMemberValue(result, "Changed") is bool changed))
+                return "달력 진행 결과를 확인할 수 없습니다.";
+            var saveResult = GetMemberValue(result, "SaveResult");
+            if (saveResult != null && GetMemberValue(saveResult, "Succeeded") is bool saved && !saved)
+            {
+                var builder = new StringBuilder("달력 진행 저장에 실패했습니다.\n변경 사항은 이전 상태로 복구되었습니다.");
+                AppendResultMember(builder, "실패 분류", saveResult, "FailedDataCategory");
+                AppendResultMember(builder, "실패 코드", saveResult, "FailureReason");
+                return builder.ToString();
+            }
+            if (!changed || saveResult == null)
+                return "달력 상태가 변경되지 않았습니다. 달력이 아직 초기화되지 않았는지 확인하세요.";
+            if (!(GetMemberValue(saveResult, "Succeeded") is bool succeeded) || !succeeded)
+                return "달력 진행 저장 결과를 확인할 수 없습니다.";
+            return $"{successAction}\n현재 날짜: {FormatCalendarDate(GetMemberValue(result, "Current"))}";
+        }
+
+        private static string FormatCalendarDate(object snapshotValue)
+        {
+            if (snapshotValue == null) return "N/A";
+            return $"{FormatValue(GetMemberValue(snapshotValue, "Year"))}년 {FormatValue(GetMemberValue(snapshotValue, "Month"))}월 {FormatValue(GetMemberValue(snapshotValue, "Day"))}일";
+        }
+
+        private static string FormatLocalizedCalendarValue(string rawValue, bool season)
+        {
+            if (string.IsNullOrWhiteSpace(rawValue)) return "없음";
+            string localized = null;
+            if (season)
+            {
+                if (rawValue == "winter") localized = "겨울";
+                else if (rawValue == "spring") localized = "봄";
+                else if (rawValue == "summer") localized = "여름";
+                else if (rawValue == "autumn") localized = "가을";
+            }
+            else if (rawValue == "flood") localized = "홍수";
+            return localized == null ? rawValue : $"{localized} ({rawValue})";
+        }
+
+        private static MethodInfo FindInstanceMethod(object target, string methodName, params Type[] parameterTypes)
+        {
+            if (target == null) return null;
+            try
+            {
+                return target.GetType().GetMethod(
+                    methodName, BindingFlags.Public | BindingFlags.Instance, null, parameterTypes, null);
+            }
+            catch (Exception exception) when (IsReflectionAccessException(exception))
+            {
+                return null;
+            }
+        }
+
+        private static MethodInfo FindCalendarLogMethod(object target, string methodName, bool acceptsOptionalResult)
+        {
+            if (target == null) return null;
+            try
+            {
+                var methods = target.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                for (var index = 0; index < methods.Length; index++)
+                {
+                    if (!string.Equals(methods[index].Name, methodName, StringComparison.Ordinal)) continue;
+                    var parameters = methods[index].GetParameters();
+                    if ((!acceptsOptionalResult && parameters.Length == 0)
+                        || (acceptsOptionalResult && parameters.Length == 1 && parameters[0].IsOptional))
+                        return methods[index];
+                }
+            }
+            catch (Exception exception) when (IsReflectionAccessException(exception))
+            {
+                return null;
+            }
+            return null;
+        }
+
+        private static string GetInvocationCause(Exception exception)
+        {
+            var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                ? invocation.InnerException
+                : exception;
+            return $"{cause.GetType().Name}: {cause.Message}";
         }
 
         private void HandleActiveSceneChanged(Scene previousScene, Scene nextScene)
@@ -262,7 +778,7 @@ namespace ND.DebugTools
         {
             nextRefreshTime = Time.unscaledTime + RefreshIntervalSeconds;
             textBuilder.Clear();
-            textBuilder.AppendLine("[Framework]");
+            textBuilder.AppendLine("[Framework 상태]");
             textBuilder.AppendLine($"Scene: {SceneManager.GetActiveScene().name}");
 
             try
@@ -278,18 +794,18 @@ namespace ND.DebugTools
                 var pendingEntries = ReadCollection(GetMemberValue(saveData, "pendingSettlements"));
                 var selectedCaravanId = GetStringMember(saveData, "selectedCaravanId");
 
-                textBuilder.AppendLine($"FrameworkRoot Initialized: {FormatBool(root != null && coordinator != null && router != null)}");
-                textBuilder.AppendLine($"SaveData: {FormatBool(saveData != null)}");
-                textBuilder.AppendLine($"Screen: {FormatValue(GetMemberValue(router, "CurrentScreenState"))}");
-                textBuilder.AppendLine($"Trading Currency: {FormatValue(GetMemberValue(player, "tradingCurrency"))}");
-                textBuilder.AppendLine($"Development Currency: {FormatValue(GetMemberValue(player, "developmentCurrency"))}");
-                textBuilder.AppendLine($"SharedGameData Loaded: {FormatBool(ToBool(GetMemberValue(sharedData, "IsLoaded")))}");
-                textBuilder.AppendLine($"  Towns: {FormatValue(GetMemberValue(sharedData, "TownCount"))}");
-                textBuilder.AppendLine($"  Markets: {FormatValue(GetMemberValue(sharedData, "MarketCount"))}");
-                textBuilder.AppendLine($"  Trade Items: {FormatValue(GetMemberValue(sharedData, "TradeItemCount"))}");
-                textBuilder.AppendLine($"  Wagons: {FormatValue(GetMemberValue(sharedData, "WagonCount"))}");
-                textBuilder.AppendLine($"  Draft Animals: {FormatValue(GetMemberValue(sharedData, "DraftAnimalCount"))}");
-                textBuilder.AppendLine($"  Routes: {FormatValue(GetMemberValue(sharedData, "RouteCount"))}");
+                textBuilder.AppendLine($"FrameworkRoot 초기화: {FormatBool(root != null && coordinator != null && router != null)}");
+                textBuilder.AppendLine($"저장 데이터: {FormatBool(saveData != null)}");
+                textBuilder.AppendLine($"화면: {FormatValue(GetMemberValue(router, "CurrentScreenState"))}");
+                textBuilder.AppendLine($"거래 재화: {FormatValue(GetMemberValue(player, "tradingCurrency"))}");
+                textBuilder.AppendLine($"발전 재화: {FormatValue(GetMemberValue(player, "developmentCurrency"))}");
+                textBuilder.AppendLine($"공용 게임 데이터 로드: {FormatBool(ToBool(GetMemberValue(sharedData, "IsLoaded")))}");
+                textBuilder.AppendLine($"  마을: {FormatValue(GetMemberValue(sharedData, "TownCount"))}");
+                textBuilder.AppendLine($"  시장: {FormatValue(GetMemberValue(sharedData, "MarketCount"))}");
+                textBuilder.AppendLine($"  거래 아이템: {FormatValue(GetMemberValue(sharedData, "TradeItemCount"))}");
+                textBuilder.AppendLine($"  마차: {FormatValue(GetMemberValue(sharedData, "WagonCount"))}");
+                textBuilder.AppendLine($"  역축: {FormatValue(GetMemberValue(sharedData, "DraftAnimalCount"))}");
+                textBuilder.AppendLine($"  경로: {FormatValue(GetMemberValue(sharedData, "RouteCount"))}");
 
                 AppendSelectedCaravan(saveData, selectedCaravanId, caravans, tradeEntries, pendingEntries);
                 AppendAllCaravans(selectedCaravanId, caravans, tradeEntries, pendingEntries);
@@ -298,7 +814,7 @@ namespace ND.DebugTools
             }
             catch (Exception exception)
             {
-                textBuilder.AppendLine($"Status read failed: {exception.GetType().Name}");
+                textBuilder.AppendLine($"상태 조회 실패: {exception.GetType().Name}");
             }
 
             snapshot = textBuilder.ToString();
@@ -319,41 +835,41 @@ namespace ND.DebugTools
                 state.Root = GetFrameworkRoot();
                 if (state.Root == null)
                 {
-                    state.DisabledReason = "Framework is unavailable";
+                    state.DisabledReason = "Framework를 사용할 수 없음";
                     return state;
                 }
 
                 state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
                 if (state.DebugCommands == null)
                 {
-                    state.DisabledReason = "DebugCommands is unavailable";
+                    state.DisabledReason = "DebugCommands를 사용할 수 없음";
                     return state;
                 }
 
                 state.Method = FindCurrencyMethod(state.DebugCommands.GetType(), methodName);
                 if (state.Method == null)
                 {
-                    state.DisabledReason = "Currency API is unavailable";
+                    state.DisabledReason = "재화 API를 사용할 수 없음";
                     return state;
                 }
 
                 var saveData = GetMemberValue(state.Root, "CurrentSaveData");
                 if (saveData == null)
                 {
-                    state.DisabledReason = "Current SaveData is unavailable";
+                    state.DisabledReason = "현재 SaveData를 사용할 수 없음";
                     return state;
                 }
 
                 var player = GetMemberValue(saveData, "player");
                 if (player == null)
                 {
-                    state.DisabledReason = "Player data is unavailable";
+                    state.DisabledReason = "플레이어 데이터를 사용할 수 없음";
                     return state;
                 }
 
                 if (!TryGetMemberValue(player, currencyMemberName, out var value) || !(value is long currentValue))
                 {
-                    state.DisabledReason = "Currency value is unavailable";
+                    state.DisabledReason = "재화 값을 사용할 수 없음";
                     return state;
                 }
 
@@ -365,7 +881,7 @@ namespace ND.DebugTools
             }
             catch (Exception exception)
             {
-                state.DisabledReason = $"Currency status unavailable: {exception.GetType().Name}";
+                state.DisabledReason = $"재화 상태를 사용할 수 없음: {exception.GetType().Name}";
                 return state;
             }
         }
@@ -410,21 +926,21 @@ namespace ND.DebugTools
             var trimmedInput = input?.Trim();
             if (string.IsNullOrEmpty(trimmedInput))
             {
-                lastCurrencyResult = "Currency grant not executed.\nReason: Enter a positive whole number.";
+                lastCurrencyResult = "재화 추가를 실행하지 않았습니다.\n사유: 양의 정수를 입력하세요.";
                 return;
             }
 
             if (!long.TryParse(trimmedInput, NumberStyles.None, CultureInfo.InvariantCulture, out var amount))
             {
                 lastCurrencyResult = ContainsOnlyAsciiDigits(trimmedInput)
-                    ? "Currency grant not executed.\nReason: Amount is too large or is not a positive whole number."
-                    : "Currency grant not executed.\nReason: Enter a positive whole number.";
+                    ? "재화 추가를 실행하지 않았습니다.\n사유: 값이 너무 크거나 양의 정수가 아닙니다."
+                    : "재화 추가를 실행하지 않았습니다.\n사유: 양의 정수를 입력하세요.";
                 return;
             }
 
             if (amount <= 0L)
             {
-                lastCurrencyResult = "Currency grant not executed.\nReason: Enter a positive whole number.";
+                lastCurrencyResult = "재화 추가를 실행하지 않았습니다.\n사유: 양의 정수를 입력하세요.";
                 return;
             }
 
@@ -446,21 +962,21 @@ namespace ND.DebugTools
 
         private void ExecuteCurrencyGrant(bool isTradingCurrency, long amount)
         {
-            var displayName = isTradingCurrency ? "Trading Currency" : "Development Currency";
+            var displayName = isTradingCurrency ? "거래 재화" : "발전 재화";
             var methodName = isTradingCurrency ? "TryAddTradingCurrency" : "TryAddDevelopmentCurrency";
             var memberName = isTradingCurrency ? "tradingCurrency" : "developmentCurrency";
             var state = ResolveCurrencyState(methodName, memberName);
 
             if (amount <= 0L)
             {
-                lastCurrencyResult = $"{displayName} grant not executed.\nRequested: {amount}\nReason: Enter a positive whole number.";
+                lastCurrencyResult = $"{displayName} 추가를 실행하지 않았습니다.\n요청값: {amount}\n사유: 양의 정수를 입력하세요.";
                 return;
             }
 
             if (!state.CanExecute)
             {
                 lastCurrencyResult =
-                    $"{displayName} grant invocation failed.\nRequested: {amount:N0}\nReason: {state.DisabledReason}.";
+                    $"{displayName} 추가 명령 실행에 실패했습니다.\n요청값: {amount:N0}\n사유: {state.DisabledReason}.";
                 RefreshSnapshot();
                 return;
             }
@@ -475,14 +991,14 @@ namespace ND.DebugTools
             {
                 var cause = exception.InnerException ?? exception;
                 lastCurrencyResult =
-                    $"{displayName} grant invocation failed.\nRequested: {amount:N0}\nReason: {cause.GetType().Name}: {cause.Message}";
+                    $"{displayName} 추가 명령 실행에 실패했습니다.\n요청값: {amount:N0}\n사유: {cause.GetType().Name}: {cause.Message}";
             }
             catch (Exception exception) when (
                 IsReflectionAccessException(exception)
                 || exception is InvalidOperationException)
             {
                 lastCurrencyResult =
-                    $"{displayName} grant invocation failed.\nRequested: {amount:N0}\nReason: {exception.GetType().Name}: {exception.Message}";
+                    $"{displayName} 추가 명령 실행에 실패했습니다.\n요청값: {amount:N0}\n사유: {exception.GetType().Name}: {exception.Message}";
             }
 
             RefreshSnapshot();
@@ -496,28 +1012,28 @@ namespace ND.DebugTools
         {
             if (result == null)
             {
-                return $"{displayName} grant invocation failed.\nRequested: {requestedAmount:N0}\nReason: Command returned no result.";
+                return $"{displayName} 추가 명령 실행에 실패했습니다.\n요청값: {requestedAmount:N0}\n사유: 명령 결과가 없습니다.";
             }
 
             if (!(GetMemberValue(result, "Succeeded") is bool succeeded))
             {
-                return $"{displayName} grant invocation failed.\nRequested: {requestedAmount:N0}\nReason: Unexpected result shape.";
+                return $"{displayName} 추가 명령 실행에 실패했습니다.\n요청값: {requestedAmount:N0}\n사유: 예상하지 못한 결과 형식입니다.";
             }
 
             var builder = new StringBuilder(256);
             if (succeeded)
             {
-                builder.AppendLine($"{displayName} grant succeeded.");
-                builder.AppendLine($"Added: {requestedAmount:N0}");
-                builder.Append($"Current: {(refreshedState.HasCurrentValue ? refreshedState.CurrentValue.ToString("N0", CultureInfo.InvariantCulture) : "N/A")}");
+                builder.AppendLine($"{displayName}를 추가했습니다.");
+                builder.AppendLine($"추가량: {requestedAmount:N0}");
+                builder.Append($"현재 값: {(refreshedState.HasCurrentValue ? refreshedState.CurrentValue.ToString("N0", CultureInfo.InvariantCulture) : "N/A")}");
                 return builder.ToString();
             }
 
-            builder.AppendLine($"{displayName} grant failed.");
-            builder.AppendLine($"Requested: {requestedAmount:N0}");
-            AppendResultMember(builder, "Category", result, "FailedDataCategory");
-            AppendResultMember(builder, "Reason", result, "FailureReason");
-            AppendResultMember(builder, "Message", result, "Message");
+            builder.AppendLine($"{displayName} 추가에 실패했습니다.");
+            builder.AppendLine($"요청값: {requestedAmount:N0}");
+            AppendResultMember(builder, "실패 분류", result, "FailedDataCategory");
+            AppendResultMember(builder, "실패 코드", result, "FailureReason");
+            AppendResultMember(builder, "메시지", result, "Message");
             return builder.ToString().TrimEnd();
         }
 
@@ -555,48 +1071,48 @@ namespace ND.DebugTools
                 state.Root = GetFrameworkRoot();
                 if (state.Root == null)
                 {
-                    state.DisabledReason = "Framework is unavailable";
+                    state.DisabledReason = "Framework를 사용할 수 없음";
                     return state;
                 }
 
                 state.DebugCommands = GetMemberValue(state.Root, "DebugCommands");
                 if (state.DebugCommands == null)
                 {
-                    state.DisabledReason = "DebugCommands is unavailable";
+                    state.DisabledReason = "DebugCommands를 사용할 수 없음";
                     return state;
                 }
 
                 state.Method = FindForceArrivalMethod(state.DebugCommands.GetType());
                 if (state.Method == null)
                 {
-                    state.DisabledReason = "Exact force-arrival API is unavailable";
+                    state.DisabledReason = "정확한 즉시 도착 API를 사용할 수 없음";
                     return state;
                 }
 
                 var saveData = GetMemberValue(state.Root, "CurrentSaveData");
                 if (saveData == null)
                 {
-                    state.DisabledReason = "Current SaveData is unavailable";
+                    state.DisabledReason = "현재 SaveData를 사용할 수 없음";
                     return state;
                 }
 
                 state.SelectedCaravanId = GetStringMember(saveData, "selectedCaravanId");
                 if (string.IsNullOrWhiteSpace(state.SelectedCaravanId))
                 {
-                    state.DisabledReason = "No selected Caravan";
+                    state.DisabledReason = "선택한 Caravan 없음";
                     return state;
                 }
 
                 if (!TryGetMemberValue(saveData, "tradeProgressEntries", out var entriesValue))
                 {
-                    state.DisabledReason = "Selected Caravan progress not found (exact entry list unavailable)";
+                    state.DisabledReason = "선택한 Caravan 진행 정보를 찾지 못함 (정확한 항목 목록 사용 불가)";
                     return state;
                 }
 
                 var entry = FindFirstByCaravanId(ReadCollection(entriesValue), state.SelectedCaravanId);
                 if (entry == null)
                 {
-                    state.DisabledReason = "Selected Caravan progress not found";
+                    state.DisabledReason = "선택한 Caravan 진행 정보를 찾지 못함";
                     return state;
                 }
 
@@ -609,19 +1125,19 @@ namespace ND.DebugTools
                 if (string.IsNullOrWhiteSpace(state.EntryCaravanId)
                     || !IdEquals(state.EntryCaravanId, state.SelectedCaravanId))
                 {
-                    state.DisabledReason = "Selected entry identity mismatch";
+                    state.DisabledReason = "선택 항목 식별자가 일치하지 않음";
                     return state;
                 }
 
                 if (string.IsNullOrWhiteSpace(state.TradeId))
                 {
-                    state.DisabledReason = "No active trade";
+                    state.DisabledReason = "진행 중인 무역 없음";
                     return state;
                 }
 
                 if (!string.Equals(state.State, "Traveling", StringComparison.Ordinal))
                 {
-                    state.DisabledReason = "Selected trade is not Traveling";
+                    state.DisabledReason = "선택한 무역이 Traveling 상태가 아님";
                     return state;
                 }
 
@@ -632,7 +1148,7 @@ namespace ND.DebugTools
             catch (Exception exception)
             {
                 state.CanExecute = false;
-                state.DisabledReason = $"Force-arrival status unavailable: {exception.GetType().Name}";
+                state.DisabledReason = $"즉시 도착 상태를 사용할 수 없음: {exception.GetType().Name}";
                 return state;
             }
         }
@@ -677,7 +1193,7 @@ namespace ND.DebugTools
             var state = ResolveForceArrivalState();
             if (!state.CanExecute)
             {
-                lastForceArrivalResult = $"Force arrival not executed. Reason: {state.DisabledReason}.";
+                lastForceArrivalResult = $"즉시 도착 처리를 실행하지 않았습니다. 사유: {state.DisabledReason}.";
                 RefreshSnapshot();
                 return;
             }
@@ -693,14 +1209,14 @@ namespace ND.DebugTools
             {
                 var cause = exception.InnerException ?? exception;
                 lastForceArrivalResult =
-                    $"Force arrival invocation failed. Reason: {cause.GetType().Name}: {cause.Message}";
+                    $"즉시 도착 명령 실행에 실패했습니다. 사유: {cause.GetType().Name}: {cause.Message}";
             }
             catch (Exception exception) when (
                 IsReflectionAccessException(exception)
                 || exception is InvalidOperationException)
             {
                 lastForceArrivalResult =
-                    $"Force arrival invocation failed. Reason: {exception.GetType().Name}: {exception.Message}";
+                    $"즉시 도착 명령 실행에 실패했습니다. 사유: {exception.GetType().Name}: {exception.Message}";
             }
 
             RefreshSnapshot();
@@ -710,13 +1226,13 @@ namespace ND.DebugTools
         {
             if (result == null)
             {
-                return "Force arrival invocation failed. Reason: command returned no result.";
+                return "즉시 도착 명령 실행에 실패했습니다. 사유: 명령 결과가 없습니다.";
             }
 
             var succeededValue = GetMemberValue(result, "Succeeded");
             if (!(succeededValue is bool succeeded))
             {
-                return "Force arrival invocation failed. Reason: unexpected result shape.";
+                return "즉시 도착 명령 실행에 실패했습니다. 사유: 예상하지 못한 결과 형식입니다.";
             }
 
             var caravanId = GetStringMember(result, "CaravanId");
@@ -726,28 +1242,28 @@ namespace ND.DebugTools
 
             if (succeeded)
             {
-                return $"Success - {FormatIdentifier(caravanId)} / {FormatIdentifier(tradeId)} is now SettlementPending.";
+                return $"성공: {FormatIdentifier(caravanId)} / {FormatIdentifier(tradeId)}가 SettlementPending 상태가 되었습니다.";
             }
 
             var builder = new StringBuilder(256);
-            builder.Append($"Force arrival failed. Reason: {FormatValue(GetMemberValue(result, "FailureReason"))}");
-            builder.Append($". Caravan: {FormatIdentifier(caravanId)}. Trade: {FormatIdentifier(tradeId)}");
+            builder.Append($"즉시 도착 처리 실패. 사유: {FormatValue(GetMemberValue(result, "FailureReason"))}");
+            builder.Append($". Caravan: {FormatIdentifier(caravanId)}. 무역: {FormatIdentifier(tradeId)}");
 
             var saveResult = GetMemberValue(result, "SaveResult");
             if (saveResult != null)
             {
-                builder.Append($". Save Succeeded: {FormatValue(GetMemberValue(saveResult, "Succeeded"))}");
-                builder.Append($". Save Failure: {FormatValue(GetMemberValue(saveResult, "FailureReason"))}");
+                builder.Append($". 저장 성공: {FormatValue(GetMemberValue(saveResult, "Succeeded"))}");
+                builder.Append($". 저장 실패 코드: {FormatValue(GetMemberValue(saveResult, "FailureReason"))}");
                 var message = GetStringMember(saveResult, "Message");
                 if (!string.IsNullOrWhiteSpace(message))
                 {
-                    builder.Append($". Message: {message}");
+                    builder.Append($". 메시지: {message}");
                 }
 
                 var failedDataCategory = GetMemberValue(saveResult, "FailedDataCategory");
                 if (failedDataCategory != null)
                 {
-                    builder.Append($". Failed Data Category: {FormatValue(failedDataCategory)}");
+                    builder.Append($". 실패 데이터 분류: {FormatValue(failedDataCategory)}");
                 }
             }
 
@@ -850,8 +1366,8 @@ namespace ND.DebugTools
             List<object> pendingEntries)
         {
             textBuilder.AppendLine();
-            textBuilder.AppendLine("[Selected Caravan]");
-            textBuilder.AppendLine($"Selected Caravan ID: {FormatIdentifier(selectedCaravanId)}");
+            textBuilder.AppendLine("[선택한 Caravan]");
+            textBuilder.AppendLine($"선택한 Caravan ID: {FormatIdentifier(selectedCaravanId)}");
 
             var caravan = GetMemberValue(saveData, "caravan");
             if (caravan == null)
@@ -861,13 +1377,13 @@ namespace ND.DebugTools
 
             if (!string.IsNullOrEmpty(selectedCaravanId) && caravan == null)
             {
-                textBuilder.AppendLine("Selected Caravan Entry: Missing");
+                textBuilder.AppendLine("선택한 Caravan 항목: 없음");
             }
 
             textBuilder.AppendLine($"Caravan ID: {FormatValue(GetMemberValue(caravan, "caravanId"))}");
-            textBuilder.AppendLine($"Slot Index: {FormatValue(GetMemberValue(caravan, "slotIndex"))}");
-            textBuilder.AppendLine($"Journey State: {FormatValue(GetMemberValue(caravan, "state"))}");
-            textBuilder.AppendLine($"Caravan Progress: {FormatProgress(GetMemberValue(caravan, "progress01"))}");
+            textBuilder.AppendLine($"슬롯 인덱스: {FormatValue(GetMemberValue(caravan, "slotIndex"))}");
+            textBuilder.AppendLine($"이동 상태: {FormatValue(GetMemberValue(caravan, "state"))}");
+            textBuilder.AppendLine($"Caravan 진행률: {FormatProgress(GetMemberValue(caravan, "progress01"))}");
 
             var trade = GetMemberValue(saveData, "tradeProgress");
             if (trade == null)
@@ -877,21 +1393,21 @@ namespace ND.DebugTools
 
             if (trade == null)
             {
-                textBuilder.AppendLine("Trade Progress State: None");
-                textBuilder.AppendLine("Active Trade ID: N/A");
-                textBuilder.AppendLine("Active Route ID: N/A");
-                textBuilder.AppendLine("Trade Start UTC: N/A");
-                textBuilder.AppendLine("Expected Trade End UTC: N/A");
-                textBuilder.AppendLine("Pending Settlement: No");
+                textBuilder.AppendLine("무역 진행 상태: 없음");
+                textBuilder.AppendLine("진행 중인 무역 ID: N/A");
+                textBuilder.AppendLine("진행 중인 경로 ID: N/A");
+                textBuilder.AppendLine("무역 시작 UTC: N/A");
+                textBuilder.AppendLine("예상 무역 종료 UTC: N/A");
+                textBuilder.AppendLine("정산 대기: 아니요");
                 return;
             }
 
-            textBuilder.AppendLine($"Trade Progress State: {FormatValue(GetMemberValue(trade, "state"))}");
-            textBuilder.AppendLine($"Active Trade ID: {FormatValue(GetMemberValue(trade, "activeTradeId"))}");
-            textBuilder.AppendLine($"Active Route ID: {FormatValue(GetMemberValue(trade, "activeRouteId"))}");
-            textBuilder.AppendLine($"Trade Start UTC: {FormatUtcTicks(GetMemberValue(trade, "tradeStartUtcTick"))}");
-            textBuilder.AppendLine($"Expected Trade End UTC: {FormatUtcTicks(GetMemberValue(trade, "expectedTradeEndUtcTick"))}");
-            textBuilder.AppendLine($"Pending Settlement: {FormatBool(HasMatchingPending(trade, pendingEntries))}");
+            textBuilder.AppendLine($"무역 진행 상태: {FormatValue(GetMemberValue(trade, "state"))}");
+            textBuilder.AppendLine($"진행 중인 무역 ID: {FormatValue(GetMemberValue(trade, "activeTradeId"))}");
+            textBuilder.AppendLine($"진행 중인 경로 ID: {FormatValue(GetMemberValue(trade, "activeRouteId"))}");
+            textBuilder.AppendLine($"무역 시작 UTC: {FormatUtcTicks(GetMemberValue(trade, "tradeStartUtcTick"))}");
+            textBuilder.AppendLine($"예상 무역 종료 UTC: {FormatUtcTicks(GetMemberValue(trade, "expectedTradeEndUtcTick"))}");
+            textBuilder.AppendLine($"정산 대기: {FormatBool(HasMatchingPending(trade, pendingEntries))}");
         }
 
         private void AppendAllCaravans(
@@ -901,7 +1417,7 @@ namespace ND.DebugTools
             List<object> pendingEntries)
         {
             textBuilder.AppendLine();
-            textBuilder.AppendLine($"[All Caravans] Count: {caravans.Count}");
+            textBuilder.AppendLine($"[전체 Caravans] 개수: {caravans.Count}");
             for (var caravanIndex = 0; caravanIndex < caravans.Count; caravanIndex++)
             {
                 var caravan = caravans[caravanIndex];
@@ -914,9 +1430,9 @@ namespace ND.DebugTools
                 var caravanId = GetStringMember(caravan, "caravanId");
                 var selectedMarker = IdEquals(caravanId, selectedCaravanId) ? "*" : " ";
                 textBuilder.AppendLine($"{selectedMarker} [{caravanIndex}] {FormatIdentifier(caravanId)}");
-                textBuilder.AppendLine($"  Slot: {FormatValue(GetMemberValue(caravan, "slotIndex"))}");
-                textBuilder.AppendLine($"  Journey: {FormatValue(GetMemberValue(caravan, "state"))}");
-                textBuilder.AppendLine($"  Progress: {FormatProgress(GetMemberValue(caravan, "progress01"))}");
+                textBuilder.AppendLine($"  슬롯: {FormatValue(GetMemberValue(caravan, "slotIndex"))}");
+                textBuilder.AppendLine($"  이동 상태: {FormatValue(GetMemberValue(caravan, "state"))}");
+                textBuilder.AppendLine($"  진행률: {FormatProgress(GetMemberValue(caravan, "progress01"))}");
 
                 var matchCount = 0;
                 for (var tradeIndex = 0; tradeIndex < tradeEntries.Count; tradeIndex++)
@@ -933,23 +1449,23 @@ namespace ND.DebugTools
 
                 if (matchCount == 0)
                 {
-                    textBuilder.AppendLine("  Trade: None");
-                    textBuilder.AppendLine("  Pending: No");
+                    textBuilder.AppendLine("  무역: 없음");
+                    textBuilder.AppendLine("  정산 대기: 아니요");
                 }
 
-                textBuilder.AppendLine("  Runtime: Deferred (saved data shown)");
+                textBuilder.AppendLine("  런타임: 지연 상태 (저장 데이터 표시)");
             }
         }
 
         private void AppendTradeLine(object trade, List<object> pendingEntries, int matchIndex)
         {
-            var duplicateMarker = matchIndex > 0 ? $" [duplicate match {matchIndex + 1}]" : string.Empty;
+                var duplicateMarker = matchIndex > 0 ? $" [중복 일치 {matchIndex + 1}]" : string.Empty;
             textBuilder.AppendLine(
-                $"  Trade{duplicateMarker}: {FormatValue(GetMemberValue(trade, "activeTradeId"))} / {FormatValue(GetMemberValue(trade, "state"))}");
-            textBuilder.AppendLine($"  Route: {FormatValue(GetMemberValue(trade, "activeRouteId"))}");
-            textBuilder.AppendLine($"  Start UTC: {FormatUtcTicks(GetMemberValue(trade, "tradeStartUtcTick"))}");
-            textBuilder.AppendLine($"  End UTC: {FormatUtcTicks(GetMemberValue(trade, "expectedTradeEndUtcTick"))}");
-            textBuilder.AppendLine($"  Pending: {FormatBool(HasMatchingPending(trade, pendingEntries))}");
+                $"  무역{duplicateMarker}: {FormatValue(GetMemberValue(trade, "activeTradeId"))} / {FormatValue(GetMemberValue(trade, "state"))}");
+            textBuilder.AppendLine($"  경로: {FormatValue(GetMemberValue(trade, "activeRouteId"))}");
+            textBuilder.AppendLine($"  시작 UTC: {FormatUtcTicks(GetMemberValue(trade, "tradeStartUtcTick"))}");
+            textBuilder.AppendLine($"  종료 UTC: {FormatUtcTicks(GetMemberValue(trade, "expectedTradeEndUtcTick"))}");
+            textBuilder.AppendLine($"  정산 대기: {FormatBool(HasMatchingPending(trade, pendingEntries))}");
         }
 
         private void AppendUnmatchedTrades(List<object> caravans, List<object> tradeEntries)
@@ -967,17 +1483,17 @@ namespace ND.DebugTools
                 if (unmatchedCount == 0)
                 {
                     textBuilder.AppendLine();
-                    textBuilder.AppendLine("[Unmatched Trade Entries]");
+                    textBuilder.AppendLine("[일치하지 않는 무역 항목]");
                 }
 
                 textBuilder.AppendLine(
-                    $"- [{index}] Caravan: {FormatIdentifier(caravanId)}, Trade: {FormatValue(GetMemberValue(trade, "activeTradeId"))} (Caravan Missing)");
+                    $"- [{index}] Caravan: {FormatIdentifier(caravanId)}, 무역: {FormatValue(GetMemberValue(trade, "activeTradeId"))} (Caravan 없음)");
                 unmatchedCount++;
             }
 
             if (unmatchedCount > 0)
             {
-                textBuilder.AppendLine($"Count: {unmatchedCount}");
+                textBuilder.AppendLine($"개수: {unmatchedCount}");
             }
         }
 
@@ -987,13 +1503,13 @@ namespace ND.DebugTools
             List<object> pendingEntries)
         {
             textBuilder.AppendLine();
-            textBuilder.AppendLine($"[Pending Settlements] Count: {pendingEntries.Count}");
+            textBuilder.AppendLine($"[정산 대기] 개수: {pendingEntries.Count}");
             for (var index = 0; index < pendingEntries.Count; index++)
             {
                 var pending = pendingEntries[index];
                 if (pending == null)
                 {
-                    textBuilder.AppendLine($"- [{index}] <null entry> (Missing References)");
+                    textBuilder.AppendLine($"- [{index}] <null 항목> (참조 없음)");
                     continue;
                 }
 
@@ -1003,10 +1519,10 @@ namespace ND.DebugTools
                 var tradeFound = ContainsTradeIdentity(tradeEntries, caravanId, tradeId);
                 var referenceState = caravanFound && tradeFound
                     ? string.Empty
-                    : $" ({(caravanFound ? string.Empty : "Caravan Missing")}{(!caravanFound && !tradeFound ? ", " : string.Empty)}{(tradeFound ? string.Empty : "Trade Missing")})";
+                    : $" ({(caravanFound ? string.Empty : "Caravan 없음")}{(!caravanFound && !tradeFound ? ", " : string.Empty)}{(tradeFound ? string.Empty : "무역 없음")})";
 
                 textBuilder.AppendLine($"- [{index}] {FormatIdentifier(caravanId)} + {FormatIdentifier(tradeId)}{referenceState}");
-                textBuilder.AppendLine($"  Result/Snapshot: {FormatPendingPayloadState(pending)}");
+                textBuilder.AppendLine($"  결과/스냅샷: {FormatPendingPayloadState(pending)}");
             }
         }
 
@@ -1134,16 +1650,16 @@ namespace ND.DebugTools
                 foundMember = true;
                 if (value is bool hasResult)
                 {
-                    return hasResult ? "Available" : "Missing";
+                    return hasResult ? "사용 가능" : "없음";
                 }
 
                 if (value != null)
                 {
-                    return "Available";
+                    return "사용 가능";
                 }
             }
 
-            return foundMember ? "Missing" : "Unknown";
+            return foundMember ? "없음" : "알 수 없음";
         }
 
         private static string GetStringMember(object target, string memberName)
@@ -1171,7 +1687,7 @@ namespace ND.DebugTools
 
         private static string FormatBool(bool value)
         {
-            return value ? "Yes" : "No";
+            return value ? "예" : "아니요";
         }
 
         private static bool ToBool(object value)
@@ -1207,7 +1723,7 @@ namespace ND.DebugTools
             }
             catch (ArgumentOutOfRangeException)
             {
-                return "Invalid";
+                return "유효하지 않음";
             }
         }
 
@@ -1235,6 +1751,30 @@ namespace ND.DebugTools
             public bool HasCurrentValue;
             public bool CanExecute;
             public string DisabledReason;
+        }
+
+        private sealed class WagonRepairMultiplierState
+        {
+            public object Root;
+            public object DebugCommands;
+            public PropertyInfo ValueProperty;
+            public MethodInfo SetMethod;
+            public double CurrentValue;
+            public bool HasCurrentValue;
+            public bool CanExecute;
+            public string DisabledReason;
+        }
+
+        private sealed class CalendarState
+        {
+            public object Root;
+            public object DebugCommands;
+            public object Calendar;
+            public object Snapshot;
+            public float DebugScale;
+            public bool HasCurrent;
+            public bool HasDebugScale;
+            public string Error;
         }
     }
 }
