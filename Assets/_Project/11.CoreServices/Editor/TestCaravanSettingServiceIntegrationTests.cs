@@ -79,9 +79,9 @@ public sealed class TestCaravanSettingServiceIntegrationTests
         var settingDraft = new CaravanSettingDraft
         {
             caravanId = "caravan-a",
-            selectedWagonInstanceId = TestCaravanSettingService.WagonInstanceId
+            selectedWagonInstanceId = "Wagon_M"
         };
-        settingDraft.SelectAnimal(TestCaravanSettingService.FirstAnimalInstanceId);
+        settingDraft.SelectAnimal("Horse");
 
         CaravanSettingCommandResult settingResult = service.Execute(settingDraft);
         CaravanLoadSettingCommandResult cargoResult = ExecuteCargo("caravan-a", "apple", 1);
@@ -156,6 +156,21 @@ public sealed class TestCaravanSettingServiceIntegrationTests
             state = state
         };
         caravan.cargo.Clear();
+        caravan.wagon = new ND.Framework.WagonSaveData
+        {
+            instanceId = "Wagon_M",
+            wagonName = "Wagon_M",
+            maxLoad = 30f,
+            minAnimals = 1,
+            maxAnimals = 2,
+            inventorySlotCount = 5
+        };
+        caravan.animals.Add(new ND.Framework.AnimalSaveData
+        {
+            instanceId = "Horse",
+            animalName = "Horse",
+            animalType = DraftAnimalType.Horse
+        });
         caravan.cargo.AddRange(cargo);
         return caravan;
     }

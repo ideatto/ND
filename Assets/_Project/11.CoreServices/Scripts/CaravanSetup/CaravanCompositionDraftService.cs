@@ -79,6 +79,12 @@ namespace ND.Framework
             return wagons.TryGetValue(NormalizeId(instanceId), out wagon);
         }
 
+        public bool TryGetAnimal(string instanceId, out OwnedDraftAnimalInstance animal)
+        {
+            return animals.TryGetValue(NormalizeId(instanceId), out animal);
+        }
+
+
         public bool OwnsAnimal(string instanceId)
         {
             return animals.ContainsKey(NormalizeId(instanceId));
@@ -239,6 +245,14 @@ namespace ND.Framework
                 state.wagonInstanceId,
                 state.animalInstanceIds.ToArray());
         }
+
+        public void Clear(string caravanId)
+        {
+            string normalizedCaravanId = NormalizeId(caravanId);
+            if (!string.IsNullOrEmpty(normalizedCaravanId))
+                drafts.Remove(normalizedCaravanId);
+        }
+
 
         private bool IsUsedByAnotherDraft(
             string caravanId,
