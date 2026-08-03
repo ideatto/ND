@@ -59,11 +59,16 @@
 
 ## 다음 작업
 
-1. NoticeUI에 WarehouseTransferFailure를 연결한다.
-2. 정상 게임 Scene에서 SharedGameData Tooltip을 확인한다.
+1. NoticeUI에 WarehouseTransferFailure를 연결하고 실패 원인별 문구를 확인한다.
+2. 정상 게임 Scene에서 SharedGameData 기반 아이템 이름·설명·아이콘 Tooltip을 확인한다.
 3. Cargo full, overweight, stale Caravan, 빠른 연속 입력을 시각 QA한다.
-4. merge 이후 MainUI 버튼과 TryOpen을 연결한다.
-
+4. 실제 SaveData 저장·불러오기와 재접속 뒤 Warehouse level, Player Inventory, Caravan Cargo 및 가격 묶음 보존을 확인한다.
+5. merge 이후 MainUI Warehouse 진입 패널을 연결한다.
+   - level 0은 숨기고 level 1 이상만 표시한다.
+   - 클릭 시 `WarehouseInventoryPopupController.TryOpen()`을 호출한다.
+   - 열기 직전 최신 SaveData로 Warehouse와 BaseCamp 조건을 다시 검증한다.
+6. MainUI 연결 후 정상 게임 Scene에서 진입 → Caravan 선택 → Player ↔ Cargo 전송 → 저장 → 재접속 PlayMode 회귀 테스트를 수행한다.
+7. merge/completed로 외부 파일이 바뀌었다면 변경 장부를 기준으로 누락된 계약만 재적용하고 compile error 0과 EditMode 6/6을 다시 확인한다.
 ## 충돌 처리
 
 - completed 전 변경·복구 장부의 파일 목록을 백업한다.

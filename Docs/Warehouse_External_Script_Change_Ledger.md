@@ -76,8 +76,13 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - NoticeUI와 WarehouseTransferFailure 연결
 - 정상 게임 Scene의 SharedGameData Tooltip 확인
 - full/overweight/stale state/연속 입력 시각 QA
-- MainUI 연결은 merge 이후
-
+- 실제 SaveData 저장 후 재접속·불러오기에서도 Warehouse level, Player Inventory, Caravan Cargo와 가격 묶음이 유지되는지 검증
+- merge 이후 MainUI Warehouse 진입 패널을 연결한다.
+  - Warehouse level 0이면 패널을 표시하지 않는다.
+  - Warehouse level 1 이상이면 패널을 표시한다.
+  - 버튼은 `WarehouseInventoryPopupController.TryOpen()`을 호출하며, 진입 시점의 최신 SaveData로 조건을 다시 검증한다.
+- MainUI 연결 후 정상 게임 Scene에서 진입 → Caravan 선택 → 양방향 전송 → 저장 → 재접속까지 PlayMode 회귀 검증
+- merge/completed 과정에서 아래 외부 파일이 바뀌었다면 과거 파일을 덮지 않고 이 장부의 계약만 새 코드에 재적용
 ## 이번 작업과 무관한 기존 dirty
 
 - `Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset`

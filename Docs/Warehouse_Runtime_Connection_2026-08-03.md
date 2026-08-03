@@ -75,9 +75,16 @@ HomeInventoryChanged / CaravanCargoChanged
 
 ## 남은 작업
 
-- NoticeUI 연결
-- 정상 게임 진입에서 SharedGameData Tooltip 확인
-- full/overweight/stale state 실패 UI 시각 QA
-- MainUI 연결은 merge 이후
+- `WarehouseTransferFailure`를 NoticeUI에 연결하고 실패 원인별 사용자 문구를 확인한다.
+- 정상 게임 진입에서 SharedGameData의 아이템 이름·설명·아이콘 Tooltip을 확인한다.
+- full/overweight/stale state 및 빠른 연속 입력의 실패 UI를 시각 QA한다.
+- 실제 SaveData 저장·불러오기와 재접속 뒤에도 Warehouse level, 양쪽 Inventory와 `itemId + purchaseUnitPrice` 묶음이 유지되는지 확인한다.
+- merge 이후 MainUI Warehouse 진입 패널을 연결한다.
+  - Warehouse level 0: 패널 숨김
+  - Warehouse level 1 이상: 패널 표시
+  - 클릭: `WarehouseInventoryPopupController.TryOpen()` 호출
+  - 열기 직전 최신 SaveData로 Warehouse/BaseCamp 조건 재검증
+- MainUI 연결 후 정상 게임 Scene에서 진입, Caravan 선택, Player ↔ Cargo 전송, 저장, 재접속을 포함한 PlayMode 회귀 테스트를 수행한다.
+- merge 중 외부 계약 파일이 변경되면 `Warehouse_External_Script_Change_Ledger.md`를 기준으로 누락된 계약만 재적용하고 컴파일 및 EditMode 6/6을 다시 확인한다.
 
 파일별 복구 정보는 `Warehouse_External_Script_Change_Ledger.md`를 기준으로 한다.
