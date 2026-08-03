@@ -3,7 +3,7 @@
 - 기준일: 2026-08-03
 - 범위: Player Home Inventory ↔ BaseCamp Prepare Caravan Cargo
 - 목적: 외부 completed/merge 충돌 시 Warehouse 변경을 백업하고 새 기준 코드에 필요한 계약만 재적용하기 위한 단일 장부
-- MainUI 연결은 merge 이후 별도 작업으로 제외한다.
+- MainUI 연결 완료: 생성된 창고 건물 블록 클릭 → `WarehouseInventoryPopupController.TryOpen()`
 
 ## 복구 원칙
 
@@ -69,19 +69,19 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - 삭제: `WarehouseInventoryDebugFixture.cs`와 meta
 - 제거: `BuildingPopupPreviewCanvas`의 fixture component
 - 이유: UI·양방향 전송 검증이 끝났고 fixture가 실제 SaveData에 임시 데이터를 저장할 수 있어 제품 코드에 남기지 않는다.
-- 제거 전 결과: EditMode 6/6, 실제 SaveService H→C→H 왕복, controller 경로 H→C→H 왕복, snapshot restore 모두 통과.
+- 제거 전 결과: 실제 SaveService H→C→H 왕복, controller 경로 H→C→H 왕복, snapshot restore 통과. 이후 슬롯 검증 테스트를 추가해 관련 EditMode 10/10을 확인했다.
 
 ## 남은 기능
 
-- NoticeUI와 WarehouseTransferFailure 연결
-- 정상 게임 Scene의 SharedGameData Tooltip 확인
-- full/overweight/stale state/연속 입력 시각 QA
-- 실제 SaveData 저장 후 재접속·불러오기에서도 Warehouse level, Player Inventory, Caravan Cargo와 가격 묶음이 유지되는지 검증
-- merge 이후 MainUI Warehouse 진입 패널을 연결한다.
-  - Warehouse level 0이면 패널을 표시하지 않는다.
-  - Warehouse level 1 이상이면 패널을 표시한다.
-  - 버튼은 `WarehouseInventoryPopupController.TryOpen()`을 호출하며, 진입 시점의 최신 SaveData로 조건을 다시 검증한다.
-- MainUI 연결 후 정상 게임 Scene에서 진입 → Caravan 선택 → 양방향 전송 → 저장 → 재접속까지 PlayMode 회귀 검증
+- Caravan/Wagon 저장 연결이 정상화된 뒤 아래 통합 검증을 수행한다.
+  - 선택한 Wagon이 `CaravanSaveData.wagon`에 저장되는지 확인한다.
+  - `wagon.inventorySlotCount`와 `wagon.maxLoad`가 Warehouse Cargo 슬롯·적재량에 즉시 반영되는지 확인한다.
+  - TradeCycle 적재·구매와 Warehouse가 동일한 `caravan.cargo`를 조회하는지 확인한다.
+  - 구매한 Cargo의 `purchaseUnitPrice`가 저장·불러오기·재접속 뒤에도 유지되는지 확인한다.
+  - Wagon 변경으로 용량이 감소해 기존 Cargo가 초과된 경우의 정책을 확정하고 이동 차단·Notice를 검증한다.
+  - 사용자 지정 Caravan 이름이 추가되어도 최종 선택과 Cargo 조회는 `caravanId`를 유지한다.
+- 정상 게임 Scene에서 SharedGameData Tooltip과 Cargo full/overweight/stale state Notice를 시각 QA한다.
+- Warehouse level, Player Inventory, Caravan Cargo와 가격 묶음의 저장·재접속 회귀 테스트를 수행한다.
 - merge/completed 과정에서 아래 외부 파일이 바뀌었다면 과거 파일을 덮지 않고 이 장부의 계약만 새 코드에 재적용
 ## 이번 작업과 무관한 기존 dirty
 
@@ -146,8 +146,16 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 - `SharedGameDataService.cs`
 - `MarketTravelValidationHarness.cs`
 
-### 후속 선행 작업
+### Caravan 정상화 이후 후속 작업
 
-- 실제 Caravan 설정 확정 결과가 `CaravanSaveData.wagon`에 저장되어야 정상 Cargo 슬롯·최대 적재량으로 통합 QA할 수 있다.
-- TradeCycle 구매 Draft를 다음 단계에서 `caravan.cargo`에 저장하는 변경은 별도 시장 거래 브랜치에서 검토한다.
+- 실제 Caravan 설정 결과를 `CaravanSaveData.wagon`에 저장하는 기능이 선행되어야 한다.
+- TradeCycle 적재·구매 확정 결과를 선택한 `caravanId`의 `caravan.cargo`에 저장하고 Warehouse와 동일 데이터를 공유해야 한다.
+- Cargo 슬롯 수·최대 적재량·현재 적재량·가격 묶음의 UI 갱신과 저장 왕복을 검증한다.
+- Wagon 교체 후 Cargo 초과 상태와 사용자 지정 Caravan 이름은 별도 정책을 확정하되, Warehouse 명령 키는 계속 `caravanId`를 사용한다.
+
+### 2026-08-03 Notice 보완
+
+- `WarehouseInventoryPopupController.cs`: 창고 진입·Caravan 선택·Framework·아이템 오류를 기존 `NoticeUI`에 사용자 문구로 연결했다.
+- `BuildingConstructionRuntimeHandler.cs`: 건설 실패 사용자 문구와 Console 진단 원인을 분리해 기존 `NoticeUI`로 표시한다.
+- `NoticeUI.prefab`, `MainUICanvas.prefab`: Notice를 화면 상단 중앙 아래 배너로 배치하고 텍스트 여백·자동 크기를 보정했다.
 

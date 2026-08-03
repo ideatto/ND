@@ -107,6 +107,8 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                 || !string.Equals(root?.CurrentSaveData?.player?.currentTownId,
                     WarehouseFunction.BaseTownId, StringComparison.Ordinal))
             {
+                // 화면에 남은 건물 블록이 최신 저장 상태와 어긋난 경우에도 실패 이유를 먼저 안내한다.
+                ShowNotice(ResolveWarehouseOpenFailure(root?.CurrentSaveData, CurrentState));
                 gameObject.SetActive(false);
                 return false;
             }
@@ -127,11 +129,20 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
 
         public bool SelectCaravan(string caravanId)
         {
-            if (!AcceptInput() || string.IsNullOrWhiteSpace(caravanId)) return false;
+            if (!AcceptInput()) return false;
+            if (string.IsNullOrWhiteSpace(caravanId))
+            {
+                ShowNotice("Caravan 슬롯 식별자가 유효하지 않습니다.");
+                return false;
+            }
             ND.Framework.SaveData save = CurrentSave();
             ND.Framework.CaravanSaveData caravan = FindCaravan(save, caravanId);
             string baseTownId = WarehouseFunction.BaseTownId;
-            if (!IsEligible(caravan, baseTownId)) return false;
+            if (!IsEligible(caravan, baseTownId))
+            {
+                ShowNotice(ResolveCaravanSelectionFailure(caravan));
+                return false;
+            }
 
             // index가 아닌 영속 ID를 보관해야 Caravan 목록 정렬이 바뀌어도 다른 Cargo로 이동하지 않는다.
             SelectedCaravanId = caravan.caravanId;
@@ -184,7 +195,7 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
         }
 
         /// <summary>Rebuilds selection rows with persistent caravan IDs rather than list positions.</summary>
-private void RefreshCaravans()
+        private void RefreshCaravans()
         {
             if (caravanContent == null || caravanSlotPrefab == null) return;
             ClearGenerated(caravanContent);
@@ -290,7 +301,7 @@ private void RefreshCaravans()
             }
         }
 
-private void ShowTooltip(string itemId, RectTransform slot)
+        private void ShowTooltip(string itemId, RectTransform slot)
         {
             if (presenter.Panel != WarehouseSelectionPanel.None || tooltip == null || slot == null) return;
             WarehouseItemTooltipViewData data = WarehouseInventoryViewDataBuilder.BuildTooltip(
@@ -303,7 +314,7 @@ private void ShowTooltip(string itemId, RectTransform slot)
             PositionTooltipBesideSlot(slot);
         }
 
-/// <summary>
+        /// <summary>
         /// Places the tooltip beside the hovered slot, flips it to the left at the right edge,
         /// and clamps its vertical center so the complete tooltip stays inside its overlay.
         /// </summary>
@@ -358,7 +369,7 @@ private void ShowTooltip(string itemId, RectTransform slot)
         }
 
         /// <summary>Builds price groups from the directional source and enters the required selection panel.</summary>
-private void SelectItem(string itemId, WarehouseTransferDirection direction)
+        private void SelectItem(string itemId, WarehouseTransferDirection direction)
         {
             if (!AcceptInput()) return;
 
@@ -464,8 +475,8 @@ private void SelectItem(string itemId, WarehouseTransferDirection direction)
                     ? "Cargo" : "Player Inventory";
         }
 
-/// <summary>Delegates final validation, mutation, save, and rollback to the transfer service.</summary>
-private void ConfirmTransfer()
+        /// <summary>Delegates final validation, mutation, save, and rollback to the transfer service.</summary>
+        private void ConfirmTransfer()
         {
             if (!AcceptInput() || presenter.Panel != WarehouseSelectionPanel.Quantity) return;
 
@@ -539,7 +550,7 @@ private void ConfirmTransfer()
             UpdateQuantityView();
         }
 
-private void CancelSelection()
+        private void CancelSelection()
         {
             if (!AcceptInput() || presenter.Panel == WarehouseSelectionPanel.Busy) return;
             ResetItemSelectionState();
@@ -576,11 +587,14 @@ private void CancelSelection()
             return true;
         }
 
-private void ShowFailure(WarehouseTransferFailure failure)
+        private void ShowFailure(WarehouseTransferFailure failure)
         {
             string message;
             switch (failure)
             {
+                case WarehouseTransferFailure.InvalidFramework:
+                    message = "저장 데이터가 아직 준비되지 않아 창고를 이용할 수 없습니다.";
+                    break;
                 case WarehouseTransferFailure.InvalidCaravan:
                     message = "선택한 Caravan을 찾을 수 없거나 슬롯 데이터가 유효하지 않습니다.";
                     break;
@@ -602,6 +616,9 @@ private void ShowFailure(WarehouseTransferFailure failure)
                 case WarehouseTransferFailure.InsufficientSource:
                     message = "선택한 가격 묶음의 수량이 부족합니다.";
                     break;
+                case WarehouseTransferFailure.InvalidItem:
+                    message = "선택한 아이템 정보가 유효하지 않습니다.";
+                    break;
                 case WarehouseTransferFailure.SaveFailed:
                     message = "저장에 실패하여 아이템 이동을 취소했습니다.";
                     break;
@@ -614,7 +631,7 @@ private void ShowFailure(WarehouseTransferFailure failure)
             ShowNotice(message);
         }
 
-private void ShowNotice(string message)
+        private void ShowNotice(string message)
         {
             if (noticeUI == null)
             {
@@ -637,6 +654,22 @@ private void ShowNotice(string message)
             if (!string.Equals(caravan.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal))
                 return "BaseCamp에 있는 Caravan만 창고를 이용할 수 있습니다.";
             return "현재 Caravan은 Cargo 이동에 사용할 수 없습니다.";
+        }
+
+        /// <summary>
+        /// 창고 진입 규칙은 WarehouseFunction에 유지하고, 실패 상태만 사용자 문구로 변환한다.
+        /// </summary>
+        private static string ResolveWarehouseOpenFailure(
+            ND.Framework.SaveData save,
+            WarehouseState state)
+        {
+            if (save?.player == null)
+                return "저장 데이터가 아직 준비되지 않아 창고를 열 수 없습니다.";
+            if (!string.Equals(save.player.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal))
+                return "BaseCamp에서만 창고를 이용할 수 있습니다.";
+            if (state.Level <= 0)
+                return "창고를 건설한 뒤 이용할 수 있습니다.";
+            return "현재 창고를 열 수 없습니다.";
         }
 
 
