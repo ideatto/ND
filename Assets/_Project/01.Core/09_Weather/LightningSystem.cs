@@ -123,6 +123,7 @@ public class LightningSystem : MonoBehaviour
         Vector3 pos = grid.CellToWorld(target.row, target.col);
 
         SpawnFx(pos, false, 0.22f, 1.3f);                           // ⚡ 섬광
+        WeatherState.ReportLightning();                             // 트레드밀 등 연출에 번개 통지
 
         if (IsFlammable(target.terrain))
         {

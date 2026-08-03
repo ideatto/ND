@@ -15,7 +15,7 @@ MonoBehaviour:
   draftAnimalId: Horse
   displayName: Horse
   icon: {fileID: 1941642949, guid: 55b2c05e0d2a3a1458148901aee174a8, type: 3}
-  prefab: {fileID: 8628410355547229561, guid: 2c771c732d7358c449a5aae612adf759, type: 3}
+  prefab: {fileID: 8435808760601582164, guid: d7a14142d6df87a4194a63d4c4db291e, type: 3}
   description: "horse can pull wagon\n "
   animalType: 3
   feedConsumption: 2

@@ -38,7 +38,10 @@ public class TreadmillPanel : MonoBehaviour
         CurrentCaravanId = caravanId;
         if (caravanLabel != null) caravanLabel.text = "마차 " + Short(caravanId);
         if (slide != null) slide.SetOpen(true);
-        if (stage != null) stage.ShowCaravan(caravanId);   // 2단계: 데이터 기반 마차+동물 세우기
+        // 마차별 독립 레인 매니저가 있으면 그 마차 전용 레인을 보인다(레인 간 상태가 안 섞임).
+        // 없으면(단일 인스턴스 하위호환) 예전처럼 하나뿐인 스테이지를 재구성한다.
+        if (TreadmillLaneManager.Instance != null) TreadmillLaneManager.Instance.Show(caravanId);
+        else if (stage != null) stage.ShowCaravan(caravanId);   // 데이터 기반 마차+동물 세우기
         Debug.Log("[Treadmill] 패널 열림 — 마차 " + caravanId);
     }
 
