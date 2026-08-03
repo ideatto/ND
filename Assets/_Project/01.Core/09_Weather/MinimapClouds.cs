@@ -20,11 +20,17 @@ using UnityEngine;
 /// <summary>바람 따라 흐르며 물 위에서 먹구름이 되는 구름 레이어(프로토).</summary>
 public class MinimapClouds : MonoBehaviour
 {
-    // 구름 하나의 런타임 상태
+    // 구름 하나의 런타임 상태.
+    // ★위치/크기/색은 '데이터(pos/scale/col/order)'가 진실이고, Transform/SpriteRenderer는 SyncRender로
+    //   거기서 미러링만 한다. → 렌더 오브젝트 없이도(t==null) 시뮬을 굴릴 수 있다(출발 시 앞으로 투영용).
     private class Cloud
     {
-        public Transform t;
-        public SpriteRenderer sr;
+        public Transform t;        // 렌더(없을 수 있음 — 투영 시 null)
+        public SpriteRenderer sr;  // 렌더(없을 수 있음)
+        public Vector2 pos;        // ★위치(데이터 = 진실)
+        public float scale;        // ★크기(데이터)
+        public Color col;          // ★색(데이터)
+        public int order;          // ★정렬순서(데이터)
         public float moisture;    // 0(흰구름)~1(먹구름)
         public float age;         // 생성 후 경과(초)
         public float life;        // 수명(초)
@@ -206,6 +212,8 @@ public class MinimapClouds : MonoBehaviour
         }
         if (simStep < targetStep) simStep = targetStep;   // 너무 오래 닫혀 상한 초과 → 목표로 점프(근사)
 
+        SyncRender();   // ★데이터(pos/scale/col) → Transform/SpriteRenderer 미러링(라이브 화면)
+
         // 앵커(게임시각) 주기 저장 → 앱 껐다 켜도 '그 공백만' 되감아 계산.
         saveTimer += Time.unscaledDeltaTime;
         if (saveTimer >= 3f) { saveTimer = 0f; SaveAnchor(); }
@@ -259,16 +267,16 @@ public class MinimapClouds : MonoBehaviour
         for (int i = clouds.Count - 1; i >= 0; i--)
         {
             Cloud cl = clouds[i];
-            Vector3 p = cl.t.position;
+            Vector2 p = cl.pos;   // ★데이터가 진실(Transform 아님)
 
             // 이동: 바람을 cloudSwirlDeg만큼 돌리고, 수분이 많을수록 빠르게
-            Vector2 w = wind.WindAt(new Vector2(p.x, p.y));
+            Vector2 w = wind.WindAt(p);
             w = new Vector2(w.x * ca - w.y * sa, w.x * sa + w.y * ca);
             float spd = cloudSpeed * Mathf.Lerp(1f, darkSpeedMul, cl.moisture);
             float mvx = w.x * spd * dt, mvy = w.y * spd * dt;
             p.x += mvx;
             p.y += mvy;
-            cl.t.position = p;
+            cl.pos = p;
             float moved = Mathf.Sqrt(mvx * mvx + mvy * mvy);   // 이번 스텝 실제 이동 거리(운반거리 누적용)
 
             cl.age += dt;
@@ -280,11 +288,10 @@ public class MinimapClouds : MonoBehaviour
                 cl.rainT += dt;
                 float k = 1f - cl.rainT / Mathf.Max(0.01f, rainDuration);   // 1→0
                 if (k <= 0f || outMap) { RemoveCloud(i); continue; }
-                float scl = cl.baseScale * k;
-                cl.t.localScale = new Vector3(scl, scl, 1f);
+                cl.scale = cl.baseScale * k;
                 Color rc = seDarkCol; rc.a = darkAlpha * Mathf.Clamp01(k * 1.4f);   // 계절색(겨울=눈구름). 끝에 옅어지며 사라짐
-                cl.sr.color = rc;
-                cl.sr.sortingOrder = darkSortingOrder;
+                cl.col = rc;
+                cl.order = darkSortingOrder;
                 continue;
             }
 
@@ -314,7 +321,7 @@ public class MinimapClouds : MonoBehaviour
             for (int j = 0; j < clouds.Count; j++)
             {
                 if (j == i) continue;
-                Vector3 q = clouds[j].t.position;
+                Vector2 q = clouds[j].pos;
                 float dx = q.x - p.x, dy = q.y - p.y;
                 if (dx * dx + dy * dy < r2) near++;
             }
@@ -337,11 +344,26 @@ public class MinimapClouds : MonoBehaviour
             float dark01 = Mathf.Clamp01(cl.moisture * 1.5f);   // 조금만 젖어도 색은 빨리 진해지게
             Color col = Color.Lerp(WhiteCol, seDarkCol, dark01);
             col.a = Mathf.Lerp(cloudAlpha, darkAlpha, dark01) * fade;
-            cl.sr.color = col;
-            cl.sr.sortingOrder = cl.moisture >= darkT ? darkSortingOrder : normalSortingOrder;
+            cl.col = col;
+            cl.order = cl.moisture >= darkT ? darkSortingOrder : normalSortingOrder;
 
             // 소멸: 흰 구름만 수명으로 자연 소멸(먹구름은 비를 뿌리기 전엔 안 사라짐 = 운반 보장) / 맵 밖은 공통
             if ((cl.age >= cl.life && cl.moisture < darkThreshold) || outMap) RemoveCloud(i);
+        }
+    }
+
+    /// <summary>구름 데이터(pos/scale/col/order)를 Transform/SpriteRenderer에 미러링(라이브 화면용).
+    /// 렌더 오브젝트가 없는 구름(t==null — 투영 계산용)은 건너뛴다.</summary>
+    private void SyncRender()
+    {
+        float z = grid != null ? grid.Area.center.z : 0f;
+        for (int i = 0; i < clouds.Count; i++)
+        {
+            var cl = clouds[i];
+            if (cl.t == null) continue;
+            cl.t.position = new Vector3(cl.pos.x, cl.pos.y, z);
+            cl.t.localScale = new Vector3(cl.scale, cl.scale, 1f);
+            if (cl.sr != null) { cl.sr.color = cl.col; cl.sr.sortingOrder = cl.order; }
         }
     }
 
@@ -356,7 +378,7 @@ public class MinimapClouds : MonoBehaviour
     }
 
     /// <summary>구름 발자국(중심+상하좌우 5점)의 '젖음 가중 평균' 0~1(호수>강).</summary>
-    private float WetFraction(Vector3 p)
+    private float WetFraction(Vector2 p)
     {
         const float o = 0.6f;   // 샘플 반경(구름 폭의 절반 정도)
         float sum = WetWeightAt(p.x, p.y)
@@ -399,7 +421,8 @@ public class MinimapClouds : MonoBehaviour
         sr.color = col;
         sr.sortingOrder = darkSortingOrder;
         sr.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
-        clouds.Add(new Cloud { t = go.transform, sr = sr, moisture = 0.95f, age = 0f, life = lifeMax, baseScale = sc });
+        clouds.Add(new Cloud { t = go.transform, sr = sr, pos = new Vector2(worldPos.x, worldPos.y),
+            scale = sc, col = col, order = darkSortingOrder, moisture = 0.95f, age = 0f, life = lifeMax, baseScale = sc });
     }
 
     /// <summary>월드 위치가 '먹구름(비구름) 아래'인지 — 캐러밴 날씨 이벤트 판정용(외부 조회). 구름 꺼져있으면 false.</summary>
@@ -413,11 +436,11 @@ public class MinimapClouds : MonoBehaviour
         for (int i = 0; i < clouds.Count; i++)
         {
             Cloud cl = clouds[i];
-            if (cl.t == null || cl.moisture < darkThreshold) continue;   // 먹구름(수분≥문턱)만
-            float r = cl.t.localScale.x * 0.9f;   // 구름 반경(스프라이트 폭 ≈ 스케일)
-            float dx = cl.t.position.x - worldPos.x, dy = cl.t.position.y - worldPos.y;
+            if (cl.moisture < darkThreshold) continue;   // 먹구름(수분≥문턱)만 — ★데이터(pos/scale) 사용(t 무관)
+            float r = cl.scale * 0.9f;   // 구름 반경(스프라이트 폭 ≈ 스케일)
+            float dx = cl.pos.x - worldPos.x, dy = cl.pos.y - worldPos.y;
             if (dx * dx + dy * dy > r * r) continue;   // 발밑에 안 걸치면 제외
-            float intensity = cl.moisture * cl.t.localScale.x;   // 세기 = 강수량(젖음) × 크기(폭)
+            float intensity = cl.moisture * cl.scale;   // 세기 = 강수량(젖음) × 크기(폭)
             if (intensity > best) best = intensity;
         }
         return best;
@@ -504,7 +527,9 @@ public class MinimapClouds : MonoBehaviour
         sr.sortingOrder = normalSortingOrder;
         sr.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;   // 맵 영역 안에서만 보이게(프레임 밖 클리핑)
 
-        clouds.Add(new Cloud { t = go.transform, sr = sr, moisture = initMoist, age = startAge, life = rng.Range(lifeMin, lifeMax), baseScale = sc });
+        clouds.Add(new Cloud { t = go.transform, sr = sr, pos = new Vector2(pos.x, pos.y), scale = sc,
+            col = sr.color, order = normalSortingOrder, moisture = initMoist, age = startAge,
+            life = rng.Range(lifeMin, lifeMax), baseScale = sc });
     }
 
     private void RemoveCloud(int i)
