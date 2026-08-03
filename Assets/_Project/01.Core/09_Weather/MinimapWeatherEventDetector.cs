@@ -54,13 +54,9 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     private readonly List<Notice> notices = new List<Notice>();
     private GUIStyle noticeStyle;
 
-    [Header("속도 감소(현상)")]
-    [Tooltip("먹구름 세기당 속도 감소량. 세기1.0 × 이 값 만큼 배율↓ (0.3 → 세기1.0에서 x0.7)")]
-    [SerializeField] private float rainSlowdown = 0.3f;
-    [SerializeField, Range(0.1f, 1f)]
-    [Tooltip("속도 배율 하한(아무리 세도 이 밑으론 안 느려짐)")]
-    private float minSpeedMul = 0.5f;
-    [Tooltip("이산 날씨 이벤트 발생(보류 중 — 지금은 속도 감소만). 켜면 셀 진입 이벤트 다시 동작")]
+    // ※비→이동시간 감속은 이제 출발 시 WeatherTravelPenalty.RouteFactor(진짜 시뮬 투영)로 이동시간에
+    //   반영된다. 옛 실시간 speedMul/GetWeatherSpeedMultiplier(미사용)는 제거함.
+    [Tooltip("이산 날씨 이벤트 발생(보류 중). 켜면 셀 진입 이벤트 다시 동작")]
     [SerializeField] private bool fireEvents = false;
 
     [Header("번개 낙뢰(행운)")]
@@ -72,8 +68,6 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     [Tooltip("폭풍급 셀에 진입했을 때 낙뢰 행운(정산 배율)이 뜰 확률. 0.5 = 50%. 인스펙터에서 조절.")]
     [SerializeField] private float luckyChance = 0.5f;
 
-    private readonly Dictionary<string, float> speedMul = new Dictionary<string, float>();   // 캐러밴별 현재 날씨 속도배율(1=정상)
-    private readonly HashSet<string> underRain = new HashSet<string>();                        // 지금 비 맞는 캐러밴(전이 알림용)
 
     // ── 낙뢰 행운(날씨 스텝 OnWeatherStep에서 판정, 무역별) ──
     private bool luckySubscribed;                                                                   // MinimapClouds.WeatherStepped 구독 여부
@@ -124,25 +118,13 @@ public class MinimapWeatherEventDetector : MonoBehaviour
             // 연속 비 세기 게시 → 트레드밀 비 연출(TreadmillRain) 등이 폴링해서 사용(느슨한 정적 채널).
             WeatherState.Report(c.caravanId, intensity);
 
-            // 속도 감소(현상): 세기가 클수록 느려짐. 프레임워크가 이 배율을 여행 속도에 곱해 쓰면 됨(협의).
-            float mul = intensity > 0f ? Mathf.Clamp(1f - intensity * rainSlowdown, minSpeedMul, 1f) : 1f;
-            speedMul[c.caravanId] = mul;
-
+            // 비 아이콘(지금 비 맞는 중 표시). ※실제 이동시간 감속은 출발 시 WeatherTravelPenalty로 반영됨.
             if (intensity > 0f)
             {
-                SpriteRenderer icon = GetOrCreateIcon(c.caravanId);   // 비 아이콘(=지금 느려짐 표시)
+                SpriteRenderer icon = GetOrCreateIcon(c.caravanId);
                 icon.transform.position = pos + iconOffset;
                 icon.enabled = true;
                 used.Add(c.caravanId);
-                if (!underRain.Contains(c.caravanId))   // 비 진입(전이) 알림
-                {
-                    underRain.Add(c.caravanId);
-                    ShowNotice("☔ 캐러밴 " + Short(c.caravanId) + " 비 진입 — 속도 x" + mul.ToString("F2") + " (세기 " + intensity.ToString("F2") + ")");
-                }
-            }
-            else if (underRain.Remove(c.caravanId))   // 비 벗어남(전이) 알림
-            {
-                ShowNotice("☀ 캐러밴 " + Short(c.caravanId) + " 비 벗어남 — 속도 정상");
             }
 
             // (보류) 이산 날씨 이벤트 — fireEvents 켜야 동작(지금은 속도 감소만).
@@ -182,10 +164,6 @@ public class MinimapWeatherEventDetector : MonoBehaviour
 
     private static string Short(string id)
         => string.IsNullOrEmpty(id) ? "?" : (id.Length > 6 ? id.Substring(0, 6) : id);
-
-    /// <summary>캐러밴의 현재 날씨 속도 배율(1=정상, 비 아래면 1 미만). 프레임워크가 여행 속도에 곱해 쓰기용(협의).</summary>
-    public float GetWeatherSpeedMultiplier(string caravanId)
-        => speedMul.TryGetValue(caravanId, out var m) ? m : 1f;
 
     /// <summary>한 셀 체크 판정: 그 셀에 비(먹구름)면, 조건 맞는 이벤트를 결정론 확률로 발생시킨다(한 체크당 1건).</summary>
     private void EvaluateCheck(string caravanId, string tradeId, MinimapCell cell, Vector3 pos, int checkIndex)
