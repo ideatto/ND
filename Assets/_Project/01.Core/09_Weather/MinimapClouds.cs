@@ -112,6 +112,11 @@ public class MinimapClouds : MonoBehaviour
     private static Sprite maskSprite;
     private GUIStyle btnStyle;
 
+    /// <summary>날씨가 한 스텝 전진할 때마다 발생(실시간 + 캐치업 되감기 공통).
+    /// 인자 = 그 스텝이 나타내는 벽시계 시각(초). 낙뢰 행운처럼 '날씨와 같은 시간축을 따라가는'
+    /// 결정론 판정을 여기 붙이면, 미니맵을 닫았다 여는 되감기에서도 같은 판정이 그대로 재생된다.</summary>
+    public event System.Action<double> WeatherStepped;
+
     private void Awake()
     {
         if (renderRoot == null) renderRoot = transform;
@@ -152,6 +157,8 @@ public class MinimapClouds : MonoBehaviour
             StepClouds(a, sdt);                // ② 그 바람으로 구름 전진
             simStep++;                         // ③ 순간 카운터 +1
             guard++;
+            // ④ 이 스텝(그 벽시계 시각) 통지 → 낙뢰 등 결정론 판정이 날씨와 같은 시간축을 따라옴(되감기서도 재생).
+            if (WeatherStepped != null) WeatherStepped(weatherEpoch + simStep * fixedDt);
         }
         if (simStep < targetStep) simStep = targetStep;   // 너무 오래 닫혀 상한 초과 → 목표로 점프(근사)
     }

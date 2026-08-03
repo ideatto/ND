@@ -75,11 +75,22 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     private readonly Dictionary<string, float> speedMul = new Dictionary<string, float>();   // 캐러밴별 현재 날씨 속도배율(1=정상)
     private readonly HashSet<string> underRain = new HashSet<string>();                        // 지금 비 맞는 캐러밴(전이 알림용)
 
+    // ── 낙뢰 행운(날씨 스텝 OnWeatherStep에서 판정, 무역별) ──
+    private bool luckySubscribed;                                                                   // MinimapClouds.WeatherStepped 구독 여부
+    private readonly Dictionary<string, Vector2Int> luckyLastCell = new Dictionary<string, Vector2Int>(); // 무역별 마지막 셀(진입 감지)
+    private readonly Dictionary<string, int> luckyCheckCursor = new Dictionary<string, int>();            // 무역별 셀 체크 횟수(결정론 hash 축)
+    private readonly Dictionary<string, double> luckyProcessedUntil = new Dictionary<string, double>();   // 무역별 '여기까지 처리한 스텝 시각'(되감기 중복 카운트 방지)
+
     private void Awake()
     {
         if (renderRoot == null) renderRoot = transform;
         if (grid == null) grid = GetComponentInChildren<MinimapGrid>(true);
         if (clouds == null) clouds = GetComponentInChildren<MinimapClouds>(true);
+    }
+
+    private void OnDisable()
+    {
+        if (clouds != null && luckySubscribed) { clouds.WeatherStepped -= OnWeatherStep; luckySubscribed = false; }
     }
 
     private void LateUpdate()
@@ -92,6 +103,9 @@ public class MinimapWeatherEventDetector : MonoBehaviour
         var save = fr != null ? fr.CurrentSaveData : null;
         if (save == null || save.caravans == null || grid == null || clouds == null) { HideAllIcons(); return; }
         if (routes == null) routes = renderRoot.GetComponentsInChildren<RouteVisual>(true);
+
+        // 낙뢰 행운은 날씨 스텝(OnWeatherStep)에 붙어 판정한다(되감기 재생 포함) → clouds 준비되면 한 번 구독.
+        if (enableLightningLucky && clouds != null && !luckySubscribed) { clouds.WeatherStepped += OnWeatherStep; luckySubscribed = true; }
 
         var used = new HashSet<string>();
         for (int i = 0; i < save.caravans.Count; i++)
@@ -131,8 +145,9 @@ public class MinimapWeatherEventDetector : MonoBehaviour
                 ShowNotice("☀ 캐러밴 " + Short(c.caravanId) + " 비 벗어남 — 속도 정상");
             }
 
-            // 셀 진입마다 결정론 체크(속도감소와 동일 훅). 낙뢰 행운 또는 이산 날씨 이벤트가 켜져 있으면 동작.
-            if ((fireEvents || enableLightningLucky) && grid.TryGetCellAtWorld(pos, out MinimapCell cell) && cell != null)
+            // (보류) 이산 날씨 이벤트 — fireEvents 켜야 동작(지금은 속도 감소만).
+            //  ※낙뢰 행운은 여기(LateUpdate 실시간)가 아니라 OnWeatherStep(날씨 스텝)에서 판정한다 → 되감기서도 재생.
+            if (fireEvents && grid.TryGetCellAtWorld(pos, out MinimapCell cell) && cell != null)
             {
                 Vector2Int cur = new Vector2Int(cell.col, cell.row);
                 if (!lastCell.TryGetValue(c.caravanId, out var prev) || prev != cur)
@@ -140,10 +155,7 @@ public class MinimapWeatherEventDetector : MonoBehaviour
                     int ci = checkCursor.TryGetValue(c.caravanId, out var v) ? v + 1 : 0;
                     checkCursor[c.caravanId] = ci;
                     lastCell[c.caravanId] = cur;
-                    // ★낙뢰 행운(결정론): 폭풍급 비 셀이면 확률로 럭키++ → 우리 자체 저장소에 누적 → 정산에서 읽음
-                    if (enableLightningLucky) EvaluateLightningLucky(c.caravanId, entry.activeTradeId, cell, pos, ci);
-                    // (보류) 이산 날씨 이벤트 — fireEvents 켜야 동작
-                    if (fireEvents) EvaluateCheck(c.caravanId, entry.activeTradeId, cell, pos, ci);
+                    EvaluateCheck(c.caravanId, entry.activeTradeId, cell, pos, ci);
                 }
             }
         }
@@ -216,24 +228,66 @@ public class MinimapWeatherEventDetector : MonoBehaviour
         }
     }
 
-    /// <summary>낙뢰 행운 판정: 폭풍급 비 셀이면 결정론 확률로 럭키 발생 → 우리 자체 저장소(WeatherLuckyStore)에
-    /// 무역별 누적. 비-속도감소 이벤트와 동일한 셀 체크·결정론 hash 방식(다른 salt로 롤 분리).
-    /// ★정산은 WeatherLuckyStore.GetCount(tradeId)를 읽어 +10%×count 적용(경제 쪽 한 줄).</summary>
-    private void EvaluateLightningLucky(string caravanId, string tradeId, MinimapCell cell, Vector3 pos, int checkIndex)
+    // ★낙뢰 행운(결정론) — 날씨가 한 스텝 갈 때마다 호출(실시간 + 되감기 공통).
+    //   그 '스텝 시각' 기준으로 각 이동중 캐러밴의 셀을 구해, 새 셀에 들어왔고 그 셀이 폭풍급이면
+    //   결정론 확률로 럭키 판정 → 우리 자체 저장소(WeatherLuckyStore)에 무역별 누적.
+    //   ※날씨와 같은 시간축(스텝)을 타므로, 미니맵 닫았다 여는 되감기에서도 같은 판정이 재생된다.
+    //     luckyProcessedUntil로 '이미 처리한 시각'은 건너뛰어 되감기 중복 카운트를 막는다.
+    //   ※정산은 GetCount(tradeId) > 0 을 불리언으로 읽어 +10% 한 번 적용(팀 확정 — 스택 없음).
+    private void OnWeatherStep(double stepWallSeconds)
     {
-        if (string.IsNullOrEmpty(tradeId)) return;
-        float intensity = clouds.RainIntensityAt(pos);       // 비 세기 = 강수량 × 크기
-        if (intensity < luckyStormIntensity) return;          // 폭풍급(번개 치는 강한 비) 아니면 낙뢰 없음
+        if (!enableLightningLucky || clouds == null || grid == null) return;
+        var fr = FrameworkRoot.Instance;
+        var save = fr != null ? fr.CurrentSaveData : null;
+        if (save == null || save.caravans == null) return;
+        if (routes == null) routes = renderRoot.GetComponentsInChildren<RouteVisual>(true);
+        long stepTicks = (long)(stepWallSeconds * System.TimeSpan.TicksPerSecond);
 
-        int cellId = cell.row * 100 + cell.col;
-        // 날씨 이벤트 roll과 겹치지 않게 tradeId에 "|lucky" salt를 섞어 독립 스트림 사용(결정론 유지).
-        var rng = new DetRng(DetRng.Seed(FnvHash(tradeId + "|lucky"), checkIndex, cellId));
-        if (rng.Value() >= luckyChance) return;               // 확률 통과 못함
+        for (int i = 0; i < save.caravans.Count; i++)
+        {
+            var c = save.caravans[i];
+            if (c == null || string.IsNullOrEmpty(c.caravanId)) continue;
+            var entry = FindTravelingEntry(save, c.caravanId);
+            if (entry == null || string.IsNullOrEmpty(entry.activeTradeId)) continue;
+            string tid = entry.activeTradeId;
 
-        int count = WeatherLuckyStore.Add(tradeId);           // 우리 자체 저장소에 누적(저장)
-        WeatherState.ReportCaravanLightning(caravanId, tradeId);   // 연출/트레드밀 트리거(시각용)
-        ShowNotice("⚡ 캐러밴 " + Short(caravanId) + " 낙뢰 행운! (누적 " + count + "회) 셀("
-                 + cell.row + "," + cell.col + ") 세기 " + intensity.ToString("F2"));
+            // 이미 처리한 시각이면 건너뜀(되감기 재생 시 중복 카운트 방지). 아니면 여기까지 처리로 표시.
+            if (luckyProcessedUntil.TryGetValue(tid, out var pu) && stepWallSeconds <= pu) continue;
+            luckyProcessedUntil[tid] = stepWallSeconds;
+
+            var route = FindRoute(entry.activeRouteId);
+            if (route == null) continue;
+            float p = ProgressAtTicks(entry, stepTicks);   // '그 스텝 시각' 기준 진행도
+            if (p <= 0f || p >= 1f) continue;               // 무역 구간 밖(출발 전/이미 도착)
+            Vector3 pos = route.EvaluatePosition(p);
+            if (!grid.TryGetCellAtWorld(pos, out MinimapCell cell) || cell == null) continue;
+
+            // 새 셀 진입만 1회 판정(같은 셀에 여러 스텝 머물러도 재판정 안 함)
+            Vector2Int cur = new Vector2Int(cell.col, cell.row);
+            if (luckyLastCell.TryGetValue(tid, out var prev) && prev == cur) continue;
+            int ci = luckyCheckCursor.TryGetValue(tid, out var v) ? v + 1 : 0;
+            luckyCheckCursor[tid] = ci;
+            luckyLastCell[tid] = cur;
+
+            float intensity = clouds.RainIntensityAt(pos);   // 그 스텝의 비 세기(되감기 중이면 그 시각 상태)
+            if (intensity < luckyStormIntensity) continue;    // 폭풍급 아니면 낙뢰 없음
+            int cellId = cell.row * 100 + cell.col;
+            // 날씨 이벤트 roll과 겹치지 않게 "|lucky" salt로 독립 스트림(결정론 유지).
+            var rng = new DetRng(DetRng.Seed(FnvHash(tid + "|lucky"), ci, cellId));
+            if (rng.Value() >= luckyChance) continue;         // 확률 통과 못함
+
+            int count = WeatherLuckyStore.Add(tid);           // 우리 자체 저장소에 누적(저장)
+            WeatherState.ReportCaravanLightning(c.caravanId, tid);   // 연출/트레드밀 트리거(시각용)
+            ShowNotice("⚡ 캐러밴 " + Short(c.caravanId) + " 낙뢰 행운! (누적 " + count + ") 셀("
+                     + cell.row + "," + cell.col + ") 세기 " + intensity.ToString("F2"));
+        }
+    }
+
+    // 진행률 = (지정 시각 - 출발) / (도착예정 - 출발), 0~1. now가 아니라 '특정 스텝 시각'으로 계산.
+    private static float ProgressAtTicks(FrameworkTradeProgress e, long nowTicks)
+    {
+        if (e.tradeStartUtcTick <= 0 || e.expectedTradeEndUtcTick <= e.tradeStartUtcTick) return 1f;
+        return Mathf.Clamp01((float)(nowTicks - e.tradeStartUtcTick) / (e.expectedTradeEndUtcTick - e.tradeStartUtcTick));
     }
 
     // ── 캐러밴 위치 해석(멀티캐러밴과 동일 로직) ──
