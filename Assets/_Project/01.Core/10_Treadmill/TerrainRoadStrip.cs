@@ -69,17 +69,24 @@ public class TerrainRoadStrip : MonoBehaviour
     /// <summary>컨트롤러가 이 길을 특정 지형으로 만든다.</summary>
     public void BuildFor(TerrainType t, float seg, float width, int count, float curv, float backZ,
                          Texture tex, Color tint, Texture dtex, Color dtint, float amount, float tileMeters, float noise,
-                         ScatterLayer[] layers, float centerPathHalf = 0f)
+                         ScatterLayer[] layers, float centerPathHalf = 0f,
+                         Texture pathTexture = null, Color pathTint = default, float pathSoft = 0.6f)
     {
         terrain = t; segLength = seg; roadWidth = width; pieces = Mathf.Max(1, count); curvature = curv; loopBackZ = backZ;
         groundTex = tex; groundTint = tint; detailTex = dtex; detailTint = dtint; detailAmount = amount;
         groundTileMeters = Mathf.Max(0.5f, tileMeters); noiseScale = noise;
         scatterLayers = layers;
         roadCenterPathHalf = Mathf.Max(0f, centerPathHalf);   // 전 지형 공통 마차길 반폭
+        pathTex = pathTexture;                                // 마차길 흙 텍스처(없으면 길 안 그림)
+        pathTintCol = pathTint.a > 0f ? pathTint : Color.white;
+        pathSoftM = Mathf.Max(0f, pathSoft);
         Rebuild();
     }
 
     private float roadCenterPathHalf = 0f;   // 도로가 지정한 '전 지형 공통' 마차길 반폭(레이어 값과 큰 쪽 적용)
+    private Texture pathTex;                  // 마차길 흙 텍스처
+    private Color pathTintCol = Color.white;  // 마차길 색
+    private float pathSoftM = 0.6f;           // 마차길 경계 부드러움(m)
 
     private void OnEnable()
     {
@@ -451,6 +458,12 @@ public class TerrainRoadStrip : MonoBehaviour
             mpb.SetTexture("_DetailMap", detailTex != null ? detailTex : tex);
             mpb.SetColor("_DetailColor", detailTint);
             mpb.SetFloat("_NoiseAmount", detailTex != null ? detailAmount : 0f);
+            // 가운데 마차길(흙길): 흙 텍스처가 지정됐을 때만 그린다(레인 중심 ±roadCenterPathHalf).
+            mpb.SetFloat("_RoadWidth", w);
+            mpb.SetFloat("_PathHalf", pathTex != null ? roadCenterPathHalf : 0f);
+            mpb.SetFloat("_PathSoft", pathSoftM);
+            mpb.SetColor("_PathColor", pathTintCol);
+            if (pathTex != null) mpb.SetTexture("_PathMap", pathTex);
         }
         mpb.SetColor("_BaseColor", tint);
         mr.SetPropertyBlock(mpb);

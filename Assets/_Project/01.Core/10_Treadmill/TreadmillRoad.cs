@@ -73,6 +73,11 @@ public class TreadmillRoad : MonoBehaviour
     [SerializeField] private float roadWidth = 12f;    // 길 너비
     [Tooltip("모든 지형에서 가운데 '마차 지나는 길'을 이 반폭(±m)만큼 비운다(스캐터 안 생김). 0=안 비움. 각 레이어의 centerPathHalf와 함께 큰 값이 적용됨.")]
     [SerializeField] private float centerPathHalf = 2.6f;   // 중앙 마차길 반폭(전 지형 공통)
+    [Tooltip("마차길 흙 텍스처. 지정하면 전 지형 가운데(centerPathHalf 폭)에 이 흙길이 보인다. 비우면 길 안 그림(스캐터만 비움).")]
+    [SerializeField] private Texture2D pathTexture;         // 마차길 흙 텍스처(예: TSI_Terrain_Earth_01D)
+    [SerializeField] private Color pathTint = Color.white;  // 마차길 색
+    [Tooltip("마차길 경계 부드러움(m). 클수록 흙↔지형 경계가 흐릿하게 섞임.")]
+    [SerializeField] private float pathSoft = 0.8f;
     [SerializeField] private int piecesPerStrip = 8;   // 한 지형 길의 조각 수(총 길이=이×segLength)
     [SerializeField] private float curvature = 0.0025f;
     [SerializeField] private float viewBack = -10f;    // 루프 창 뒤끝(마차 뒤로 남길 여유)
@@ -255,7 +260,8 @@ public class TreadmillRoad : MonoBehaviour
                     { tex = s.texture; tint = s.tint; dtex = s.detailTexture; dtint = s.detailTint; amount = s.detailAmount;
                       layers = s.scatterLayers; break; }
             strip.BuildFor(t, segLength, roadWidth, piecesPerStrip, curvature, viewBack,
-                           tex, tint, dtex, dtint, amount, textureTileMeters, noiseScale, layers, centerPathHalf);
+                           tex, tint, dtex, dtint, amount, textureTileMeters, noiseScale, layers, centerPathHalf,
+                           pathTexture, pathTint, pathSoft);
             strips[t] = strip;
             Park(strip, slot);   // 에디트에선 X로 나란히(각 지형 길 따로 확인)
         }

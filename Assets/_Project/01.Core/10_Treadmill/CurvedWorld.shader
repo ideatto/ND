@@ -38,6 +38,12 @@ Shader "ND/CurvedWorld"
         _FogEnd ("Fog End (m)", Float) = 46
         _Curvature ("Curvature", Float) = 0
         _ShadowTint ("Shadow Tint (그림자 밝기, 낮을수록 진함)", Range(0,1)) = 0.55  // 그림자 진 바닥 밝기
+        // 가운데 마차길(흙길): 레인 중심 ±_PathHalf 안쪽을 흙 텍스처로 덮어 모든 지형에 길이 보이게
+        _PathMap ("Path (마차길 흙 텍스처)", 2D) = "white" {}
+        _PathColor ("Path Color", Color) = (1,1,1,1)
+        _PathHalf ("Path Half Width (m) — 0=길 없음", Float) = 0
+        _PathSoft ("Path Edge Soft (m)", Float) = 0.6
+        _RoadWidth ("Road Width (m)", Float) = 64
         [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 1
         [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dst Blend", Float) = 0
         [Enum(Off,0,On,1)] _ZWrite ("ZWrite", Float) = 1
@@ -68,10 +74,12 @@ Shader "ND/CurvedWorld"
                 float viewDepth : TEXCOORD1;  // 카메라로부터 거리(자체 안개용)
                 float worldZraw : TEXCOORD2;  // 순수 월드 Z(디졸브 경계 판정용)
                 float3 worldPos : TEXCOORD3;  // 월드 좌표(그림자 좌표 계산용)
+                float lateralM : TEXCOORD4;   // 레인 중심 기준 좌우거리(m) — 마차길 판정용
             };
 
             TEXTURE2D(_BaseMap);   SAMPLER(sampler_BaseMap);
             TEXTURE2D(_DetailMap); SAMPLER(sampler_DetailMap);
+            TEXTURE2D(_PathMap);   SAMPLER(sampler_PathMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
@@ -93,6 +101,11 @@ Shader "ND/CurvedWorld"
                 float _FogEnd;
                 float _Curvature;
                 float _ShadowTint;
+                float4 _PathMap_ST;
+                half4 _PathColor;
+                float _PathHalf;
+                float _PathSoft;
+                float _RoadWidth;
             CBUFFER_END
 
             // 값 노이즈(부드러움)
@@ -119,6 +132,8 @@ Shader "ND/CurvedWorld"
                 OUT.viewDepth = -viewPos.z;   // 카메라 전방 거리(안개 페이드용)
                 OUT.worldZraw = worldPos.z;
                 OUT.worldPos = worldPos;      // 그림자 좌표 계산용
+                // 레인 중심 기준 좌우거리(m): 바닥 Plane은 object x∈[-5,5], 스케일 roadWidth/10.
+                OUT.lateralM = IN.positionOS.x * (_RoadWidth * 0.1);
                 return OUT;
             }
 
@@ -150,6 +165,16 @@ Shader "ND/CurvedWorld"
                 float mask = smoothstep(0.5 - w, 0.5 + w, n) * _NoiseAmount;
 
                 half4 c = lerp(baseC, detailC, mask);
+
+                // 가운데 마차길(흙길): 레인 중심 ±_PathHalf 안쪽을 흙 텍스처로 덮는다(부드러운 경계).
+                //  → 논밭뿐 아니라 풀·숲·산 등 모든 지형에 마차가 지나는 흙길이 보인다.
+                if (_PathHalf > 0.001)
+                {
+                    float dl = abs(IN.lateralM);
+                    float pathM = 1.0 - smoothstep(_PathHalf - _PathSoft, _PathHalf + _PathSoft, dl);
+                    half4 pathC = SAMPLE_TEXTURE2D(_PathMap, sampler_PathMap, tuv) * _PathColor;
+                    c.rgb = lerp(c.rgb, pathC.rgb, pathM);
+                }
 
                 // 메인 라이트 그림자 수신: 마차·동물이 드리운 그림자 자리를 어둡게(입체감·접지감).
                 #if defined(_MAIN_LIGHT_SHADOWS) || defined(_MAIN_LIGHT_SHADOWS_CASCADE) || defined(_MAIN_LIGHT_SHADOWS_SCREEN)
