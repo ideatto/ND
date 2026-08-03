@@ -20,6 +20,7 @@ public class imsiTradeItemData
     public string id;        // 아이템 구분용 ID
     public string itemName;  // 이름
     public float weight;     // 무게 → 적재량 계산에 사용
+    public long purchaseUnitPrice; // 실제 매입 단가. SaveData 왕복 시 가격 묶음 보존에 사용
     public long basePrice;   // 기본 가격(돈=long, 팀 결정) → 정산 때 사용
     public int maxCount = 1;  // [M2] 한 칸(슬롯)에 쌓이는 최대 개수(스택). SO TradeItemData.maxCount
 }

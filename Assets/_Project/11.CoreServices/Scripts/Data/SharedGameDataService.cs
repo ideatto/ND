@@ -474,6 +474,7 @@ namespace ND.Framework
                 {
                     Id = id,
                     DisplayName = item.DisplayName,
+                    Description = item.Description,
                     Icon = item.Icon,
                     Rarity = item.Rarity.ToString(),
                     Category = item.Category.ToString(),
@@ -671,6 +672,7 @@ namespace ND.Framework
                 {
                     Id = id,
                     DisplayName = item.QuestName,
+                    // Copy presentation text into the immutable shared-data snapshot used by runtime UI.
                     Description = item.Description,
                     Type = item.Type,
                     RepeatPolicy = item.RepeatPolicy,

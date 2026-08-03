@@ -533,6 +533,8 @@ namespace ND.Framework
         public string itemId = string.Empty;
         public string itemName = string.Empty;
         public float weight;
+        /// <summary>실제 매입 단가. 0은 구매 이력이 없는 획득품이며 itemId와 함께 가격 묶음을 식별한다.</summary>
+        public long purchaseUnitPrice;
         public long basePrice;
         public int maxCount = 1;
     }

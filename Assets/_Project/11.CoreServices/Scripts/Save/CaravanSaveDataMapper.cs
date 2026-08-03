@@ -458,6 +458,8 @@ namespace ND.Framework
                         id = cargo.item.itemId,
                         itemName = cargo.item.itemName,
                         weight = cargo.item.weight,
+                        // Preserve the acquisition-price group across runtime/SaveData conversion.
+                        purchaseUnitPrice = cargo.item.purchaseUnitPrice,
                         basePrice = cargo.item.basePrice,
                         maxCount = cargo.item.maxCount > 0 ? cargo.item.maxCount : 1
                     },
@@ -488,6 +490,8 @@ namespace ND.Framework
                         itemId = cargo.item.id ?? string.Empty,
                         itemName = cargo.item.itemName ?? string.Empty,
                         weight = cargo.item.weight,
+                        // Preserve the acquisition-price group across SaveData/runtime conversion.
+                        purchaseUnitPrice = cargo.item.purchaseUnitPrice,
                         basePrice = cargo.item.basePrice,
                         maxCount = cargo.item.maxCount > 0 ? cargo.item.maxCount : 1
                     },
