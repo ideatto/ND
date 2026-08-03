@@ -234,7 +234,7 @@ public class MinimapWeatherEventDetector : MonoBehaviour
     //   ※날씨와 같은 시간축(스텝)을 타므로, 미니맵 닫았다 여는 되감기에서도 같은 판정이 재생된다.
     //     luckyProcessedUntil로 '이미 처리한 시각'은 건너뛰어 되감기 중복 카운트를 막는다.
     //   ※정산은 GetCount(tradeId) > 0 을 불리언으로 읽어 +10% 한 번 적용(팀 확정 — 스택 없음).
-    private void OnWeatherStep(double stepWallSeconds)
+    private void OnWeatherStep(long simStep, double stepWallSeconds)
     {
         if (!enableLightningLucky || clouds == null || grid == null) return;
         var fr = FrameworkRoot.Instance;

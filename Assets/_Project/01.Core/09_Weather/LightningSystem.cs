@@ -25,15 +25,15 @@ public class LightningSystem : MonoBehaviour
     [SerializeField] private MinimapClouds clouds;
     [SerializeField] private MinimapWind wind;
 
-    [Header("번개")]
-    [Tooltip("이 주기(초)마다 번개 시도")]
-    [SerializeField] private float strikeInterval = 2.5f;
+    [Header("번개(날씨 스텝 = 게임시간 결정론)")]
+    [Tooltip("이 '날씨 스텝' 주기마다 번개 시도(실시간 초 아님). 날씨 스텝=0.1게임초 → 25≈2.5게임초.")]
+    [SerializeField] private int attemptEverySteps = 25;
     [Range(0f, 1f)]
     [Tooltip("시도당 번개 발동 확률")]
     [SerializeField] private float strikeChance = 0.6f;
     [Tooltip("이 세기(강수량×크기) 이상 먹구름 아래에서만 번개")]
     [SerializeField] private float minStrikeIntensity = 0.4f;
-    [SerializeField] private uint worldSeed = 777u;   // 결정론 씨앗
+    [SerializeField] private uint worldSeed = 777u;   // 결정론 씨앗(번개 판정 축)
 
     [Header("큰불")]
     [Tooltip("불 지속(초). 이 동안 저기압도 유지")]
@@ -44,8 +44,7 @@ public class LightningSystem : MonoBehaviour
     [SerializeField] private float fireRadiusFactor = 0.12f;
 
     private Transform fxRoot;
-    private float timer;
-    private long lightningStep;
+    private bool stepSubscribed;                    // clouds.WeatherStepped 구독 여부
     private ND.UI.WorldMap.RouteVisual[] routes;   // 마차 현재 셀 계산용 경로 캐시(최초 1회 탐색)
 
     private class Fx { public Transform t; public SpriteRenderer sr; public float age; public float life; public bool isFire; }
@@ -63,6 +62,11 @@ public class LightningSystem : MonoBehaviour
         if (wind == null) wind = GetComponentInChildren<MinimapWind>(true);
     }
 
+    private void OnDisable()
+    {
+        if (clouds != null && stepSubscribed) { clouds.WeatherStepped -= OnWeatherStep; stepSubscribed = false; }
+    }
+
     private void Update()
     {
         // 핫 리로드 대비 재탐색
@@ -73,11 +77,10 @@ public class LightningSystem : MonoBehaviour
         if (grid == null || clouds == null || wind == null) return;
         if (fxRoot == null) { fxRoot = new GameObject("LightningFx").transform; fxRoot.SetParent(renderRoot, false); }
 
-        float dt = Time.deltaTime;
+        // 번개 판정은 날씨 스텝(OnWeatherStep, simStep 결정론)에 올라탄다 → clouds 준비되면 한 번 구독.
+        if (!stepSubscribed) { clouds.WeatherStepped += OnWeatherStep; stepSubscribed = true; }
 
-        // 번개 주기
-        timer -= dt;
-        if (timer <= 0f) { timer = Mathf.Max(0.2f, strikeInterval); TryStrike(); }
+        float dt = Time.deltaTime;
 
         // Fx 갱신(섬광 페이드 / 불 깜빡임·소멸)
         for (int i = fxs.Count - 1; i >= 0; i--)
@@ -103,9 +106,16 @@ public class LightningSystem : MonoBehaviour
         }
     }
 
-    /// <summary>먹구름(세기 충분) 아래 셀 중 하나에 번개. 결정론 hash로 발동/위치 결정.</summary>
-    private void TryStrike()
+    // ★번개 판정 — 날씨가 한 스텝 갈 때마다 호출(실시간 + 되감기/투영 공통). simStep이 결정론 축.
+    //   attemptEverySteps 마다 시도 → 폭풍 셀 하나를 결정론 hash로 골라 번개.
+    //   ★불(DropEventAt)은 바람 시뮬을 교란하므로 '결정론 재현'을 위해 되감기 중에도 항상 적용한다.
+    //     시각 섬광(SpawnFx)만 '라이브 스텝'에서 낸다(되감기 중 옛 스텝은 화면에 안 뿌림).
+    private void OnWeatherStep(long simStep, double wallSeconds)
     {
+        if (grid == null || clouds == null || wind == null) return;
+        if (simStep % Mathf.Max(1, attemptEverySteps) != 0) return;   // 이 스텝은 시도 주기 아님
+
+        // 폭풍(먹구름 세기≥문턱) 셀 수집
         candidates.Clear();
         for (int r = 0; r < grid.Rows; r++)
             for (int c = 0; c < grid.Cols; c++)
@@ -117,27 +127,36 @@ public class LightningSystem : MonoBehaviour
             }
         if (candidates.Count == 0) return;
 
-        var rng = new DetRng(DetRng.Seed(worldSeed, lightningStep++, 0));
+        var rng = new DetRng(DetRng.Seed(worldSeed, simStep, 0));   // ★결정론 축 = simStep
         if (rng.Value() >= strikeChance) return;                    // 이번엔 안 침
 
         MinimapCell target = candidates[rng.Range(0, candidates.Count)];
         Vector3 pos = grid.CellToWorld(target.row, target.col);
+        bool flammable = IsFlammable(target.terrain);
+        bool live = IsLiveStep(wallSeconds);   // 되감기 중 옛 스텝이면 false
 
-        SpawnFx(pos, false, 0.22f, 1.3f);                           // ⚡ 섬광
-        WeatherState.ReportLightning();                             // 트레드밀 등 연출에 번개 통지
+        // 불 = 시뮬(바람) 교란 → 결정론 재현 위해 되감기 중에도 항상 적용.
+        if (flammable)
+            wind.DropEventAt(new Vector2(pos.x, pos.y), false, firePressureStrength, fireRadiusFactor, fireDuration);
 
-        ShowCaravanStrikeFx(target);   // 마차 셀에 번개가 떨어지면 강조 섬광(시각 전용 — 행운 판정은 detector 담당)
-
-        if (IsFlammable(target.terrain))
+        // 시각 연출 = 라이브 스텝만(되감기 중 옛 번개는 화면에 안 뿌림).
+        if (live)
         {
-            SpawnFx(pos, true, fireDuration, 1.1f);                 // 🔥 불
-            wind.DropEventAt(new Vector2(pos.x, pos.y), false, firePressureStrength, fireRadiusFactor, fireDuration);  // 저기압 주입
-            Debug.Log("[번개] 큰불 발생! 셀(" + target.row + "," + target.col + ") " + target.terrain + " → 저기압 발생");
+            SpawnFx(pos, false, 0.22f, 1.3f);                        // ⚡ 섬광
+            WeatherState.ReportLightning();                          // 트레드밀 등 연출에 통지
+            ShowCaravanStrikeFx(target);                            // 마차 셀 강조 섬광(시각 전용)
+            if (flammable) SpawnFx(pos, true, fireDuration, 1.1f);   // 🔥 불 연출
         }
-        else
-        {
-            Debug.Log("[번개] 셀(" + target.row + "," + target.col + ") " + target.terrain + " (불 안 붙음)");
-        }
+    }
+
+    // 이 스텝이 '지금(라이브)'인지 — 되감기 중 옛 스텝은 화면 연출을 생략하기 위함.
+    private static bool IsLiveStep(double wallSeconds)
+    {
+        var fr = ND.Framework.FrameworkRoot.Instance;
+        double now = (fr != null && fr.GameTime != null)
+            ? fr.GameTime.CurrentUtc.Ticks / (double)System.TimeSpan.TicksPerSecond
+            : System.DateTime.UtcNow.Ticks / (double)System.TimeSpan.TicksPerSecond;
+        return (now - wallSeconds) < 1.0;   // 1초 이내면 라이브
     }
 
     /// <summary>가연 지형: 숲·풀.</summary>
