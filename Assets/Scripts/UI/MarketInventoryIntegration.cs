@@ -165,6 +165,7 @@ namespace ND.Framework.CargoLoading
         private readonly Dictionary<string, TradeItemData> catalogById;
         private readonly HashSet<string> stockItemIds;
         private readonly int slotCount;
+        private readonly int minimumGeneratedStock;
         private readonly int maximumGeneratedStock;
         private readonly long refreshIntervalTicks;
         private readonly int worldSeed;
@@ -181,6 +182,7 @@ namespace ND.Framework.CargoLoading
             IEnumerable<TradeItemData> stockCatalog,
             IEnumerable<TradeItemData> transactionCatalog,
             int slotCount,
+            int minimumGeneratedStock,
             int maximumGeneratedStock,
             double refreshIntervalSeconds,
             int worldSeed)
@@ -192,6 +194,7 @@ namespace ND.Framework.CargoLoading
             this.timeProvider = timeProvider;
             MarketId = string.IsNullOrWhiteSpace(marketId) ? "default-market" : marketId;
             this.slotCount = Math.Max(1, slotCount);
+            this.minimumGeneratedStock = Math.Max(1, minimumGeneratedStock);
             this.maximumGeneratedStock = Math.Max(1, maximumGeneratedStock);
             refreshIntervalTicks = TimeSpan.FromSeconds(Math.Max(1d, refreshIntervalSeconds)).Ticks;
             this.worldSeed = worldSeed;
@@ -216,6 +219,20 @@ namespace ND.Framework.CargoLoading
 
         internal long TradingCurrency =>
             saveData.player != null ? Math.Max(0L, saveData.player.tradingCurrency) : 0L;
+
+        internal static PriceCalculationResult ResolveUnitPrices(TradeItemData item)
+        {
+            if (item == null)
+                return new PriceCalculationResult();
+
+            List<PriceModifierInput> modifiers = item.AffectModify
+                ? LjhEconomyM1InputAdapter.ToPriceModifierInputs(item.Modifiers)
+                : new List<PriceModifierInput>();
+            return PriceCalculator.CalculateUnitPrices(
+                item.BaseBuyPrice,
+                item.BaseSellPrice,
+                modifiers);
+        }
 
         internal IReadOnlyList<MarketStockView> Stocks
         {
@@ -305,10 +322,41 @@ namespace ND.Framework.CargoLoading
             out string error)
         {
             return TryOpen(
-                saveData, caravanId, MarketTradeMode.BuyAndSell,
-                saveService, timeProvider, marketId, stockCatalog, transactionCatalog,
-                slotCount, maximumGeneratedStock, refreshIntervalSeconds, worldSeed,
-                out session, out error);
+                saveData, caravanId, MarketTradeMode.BuyAndSell, saveService, timeProvider, marketId,
+                stockCatalog, transactionCatalog, slotCount, 1, maximumGeneratedStock,
+                refreshIntervalSeconds, worldSeed, out session, out error);
+        }
+
+        public static bool TryOpen(
+            SaveData saveData,
+            ISaveService saveService,
+            IGameTimeProvider timeProvider,
+            string marketId,
+            IEnumerable<TradeItemData> catalog,
+            int slotCount,
+            int minimumGeneratedStock,
+            int maximumGeneratedStock,
+            double refreshIntervalSeconds,
+            int worldSeed,
+            out MarketInventoryMutationSession session,
+            out string error)
+        {
+            return TryOpen(
+                saveData,
+                saveData != null ? saveData.selectedCaravanId : string.Empty,
+                MarketTradeMode.BuyAndSell,
+                saveService,
+                timeProvider,
+                marketId,
+                catalog,
+                catalog,
+                slotCount,
+                minimumGeneratedStock,
+                maximumGeneratedStock,
+                refreshIntervalSeconds,
+                worldSeed,
+                out session,
+                out error);
         }
 
         public static bool TryOpen(
@@ -321,6 +369,7 @@ namespace ND.Framework.CargoLoading
             IEnumerable<TradeItemData> stockCatalog,
             IEnumerable<TradeItemData> transactionCatalog,
             int slotCount,
+            int minimumGeneratedStock,
             int maximumGeneratedStock,
             double refreshIntervalSeconds,
             int worldSeed,
@@ -353,6 +402,7 @@ namespace ND.Framework.CargoLoading
                 stockCatalog,
                 transactionCatalog,
                 slotCount,
+                minimumGeneratedStock,
                 maximumGeneratedStock,
                 refreshIntervalSeconds,
                 worldSeed);
@@ -377,6 +427,28 @@ namespace ND.Framework.CargoLoading
 
             session = created;
             return true;
+        }
+
+        public static bool TryOpen(
+            SaveData saveData,
+            string caravanId,
+            MarketTradeMode tradeMode,
+            ISaveService saveService,
+            IGameTimeProvider timeProvider,
+            string marketId,
+            IEnumerable<TradeItemData> stockCatalog,
+            IEnumerable<TradeItemData> transactionCatalog,
+            int slotCount,
+            int maximumGeneratedStock,
+            double refreshIntervalSeconds,
+            int worldSeed,
+            out MarketInventoryMutationSession session,
+            out string error)
+        {
+            return TryOpen(
+                saveData, caravanId, tradeMode, saveService, timeProvider, marketId,
+                stockCatalog, transactionCatalog, slotCount, 1, maximumGeneratedStock,
+                refreshIntervalSeconds, worldSeed, out session, out error);
         }
 
         /// <summary>
@@ -477,7 +549,7 @@ namespace ND.Framework.CargoLoading
                     BuyQuantity = line.BuyQuantity,
                     SellQuantity = line.SellQuantity,
                     BuyUnitPrice = Math.Max(0L, stock?.unitPrice ?? 0L),
-                    SellUnitPrice = Math.Max(0L, item.BaseSellPrice),
+                    SellUnitPrice = ResolveUnitPrices(item).UnitSellPrice,
                     UnitWeight = Math.Max(0f, item.Weight),
                     MaxStackQuantity = Math.Max(1, item.MaxCount)
                 });
@@ -721,8 +793,10 @@ namespace ND.Framework.CargoLoading
                     itemId = item.ItemId,
                     quantity = MarketTransactionCalculator.GetEffectiveMarketStock(
                         item.ItemId,
-                        random.Next(1, maximumGeneratedStock + 1)),
-                    unitPrice = Math.Max(0L, item.BaseBuyPrice)
+                        random.Next(
+                            Math.Min(minimumGeneratedStock, maximumGeneratedStock),
+                            maximumGeneratedStock + 1)),
+                    unitPrice = ResolveUnitPrices(item).UnitBuyPrice
                 })
                 .ToList();
         }
@@ -791,9 +865,6 @@ namespace ND.Framework.CargoLoading
 
             if (delta < 0)
             {
-                // The current Market UI sells an itemId total and does not select a price group.
-                // Drain persisted group order only as a deterministic inventory mutation rule;
-                // sale revenue remains owned by the existing Economy calculator.
                 int remainingToSell = -delta;
                 foreach (CargoEntrySaveData entry in entries)
                 {
@@ -814,9 +885,6 @@ namespace ND.Framework.CargoLoading
             if (delta == 0)
                 return;
 
-            // A purchase creates or extends only the exact acquisition-price group. Equal-price
-            // purchases merge; different prices remain separate while physical slots still use
-            // the itemId aggregate calculated elsewhere.
             long normalizedPrice = Math.Max(0L, purchaseUnitPrice);
             CargoEntrySaveData matchingGroup = entries.FirstOrDefault(entry =>
                 Math.Max(0L, entry.item.purchaseUnitPrice) == normalizedPrice);
@@ -874,7 +942,6 @@ namespace ND.Framework.CargoLoading
                             itemId = entry.item.itemId,
                             itemName = entry.item.itemName,
                             weight = entry.item.weight,
-                            // Rollback must restore the same acquisition-price groups as before the transaction.
                             purchaseUnitPrice = entry.item.purchaseUnitPrice,
                             basePrice = entry.item.basePrice,
                             maxCount = entry.item.maxCount

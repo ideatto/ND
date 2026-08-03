@@ -6,6 +6,9 @@ public class MarketData : ScriptableObject, IIdentifiableData
     [SerializeField] private string marketId;
 
     [Header("Market_Info")]
+    [Min(1)]
+    [SerializeField] private int itemMinimumQuantity = 1;
+    [Min(1)]
     [SerializeField] private int itemMaxQuantity;
     [SerializeField] private float itemRenewalCycle;
 
@@ -24,6 +27,7 @@ public class MarketData : ScriptableObject, IIdentifiableData
     #region Public Properties
     public string Id => marketId;
     public string MarketId => marketId;
+    public int ItemMinimumQuantity => Mathf.Max(1, itemMinimumQuantity);
     public int ItemMaxQuantity => Mathf.Max(0, itemMaxQuantity);
     public float ItemRenewalCycle => Mathf.Max(0f, itemRenewalCycle);
     public TradeItemData[] TradeItems => tradeItems != null ? (TradeItemData[])tradeItems.Clone() : new TradeItemData[0];
@@ -31,5 +35,14 @@ public class MarketData : ScriptableObject, IIdentifiableData
     public WagonData[] WagonItems => wagonItems != null ? (WagonData[])wagonItems.Clone() : new WagonData[0];
     public TradeItemData[] LocalSpecialtyItems => localSpecialtyItems != null ? (TradeItemData[])localSpecialtyItems.Clone() : new TradeItemData[0];
     #endregion
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        itemMinimumQuantity = Mathf.Max(1, itemMinimumQuantity);
+        itemMaxQuantity = Mathf.Max(itemMinimumQuantity, itemMaxQuantity);
+        itemRenewalCycle = Mathf.Max(0f, itemRenewalCycle);
+    }
+#endif
 }
 

@@ -489,6 +489,7 @@ public sealed class MarketTravelValidationHarness : MonoBehaviour
                 activeMarketId,
                 marketCatalog,
                 marketCatalogCount,
+                Math.Max(1, marketData.ItemMinimumQuantity),
                 marketMaximumStock,
                 marketRefreshIntervalSeconds,
                 worldSeed,
