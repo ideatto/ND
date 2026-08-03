@@ -24,22 +24,46 @@ namespace ND.Economy
                 return result;
             }
 
+            PriceCalculationResult unitPrices = CalculateUnitPrices(
+                input.BaseBuyPrice,
+                input.BaseSellPrice,
+                input.Modifiers);
             result.TradeItemId = input.TradeItemId;
             result.Quantity = input.Quantity;
-
-            double buyPrice = input.BaseBuyPrice;
-            double sellPrice = input.BaseSellPrice;
-
-            ApplyModifiers(input.Modifiers, ref buyPrice, ref sellPrice, result.Modifiers);
-
-            result.UnitBuyPrice = ClampFinalPrice(buyPrice);
-            result.UnitSellPrice = ClampFinalPrice(sellPrice);
+            result.UnitBuyPrice = unitPrices.UnitBuyPrice;
+            result.UnitSellPrice = unitPrices.UnitSellPrice;
+            result.Modifiers = unitPrices.Modifiers;
             result.TotalBuyPrice = result.UnitBuyPrice * input.Quantity;
             result.TotalSellPrice = result.UnitSellPrice * input.Quantity;
             result.ExpectedGrossProfit = result.TotalSellPrice - result.TotalBuyPrice;
             result.IsValid = true;
             result.ErrorCode = ErrorNone;
 
+            return result;
+        }
+
+        /// <summary>
+        /// Calculates market-facing unit prices without requiring a town or route context.
+        /// </summary>
+        public static PriceCalculationResult CalculateUnitPrices(
+            long baseBuyPrice,
+            long baseSellPrice,
+            List<PriceModifierInput> modifiers)
+        {
+            var result = new PriceCalculationResult();
+            if (baseBuyPrice <= 0L || baseSellPrice <= 0L)
+            {
+                result.ErrorCode = ErrorInvalidBasePrice;
+                return result;
+            }
+
+            double buyPrice = baseBuyPrice;
+            double sellPrice = baseSellPrice;
+            ApplyModifiers(modifiers, ref buyPrice, ref sellPrice, result.Modifiers);
+            result.UnitBuyPrice = ClampFinalPrice(buyPrice);
+            result.UnitSellPrice = ClampFinalPrice(sellPrice);
+            result.IsValid = true;
+            result.ErrorCode = ErrorNone;
             return result;
         }
 

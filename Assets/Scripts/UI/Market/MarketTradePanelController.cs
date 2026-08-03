@@ -187,7 +187,9 @@ namespace ND.UI.Market
                             itemId)),
                     CargoQuantity = held?.Quantity ?? 0,
                     BuyUnitPrice = stock?.UnitPrice ?? 0L,
-                    SellUnitPrice = definition?.BaseSellPrice ?? 0L
+                    SellUnitPrice = definition != null
+                        ? MarketInventoryMutationSession.ResolveUnitPrices(definition).UnitSellPrice
+                        : 0L
                 });
             }
         }
@@ -558,6 +560,7 @@ namespace ND.UI.Market
                 catalog,
                 transactionCatalog,
                 Mathf.Max(1, catalog.Length),
+                Mathf.Max(1, marketData.ItemMinimumQuantity),
                 Mathf.Max(1, marketData.ItemMaxQuantity),
                 Mathf.Max(1f, marketData.ItemRenewalCycle),
                 CombineSeed(worldSeed, marketData.MarketId),
