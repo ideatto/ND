@@ -61,8 +61,8 @@ namespace ND.Framework
         /// </summary>
         public void ResetSaveData()
         {
-            // Title scene에서 테스트나 새 시작을 위해 저장 파일을 제거한다.
-            FrameworkRoot.Instance.SaveService.ResetSaveData();
+            // 디스크와 런타임 저장 상태를 FrameworkRoot의 단일 초기화 경로로 정리한다.
+            FrameworkRoot.Instance.ResetSaveData();
         }
 
         /// <summary>
