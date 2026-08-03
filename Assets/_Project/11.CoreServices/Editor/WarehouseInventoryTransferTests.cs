@@ -32,20 +32,22 @@ public sealed class WarehouseInventoryTransferTests
         Assert.That(groups[1].Quantity, Is.EqualTo(5));
     }
 
-    [Test]
+[Test]
     public void Transfer_SaveFailure_RestoresBothInventories()
     {
         FrameworkSaveData save = new FrameworkSaveData();
+        save.caravans.Clear();
         save.player.currentTownId = WarehouseFunction.BaseTownId;
         save.player.homeInventory.Add(Entry("apple", 10, 5));
         var caravan = new FrameworkCaravanSaveData
         {
             caravanId = "caravan-test",
-            currentTownId = "BaseCamp"
+            slotIndex = 0,
+            currentTownId = WarehouseFunction.BaseTownId
         };
         save.caravans.Add(caravan);
         var request = new WarehouseTransferRequest(
-            caravan.caravanId, "BaseCamp", "apple", 10, 3,
+            caravan.caravanId, WarehouseFunction.BaseTownId, "apple", 10, 3,
             WarehouseTransferDirection.HomeToCargo, 30, 12, 100f);
 
         bool succeeded = WarehouseInventoryTransferService.TryTransfer(
@@ -55,7 +57,8 @@ public sealed class WarehouseInventoryTransferTests
         Assert.That(failure, Is.EqualTo(WarehouseTransferFailure.SaveFailed));
         Assert.That(WarehousePriceGroupResolver.Resolve(save.player.homeInventory, "apple").Single().Quantity,
             Is.EqualTo(5));
-        Assert.That(SaveDataLookup.TryGetCaravan(save, "caravan-test", out FrameworkCaravanSaveData restored), Is.True);
+        Assert.That(SaveDataLookup.TryGetCaravan(
+            save, "caravan-test", out FrameworkCaravanSaveData restored), Is.True);
         Assert.That(restored.cargo, Is.Empty);
     }
 
@@ -63,11 +66,13 @@ public sealed class WarehouseInventoryTransferTests
     public void Transfer_NonPrepareCaravan_IsRejectedBeforeMutation()
     {
         FrameworkSaveData save = new FrameworkSaveData();
+        save.caravans.Clear();
         save.player.currentTownId = WarehouseFunction.BaseTownId;
         save.player.homeInventory.Add(Entry("apple", 10, 5));
         var caravan = new FrameworkCaravanSaveData
         {
             caravanId = "caravan-busy",
+            slotIndex = 0,
             currentTownId = WarehouseFunction.BaseTownId,
             state = JourneyState.Traveling
         };

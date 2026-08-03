@@ -12,6 +12,7 @@
 // [씬 로드 타이밍] 마을 씬(Registry)이 additive로 나중에 로드되므로 대기 후 생성.
 // =============================================================================
 
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -23,7 +24,12 @@ public class BuildingListPanel : MonoBehaviour
     [SerializeField] private RectTransform content;   // ScrollRect Content
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private float itemHeight = 56f;
-    [SerializeField] private BuildingAddPopup addPopup;   // [+] 가 여는 건물 추가 팝업
+    [SerializeField] private BuildingAddPopup addPopup;   // [+] 가 여는 건물 추가 팝업    /// <summary>
+    /// 동적으로 생성된 건물 블록이 선택된 뒤 표시 이름을 전달한다.
+    /// 목록은 특정 건물 기능을 알지 않고 외부 연결부가 필요한 동작만 선택하도록 한다.
+    /// </summary>
+    public event Action<string> BuildingClicked;
+
 
     private IEnumerator Start()
     {
@@ -38,14 +44,11 @@ public class BuildingListPanel : MonoBehaviour
     }
 
     /// <summary>Registry의 현재 건물 상태를 기준으로 리스트를 처음부터 다시 만든다.</summary>
-    public void Rebuild()
+public void Rebuild()
     {
-        // Registry의 현재 상태를 다시 그리는 메서드다.
-        // 초기 표시와 실제 건설 트랜잭션 성공 후에만 호출하고, 카탈로그 선택만으로는 호출하지 않는다.
         if (content == null) return;
 
-        // 기존 항목 제거 — Destroy는 프레임 끝에 처리되므로, 먼저 부모에서 분리(즉시)해
-        // Rebuild가 옛 항목을 중복으로 쌓지 않게 한다.
+        // Destroy는 frame 끝에 처리되므로 먼저 부모에서 분리해 연속 Rebuild에도 중복 행이 남지 않게 한다.
         for (int i = content.childCount - 1; i >= 0; i--)
         {
             Transform child = content.GetChild(i);
@@ -56,18 +59,21 @@ public class BuildingListPanel : MonoBehaviour
         VillageBuildingRegistry reg = VillageBuildingRegistry.Instance;
         if (reg == null) return;
 
-        // 건물 항목들 (이름 + 레벨)
         for (int i = 0; i < reg.Count; i++)
         {
-            int idx = i;   // 캡처 방지
-            Button item = CreateRow($"{reg.GetName(i)}  Lv.{reg.GetLevel(i)}", new Color(0.76f, 0.77f, 0.73f));
-            item.onClick.AddListener(() => reg.Highlight(idx));
+            int idx = i;
+            string buildingName = reg.GetName(i);
+            Button item = CreateRow(
+                $"{buildingName}  Lv.{reg.GetLevel(i)}",
+                new Color(0.76f, 0.77f, 0.73f));
+            item.onClick.AddListener(() =>
+            {
+                // 기존 하이라이트는 유지하고 추가 기능은 건물 이름 이벤트를 구독한 연결부에 위임한다.
+                reg.Highlight(idx);
+                BuildingClicked?.Invoke(buildingName);
+            });
         }
 
-        // 맨 아래 [+] 추가 버튼 → 비용 건설용 건물 카탈로그 Popup 열기
-        // 일반 사용자 건설은 비용 검증 경로인 Open()을 사용한다.
-        // Open(Rebuild)는 즉시 AddOrUpgrade하는 기존 무료 경로이므로 이 버튼에서는 호출하지 않는다.
-        // 저장까지 성공한 건설 처리 컴포넌트가 Rebuild()를 호출해 목록을 갱신한다.
         Button addBtn = CreateRow("+", new Color(0.6f, 0.7f, 0.55f));
         addBtn.onClick.AddListener(() =>
         {

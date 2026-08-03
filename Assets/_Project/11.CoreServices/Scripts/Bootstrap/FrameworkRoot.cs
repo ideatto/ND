@@ -449,6 +449,19 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// 저장 파일을 삭제한 뒤 현재 런타임 저장 데이터 참조를 비운다.
+        /// </summary>
+        /// <remarks>
+        /// 파일 삭제가 정상 반환된 경우에만 메모리 참조를 비우며, 이후 ExitGame은 저장을 생략한다.
+        /// 저장 서비스의 삭제 예외는 호출자에게 전파된다.
+        /// </remarks>
+        public void ResetSaveData()
+        {
+            SaveService.ResetSaveData();
+            CurrentSaveData = null;
+        }
+
+        /// <summary>
         /// loading 단계를 완료하고 저장 데이터 기준으로 인게임 화면 상태를 갱신한 뒤 in-game scene으로 이동한다.
         /// </summary>
         /// <remarks>

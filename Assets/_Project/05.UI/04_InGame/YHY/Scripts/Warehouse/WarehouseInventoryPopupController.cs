@@ -37,6 +37,7 @@ namespace ND.UI.InGame.Warehouse
         private TMP_Text loadText;
         private TMP_Text maxLoadText;
         private TMP_Text guideText;
+        private NoticeUI noticeUI;
         private TMP_Text cargoTitleText;
         private TMP_Text tooltipNameText;
         private TMP_Text tooltipPriceText;
@@ -106,6 +107,8 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                 || !string.Equals(root?.CurrentSaveData?.player?.currentTownId,
                     WarehouseFunction.BaseTownId, StringComparison.Ordinal))
             {
+                // 화면에 남은 건물 블록이 최신 저장 상태와 어긋난 경우에도 실패 이유를 먼저 안내한다.
+                ShowNotice(ResolveWarehouseOpenFailure(root?.CurrentSaveData, CurrentState));
                 gameObject.SetActive(false);
                 return false;
             }
@@ -126,11 +129,20 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
 
         public bool SelectCaravan(string caravanId)
         {
-            if (!AcceptInput() || string.IsNullOrWhiteSpace(caravanId)) return false;
+            if (!AcceptInput()) return false;
+            if (string.IsNullOrWhiteSpace(caravanId))
+            {
+                ShowNotice("Caravan 슬롯 식별자가 유효하지 않습니다.");
+                return false;
+            }
             ND.Framework.SaveData save = CurrentSave();
             ND.Framework.CaravanSaveData caravan = FindCaravan(save, caravanId);
             string baseTownId = WarehouseFunction.BaseTownId;
-            if (!IsEligible(caravan, baseTownId)) return false;
+            if (!IsEligible(caravan, baseTownId))
+            {
+                ShowNotice(ResolveCaravanSelectionFailure(caravan));
+                return false;
+            }
 
             // index가 아닌 영속 ID를 보관해야 Caravan 목록 정렬이 바뀌어도 다른 Cargo로 이동하지 않는다.
             SelectedCaravanId = caravan.caravanId;
@@ -189,11 +201,35 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             ClearGenerated(caravanContent);
             ND.Framework.SaveData save = CurrentSave();
             if (save?.caravans == null) return;
-            string baseTownId = WarehouseFunction.BaseTownId;
 
-            foreach (ND.Framework.CaravanSaveData caravan in save.caravans.OrderBy(c => c?.slotIndex ?? int.MaxValue))
+            CaravanSlotValidationResult validation = CaravanSlotValidation.Validate(save.caravans);
+            string baseTownId = WarehouseFunction.BaseTownId;
+            for (int slotIndex = 0; slotIndex < CaravanSlotValidation.SlotCount; slotIndex++)
             {
+                if (validation.IsConflicted(slotIndex))
+                {
+                    // Render an explicit disabled row so duplicate data is visible, but never selectable.
+                    var conflicted = new ND.Framework.CaravanSaveData
+                    {
+                        slotIndex = slotIndex,
+                        caravanId = string.Empty
+                    };
+                    GameObject conflictInstance = Instantiate(caravanSlotPrefab, caravanContent);
+                    conflictInstance.name = "CaravanSlotConflict_" + slotIndex;
+                    WarehouseCaravanSlotView conflictView =
+                        conflictInstance.GetComponent<WarehouseCaravanSlotView>()
+                        ?? conflictInstance.AddComponent<WarehouseCaravanSlotView>();
+                    conflictView.Bind(
+                        conflicted,
+                        false,
+                        "Caravan 슬롯 데이터가 중복되었거나 식별자가 유효하지 않습니다.",
+                        _ => { });
+                    continue;
+                }
+
+                ND.Framework.CaravanSaveData caravan = validation.GetCaravanAt(slotIndex);
                 if (caravan == null) continue;
+
                 bool eligible = IsEligible(caravan, baseTownId);
                 string reason = eligible ? string.Empty
                     : caravan.state != JourneyState.Prepare ? "준비 상태가 아닙니다."
@@ -205,6 +241,9 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                     ?? instance.AddComponent<WarehouseCaravanSlotView>();
                 view.Bind(caravan, eligible, reason, id => SelectCaravan(id));
             }
+
+            if (validation.HasInvalidEntries)
+                Debug.LogWarning("Invalid Caravan slot data was excluded from Warehouse selection.", this);
         }
 
         /// <summary>Reads the latest SaveData and refreshes both inventories, capacity, title, and load.</summary>
@@ -264,7 +303,7 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
 
         private void ShowTooltip(string itemId, RectTransform slot)
         {
-            if (presenter.Panel != WarehouseSelectionPanel.None || tooltip == null) return;
+            if (presenter.Panel != WarehouseSelectionPanel.None || tooltip == null || slot == null) return;
             WarehouseItemTooltipViewData data = WarehouseInventoryViewDataBuilder.BuildTooltip(
                 itemId, FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null);
             if (tooltipNameText != null) tooltipNameText.text = data.DisplayName;
@@ -272,7 +311,56 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             if (tooltipDescriptionText != null) tooltipDescriptionText.text = data.Description;
             SetActive(tooltipLayer, true);
             SetActive(tooltip, true);
+            PositionTooltipBesideSlot(slot);
         }
+
+        /// <summary>
+        /// Places the tooltip beside the hovered slot, flips it to the left at the right edge,
+        /// and clamps its vertical center so the complete tooltip stays inside its overlay.
+        /// </summary>
+        private void PositionTooltipBesideSlot(RectTransform slot)
+        {
+            RectTransform layerRect = tooltipLayer != null ? tooltipLayer.transform as RectTransform : null;
+            RectTransform tooltipRect = tooltip != null ? tooltip.transform as RectTransform : null;
+            if (layerRect == null || tooltipRect == null || slot == null) return;
+
+            Canvas canvas = GetComponentInParent<Canvas>();
+            Camera eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? canvas.worldCamera
+                : null;
+
+            var slotWorldCorners = new Vector3[4];
+            slot.GetWorldCorners(slotWorldCorners);
+            Vector2 bottomLeft;
+            Vector2 topRight;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                layerRect,
+                RectTransformUtility.WorldToScreenPoint(eventCamera, slotWorldCorners[0]),
+                eventCamera,
+                out bottomLeft);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                layerRect,
+                RectTransformUtility.WorldToScreenPoint(eventCamera, slotWorldCorners[2]),
+                eventCamera,
+                out topRight);
+
+            const float gap = 16f;
+            float tooltipWidth = tooltipRect.rect.width;
+            float tooltipHeight = tooltipRect.rect.height;
+            bool placeRight = topRight.x + gap + tooltipWidth <= layerRect.rect.xMax;
+
+            tooltipRect.anchorMin = tooltipRect.anchorMax = new Vector2(0.5f, 0.5f);
+            tooltipRect.pivot = new Vector2(placeRight ? 0f : 1f, 0.5f);
+
+            float x = placeRight ? topRight.x + gap : bottomLeft.x - gap;
+            float y = (bottomLeft.y + topRight.y) * 0.5f;
+            y = Mathf.Clamp(
+                y,
+                layerRect.rect.yMin + tooltipHeight * 0.5f,
+                layerRect.rect.yMax - tooltipHeight * 0.5f);
+            tooltipRect.anchoredPosition = new Vector2(x, y);
+        }
+
 
         private void HideTooltip()
         {
@@ -283,19 +371,20 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
         /// <summary>Builds price groups from the directional source and enters the required selection panel.</summary>
         private void SelectItem(string itemId, WarehouseTransferDirection direction)
         {
-            // Caravan 선택 화면에서도 Player item 정보 hover는 허용한다.
-            // 다만 목적지 Cargo가 확정되기 전에는 가격/수량 선택을 시작하지 않아
-            // InvalidCaravan으로 Modal이 조용히 닫히는 잘못된 흐름을 차단한다.
-            if (direction == WarehouseTransferDirection.HomeToCargo)
-            {
-                ND.Framework.CaravanSaveData selectedCaravan = FindCaravan(CurrentSave(), SelectedCaravanId);
-                if (!IsEligible(selectedCaravan, WarehouseFunction.BaseTownId)) return;
-            }
             if (!AcceptInput()) return;
+
             ND.Framework.SaveData save = CurrentSave();
             ND.Framework.CaravanSaveData caravan = FindCaravan(save, SelectedCaravanId);
+            if (direction == WarehouseTransferDirection.HomeToCargo
+                && !IsEligible(caravan, WarehouseFunction.BaseTownId))
+            {
+                ShowNotice(ResolveCaravanSelectionFailure(caravan));
+                return;
+            }
+
             IEnumerable<CargoEntrySaveData> source = direction == WarehouseTransferDirection.HomeToCargo
-                ? save?.player?.homeInventory : caravan?.cargo;
+                ? save?.player?.homeInventory
+                : caravan?.cargo;
             selectedDirection = direction;
             selectedItemId = itemId ?? string.Empty;
             HideTooltip();
@@ -303,7 +392,12 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             WarehousePriceGroupModalViewData data = presenter.SelectItem(
                 source, selectedItemId,
                 FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null);
-            if (data == null || data.Groups.Count == 0) return;
+            if (data == null || data.Groups.Count == 0)
+            {
+                ShowNotice("선택한 아이템에서 이동 가능한 가격 묶음을 찾을 수 없습니다.");
+                presenter.CancelSelection();
+                return;
+            }
 
             BindSelectedItemSummary(data);
             if (data.Groups.Count == 1)
@@ -381,10 +475,21 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                     ? "Cargo" : "Player Inventory";
         }
 
-/// <summary>Delegates final validation, mutation, save, and rollback to the transfer service.</summary>
+        /// <summary>Delegates final validation, mutation, save, and rollback to the transfer service.</summary>
         private void ConfirmTransfer()
         {
             if (!AcceptInput() || presenter.Panel != WarehouseSelectionPanel.Quantity) return;
+
+            // Revalidate immediately before mutation. A duplicate or out-of-range slot that appeared
+            // after selection must invalidate the stale caravanId instead of redirecting Cargo.
+            if (FindCaravan(CurrentSave(), SelectedCaravanId) == null)
+            {
+                ResetItemSelectionState();
+                CloseSelection();
+                ShowFailure(WarehouseTransferFailure.InvalidCaravan);
+                return;
+            }
+
             presenter.BeginTransfer();
             SetButtonsInteractable(false);
 
@@ -445,7 +550,7 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             UpdateQuantityView();
         }
 
-private void CancelSelection()
+        private void CancelSelection()
         {
             if (!AcceptInput() || presenter.Panel == WarehouseSelectionPanel.Busy) return;
             ResetItemSelectionState();
@@ -484,9 +589,89 @@ private void CancelSelection()
 
         private void ShowFailure(WarehouseTransferFailure failure)
         {
-            if (guideText != null)
-                guideText.text = "이동할 수 없습니다: " + failure;
+            string message;
+            switch (failure)
+            {
+                case WarehouseTransferFailure.InvalidFramework:
+                    message = "저장 데이터가 아직 준비되지 않아 창고를 이용할 수 없습니다.";
+                    break;
+                case WarehouseTransferFailure.InvalidCaravan:
+                    message = "선택한 Caravan을 찾을 수 없거나 슬롯 데이터가 유효하지 않습니다.";
+                    break;
+                case WarehouseTransferFailure.NotAtBaseCamp:
+                    message = "BaseCamp에 있는 Caravan만 창고를 이용할 수 있습니다.";
+                    break;
+                case WarehouseTransferFailure.CaravanBusy:
+                    message = "준비 상태인 Caravan만 창고를 이용할 수 있습니다.";
+                    break;
+                case WarehouseTransferFailure.CargoFull:
+                    message = "Cargo 슬롯에 여유가 없습니다.";
+                    break;
+                case WarehouseTransferFailure.CargoOverweight:
+                    message = "Cargo 최대 적재량이 부족합니다. 배정된 Wagon 정보를 확인해 주세요.";
+                    break;
+                case WarehouseTransferFailure.WarehouseFull:
+                    message = "Warehouse 슬롯에 여유가 없습니다.";
+                    break;
+                case WarehouseTransferFailure.InsufficientSource:
+                    message = "선택한 가격 묶음의 수량이 부족합니다.";
+                    break;
+                case WarehouseTransferFailure.InvalidItem:
+                    message = "선택한 아이템 정보가 유효하지 않습니다.";
+                    break;
+                case WarehouseTransferFailure.SaveFailed:
+                    message = "저장에 실패하여 아이템 이동을 취소했습니다.";
+                    break;
+                default:
+                    message = "아이템을 이동할 수 없습니다: " + failure;
+                    break;
+            }
+
+            if (guideText != null) guideText.text = message;
+            ShowNotice(message);
         }
+
+        private void ShowNotice(string message)
+        {
+            if (noticeUI == null)
+            {
+                Canvas canvas = GetComponentInParent<Canvas>();
+                noticeUI = canvas != null ? canvas.GetComponentInChildren<NoticeUI>(true) : null;
+            }
+
+            if (noticeUI != null)
+                noticeUI.Show(message);
+            else if (guideText != null)
+                guideText.text = message;
+        }
+
+        private static string ResolveCaravanSelectionFailure(ND.Framework.CaravanSaveData caravan)
+        {
+            if (caravan == null)
+                return "먼저 유효한 Caravan을 선택해 주세요.";
+            if (caravan.state != JourneyState.Prepare)
+                return "준비 상태인 Caravan만 창고를 이용할 수 있습니다.";
+            if (!string.Equals(caravan.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal))
+                return "BaseCamp에 있는 Caravan만 창고를 이용할 수 있습니다.";
+            return "현재 Caravan은 Cargo 이동에 사용할 수 없습니다.";
+        }
+
+        /// <summary>
+        /// 창고 진입 규칙은 WarehouseFunction에 유지하고, 실패 상태만 사용자 문구로 변환한다.
+        /// </summary>
+        private static string ResolveWarehouseOpenFailure(
+            ND.Framework.SaveData save,
+            WarehouseState state)
+        {
+            if (save?.player == null)
+                return "저장 데이터가 아직 준비되지 않아 창고를 열 수 없습니다.";
+            if (!string.Equals(save.player.currentTownId, WarehouseFunction.BaseTownId, StringComparison.Ordinal))
+                return "BaseCamp에서만 창고를 이용할 수 있습니다.";
+            if (state.Level <= 0)
+                return "창고를 건설한 뒤 이용할 수 있습니다.";
+            return "현재 창고를 열 수 없습니다.";
+        }
+
 
         private void OnSaveLoaded(ND.Framework.SaveData _)
         {
@@ -527,6 +712,8 @@ private void OnCaravanCreated(string _, int __)
             loadText = Find("LoadText")?.GetComponent<TMP_Text>();
             maxLoadText = Find("MaxLoadText")?.GetComponent<TMP_Text>();
             guideText = Find("GuideText")?.GetComponent<TMP_Text>();
+            Canvas rootCanvas = GetComponentInParent<Canvas>();
+            noticeUI = rootCanvas != null ? rootCanvas.GetComponentInChildren<NoticeUI>(true) : null;
             cargoTitleText = Find("CargoTitle")?.GetComponent<TMP_Text>();
             tooltipNameText = FindWithin(Find("SharedItemTooltip"), "DisplayNameText")?.GetComponent<TMP_Text>();
             tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetComponent<TMP_Text>();
@@ -582,10 +769,17 @@ private void OnCaravanCreated(string _, int __)
             return FrameworkRoot.Instance != null ? FrameworkRoot.Instance.CurrentSaveData : null;
         }
 
-        private static ND.Framework.CaravanSaveData FindCaravan(ND.Framework.SaveData save, string caravanId)
+private static ND.Framework.CaravanSaveData FindCaravan(
+            ND.Framework.SaveData save,
+            string caravanId)
         {
-            return save?.caravans?.FirstOrDefault(
-                c => c != null && string.Equals(c.caravanId, caravanId, StringComparison.Ordinal));
+            if (save?.caravans == null) return null;
+
+            // Keep caravanId as final identity, but only resolve IDs that survive slot validation.
+            CaravanSlotValidationResult validation = CaravanSlotValidation.Validate(save.caravans);
+            return validation.TryGetCaravan(caravanId, out ND.Framework.CaravanSaveData caravan)
+                ? caravan
+                : null;
         }
 
         private static float CalculateCargoWeight(ND.Framework.CaravanSaveData caravan)
