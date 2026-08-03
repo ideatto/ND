@@ -250,6 +250,9 @@ namespace ND.Framework
             var departureTownId = caravanSave.currentTownId;
             var tradeId = Guid.NewGuid().ToString("D");
             var expectedSeconds = CaravanCalculator.GetTravelSeconds(runtimeCaravan, route.Distance);
+            // ★비(날씨) 감속: 출발 시 실제 날씨 시뮬을 여행 시간창만큼 투영해 비 구간 감속을 이동시간에 반영.
+            //   결정론이라 출발 때 계산=실제 겪을 날씨 → 곱해서 저장하면 오프라인 자동(되감기 불필요).
+            expectedSeconds *= WeatherTravelPenalty.RouteFactor(routeId, WeatherDepartureSeconds(), expectedSeconds);
             if (tradeProgressRecorder == null || !tradeProgressRecorder.RecordStartedTrade(
                     saveData, caravanId, tradeId, routeId,
                     TimeSpan.FromSeconds(Math.Max(0f, expectedSeconds))))
@@ -418,6 +421,8 @@ namespace ND.Framework
             var restrictedPreparationBefore = saveData.rescueLoan != null
                 && saveData.rescueLoan.isRestrictedPreparation;
             var expectedSeconds = CaravanCalculator.GetTravelSeconds(caravan, distanceKm);
+            // ★비(날씨) 감속: 출발 시 실제 날씨 시뮬을 여행 시간창만큼 투영해 이동시간에 반영(결정론→오프라인 자동).
+            expectedSeconds *= WeatherTravelPenalty.RouteFactor(routeId, WeatherDepartureSeconds(), expectedSeconds);
             var expectedDuration = TimeSpan.FromSeconds(Math.Max(0f, expectedSeconds));
 
             // active trade ID와 예상 종료 시각을 저장 데이터에 먼저 기록해 이후 진행률 계산 기준을 만든다.
@@ -542,6 +547,15 @@ namespace ND.Framework
             return string.Equals(route.FromTownId, departureTownId, StringComparison.Ordinal)
                 ? route.ToTownId ?? string.Empty
                 : route.FromTownId ?? string.Empty;
+        }
+
+        // 날씨 투영 시작 시각(초) = 지금 게임시각. 날씨 시뮬(MinimapClouds)과 같은 소스(GameTime)라 정합.
+        // FrameworkRoot/GameTime 없으면 OS 시계로 폴백(테스트 등).
+        private static double WeatherDepartureSeconds()
+        {
+            var fr = FrameworkRoot.Instance;
+            long ticks = (fr != null && fr.GameTime != null) ? fr.GameTime.CurrentUtc.Ticks : DateTime.UtcNow.Ticks;
+            return ticks / (double)TimeSpan.TicksPerSecond;
         }
 
         /// <summary>

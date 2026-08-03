@@ -483,6 +483,24 @@ public class MinimapClouds : MonoBehaviour
     /// <summary>월드 위치가 '먹구름(비구름) 아래'인지 — 캐러밴 날씨 이벤트 판정용(외부 조회). 구름 꺼져있으면 false.</summary>
     public bool IsRainAt(Vector3 worldPos) => RainIntensityAt(worldPos) > 0f;
 
+    /// <summary>먹구름(비구름)의 '중심' 월드좌표들을 수집한다(세기=수분×크기 ≥ minIntensity인 것만).
+    /// ★번개가 구름의 넓은 가장자리가 아니라 '진한 중심'에 치도록 대상 선정에 쓴다(가장자리 섬광 방지).
+    /// 데이터(pos/moisture/scale)만 보므로 투영 중에도 동일하게 동작(결정론).</summary>
+    public void CollectStormCenters(List<Vector3> outCenters, float minIntensity)
+    {
+        if (outCenters == null) return;
+        outCenters.Clear();
+        if (!on) return;
+        float z = grid != null ? grid.Area.center.z : 0f;
+        for (int i = 0; i < clouds.Count; i++)
+        {
+            Cloud cl = clouds[i];
+            if (cl.moisture < darkThreshold) continue;          // 먹구름만
+            if (cl.moisture * cl.scale < minIntensity) continue; // 세기 문턱
+            outCenters.Add(new Vector3(cl.pos.x, cl.pos.y, z));  // ★구름 중심(가장자리 아님)
+        }
+    }
+
     /// <summary>위치의 '비 세기' = 덮은 먹구름 중 가장 센 것의 (강수량 moisture × 크기 scale). 없으면 0. 이벤트 판단용.</summary>
     public float RainIntensityAt(Vector3 worldPos)
     {
