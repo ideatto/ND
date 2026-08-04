@@ -489,6 +489,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                     CaravanSettingFailureCodes.AssetNotOwned,
                     "One or more selected transport instances are not available.");
             case CaravanCompositionDraftFailure.DuplicateAnimal:
+            case CaravanCompositionDraftFailure.MixedAnimalType:
             case CaravanCompositionDraftFailure.InvalidComposition:
                 return CaravanSettingCommandResult.Failure(
                     CaravanSettingFailureCodes.InvalidComposition,
@@ -648,9 +649,17 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         var wagonViews = new List<WagonViewData>();
         foreach (WagonData wagon in transportCatalog.Wagons)
         {
+            // SaveData stores an owned instance ID while the SO catalog stores shared content IDs.
+            // Preserve the selected physical wagon identity so S3 can restore and commit it safely.
+            string wagonInstanceId = wagon.WagonId;
+            if (!string.IsNullOrWhiteSpace(snapshotWagonInstanceId)
+                && transportInventory.TryGetWagon(snapshotWagonInstanceId, out OwnedWagonInstance selectedWagon)
+                && string.Equals(selectedWagon.ContentId, wagon.WagonId, StringComparison.Ordinal))
+                wagonInstanceId = selectedWagon.InstanceId;
+
             wagonViews.Add(new WagonViewData
             {
-                wagonId = wagon.WagonId, wagonInstanceId = wagon.WagonId,
+                wagonId = wagon.WagonId, wagonInstanceId = wagonInstanceId,
                 displayName = wagon.DisplayName, icon = wagon.Icon, description = wagon.Description,
                 wagonType = wagon.WagonType, baseMoveSpeed = wagon.BaseMoveSpeed,
                 currentDurability = wagon.MaxDurability, maxDurability = wagon.MaxDurability,
@@ -663,20 +672,23 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             });
         }
         var animalViews = new List<DraftAnimalViewData>();
+        var selectedAnimalContentIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int index = 0; index < selectedAnimalIds.Length; index++)
+        {
+            string selectedInstanceId = selectedAnimalIds[index];
+            if (!transportInventory.TryGetAnimal(selectedInstanceId, out OwnedDraftAnimalInstance ownedAnimal)
+                || !transportCatalog.TryGetDraftAnimal(ownedAnimal.ContentId, out DraftAnimalData selectedAnimal))
+                continue;
+
+            selectedAnimalContentIds.Add(ownedAnimal.ContentId);
+            animalViews.Add(CreateAnimalSettingView(selectedAnimal, selectedInstanceId, true, canEdit, blockedReason));
+        }
         foreach (DraftAnimalData animal in transportCatalog.DraftAnimals)
         {
-            bool selected = ContainsId(selectedAnimalIds, animal.DraftAnimalId);
-            animalViews.Add(new DraftAnimalViewData
-            {
-                draftAnimalId = animal.DraftAnimalId, draftAnimalInstanceId = animal.DraftAnimalId,
-                displayName = animal.DisplayName, icon = animal.Icon, description = animal.Description,
-                animalType = animal.AnimalType, feedConsumption = animal.FeedConsumption,
-                baseMoveSpeed = animal.BaseMoveSpeed, increaseOverLoad = animal.IncreaseOverLoad,
-                increaseMaxLoad = animal.IncreaseMaxLoad, ownedAmount = 1,
-                selectedAmount = selected ? 1 : 0, maxSelectableAmount = 1,
-                isEligibleForSelectedWagon = true, canSelect = canEdit,
-                disabledReason = canEdit ? string.Empty : blockedReason
-            });
+            // Keep a temporary catalog fallback for unselected types until the player-owned
+            // transport inventory supplies every instance, without replacing saved instance IDs.
+            if (!selectedAnimalContentIds.Contains(animal.DraftAnimalId))
+                animalViews.Add(CreateAnimalSettingView(animal, animal.DraftAnimalId, false, canEdit, blockedReason));
         }
         return new CaravanSettingViewData
         {
@@ -689,6 +701,22 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
     }
 
 
+
+    private static DraftAnimalViewData CreateAnimalSettingView(
+        DraftAnimalData animal, string instanceId, bool selected, bool canEdit, string blockedReason)
+    {
+        return new DraftAnimalViewData
+        {
+            draftAnimalId = animal.DraftAnimalId, draftAnimalInstanceId = instanceId,
+            displayName = animal.DisplayName, icon = animal.Icon, description = animal.Description,
+            animalType = animal.AnimalType, feedConsumption = animal.FeedConsumption,
+            baseMoveSpeed = animal.BaseMoveSpeed, increaseOverLoad = animal.IncreaseOverLoad,
+            increaseMaxLoad = animal.IncreaseMaxLoad, ownedAmount = 1,
+            selectedAmount = selected ? 1 : 0, maxSelectableAmount = 1,
+            isEligibleForSelectedWagon = true, canSelect = canEdit,
+            disabledReason = canEdit ? string.Empty : blockedReason
+        };
+    }
 
     private TradeItemViewData[] CreateAvailableItemSnapshot(string caravanId)
     {

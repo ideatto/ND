@@ -162,6 +162,26 @@ public class CaravanSlotPanel : MonoBehaviour
         OnSlotSelected?.Invoke(selectedIndex);
     }
 
+    /// <summary>
+    /// Restores a Provider-owned Caravan selection after ViewData refresh rebuilt the cards.
+    /// Identity, not the old list index, is used because SaveData order and availability may change.
+    /// </summary>
+    public bool TryRestoreCaravanSelection(string caravanId)
+    {
+        string normalizedId = string.IsNullOrWhiteSpace(caravanId) ? string.Empty : caravanId.Trim();
+        if (!departureSelectionMode || string.IsNullOrEmpty(normalizedId))
+            return false;
+
+        int index = caravanIds.FindIndex(id => string.Equals(id, normalizedId, StringComparison.Ordinal));
+        if (index < 0 || index >= cards.Count || cards[index] == null || !cards[index].interactable)
+            return false;
+
+        selectedIndex = index;
+        for (int cardIndex = 0; cardIndex < cards.Count; cardIndex++)
+            SetColor(cards[cardIndex], cardIndex == selectedIndex ? selectedColor : emptyColor);
+        OnSlotSelected?.Invoke(selectedIndex);
+        return true;
+    }
     /// <summary>현재 선택 슬롯 index(없으면 -1).</summary>
     public int SelectedIndex => selectedIndex;
 

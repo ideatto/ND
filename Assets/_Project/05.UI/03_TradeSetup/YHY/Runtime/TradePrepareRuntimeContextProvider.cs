@@ -46,7 +46,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         FrameworkEvents.LoadCompleted += HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
 
-        FrameworkEvents.CaravanCargoChanged += HandleCaravanCargoChanged;
+        FrameworkEvents.CaravanCargoChangedDetailed += HandleCaravanCargoChanged;
         FrameworkEvents.CaravanCreated += HandleCaravanCreated;
         TryInitialize(currentSaveData);
         AttachSceneCaravanProviders();
@@ -57,7 +57,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         FrameworkEvents.LoadCompleted -= HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
 
-        FrameworkEvents.CaravanCargoChanged -= HandleCaravanCargoChanged;
+        FrameworkEvents.CaravanCargoChangedDetailed -= HandleCaravanCargoChanged;
         FrameworkEvents.CaravanCreated -= HandleCaravanCreated;
         DisposeFlow();
     }
@@ -98,8 +98,18 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         flowController.UpdateBuildContext(buildContext);
     }
 
-    private void HandleCaravanCargoChanged(string caravanId)
+    private void HandleCaravanCargoChanged(
+        string caravanId,
+        CaravanCargoChangeSource source)
     {
+        // Temporary Market writes must not invalidate the Provider-owned S4 plan.
+        // Warehouse mutations remain authoritative and rebase the plan from SaveData.
+        if (source == CaravanCargoChangeSource.MarketTransaction
+            || source == CaravanCargoChangeSource.MarketRollback)
+        {
+            return;
+        }
+
         string selectedCaravanId = flowController?.CurrentDraft?.departureCaravanId;
         if (!string.Equals(caravanId?.Trim(), selectedCaravanId?.Trim(), StringComparison.Ordinal))
             return;
@@ -335,6 +345,24 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     public void RefreshFromCurrentSaveData()
     {
         flowController?.Refresh();
+    }
+
+    /// <summary>Validates projected departure data without committing Market or SaveData.</summary>
+    public TradePrepareStartResult ValidateDeparture()
+    {
+        if (flowController == null || startAdapter == null || buildContext == null)
+        {
+            return new TradePrepareStartResult
+            {
+                succeeded = false,
+                errorCode = TradePrepareStartAdapter.ErrorStartServiceMissing,
+                errorMessage = "Trade prepare runtime context is not initialized."
+            };
+        }
+
+        RefreshSelectedCaravanSetting();
+        RefreshSelectedCaravanCargoPlan();
+        return startAdapter.ValidateDeparture(flowController.CurrentDraft, buildContext);
     }
 
     public TradePrepareStartResult TryStartTrade(string tradeId, bool saveImmediately = true)

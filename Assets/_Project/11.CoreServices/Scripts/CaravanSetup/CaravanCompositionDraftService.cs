@@ -3,6 +3,10 @@ using System.Collections.Generic;
 
 namespace ND.Framework
 {
+    /// <summary>
+    /// SO 콘텐츠 정의와 플레이어가 실제 소유한 운송수단 인스턴스를 분리하는 불변 입력이다.
+    /// InstanceId는 편성 저장 경계, ContentId는 카탈로그 조회 경계에서 사용한다.
+    /// </summary>
     public sealed class OwnedWagonInstance
     {
         public string InstanceId { get; }
@@ -31,6 +35,7 @@ namespace ND.Framework
         private static string NormalizeId(string value) => value?.Trim() ?? string.Empty;
     }
 
+    /// <summary>동일 종류 여러 마리를 구분하기 위한 소유 견인동물 인스턴스 식별자다.</summary>
     public sealed class OwnedDraftAnimalInstance
     {
         public string InstanceId { get; }
@@ -100,6 +105,7 @@ namespace ND.Framework
         WagonNotOwned,
         AnimalNotOwned,
         DuplicateAnimal,
+        MixedAnimalType,
         AssetAlreadyInUse,
         InvalidComposition
     }
@@ -194,15 +200,24 @@ namespace ND.Framework
 
             var normalizedAnimalIds = new List<string>();
             var uniqueAnimalIds = new HashSet<string>(StringComparer.Ordinal);
+            string selectedAnimalContentId = string.Empty;
             if (animalInstanceIds != null)
             {
                 for (int index = 0; index < animalInstanceIds.Count; index++)
                 {
                     string animalId = NormalizeId(animalInstanceIds[index]);
-                    if (!inventory.OwnsAnimal(animalId))
+                    if (!inventory.TryGetAnimal(animalId, out OwnedDraftAnimalInstance animal))
                         return CaravanCompositionDraftFailure.AnimalNotOwned;
                     if (!uniqueAnimalIds.Add(animalId))
                         return CaravanCompositionDraftFailure.DuplicateAnimal;
+
+                    // 인스턴스 소유권과 별개로 콘텐츠 종류도 일치해야 한다.
+                    // 이 검증을 Core 경계에 두어 UI 우회나 기존 잘못된 SaveData의 재저장을 막는다.
+                    if (string.IsNullOrEmpty(selectedAnimalContentId))
+                        selectedAnimalContentId = animal.ContentId;
+                    else if (!string.Equals(selectedAnimalContentId, animal.ContentId, StringComparison.Ordinal))
+                        return CaravanCompositionDraftFailure.MixedAnimalType;
+
                     normalizedAnimalIds.Add(animalId);
                 }
             }

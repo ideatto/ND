@@ -9,6 +9,7 @@ using FrameworkCargoEntrySaveData = ND.Framework.CargoEntrySaveData;
 using FrameworkSaveData = ND.Framework.SaveData;
 using FrameworkTradeItemSaveData = ND.Framework.TradeItemSaveData;
 
+/// <summary>임시 S3/S4 서비스가 Framework SaveData 경계를 침범하지 않고 Caravan별 초안을 격리하는지 검증한다.</summary>
 public sealed class TestCaravanSettingServiceIntegrationTests
 {
     private GameObject host;

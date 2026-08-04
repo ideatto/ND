@@ -898,10 +898,14 @@ public void CloseCaravanEdit()
             return;
         }
 
+        // Draft updates rebuild ViewData synchronously while this screen is still visible.
+        // Preserve the persistent ID when it remains available; resetting it here made Next
+        // appear to reject a valid Caravan immediately after selection.
+        string selectedCaravanId = caravanSlotPanel.SelectedCaravanId;
         caravanSlotPanel.PopulateCaravanOptions(
             CaravanOptionsProvider() ?? Array.Empty<TradePrepareCaravanOptionViewData>());
-        caravanSlotPanel.ResetSelection();
-        if (slotNext != null) slotNext.interactable = false;
+        bool restored = caravanSlotPanel.TryRestoreCaravanSelection(selectedCaravanId);
+        if (slotNext != null) slotNext.interactable = restored;
     }
 
     private void GoAnimals()

@@ -363,6 +363,9 @@ public class AnimalInventoryPanel : MonoBehaviour
         int placed = counts.TryGetValue(selectionKey, out int c) ? c : 0;
         if (placed >= a.ownedCount) return;             // 소지 다 씀
         if (TotalSelected() >= maxReq) return;          // 슬롯 꽉 참
+        // 첫 선택의 콘텐츠 종류가 이 편성에서 허용할 동물 종류를 결정한다.
+        // 인스턴스 ID가 달라도 같은 SO 콘텐츠 ID라면 함께 편성할 수 있다.
+        if (!CanSelectAnimalType(a.id)) return;
         counts[selectionKey] = placed + 1;
         FillSlots();                                    // 슬롯 채움 + 인벤토리 잔량 갱신
         OnSelectionChanged?.Invoke(BuildPicks(), IsValid());
@@ -380,8 +383,37 @@ public class AnimalInventoryPanel : MonoBehaviour
             int remain = a.ownedCount - placed;
             SetLabel(invButtons[i], $"{a.name}\n(x{remain})");
             if (invButtons[i] != null)
-                invButtons[i].interactable = allowEditing && hasWagon && a.canSelect && remain > 0 && !full;
+                invButtons[i].interactable = allowEditing
+                    && hasWagon
+                    && a.canSelect
+                    && remain > 0
+                    && !full
+                    && CanSelectAnimalType(a.id);
         }
+    }
+
+    /// <summary>
+    /// 선택이 비어 있으면 모든 종류를 허용하고, 첫 선택 이후에는 같은 콘텐츠 ID만 허용한다.
+    /// UI 차단은 사용자 피드백용이며 저장 Command의 동일 검증을 대체하지 않는다.
+    /// </summary>
+    private bool CanSelectAnimalType(string candidateContentId)
+    {
+        string selectedContentId = GetSelectedAnimalContentId();
+        return string.IsNullOrEmpty(selectedContentId)
+            || string.Equals(selectedContentId, candidateContentId, StringComparison.Ordinal);
+    }
+
+    private string GetSelectedAnimalContentId()
+    {
+        for (int index = 0; index < animals.Count; index++)
+        {
+            AnimalEntry animal = animals[index];
+            string key = SelectionKey(animal);
+            if (counts.TryGetValue(key, out int selected) && selected > 0)
+                return animal.id ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     private int TotalSelected()

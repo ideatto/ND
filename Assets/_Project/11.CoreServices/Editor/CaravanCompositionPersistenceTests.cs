@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using FrameworkSaveData = ND.Framework.SaveData;
 
+/// <summary>편성 저장이 대상 Caravan만 변경하고 기존 Cargo 및 다른 Caravan 상태를 보존하는지 검증한다.</summary>
 public sealed class CaravanCompositionPersistenceTests
 {
     private GameObject host;
