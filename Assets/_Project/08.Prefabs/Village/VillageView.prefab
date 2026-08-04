@@ -92,7 +92,7 @@ MonoBehaviour:
   gridHeight: 24
   zoomStep: 1
   zoomMin: 4
-  zoomMax: 15
+  zoomMax: 9
   panSpeed: 0.004
   panRange: 12
   npcCount: 3
