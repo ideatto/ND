@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: Market_Mount
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
   marketId: MountTownMarket
-  itemMaxQuantity: 8
-  itemRenewalCycle: 1
+  itemMinimumQuantity: 150
+  itemMaxQuantity: 350
+  itemRenewalCycle: 3600
   tradeItems:
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   draftAnimalItems:

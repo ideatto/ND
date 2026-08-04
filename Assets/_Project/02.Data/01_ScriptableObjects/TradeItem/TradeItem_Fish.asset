@@ -13,18 +13,16 @@ MonoBehaviour:
   m_Name: TradeItem_Fish
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Fish
-  displayName: Fish
+  displayName: "\uC0DD\uC120"
   icon: {fileID: 21300000, guid: 74d1eb3f1e55d8549bde28cbd0813950, type: 3}
-  description: 'River Fish
-
-'
+  description: "\uC0DD\uC120, \uB9AC\uBC84\uD0C0\uC6B4\uC758 \uD2B9\uC0B0\uD488."
   rarity: 1
-  category: 1
+  category: 0
   baseBuyPrice: 2
-  baseSellPrice: 5
+  baseSellPrice: 25
   canStack: 1
   maxCount: 10
-  weight: 4
+  weight: 2
   isConsumable: 1
   affectModify: 0
   modifiers: []

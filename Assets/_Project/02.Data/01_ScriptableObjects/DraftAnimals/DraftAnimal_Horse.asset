@@ -13,17 +13,18 @@ MonoBehaviour:
   m_Name: DraftAnimal_Horse
   m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
   draftAnimalId: Horse
-  displayName: Horse
+  displayName: "\uB9D0"
   icon: {fileID: 1941642949, guid: 55b2c05e0d2a3a1458148901aee174a8, type: 3}
   prefab: {fileID: 8435808760601582164, guid: d7a14142d6df87a4194a63d4c4db291e, type: 3}
-  description: "horse can pull wagon\n "
+  description: "\uB9D0, \uC801\uB2F9\uD55C \uC18D\uB3C4, \uC2DD\uB7C9\uC744 \uC801\uB2F9\uD788
+    \uC18C\uBAA8\uD55C\uB2E4."
   animalType: 3
-  feedConsumption: 2
-  baseMoveSpeed: 20
+  feedConsumption: 0.2
+  baseMoveSpeed: 4
   increaseOverLoad: 2
   increaseMaxLoad: 10
   rarity: 1
-  baseBuyPrice: 10
+  baseBuyPrice: 100
   canStack: 0
   maxCount: 99
   affectModify: 0

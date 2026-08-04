@@ -18,7 +18,7 @@ MonoBehaviour:
   prefab: {fileID: 1888460102753451980, guid: ba99e5848ccccb64eb45b1cc65bd9464, type: 3}
   description: Wagon middle size need Hourse or donkey
   wagonType: 1
-  maxDurability: 1000
+  maxDurability: 300
   overLoad: 5
   maxLoad: 30
   baseMoveSpeed: 0

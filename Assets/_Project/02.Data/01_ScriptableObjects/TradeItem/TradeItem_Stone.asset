@@ -17,13 +17,13 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 8569fcf715cad7641ae3adf3a9486165, type: 3}
   description: "\uB3CC. \uAC74\uC124/\uC99D\uCD95 \uC2DC \uC7AC\uB8CC\uB85C \uC0AC\uC6A9\uB418\uACE4
     \uD55C\uB2E4."
-  rarity: 0
+  rarity: 1
   category: 1
-  baseBuyPrice: 3
-  baseSellPrice: 3
+  baseBuyPrice: 5
+  baseSellPrice: 5
   canStack: 1
-  maxCount: 99
-  weight: 0.2
+  maxCount: 1
+  weight: 5
   isConsumable: 0
   affectModify: 0
   modifiers: []

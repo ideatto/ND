@@ -17,12 +17,30 @@ MonoBehaviour:
   toTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
   displayName: "\uD130\uB110"
   unlockedByDefault: 0
-  distance: 15
-  defaultElapsedTime: 75
+  distance: 1200
+  defaultElapsedTime: 120
   baseFoodCost: 1
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 4
   baseRequiredMercenaryPower: 0
-  baseRiskLevel: 0
-  routeEvents: []
-  maxEventCount: 0
+  baseRiskLevel: 0.4
+  maxEventCount: 3
+  routeEvents:
+  - eventType: 0
+    routeEventId: MountToBase_Bandit
+    displayName: "\uC0B0\uC801 \uCD9C\uBAB0"
+    description: "\uD130\uB110\uC744 \uC9C0\uB098\uB2E4 \uC0B0\uC801\uC744 \uB9C8\uC8FC\uCCE4\uB2E4."
+    eventValue: 0
+    defaultEvasionPer: 60
+    lossCount: 0
+    eventRewardType: 0
+    eventRewardCurrency:
+      minAmount: 0
+      maxAmount: 0
+    eventRewardItem:
+      itemId: 
+      minQuantity: 0
+      maxQuantity: 0
+    banditCombatPower: 10
+    cargoLootRate: 0.1
+    fodderLootRate: 0.1
