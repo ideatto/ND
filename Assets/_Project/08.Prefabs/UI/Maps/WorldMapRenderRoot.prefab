@@ -1194,6 +1194,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: MountTown
+  treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 114247275344971264}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
   lockedColor: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -2509,6 +2510,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: RiverTown
+  treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 7010911206374391207}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
   lockedColor: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -2879,6 +2881,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: BaseCamp
+  treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 6928380865777902891}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
   lockedColor: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -3136,6 +3139,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: WindyTown
+  treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 2969474632424115417}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
   lockedColor: {r: 0.45, g: 0.45, b: 0.45, a: 1}
