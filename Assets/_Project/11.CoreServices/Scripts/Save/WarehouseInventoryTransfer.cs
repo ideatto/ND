@@ -255,7 +255,9 @@ private static int MaxAdditionalBySlots(
 
             // Events are invalidation signals, not data payloads; subscribers re-read the saved state.
             FrameworkEvents.RaiseHomeInventoryChanged();
-            FrameworkEvents.RaiseCaravanCargoChanged(request.CaravanId);
+            FrameworkEvents.RaiseCaravanCargoChanged(
+                request.CaravanId,
+                CaravanCargoChangeSource.WarehouseTransfer);
             return true;
         }
 

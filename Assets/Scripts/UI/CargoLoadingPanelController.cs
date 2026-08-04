@@ -8,6 +8,10 @@ using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+/// <summary>
+/// S4 적재 화면의 렌더링과 사용자 선택 초안만 소유한다.
+/// 저장 Cargo, 시장 예약, 통화의 단일 원본은 Runtime/Framework 계층에 있으며 이 UI는 완전한 선택 Snapshot을 전달한다.
+/// </summary>
 public sealed class CargoLoadingPanelController : MonoBehaviour
 {
     /// <summary>

@@ -7,6 +7,10 @@ using UnityEngine.UI;
 
 namespace ND.UI.CargoSell
 {
+    /// <summary>
+    /// 구매가격 그룹을 잃지 않은 판매 예약 한 줄의 렌더링 입력이다.
+    /// 동일 itemId라도 PurchaseUnitPrice가 다르면 상위 Builder가 별도 행으로 유지한다.
+    /// </summary>
     [Serializable]
     public sealed class CargoSellPendingSaleRowViewData
     {

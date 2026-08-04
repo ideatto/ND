@@ -5,6 +5,7 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
+/// <summary>현재 시장 카탈로그 밖의 저장 Cargo도 적재 UI 표시와 무게 계산에서 보존되는지 검증한다.</summary>
 public sealed class TradePrepareSavedCargoPresentationTests
 {
     private readonly List<TradeItemData> createdItems = new List<TradeItemData>();
