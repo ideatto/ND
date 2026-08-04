@@ -17,13 +17,12 @@ MonoBehaviour:
   toTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   displayName: "\uC0B0 \uAE38 "
   unlockedByDefault: 0
-  distance: 28
-  defaultElapsedTime: 140
+  distance: 400
+  defaultElapsedTime: 40
   baseFoodCost: 0
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 7
   baseRequiredMercenaryPower: 3
   baseRiskLevel: 0
   maxEventCount: 0
-  eventCheckIntervalKm: 10
   routeEvents: []

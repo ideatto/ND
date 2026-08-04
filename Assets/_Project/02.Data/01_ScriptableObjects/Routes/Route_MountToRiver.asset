@@ -17,13 +17,30 @@ MonoBehaviour:
   toTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   displayName: "\uAC15\uBCC0\uAE38"
   unlockedByDefault: 0
-  distance: 12
-  defaultElapsedTime: 60
+  distance: 300
+  defaultElapsedTime: 30
   baseFoodCost: 0
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 3
   baseRequiredMercenaryPower: 20
-  baseRiskLevel: 0
-  maxEventCount: 0
-  eventCheckIntervalKm: 10
-  routeEvents: []
+  baseRiskLevel: 0.5
+  maxEventCount: 1
+  routeEvents:
+  - eventType: 0
+    routeEventId: MountToRiver_Bandit
+    displayName: "\uC0B0\uC801 \uCD9C\uBAB0"
+    description: "\uAC15\uBCC0\uAE38\uC5D0\uC11C \uC0B0\uC801\uC744 \uB9C8\uC8FC\uCCE4\uB2E4."
+    eventValue: 0
+    defaultEvasionPer: 80
+    lossCount: 0
+    eventRewardType: 0
+    eventRewardCurrency:
+      minAmount: 0
+      maxAmount: 0
+    eventRewardItem:
+      itemId: 
+      minQuantity: 0
+      maxQuantity: 0
+    banditCombatPower: 5
+    cargoLootRate: 0.1
+    fodderLootRate: 0.1

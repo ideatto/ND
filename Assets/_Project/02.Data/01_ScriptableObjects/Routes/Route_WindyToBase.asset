@@ -17,13 +17,30 @@ MonoBehaviour:
   toTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
   displayName: "\uC624\uC194\uAE38"
   unlockedByDefault: 1
-  distance: 10
-  defaultElapsedTime: 50
+  distance: 700
+  defaultElapsedTime: 70
   baseFoodCost: 0
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 3
   baseRequiredMercenaryPower: 0
-  baseRiskLevel: 0
-  maxEventCount: 0
-  eventCheckIntervalKm: 10
-  routeEvents: []
+  baseRiskLevel: 0.3
+  maxEventCount: 1
+  routeEvents:
+  - eventType: 0
+    routeEventId: WindyToBase_Bandit
+    displayName: "\uC0B0\uC801 \uCD9C\uBAB0"
+    description: "\uC624\uC194\uAE38\uC5D0\uC11C \uC0B0\uC801\uC744 \uB9C8\uC8FC\uCCE4\uB2E4."
+    eventValue: 0
+    defaultEvasionPer: 80
+    lossCount: 0
+    eventRewardType: 0
+    eventRewardCurrency:
+      minAmount: 0
+      maxAmount: 0
+    eventRewardItem:
+      itemId: 
+      minQuantity: 0
+      maxQuantity: 0
+    banditCombatPower: 3
+    cargoLootRate: 0.1
+    fodderLootRate: 0.1

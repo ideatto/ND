@@ -13,17 +13,25 @@ MonoBehaviour:
   m_Name: TradeItem_Apple
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Apple
-  displayName: Apple
+  displayName: "\uC0AC\uACFC"
   icon: {fileID: 21300000, guid: c6ba72f840279004698b4f843d87351c, type: 3}
-  description: TradeItem_Apple
+  description: "\uC0AC\uACFC, \uAC00\uC744 \uC0AC\uACFC\uAC00 \uB9DB\uC788\uB2E4.
+    \uBCA0\uC774\uC2A4 \uCEA0\uD504\uC758 \uD2B9\uC0B0\uD488."
   rarity: 1
   category: 0
   baseBuyPrice: 1
-  baseSellPrice: 2
+  baseSellPrice: 10
   canStack: 1
   maxCount: 10
   weight: 1
   isConsumable: 0
-  affectModify: 0
-  modifiers: []
+  affectModify: 1
+  modifiers:
+  - modifierType: 1
+    sourceId: autumn
+    displayName: "\uAC00\uC744 \uC218\uC694 \uC99D\uAC00"
+    modifierBundles:
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: 0.2
   localSpecialty: 1

@@ -17,28 +17,28 @@ MonoBehaviour:
   toTown: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   displayName: "\uB451\uAE38"
   unlockedByDefault: 1
-  distance: 4000
-  defaultElapsedTime: 100
+  distance: 500
+  defaultElapsedTime: 50
   baseFoodCost: 1
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 5
-  baseRequiredMercenaryPower: 0
-  baseRiskLevel: 1
+  baseRequiredMercenaryPower: 10
+  baseRiskLevel: 0.5
   maxEventCount: 2
   routeEvents:
   - eventType: 0
     routeEventId: BaseToRiver_Bandit
-    displayName: Bandit Ambush
-    description: Bandits ambush the caravan on the dike road.
+    displayName: "\uC0B0\uC801 \uCD9C\uBAB0"
+    description: "\uB451\uAE38\uC5D0\uC11C \uC0B0\uC801\uC744 \uB9C8\uC8FC\uCCE4\uB2E4."
     eventValue: 6
-    defaultEvasionPer: 0
+    defaultEvasionPer: 80
     lossCount: 1
     eventRewardType: 0
     eventRewardCurrency:
       minAmount: 0
       maxAmount: 0
     eventRewardItem:
-      itemId:
+      itemId: 
       minQuantity: 0
       maxQuantity: 0
     banditCombatPower: 6

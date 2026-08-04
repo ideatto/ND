@@ -13,17 +13,32 @@ MonoBehaviour:
   m_Name: TradeItem_Wheat
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Wheat
-  displayName: Wheat
+  displayName: "\uBC00"
   icon: {fileID: 21300000, guid: afbc89dc6ce2aff459ee31cf5fcb0ee0, type: 3}
-  description: Wheat
+  description: "\uBC00, \uAC00\uC744\uC5D0 \uCD94\uC218\uD55C\uB2E4. "
   rarity: 1
-  category: 1
+  category: 0
   baseBuyPrice: 2
-  baseSellPrice: 3
+  baseSellPrice: 5
   canStack: 1
-  maxCount: 20
-  weight: 1
+  maxCount: 40
+  weight: 0.5
   isConsumable: 0
-  affectModify: 0
-  modifiers: []
+  affectModify: 1
+  modifiers:
+  - modifierType: 1
+    sourceId: autumn
+    displayName: "\uCD94\uC218\uB85C \uC778\uD55C \uACF5\uAE09 \uC0C1\uC2B9"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 2
+      value: 1
+  - modifierType: 1
+    sourceId: summer
+    displayName: "\uC800\uC7A5\uB7C9\uC774 \uC18C\uC9C4\uB418\uC5B4 \uC218\uC694
+      \uC0C1\uC2B9"
+    modifierBundles:
+    - modifierTarget: 2
+      modifierOperation: 1
+      value: 2
   localSpecialty: 0

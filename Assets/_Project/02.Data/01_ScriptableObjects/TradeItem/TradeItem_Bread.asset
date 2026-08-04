@@ -13,18 +13,17 @@ MonoBehaviour:
   m_Name: TradeItem_Bread
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Bread
-  displayName: Bread
+  displayName: "\uBE75"
   icon: {fileID: 21300000, guid: 7a3a43b670c3e4c42a26096440b91d1b, type: 3}
-  description: 'TradeItem_Bread
-
-'
+  description: "\uD3C9\uBC94\uD55C \uBE75, \uC5B8\uC81C\uB098 \uD3C9\uD0C4\uD55C
+    \uC218\uC694\uAC00 \uC788\uB2E4."
   rarity: 1
   category: 0
   baseBuyPrice: 1
-  baseSellPrice: 2
+  baseSellPrice: 5
   canStack: 1
-  maxCount: 10
-  weight: 1
+  maxCount: 50
+  weight: 0.5
   isConsumable: 1
   affectModify: 0
   modifiers: []

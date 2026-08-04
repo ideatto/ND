@@ -16,15 +16,23 @@ MonoBehaviour:
   displayName: "\uD1B5\uB098\uBB34"
   icon: {fileID: 21300000, guid: f271e57910835bb43b9cc596dbc579f7, type: 3}
   description: "\uD1B5\uB098\uBB34, \uAC74\uC124/\uC99D\uCD95 \uC2DC \uC7AC\uB8CC\uB85C
-    \uC0AC\uC6A9\uB418\uACE4 \uD55C\uB2E4."
-  rarity: 0
+    \uC0AC\uC6A9\uB418\uACE4 \uD55C\uB2E4. \uC5EC\uB984\uC5D0\uB294 \uBAA9\uC81C\uAC00
+    \uC816\uC5B4 \uAC00\uACA9\uC774 \uC0C1\uC2B9\uD55C\uB2E4."
+  rarity: 1
   category: 1
   baseBuyPrice: 10
   baseSellPrice: 10
   canStack: 1
-  maxCount: 99
-  weight: 2
+  maxCount: 5
+  weight: 5
   isConsumable: 0
-  affectModify: 0
-  modifiers: []
+  affectModify: 1
+  modifiers:
+  - modifierType: 1
+    sourceId: summer
+    displayName: "\uC5EC\uB984 \uACF5\uAE09 \uBD80\uC871"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: 0.2
   localSpecialty: 0
