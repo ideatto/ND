@@ -1004,6 +1004,10 @@ namespace ND.Framework
                 if (claimResult.Succeeded)
                 {
                     ClearClaimedIdentity(caravanId, tradeId);
+                    // SaveData.pendingSettlements remains the durable source of truth. After
+                    // claiming the exact displayed identity, advance the presentation cursor
+                    // to the next unclaimed entry instead of maintaining a second memory queue.
+                    TryPresentNextPendingSettlement();
                 }
                 else
                 {
@@ -1059,6 +1063,34 @@ namespace ND.Framework
             settlementPresentationRequested = false;
         }
 
+        /// <summary>Selects the first valid, unclaimed failed settlement as the next UI cursor.</summary>
+        /// <remarks>
+        /// Collection order is the queue order. Successful arrivals still require the existing
+        /// sell flow to call PresentSettlement; only failures are eligible for immediate chaining.
+        /// Invalid entries are skipped without mutating SaveData so validation and repair remain
+        /// Framework/Core responsibilities.
+        /// </remarks>
+        private bool TryPresentNextPendingSettlement()
+        {
+            SaveData saveData = GetSaveData();
+            if (saveData?.pendingSettlements == null)
+                return false;
+
+            for (var index = 0; index < saveData.pendingSettlements.Count; index++)
+            {
+                PendingSettlementSaveData pending = saveData.pendingSettlements[index];
+                if (pending == null || pending.claimed || !pending.hasResult
+                    || pending.grade != JourneyResultGrade.Failed)
+                    continue;
+
+                if (PresentSettlement(pending.caravanId, pending.tradeId))
+                    return true;
+            }
+
+            return false;
+        }
+
+
         private void ClearClaimedIdentity(string caravanId, string tradeId)
         {
             if (string.Equals(presentedCaravanId, caravanId, StringComparison.Ordinal)
@@ -1111,33 +1143,21 @@ namespace ND.Framework
             frameworkEventsSubscribed = false;
         }
 
-        private void HandleSettlementReady(string caravanId, string tradeId, JourneyResultData result)
+private void HandleSettlementReady(string caravanId, string tradeId, JourneyResultData result)
         {
             if (!IsSettlementEntryValid("HandleSettlementReady", caravanId, tradeId, result))
-            {
                 return;
-            }
 
             latestNotificationCaravanId = caravanId;
             latestNotificationTradeId = tradeId;
             latestNotificationResult = result;
 
-            // The first notification may initialize legacy single-Caravan presentation state.
-            // Once a settlement is presented, later notifications cannot redirect that cursor.
-            if (presentedResult == null)
-            {
-                presentedCaravanId = caravanId;
-                presentedTradeId = tradeId;
-                presentedResult = result;
-                settlementPresentationRequested = false;
-            }
-
-            // Compatibility probes may still opt into automatic Claim explicitly. Runtime
-            // initialization disables it so arrival remains pending until the sale flow calls
-            // PresentSettlement(caravanId, tradeId).
             if (autoClaimOnArrival)
             {
-                if (ClaimSettlementAndReset())
+                // Compatibility-only mode claims the exact event identity. It must not depend on
+                // or overwrite a settlement that another Caravan is currently presenting.
+                ClaimSettlementResult claimResult = ClaimSettlement(caravanId, tradeId);
+                if (claimResult.Succeeded)
                 {
                     FrameworkLog.Info($"Settlement auto-claimed on arrival. TradeId: {tradeId}");
                     return;
@@ -1147,9 +1167,16 @@ namespace ND.Framework
                     $"Settlement auto-claim failed; keeping pending result for recovery UI. TradeId: {tradeId}");
             }
 
-            // A saved ready event only marks this caravan as awaiting player action. The
-            // Caravan status UI opens the sell-only panel, and that flow explicitly presents
-            // settlement after the player confirms or skips selling.
+            // Successful arrival belongs to the destination sale flow. Keeping it only in the
+            // durable pending collection prevents it from occupying the immediate-failure cursor.
+            if (result.grade != JourneyResultGrade.Failed)
+                return;
+
+            // Failed journeys have no destination sale phase. Only an empty cursor may present
+            // this failure; later failures remain ordered in SaveData until the current claim
+            // advances TryPresentNextPendingSettlement().
+            if (presentedResult == null)
+                PresentSettlement(caravanId, tradeId);
         }
 
         private bool IsSettlementEntryValid(

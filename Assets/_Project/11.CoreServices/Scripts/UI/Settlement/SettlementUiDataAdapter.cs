@@ -95,8 +95,20 @@ namespace ND.Framework
                 return;
             }
 
-            displayedCaravanId = string.Empty;
-            displayedTradeId = string.Empty;
+            // Claim can synchronously advance the bridge to another failed settlement.
+            // Re-read that cursor instead of clearing the identity written by SettlementReady.
+            string nextCaravanId;
+            string nextTradeId;
+            JourneyResultData nextResult;
+            if (bridge.TryGetPendingSettlement(out nextCaravanId, out nextTradeId, out nextResult))
+            {
+                RefreshSettlementView();
+            }
+            else
+            {
+                displayedCaravanId = string.Empty;
+                displayedTradeId = string.Empty;
+            }
             ClearClaimProcessing();
         }
 

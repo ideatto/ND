@@ -190,9 +190,16 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
         string tradeId,
         JourneyResultData result)
     {
-        // Failed journeys still use the existing settlement screen route.
-        if (result == null || result.grade == JourneyResultGrade.Failed)
+        if (result == null)
             return;
+
+        if (result.grade == JourneyResultGrade.Failed)
+        {
+            // Failure has no destination sale step and belongs to the event Caravan, not the
+            // globally focused Caravan. Open S8 directly even when another Caravan is selected.
+            OpenSettlementScreen();
+            return;
+        }
 
         FrameworkRoot root = FrameworkRoot.Instance;
         if (root?.CurrentSaveData == null
