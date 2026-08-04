@@ -2523,9 +2523,10 @@ MonoBehaviour:
   rainColor: {r: 0.35, g: 0.55, b: 0.95, a: 0.95}
   showTestButton: 1
   showNotices: 1
-  rainSlowdown: 0.3
-  minSpeedMul: 0.5
   fireEvents: 0
+  enableLightningLucky: 1
+  luckyStormIntensity: 0.4
+  luckyChance: 0.5
 --- !u!114 &2694811030358693518
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2570,7 +2571,7 @@ MonoBehaviour:
   grid: {fileID: 1234163303482534806}
   clouds: {fileID: 5190303486445152575}
   wind: {fileID: 2404121775284365572}
-  strikeInterval: 2.5
+  attemptEverySteps: 25
   strikeChance: 0.6
   minStrikeIntensity: 0.4
   worldSeed: 777
