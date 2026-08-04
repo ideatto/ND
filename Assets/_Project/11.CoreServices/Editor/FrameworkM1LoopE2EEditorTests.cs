@@ -1062,7 +1062,7 @@ namespace ND.Framework.Editor
             });
 
             var resultA = new JourneyResultData { grade = JourneyResultGrade.Success };
-            var resultB = new JourneyResultData { grade = JourneyResultGrade.PartialSuccess };
+            var resultB = new JourneyResultData { grade = JourneyResultGrade.Failed };
             var pendingA = PendingSettlementSaveDataMapper.ToSave(resultA, tradeA, RouteId);
             pendingA.caravanId = caravanA;
             var pendingB = PendingSettlementSaveDataMapper.ToSave(resultB, tradeB, RouteId);
@@ -1075,6 +1075,31 @@ namespace ND.Framework.Editor
             {
                 var bridge = bridgeObject.AddComponent<SettlementUiBridge>();
                 bridge.Initialize(() => saveData, null, new InGameScreenStateRouter());
+
+                // A successful arrival must remain durable without taking the immediate-failure
+                // presentation cursor. A later failed Caravan may then present immediately.
+                FrameworkEvents.RaiseTradeSettlementReady(caravanA, tradeA, resultA);
+                if (bridge.TryGetPendingSettlement(out _, out _, out _))
+                {
+                    throw new InvalidOperationException(
+                        "Successful arrival occupied the immediate-failure settlement cursor.");
+                }
+
+                FrameworkEvents.RaiseTradeSettlementReady(caravanB, tradeB, resultB);
+                if (!bridge.TryGetPendingSettlement(
+                        out var failedCaravanId,
+                        out var failedTradeId,
+                        out var failedResult)
+                    || failedCaravanId != caravanB
+                    || failedTradeId != tradeB
+                    || failedResult == null
+                    || failedResult.grade != JourneyResultGrade.Failed)
+                {
+                    throw new InvalidOperationException(
+                        "Failed arrival did not acquire the empty settlement cursor.");
+                }
+
+                bridge.ClearPendingSettlement();
                 if (!bridge.PresentSettlement(caravanA, tradeA)
                     || !bridge.TryGetPendingSettlement(
                         out var presentedCaravanId,

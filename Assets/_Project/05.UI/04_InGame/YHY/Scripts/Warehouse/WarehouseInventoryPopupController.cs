@@ -40,7 +40,7 @@ namespace ND.UI.InGame.Warehouse
         private NoticeUI noticeUI;
         private TMP_Text cargoTitleText;
         private TMP_Text tooltipNameText;
-        private TMP_Text tooltipPriceText;
+private TMP_Text tooltipPriceText;
         private TMP_Text tooltipDescriptionText;
         private TMP_Text selectedItemNameText;
         private TMP_Text selectedItemTotalText;
@@ -307,7 +307,8 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             WarehouseItemTooltipViewData data = WarehouseInventoryViewDataBuilder.BuildTooltip(
                 itemId, FrameworkRoot.Instance != null ? FrameworkRoot.Instance.SharedGameData : null);
             if (tooltipNameText != null) tooltipNameText.text = data.DisplayName;
-            if (tooltipPriceText != null) tooltipPriceText.text = "기본 구매가  " + data.BaseBuyPrice + " G";
+            if (tooltipPriceText != null)
+                tooltipPriceText.text = $"기본 구매가  {data.BaseBuyPrice} G\n무게  {data.Weight:0.##}";
             if (tooltipDescriptionText != null) tooltipDescriptionText.text = data.Description;
             SetActive(tooltipLayer, true);
             SetActive(tooltip, true);
@@ -716,7 +717,7 @@ private void OnCaravanCreated(string _, int __)
             noticeUI = rootCanvas != null ? rootCanvas.GetComponentInChildren<NoticeUI>(true) : null;
             cargoTitleText = Find("CargoTitle")?.GetComponent<TMP_Text>();
             tooltipNameText = FindWithin(Find("SharedItemTooltip"), "DisplayNameText")?.GetComponent<TMP_Text>();
-            tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetComponent<TMP_Text>();
+tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetComponent<TMP_Text>();
             tooltipDescriptionText = FindWithin(Find("SharedItemTooltip"), "DescriptionText")?.GetComponent<TMP_Text>();
             selectedItemNameText = FindWithin(Find("PriceGroupModal"), "SelectedItemNameText")?.GetComponent<TMP_Text>();
             selectedItemTotalText = FindWithin(Find("PriceGroupModal"), "SelectedItemTotalQuantityText")?.GetComponent<TMP_Text>();
@@ -738,6 +739,9 @@ private void OnCaravanCreated(string _, int __)
             maxButton = FindWithin(Find("WarehouseQuantityModal"), "MaxButton")?.GetComponent<Button>();
             confirmButton = FindWithin(Find("WarehouseQuantityModal"), "ConfirmTransferButton")?.GetComponent<Button>();
         }
+
+
+
 
         private void WireButtons()
         {

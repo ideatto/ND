@@ -33,6 +33,15 @@ using ND.Economy;
 
 namespace ND.Framework
 {
+    /// <summary>Identifies why persisted Caravan Cargo changed.</summary>
+    public enum CaravanCargoChangeSource
+    {
+        Unknown,
+        MarketTransaction,
+        MarketRollback,
+        WarehouseTransfer
+    }
+
     /// <summary>
     /// CoreServices 내부 상태 변경을 느슨하게 전달하는 정적 이벤트 허브이다.
     /// </summary>
@@ -102,6 +111,8 @@ namespace ND.Framework
         /// Subscribers must re-read SaveData instead of treating the event payload as inventory data.
         /// </summary>
         public static event Action<string> CaravanCargoChanged;
+        /// <summary>Detailed Cargo invalidation signal including the mutation source.</summary>
+        public static event Action<string, CaravanCargoChangeSource> CaravanCargoChangedDetailed;
 
 
         /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
@@ -278,11 +289,14 @@ namespace ND.Framework
             TradingCurrencyChanged?.Invoke(tradingCurrency);
         }
 
-        public static void RaiseCaravanCargoChanged(string caravanId)
+        public static void RaiseCaravanCargoChanged(
+            string caravanId,
+            CaravanCargoChangeSource source = CaravanCargoChangeSource.Unknown)
         {
             string normalizedCaravanId = caravanId ?? string.Empty;
-            FrameworkLog.Info($"CaravanCargoChanged event raised. CaravanId: {normalizedCaravanId}");
+            FrameworkLog.Info($"CaravanCargoChanged event raised. CaravanId: {normalizedCaravanId}, Source: {source}");
             CaravanCargoChanged?.Invoke(normalizedCaravanId);
+            CaravanCargoChangedDetailed?.Invoke(normalizedCaravanId, source);
         }
 
         public static void RaiseHomeInventoryChanged()

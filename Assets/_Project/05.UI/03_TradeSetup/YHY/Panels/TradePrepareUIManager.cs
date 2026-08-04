@@ -50,7 +50,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         public long[] buyUnitPrices;      // 현재 시장 갱신 구간의 확정 구매 단가
     }
 
-    /// <summary>⑥ 요약 계산 질의 — 매니저가 아는 확정 선택값. 계산은 데이터 소스가 담당.</summary>
+/// <summary>무역 준비 플로우의 화면 전환과 단계 간 데이터 전달을 총괄하는 매니저.</summary>
     public struct SummaryQuery
     {
         public string routeId;            // 선택 루트
@@ -89,7 +89,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
     // ══ 인스펙터 참조 ═══════════════════════════════════════════
 
-    [Header("화면 패널 (윤호영)")]
+    [Header("화면 패널 (정헌님)")]
     [SerializeField] private TownRoutePanel townRoutePanel;      // ① 도시+루트
     [SerializeField] private CaravanSlotPanel caravanSlotPanel;  // ② 상단 슬롯
     [SerializeField] private AnimalInventoryPanel animalPanel;   // ③ 상단 구성
@@ -137,7 +137,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
     /// <summary>① 도시+루트 목록 공급자.</summary>
     public Func<List<TownRoutePanel.TownEntry>> TownProvider;
-    /// <summary>③ 동물 인벤토리 공급자(스탯 포함 — 최대 적재량 계산에도 사용).</summary>
+    /// <summary>④ 적재 화면 값(골드·먹이·상점) 공급자.</summary>
     public Func<List<AnimalInventoryPanel.AnimalEntry>> AnimalProvider;
     /// <summary>③ 웨건 선택 팝업용 소지 이동수단 공급자.</summary>
     public Func<List<TransportSelectPanel.TransportEntry>> OwnedWagonProvider;
@@ -161,7 +161,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public event Action<DepartData> OnDepart;
     /// <summary>무역 취소(Cargo/용병의 Cancel, ⑥·⑦-1 취소) — 준비 데이터 초기화 후 ①로 복귀했음을 알림.</summary>
     public event Action OnCancelled;
-    /// <summary>⑦ 무역 종료(도착) — 정산(⑧)으로 이어질 지점. 데모는 로그만.</summary>
+    /// <summary>④ 적재 화면 값(골드·먹이·상점) 공급자.</summary>
     public event Action OnJourneyFinished;
 
     /// <summary>Requests the latest setting snapshot for one Overview-selected Caravan.</summary>
@@ -380,9 +380,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         // Provider/SaveData rehydration is presentation-only. Emitting LoadChanged here would
         // publish the same reservation and synchronously re-enter this method through the
         // market inventory refresh event.
-        cargoPanel.RestoreSelectedCargo(
+        cargoPanel.RestoreSavedCargo(
             BuildDetachedOwnedCargoSelection(viewData, config.reservedItems),
-            true,
             false);
         cargoPanel.RestoreSelectedCargo(config.reservedItems, false, false);
         activeDetachedCargoViewData = viewData;
@@ -393,16 +392,10 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     }
 
     /// <summary>Closes only a detached Overview edit instead of restarting the trade flow at S1.</summary>
-    public void CloseCaravanEdit()
+public void CloseCaravanEdit()
     {
-        if (detachedCaravanEditMode == DetachedCaravanEditMode.None)
-            return;
-
-        // A detached Cargo selection is a Caravan-owned draft until Continue commits it.
-        // Closing the panel or switching Caravan slots must keep that reservation so another
-        // Caravan sees the reduced market availability. Explicit trade cancellation and a
-        // successful commit remain the only paths that release it.
-        // Detached edits own no trade route Draft, so closing them must not invoke trade cancellation.
+        // A successful synchronous Command can clear detached identity during Provider refresh.
+        // Hiding must therefore be idempotent instead of returning early on the cleared mode.
         ClearDetachedCaravanEditState();
         ShowOnly(-1);
         SetTradeRootActive(false);
@@ -544,9 +537,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             {
                 itemId = itemId,
                 displayName = item.displayName ?? string.Empty,
+                icon = item.icon,
+                category = item.category,
                 ownedAmount = ownedQuantity,
                 unitWeight = item.unitWeight,
-                purchasePrice = item.purchaseUnitPrice
+                purchasePrice = item.purchaseUnitPrice,
+                sellPrice = item.estimatedSellUnitPrice
             });
         }
 
@@ -822,7 +818,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
         ResetTradeState();
         ShowOnly(0);
-        OnCancelled?.Invoke();
+    // ④/⑤의 [Cancel](무역 취소) — 씬 퍼시스턴트 리스너로 연결(onTradeCancelled).
     }
 
     // ⑤ 용병의 [Confirm] — 씬 퍼시스턴트 리스너로 연결(onConfirmed).
@@ -902,10 +898,14 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             return;
         }
 
+        // Draft updates rebuild ViewData synchronously while this screen is still visible.
+        // Preserve the persistent ID when it remains available; resetting it here made Next
+        // appear to reject a valid Caravan immediately after selection.
+        string selectedCaravanId = caravanSlotPanel.SelectedCaravanId;
         caravanSlotPanel.PopulateCaravanOptions(
             CaravanOptionsProvider() ?? Array.Empty<TradePrepareCaravanOptionViewData>());
-        caravanSlotPanel.ResetSelection();
-        if (slotNext != null) slotNext.interactable = false;
+        bool restored = caravanSlotPanel.TryRestoreCaravanSelection(selectedCaravanId);
+        if (slotNext != null) slotNext.interactable = restored;
     }
 
     private void GoAnimals()
@@ -963,10 +963,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
                 cfg.buyUnitPrices);
             cargoPanel.SetMarketDraftContext(cfg.caravanId, cfg.marketId);
             cargoPanel.SetCargoEditingEnabled(!cfg.automaticCargoLoading);
-            cargoPanel.RestoreSelectedCargo(
-                cfg.selectedItems,
-                cfg.restoreOwnedCargo,
-                false);
+            // Saved Cargo and Market reservations have different ownership. Rehydrate the
+            // persisted baseline without requiring the item to exist in the current shop.
+            if (cfg.restoreOwnedCargo)
+                cargoPanel.RestoreSavedCargo(cfg.selectedItems, false);
+            else
+                cargoPanel.RestoreSelectedCargo(cfg.selectedItems, false, false);
             // Rehydrating an existing reservation is presentation-only. Publishing it again
             // would recursively trigger MarketInventoryChanged -> RefreshCargoIfVisible.
             cargoPanel.RestoreSelectedCargo(cfg.reservedItems, false, false);
@@ -1026,7 +1028,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             TradeItemBundle[] bundles = cargoPanel != null ? cargoPanel.BuildTradeItemBundles() : new TradeItemBundle[0];
             int loadedFood = cargoPanel != null ? cargoPanel.LoadedFood : 0;
 
-            // 질의(매니저가 아는 확정 선택값)
+            // 비용·이익(번들에서 직접 집계 — 배율은 배율 데이터 확정 후 적용)
             SummaryQuery q = new SummaryQuery();
             q.routeId = selRouteId;
             q.distanceKm = distanceKm;
@@ -1037,7 +1039,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             q.loadedFood = loadedFood;
             SummaryStats st = SummaryStatsProvider != null ? SummaryStatsProvider(q) : default(SummaryStats);
 
-            // ⑦ 진행 화면에서 쓸 값 저장(출발 도시·소요 시간)
+            // 비용·이익(번들에서 직접 집계 — 배율은 배율 데이터 확정 후 적용)
             lastFromTownName = string.IsNullOrEmpty(st.fromTownName) ? "-" : st.fromTownName;
             lastDuration = st.durationSeconds;
 
@@ -1107,8 +1109,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (progressPanel != null)
         {
             // 데모 관찰용 시간(progressDemoSeconds>0)이 있으면 그걸, 없으면 실제 계산값.
+            // 데모 관찰용 시간(progressDemoSeconds>0)이 있으면 그걸, 없으면 실제 계산값.
             float dur = progressDemoSeconds > 0f ? progressDemoSeconds : Mathf.Max(1f, lastDuration);
-            progressPanel.Begin(lastFromTownName, Resolve(selTownId), dur);
         }
         ShowOnly(5);
     }
@@ -1224,4 +1226,5 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         string n = NameResolver(id);
         return string.IsNullOrEmpty(n) ? id : n;
     }
+
 }

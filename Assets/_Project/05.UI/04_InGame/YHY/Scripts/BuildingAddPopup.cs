@@ -1,98 +1,174 @@
-// =============================================================================
-// BuildingAddPopup — 건물 추가 팝업 (카탈로그에서 선택)
-// =============================================================================
-// [담당] Core Gameplay (윤호영)
-//
-// [역할] 건물 리스트의 [+] 버튼이 여는 팝업. 추가 가능한 건물 종류(카탈로그)를
-//        버튼 리스트로 보여주고, 하나를 선택하면 마을에 그 건물을 추가한다.
-//        추가 후 onAdded 콜백으로 건물 리스트를 갱신하고 팝업을 닫는다.
-// =============================================================================
-
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-/// <summary>건물 추가 팝업 — 카탈로그 리스트에서 선택.</summary>
+/// <summary>
+/// `마을 꾸미기` 팝업의 카탈로그를 프리팹 설정과 런타임 Registry로 조합한다.
+/// 버튼 GameObject를 프리팹에 고정하지 않고 Section 정의에서 생성하여 카테고리 확장을 허용한다.
+/// </summary>
+/// <remarks>
+/// RegistryBuildings는 기존 건설 흐름을 유지하고, InspectorEntries는 아직 데이터 타입이 확정되지 않은
+/// 환경 메뉴의 임시 확장 지점이다. 실제 환경 SO 정책이 정해지면 개별 UnityEvent 대신 공통 선택 처리기로
+/// 데이터를 전달하되, ScrollView와 Section 생성 책임은 이 클래스에 남긴다.
+/// </remarks>
 public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 {
-    [SerializeField] private RectTransform content;   // 카탈로그 항목이 쌓일 곳
+    /// <summary>Section 항목을 어디서 구성할지 결정하며 UI가 데이터 원본을 추측하지 않게 한다.</summary>
+    public enum SectionContentSource
+    {
+        RegistryBuildings,
+        InspectorEntries
+    }
+
+    [Serializable]
+    /// <summary>
+    /// InspectorEntries가 생성할 표시용 항목이다. 현재 selected는 임시 연결 지점이며,
+    /// 환경 데이터 형식 확정 후 안정적인 ID와 데이터 참조 기반 선택 계약으로 교체할 예정이다.
+    /// </summary>
+    public sealed class MenuEntry
+    {
+        public string label = "새 항목";
+        public bool interactable = true;
+        public UnityEvent selected = new UnityEvent();
+    }
+
+    [Serializable]
+    public sealed class MenuSection
+    {
+        public string title = "새 카테고리";
+        public bool initiallyExpanded = true;
+        public SectionContentSource contentSource;
+        public List<MenuEntry> entries = new List<MenuEntry>();
+    }
+
+    [Header("목록")]
+    [SerializeField] private RectTransform content;
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private float itemHeight = 60f;
+    [SerializeField] private TMP_Text headerText;
+    [SerializeField] private List<MenuSection> sections = new List<MenuSection>();
 
-    // 비용 건설 경로에서는 직접 건물을 추가하지 않고 선택한 BuildData를 Detail/Confirm UI에 전달한다.
+    [Header("편집 모드 버튼 Prefab")]
+    [SerializeField] private Button editModeButtonPrefab;
+
+    [Header("건물 상세")]
     [SerializeField] private BuildingPopupRuntimeBinding popupRuntimeBinding;
 
-    // 기존 무료 즉시 추가 경로와 신규 비용 검증 경로를 함께 보존하기 위한 실행 모드다.
-    // true: AddOrUpgrade 즉시 실행, false: Detail Popup 표시
+    private readonly Dictionary<int, bool> expandedSections = new Dictionary<int, bool>();
+    private BuildingPlacementController placementController;
+    private Button headerEditModeButton;
     private bool useImmediateAdd;
-
     private Action onAdded;
 
-    /// <summary>
-    /// 기존 즉시 추가 경로로 Popup을 연다.
-    /// 초기 구성, 디버그 또는 명시적인 무료 추가 호출의 기존 동작을 보존한다.
-    /// </summary>
+    private void Awake()
+    {
+        placementController = FindAnyObjectByType<BuildingPlacementController>();
+        EnsureDefaultSections();
+        ResolveHeader();
+    }
+
+    /// <summary>팝업 인스턴스가 재사용되어도 이전 펼침 상태가 다음 진입에 누출되지 않게 한다.</summary>
+    private void OnDisable()
+    {
+        // Reset transient accordion state whenever the popup is closed.
+        expandedSections.Clear();
+    }
+
     public void Open(Action onAddedCallback)
     {
-
         CancelPlacementSelection();
         useImmediateAdd = true;
         onAdded = onAddedCallback;
-        gameObject.SetActive(true);
-        transform.SetAsLastSibling();
-        BuildCatalog();
+        OpenInternal();
     }
 
-    /// <summary>
-    /// 비용 검증이 필요한 사용자 건설 경로로 Popup을 연다.
-    /// 항목 선택 시 AddOrUpgrade를 호출하지 않고 Detail Popup을 표시한다.
-    /// </summary>
     public void Open()
     {
-
         CancelPlacementSelection();
         useImmediateAdd = false;
-        // 이전에 즉시 추가 모드로 열었을 때 받은 콜백이 비용 건설 경로에서 실행되지 않게 한다.
         onAdded = null;
-
-        gameObject.SetActive(true);
-        transform.SetAsLastSibling();
-        BuildCatalog();
+        OpenInternal();
     }
 
-    /// <summary>팝업 닫기.</summary>
     public void Close()
     {
         gameObject.SetActive(false);
     }
 
-/// <summary>
-    /// Popup 바깥의 실제 Backdrop(root Image)을 클릭했을 때만 닫는다.
-    /// Card와 내부 버튼 클릭은 자식 Graphic이 Raycast를 받으므로 여기서 닫히지 않는다.
-    /// </summary>
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData != null && eventData.pointerCurrentRaycast.gameObject == gameObject)
-        {
             Close();
+    }
+
+    private void OpenInternal()
+    {
+        gameObject.SetActive(true);
+        transform.SetAsLastSibling();
+        ResolveHeader();
+        BuildCatalog();
+    }
+
+    private void ResolveHeader()
+    {
+        if (headerText == null)
+        {
+            foreach (TMP_Text candidate in GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (candidate != null && candidate.text == "건물 추가")
+                {
+                    headerText = candidate;
+                    break;
+                }
+            }
         }
+
+        if (headerText != null)
+            headerText.text = "마을 꾸미기";
+    }
+
+    private void EnsureDefaultSections()
+    {
+        if (sections == null)
+            sections = new List<MenuSection>();
+        if (sections.Count > 0)
+            return;
+
+        sections.Add(new MenuSection
+        {
+            title = "건물",
+            initiallyExpanded = false,
+            contentSource = SectionContentSource.RegistryBuildings
+        });
+        sections.Add(new MenuSection
+        {
+            title = "환경",
+            initiallyExpanded = false,
+            contentSource = SectionContentSource.InspectorEntries
+        });
     }
 
     private void CancelPlacementSelection()
     {
-        // OnGUI 회전 버튼은 Canvas 정렬과 무관하므로 Popup을 열기 전에 선택 자체를 종료해야 한다.
-        BuildingPlacementController placementController = FindAnyObjectByType<BuildingPlacementController>();
+        ResolvePlacementController();
         placementController?.CancelPlacementSelection();
     }
 
+    private void ResolvePlacementController()
+    {
+        if (placementController == null)
+            placementController = FindAnyObjectByType<BuildingPlacementController>();
+    }
 
     private void BuildCatalog()
     {
-        if (content == null) return;
-        // 기존 항목 즉시 제거
+        if (content == null)
+            return;
+
         for (int i = content.childCount - 1; i >= 0; i--)
         {
             Transform child = content.GetChild(i);
@@ -100,79 +176,219 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             Destroy(child.gameObject);
         }
 
-        VillageBuildingRegistry reg = VillageBuildingRegistry.Instance;
-        if (reg == null) return;
+        ResolvePlacementController();
+        CreateHeaderEditModeControls();
 
-        for (int i = 0; i < reg.CatalogCount; i++)
+        for (int sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
         {
-            int idx = i;   // 캡처 방지
-            // 있는 건물 = Lv.n, 없는 건물 = Lv.0
-            Button row = CreateRow($"{reg.GetCatalogName(i)}  Lv.{reg.GetCatalogLevel(i)}");
-            row.onClick.AddListener(() =>
+            MenuSection section = sections[sectionIndex];
+            if (section == null)
+                continue;
+
+            if (!expandedSections.TryGetValue(sectionIndex, out bool expanded))
             {
-                if (useImmediateAdd)
-                {
-                    // 기존 호출자를 위한 명시적 무료 추가 경로. 비용 트랜잭션 성공 후에는 사용하지 않는다.
-                    reg.AddOrUpgrade(idx); // 있으면 레벨업, 없으면 신축(Lv.1)
+                expanded = section.initiallyExpanded;
+                expandedSections[sectionIndex] = expanded;
+            }
 
-                    if (onAdded != null)
-                    {
-                        onAdded.Invoke();
-                    }
-
-                    Close();
-                    return;
-                }
-
-                // 일반 사용자 건설은 여기서 상태를 변경하지 않고 Popup에 선택 정보만 전달한다.
-                BuildData buildData = reg.GetCatalogBuildData(idx);
-
-                if(buildData == null)
-                {
-                    Debug.LogError($"BuildingAddPopup: no BuildData is assigned to catalog index {idx}.", this);
-                    return;
-                }
-
-                if(popupRuntimeBinding == null)
-                {
-                    Debug.LogError("BuildingAddPopup: BuildingPopupRuntimeBinding is not assigned.", this);
-                    return;
-                }
-
-                int currentLevel = reg.GetCatalogLevel(idx);
-
-                popupRuntimeBinding.OpenDetail(buildData, currentLevel);
-
-                Close();
+            int capturedSection = sectionIndex;
+            Button header = CreateRow(
+                $"{(expanded ? "▼" : "▶")}  {section.title}",
+                new Color(0.47f, 0.55f, 0.45f),
+                false);
+            header.onClick.AddListener(() =>
+            {
+                expandedSections[capturedSection] = !expandedSections[capturedSection];
+                BuildCatalog();
             });
+
+            if (!expanded)
+                continue;
+
+            if (section.contentSource == SectionContentSource.RegistryBuildings)
+                CreateRegistryBuildingRows();
+
+            CreateInspectorRows(section);
         }
     }
 
-    private Button CreateRow(string label)
+    /// <summary>
+    /// 편집 진입 버튼은 스크롤 Content가 아닌 헤더에 생성한다.
+    /// 상태 종료/저장은 별도 UI가 맡도록 여기서는 EnterEditMode와 팝업 닫기만 수행한다.
+    /// </summary>
+    private void CreateHeaderEditModeControls()
     {
-        GameObject go = new GameObject("CatalogRow",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(LayoutElement));
+        bool editing = placementController != null && placementController.IsEditMode;
+        if (headerEditModeButton == null)
+            // Keep the entry button visually paired with the existing Close button (120 x 56).
+            // A narrower width wraps the Korean label and makes the header controls look unrelated.
+            headerEditModeButton = CreateHeaderButton(editModeButtonPrefab, "\uD3B8\uC9D1\uBAA8\uB4DC", 120f);
+        headerEditModeButton.onClick.RemoveAllListeners();
+        headerEditModeButton.onClick.AddListener(() =>
+        {
+            ResolvePlacementController();
+            placementController?.EnterEditMode();
+            // Close the catalog immediately so it does not block village edit input.
+            Close();
+        });
+        headerEditModeButton.gameObject.SetActive(true);
+        headerEditModeButton.interactable = !editing;
+    }
+
+    private Button CreateHeaderButton(Button prefab, string label, float width)
+    {
+        Transform header = headerText != null ? headerText.transform.parent : transform;
+        Button button = prefab != null
+            ? Instantiate(prefab, header, false)
+            : CreateRow(label, new Color(0.31f, 0.61f, 0.35f), false);
+        button.name = prefab != null ? prefab.name : label;
+        RectTransform rect = button.GetComponent<RectTransform>();
+        rect.SetParent(header, false);
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(16f, -16f);
+        rect.sizeDelta = new Vector2(width, 56f);
+        LayoutElement layout = button.GetComponent<LayoutElement>();
+        if (layout != null)
+            Destroy(layout);
+        TMP_Text text = button.GetComponentInChildren<TMP_Text>(true);
+        if (text != null)
+        {
+            text.text = label;
+            text.fontSize = 22f;
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 16f;
+            text.fontSizeMax = 22f;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.alignment = TextAlignmentOptions.Center;
+            if (font != null)
+                text.font = font;
+        }
+        return button;
+    }    private void CreateRegistryBuildingRows()
+    {
+        VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
+        if (registry == null)
+            return;
+
+        for (int i = 0; i < registry.CatalogCount; i++)
+        {
+            int catalogIndex = i;
+            Button row = CreateRow(
+                $"{registry.GetCatalogName(i)}  Lv.{registry.GetCatalogLevel(i)}",
+                new Color(0.78f, 0.79f, 0.75f),
+                true);
+            row.onClick.AddListener(() => SelectRegistryBuilding(registry, catalogIndex));
+        }
+    }
+
+    private void CreateInspectorRows(MenuSection section)
+    {
+        if (section.entries == null)
+            return;
+
+        foreach (MenuEntry entry in section.entries)
+        {
+            if (entry == null)
+                continue;
+
+            Button row = CreateRow(
+                $"{entry.label}",
+                new Color(0.72f, 0.76f, 0.70f),
+                true);
+            row.interactable = entry.interactable;
+            row.onClick.AddListener(() => entry.selected?.Invoke());
+        }
+    }
+
+    private void SelectRegistryBuilding(VillageBuildingRegistry registry, int catalogIndex)
+    {
+        if (useImmediateAdd)
+        {
+            registry.AddOrUpgrade(catalogIndex);
+            onAdded?.Invoke();
+            Close();
+            return;
+        }
+
+        BuildData buildData = registry.GetCatalogBuildData(catalogIndex);
+        if (buildData == null)
+        {
+            Debug.LogError($"BuildingAddPopup: no BuildData is assigned to catalog index {catalogIndex}.", this);
+            return;
+        }
+
+        if (popupRuntimeBinding == null)
+        {
+            Debug.LogError("BuildingAddPopup: BuildingPopupRuntimeBinding is not assigned.", this);
+            return;
+        }
+
+        popupRuntimeBinding.OpenDetail(buildData, registry.GetCatalogLevel(catalogIndex));
+        Close();
+    }
+
+    private Button CreateFromPrefab(Button prefab, string label, Color fallbackColor)
+    {
+        if (prefab == null)
+            return CreateRow(label, fallbackColor, false);
+
+        Button button = Instantiate(prefab, content, false);
+        button.gameObject.SetActive(true);
+        button.name = prefab.name;
+        LayoutElement layout = button.GetComponent<LayoutElement>();
+        if (layout == null)
+            layout = button.gameObject.AddComponent<LayoutElement>();
+        layout.minHeight = itemHeight;
+
+        TMP_Text text = button.GetComponentInChildren<TMP_Text>(true);
+        if (text != null)
+        {
+            text.text = label;
+            if (font != null)
+                text.font = font;
+        }
+        return button;
+    }
+
+    private Button CreateRow(string label, Color background, bool childRow)
+    {
+        GameObject go = new GameObject(
+            childRow ? "CategoryItem" : "CategoryHeader",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(Button),
+            typeof(LayoutElement));
         go.transform.SetParent(content, false);
         go.GetComponent<LayoutElement>().minHeight = itemHeight;
 
-        Image img = go.GetComponent<Image>();
-        img.color = new Color(0.78f, 0.79f, 0.75f);
-        Button btn = go.GetComponent<Button>();
-        btn.targetGraphic = img;
+        Image image = go.GetComponent<Image>();
+        image.color = background;
+        Button button = go.GetComponent<Button>();
+        button.targetGraphic = image;
 
-        GameObject lgo = new GameObject("Label", typeof(RectTransform));
-        lgo.transform.SetParent(go.transform, false);
-        RectTransform lr = lgo.GetComponent<RectTransform>();
-        lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-        lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
-        TextMeshProUGUI t = lgo.AddComponent<TextMeshProUGUI>();
-        t.font = font;
-        t.text = label;
-        t.fontSize = 30f;
-        t.alignment = TextAlignmentOptions.Center;
-        t.color = new Color(0.2f, 0.2f, 0.2f);
-        t.raycastTarget = false;
+        GameObject labelObject = new GameObject("Label", typeof(RectTransform));
+        labelObject.transform.SetParent(go.transform, false);
+        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = new Vector2(6f, 0f);
+        labelRect.offsetMax = new Vector2(-6f, 0f);
 
-        return btn;
+        TextMeshProUGUI text = labelObject.AddComponent<TextMeshProUGUI>();
+        text.font = font;
+        text.text = label;
+        text.fontSize = childRow ? 27f : 29f;
+        text.alignment = TextAlignmentOptions.Center;
+        text.enableAutoSizing = true;
+        text.fontSizeMin = 18f;
+        text.fontSizeMax = childRow ? 27f : 29f;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.color = new Color(0.16f, 0.18f, 0.16f);
+        text.raycastTarget = false;
+        return button;
     }
 }

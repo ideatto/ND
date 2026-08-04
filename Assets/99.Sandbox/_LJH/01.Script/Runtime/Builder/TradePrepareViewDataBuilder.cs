@@ -113,7 +113,7 @@ public sealed class TradePrepareViewDataBuilder
 
         TradePrepareConditionInput conditionInput = new TradePrepareConditionInput
         {
-            isTradeAlreadyActive = IsTradeAlreadyActive(saveData),
+            isTradeAlreadyActive = IsTradeAlreadyActive(saveData, draft.departureCaravanId),
             // Do not break the existing single-Caravan scene before its multi-Caravan Provider is connected.
             // Once options exist, TradePrepareUI must choose one before departure can be requested.
             isDepartureCaravanSelectionRequired = context.caravanOptions != null && context.caravanOptions.Length > 0,
@@ -262,7 +262,10 @@ public sealed class TradePrepareViewDataBuilder
                 maxDurability = wagon.MaxDurability,
                 inventorySlotCount = wagon.InventorySlotCount
             } : null,
-            currentDurability = GetCurrentDurability(saveData, wagon)
+            // S3 owns the selected Caravan instance state in multi-Caravan flows.
+            currentDurability = draft != null && draft.hasAuthoritativeCaravanComposition
+                ? Math.Max(0, draft.selectedWagonCurrentDurability)
+                : GetCurrentDurability(saveData, wagon)
         };
 
         float draftAnimalFoodWeight = 0f;
@@ -612,15 +615,17 @@ public sealed class TradePrepareViewDataBuilder
 
             if (isCurrent)
             {
-                disableReason = unlocked ? "ÇöÀç µµ½ÃÀÔ´Ï´Ù." : "ÇöÀç µµ½Ã°¡ Àá±İ »óÅÂÀÔ´Ï´Ù. ¼¼ÀÌºê µ¥ÀÌÅÍÀÇ È®ÀÎÀ» ºÎÅ¹µå¸³´Ï´Ù.";
+                disableReason = unlocked
+                    ? "í˜„ì¬ ë„ì‹œì…ë‹ˆë‹¤."
+                    : "í˜„ì¬ ë„ì‹œê°€ ì ê¸ˆ ìƒíƒœì…ë‹ˆë‹¤. ì„¸ì´ë¸Œ ë°ì´í„°ì˜ í™•ì¸ì„ ë¶€íƒë“œë¦½ë‹ˆë‹¤.";
             }
             else if (!unlocked)
             {
-                disableReason = "µµ½Ã°¡ Àá±İ »óÅÂÀÔ´Ï´Ù.";
+                disableReason = "ë„ì‹œê°€ ì ê¸ˆ ìƒíƒœì…ë‹ˆë‹¤.";
             }
             else if (!hasSelectableRoute)
             {
-                disableReason = "¼±ÅÃ °¡´ÉÇÑ ·çÆ®°¡ ¾ø½À´Ï´Ù.";
+                disableReason = "ì„ íƒ ê°€ëŠ¥í•œ ë£¨íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤.";
             }
             else
             {
@@ -670,19 +675,19 @@ public sealed class TradePrepareViewDataBuilder
 
             if (!currentTownUnlocked)
             {
-                disableReason = "ÇöÀç µµ½Ã°¡ Àá±İ »óÅÂÀÔ´Ï´Ù.";
+                disableReason = "í˜„ì¬ ë„ì‹œê°€ ì ê¸ˆ ìƒíƒœì…ë‹ˆë‹¤.";
             }
             else if (destinationTown == null)
             {
-                disableReason = "µµÂøÁö°¡ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.";
+                disableReason = "ë„ì°©ì§€ê°€ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.";
             }
             else if (!destinationTownUnlocked)
             {
-                disableReason = "µµÂøÁö°¡ Àá±İ »óÅÂÀÔ´Ï´Ù.";
+                disableReason = "ë„ì°©ì§€ê°€ ì ê¸ˆ ìƒíƒœì…ë‹ˆë‹¤.";
             }
             else if (!routeUnlocked)
             {
-                disableReason = "°æ·Î°¡ Àá±İ »óÅÂÀÔ´Ï´Ù.";
+                disableReason = "ê²½ë¡œê°€ ì ê¸ˆ ìƒíƒœì…ë‹ˆë‹¤.";
             }
             else
             {
@@ -1201,15 +1206,30 @@ public sealed class TradePrepareViewDataBuilder
         return saveData != null && saveData.player != null ? saveData.player.tradingCurrency : 0L;
     }
 
-    private static bool IsTradeAlreadyActive(ND.Framework.SaveData saveData)
+    private static bool IsTradeAlreadyActive(
+        ND.Framework.SaveData saveData,
+        string departureCaravanId)
     {
-        if (saveData == null || saveData.tradeProgress == null)
-        {
+        if (saveData == null)
             return false;
+
+        // Multi-Caravan preparation must only reject the Caravan selected for this departure.
+        // Another Caravan traveling or awaiting settlement is an independent valid lifecycle.
+        if (!string.IsNullOrWhiteSpace(departureCaravanId))
+        {
+            return ND.Framework.SaveDataLookup.TryGetTradeProgress(
+                       saveData,
+                       departureCaravanId.Trim(),
+                       out ND.Framework.TradeProgressSaveData selectedProgress)
+                   && selectedProgress != null
+                   && (selectedProgress.state == ND.Framework.TradeProgressState.Traveling
+                       || selectedProgress.state == ND.Framework.TradeProgressState.SettlementPending);
         }
 
-        return saveData.tradeProgress.state == ND.Framework.TradeProgressState.Traveling
-            || saveData.tradeProgress.state == ND.Framework.TradeProgressState.SettlementPending;
+        // Keep the legacy single-Caravan contract until every old scene supplies an explicit ID.
+        return saveData.tradeProgress != null
+               && (saveData.tradeProgress.state == ND.Framework.TradeProgressState.Traveling
+                   || saveData.tradeProgress.state == ND.Framework.TradeProgressState.SettlementPending);
     }
 
     private static long ReadDevelopmentCurrency(ND.Framework.SaveData saveData)

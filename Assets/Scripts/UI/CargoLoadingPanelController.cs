@@ -8,6 +8,10 @@ using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+/// <summary>
+/// S4 적재 화면의 렌더링과 사용자 선택 초안만 소유한다.
+/// 저장 Cargo, 시장 예약, 통화의 단일 원본은 Runtime/Framework 계층에 있으며 이 UI는 완전한 선택 Snapshot을 전달한다.
+/// </summary>
 public sealed class CargoLoadingPanelController : MonoBehaviour
 {
     /// <summary>
@@ -85,8 +89,30 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private sealed class LoadedLine
     {
         public TradeItemData Item;
+        public TradeItemViewData SavedItem;
         public int Quantity;
         public long UnitPrice;
+        public bool IsSaved;
+
+        public string ItemId => Item != null ? Item.ItemId : SavedItem?.itemId ?? string.Empty;
+        public Sprite Icon => Item != null ? Item.Icon : SavedItem?.icon;
+        public float Weight => Item != null ? Item.Weight : Mathf.Max(0f, SavedItem?.unitWeight ?? 0f);
+        public TradeItemCategory Category => Item != null ? Item.Category : SavedItem?.category ?? default;
+        public bool CanStack => Item != null ? Item.CanStack : true;
+        public int MaxCount => Item != null ? Item.MaxCount : int.MaxValue;
+        public long BaseSellPrice => Item != null ? Item.BaseSellPrice : Math.Max(0L, SavedItem?.sellPrice ?? 0L);
+        public bool HasItem => !string.IsNullOrWhiteSpace(ItemId);
+    }
+
+    /// <summary>
+    /// Presentation-only projection. Persisted Cargo and Market reservations stay as separate
+    /// LoadedLine records, while equal item IDs occupy one visible slot with a combined quantity.
+    /// </summary>
+    private sealed class LoadedSlotView
+    {
+        public string ItemId;
+        public LoadedLine PresentationLine;
+        public int Quantity;
     }
 
     private readonly List<LoadedLine> loadedLines = new List<LoadedLine>();
@@ -151,17 +177,41 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         : selectedWagon == null
             ? loadedSlots.Length
             : selectedWagon.InventorySlotCount;
-    public float CurrentLoad => loadedLines.Sum(line => line.Item == null ? 0f : line.Item.Weight * line.Quantity);
+    public float CurrentLoad => loadedLines.Sum(line => !line.HasItem ? 0f : line.Weight * line.Quantity);
+    public float SavedLoad => loadedLines.Where(line => line.IsSaved && line.HasItem)
+        .Sum(line => line.Weight * line.Quantity);
+    public float ReservedLoad => loadedLines.Where(line => !line.IsSaved && line.HasItem)
+        .Sum(line => line.Weight * line.Quantity);
     public float MaximumLoad => GetCoreMaximumLoad();
     public int LoadedFood => loadedLines
-        .Where(line => line.Item != null && IsFood(line.Item))
+        .Where(line => line.HasItem && IsFood(line))
         .Sum(line => line.Quantity);
     public bool CanProceed => (TryCommitDetachedCargoPlan != null
             ? cargoEditingEnabled
             : (CanCommitCargoTransaction?.Invoke() ?? pendingPurchaseCost <= currentGold))
         && CurrentLoad <= MaximumLoad + 0.0001f
         && LoadedSlotCount <= InventorySlotLimit;
-    private int LoadedSlotCount => loadedLines.Count(line => line.Item != null && line.Quantity > 0);
+    private int LoadedSlotCount => CalculateProjectedSlotCount();
+
+    private int SavedSlotCount => loadedLines
+        .Where(line => line.IsSaved && line.HasItem && line.Quantity > 0)
+        .GroupBy(line => line.ItemId, StringComparer.Ordinal)
+        .Sum(group => RequiredSlots(group.Sum(line => line.Quantity), group.First().CanStack, group.First().MaxCount));
+
+    private int CalculateProjectedSlotCount()
+    {
+        return loadedLines
+            .Where(line => line.HasItem && line.Quantity > 0)
+            .GroupBy(line => line.ItemId, StringComparer.Ordinal)
+            .Sum(group => RequiredSlots(group.Sum(line => line.Quantity), group.First().CanStack, group.First().MaxCount));
+    }
+
+    private static int RequiredSlots(int quantity, bool canStack, int maxCount)
+    {
+        int stack = canStack ? Mathf.Max(1, maxCount) : 1;
+        return quantity <= 0 ? 0 : (quantity + stack - 1) / stack;
+    }
+
     public long MercenaryBudget => ProjectedCurrencyAfterCargoTransaction != null
         ? Math.Max(0L, ProjectedCurrencyAfterCargoTransaction())
         : Math.Max(0L, currentGold - pendingPurchaseCost);
@@ -260,6 +310,29 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// Restores cargo quantities already held by the authoritative preparation draft.
     /// Configure clears presentation state first, so returning to S4 must rebuild it.
     /// </summary>
+    /// <summary>
+    /// Restores persisted Cargo from Provider-owned ViewData. Saved lines remain read-only
+    /// until the detached command commits the combined final snapshot.
+    /// </summary>
+    public void RestoreSavedCargo(
+        IReadOnlyList<TradeItemViewData> savedItems,
+        bool notifyChange = false)
+    {
+        if (savedItems == null)
+            return;
+
+        foreach (TradeItemViewData item in savedItems)
+        {
+            if (item == null || item.ownedAmount <= 0 || string.IsNullOrWhiteSpace(item.itemId))
+                continue;
+
+            TryAddSavedQuantity(item, item.ownedAmount);
+        }
+
+        RefreshAll();
+        if (notifyChange)
+            NotifyLoadChanged();
+    }
     public void RestoreSelectedCargo(
         IReadOnlyList<TradeItemViewData> selectedItems,
         bool useOwnedCargo = false,
@@ -288,7 +361,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                     shopItems[shopIndex],
                     quantity,
                     unitPrice,
-                    ignoreSlotCapacity: useOwnedCargo))
+                    ignoreSlotCapacity: useOwnedCargo,
+                    isSaved: useOwnedCargo))
                 continue;
 
             if (!useOwnedCargo)
@@ -400,7 +474,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         int nextSlotLimit = wagon == null
             ? loadedSlots.Length
             : wagon.InventorySlotCount;
-        int usedSlotCount = loadedLines.Count(line => line.Item != null && line.Quantity > 0);
+        int usedSlotCount = loadedLines.Count(line => line.HasItem && line.Quantity > 0);
 
         if (usedSlotCount > nextSlotLimit)
         {
@@ -453,14 +527,14 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     public TradeItemBundle[] BuildTradeItemBundles()
     {
         return loadedLines
-            .Where(line => line.Item != null && line.Quantity > 0)
-            .GroupBy(line => line.Item)
+            .Where(line => line.HasItem && line.Quantity > 0)
+            .GroupBy(line => line.ItemId, StringComparer.Ordinal)
             .Select(group => new TradeItemBundle
             {
-                itemId = group.Key.ItemId,
+                itemId = group.Key,
                 quantity = group.Sum(line => line.Quantity),
                 purchaseUnitPrice = group.First().UnitPrice,
-                sellUnitPrice = group.Key.BaseSellPrice
+                sellUnitPrice = group.First().BaseSellPrice
             })
             .ToArray();
     }
@@ -469,8 +543,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     public CargoSelection[] BuildCargoSelections()
     {
         return loadedLines
-            .Where(line => line.Item != null && line.Quantity > 0)
-            .GroupBy(line => line.Item.ItemId)
+            .Where(line => line.HasItem && line.Quantity > 0)
+            .GroupBy(line => line.ItemId)
             .Select(group => new CargoSelection
             {
                 itemId = group.Key ?? string.Empty,
@@ -559,31 +633,30 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     public void DecrementLoadedSlot(int slotIndex)
     {
-        if (!cargoEditingEnabled)
-            return;
-
-        LoadedLine line = GetVisibleLoadedLine(slotIndex);
-        if (line == null)
-            return;
-
+        if (!cargoEditingEnabled) return;
+        LoadedLine line = GetVisibleReservedLine(slotIndex);
+        if (line == null) return;
         ReturnToShop(line, 1);
         RefreshAll();
-        // Publish the complete snapshot because one unit may remove the final visible stack.
         NotifyLoadChanged();
     }
 
     public void ClearLoadedSlot(int slotIndex)
     {
-        if (!cargoEditingEnabled)
-            return;
+        if (!cargoEditingEnabled) return;
+        LoadedSlotView slot = GetVisibleLoadedSlot(slotIndex);
+        if (slot == null) return;
 
-        LoadedLine line = GetVisibleLoadedLine(slotIndex);
-        if (line == null)
-            return;
-
-        ReturnToShop(line, line.Quantity);
+        // Warehouse/persisted Cargo is read-only in the Market screen. A right click cancels
+        // every purchase reservation for this item ID and leaves the saved baseline untouched.
+        LoadedLine[] reservations = loadedLines
+            .Where(line => !line.IsSaved
+                && line.Quantity > 0
+                && string.Equals(line.ItemId, slot.ItemId, StringComparison.Ordinal))
+            .ToArray();
+        foreach (LoadedLine reservation in reservations)
+            ReturnToShop(reservation, reservation.Quantity);
         RefreshAll();
-        // A removed slot must also remove its item from Runtime Draft.
         NotifyLoadChanged();
     }
 
@@ -618,6 +691,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             ? Array.Empty<RectTransform>()
             : loadedGrid.Cast<Transform>().OfType<RectTransform>().ToArray();
     }
+
 
     private void EnsureDynamicSlots()
     {
@@ -841,6 +915,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             text.color = new Color32(45, 40, 39, 255);
         }
     }
+
 
     private void SetRect(string objectName, Vector2 size, Vector2 position)
     {
@@ -1103,7 +1178,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private void RefreshLoadedSlots()
     {
-        List<LoadedLine> visibleLines = loadedLines.Where(line => line.Quantity > 0).ToList();
+        List<LoadedSlotView> visibleLines = BuildLoadedSlotViews();
 
         for (int i = 0; i < loadedSlots.Length; i++)
         {
@@ -1113,7 +1188,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 continue;
 
             bool hasLine = i < visibleLines.Count;
-            LoadedLine line = hasLine ? visibleLines[i] : null;
+            LoadedSlotView slot = hasLine ? visibleLines[i] : null;
+            LoadedLine line = slot?.PresentationLine;
             Image icon = FindDeepChild(loadedSlots[i], "ItemIcon")?.GetComponent<Image>();
             TMP_Text quantity = FindDeepChild(loadedSlots[i], "QuantityText")?.GetComponent<TMP_Text>();
             TMP_Text foodBadge = FindDeepChild(loadedSlots[i], "FoodBadge")?.GetComponent<TMP_Text>();
@@ -1121,8 +1197,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             if (icon != null)
             {
                 icon.enabled = hasLine;
-                icon.sprite = hasLine ? line.Item.Icon : null;
-                icon.color = hasLine && line.Item.Icon == null
+                icon.sprite = hasLine ? line.Icon : null;
+                icon.color = hasLine && line.Icon == null
                     ? new Color(0.24f, 0.27f, 0.31f)
                     : Color.white;
                 icon.preserveAspect = true;
@@ -1130,20 +1206,21 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
             bool detached = TryCommitDetachedCargoPlan != null;
             if (quantity != null)
-                quantity.text = hasLine && !detached ? line.Quantity.ToString() : string.Empty;
+                quantity.text = hasLine && !detached ? slot.Quantity.ToString() : string.Empty;
 
             if (foodBadge != null)
             {
-                bool showBadge = hasLine && (detached || IsFood(line.Item));
+                bool showBadge = hasLine && (detached || IsFood(line));
                 foodBadge.gameObject.SetActive(showBadge);
                 foodBadge.text = !showBadge
                     ? string.Empty
-                    : detached ? line.Quantity.ToString() : "먹이";
+                    : detached ? slot.Quantity.ToString() : "먹이";
             }
         }
 
         UpdateGridContentHeight(loadedGrid, InventorySlotLimit);
     }
+
 
     private void UpdateGridContentHeight(RectTransform grid, int visibleSlotCount)
     {
@@ -1356,7 +1433,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (item == null)
             return 0;
 
-        int usedSlotCount = loadedLines.Count(line => line.Item != null && line.Quantity > 0);
+        int usedSlotCount = loadedLines.Count(line => line.HasItem && line.Quantity > 0);
         int emptySlotCount = Mathf.Max(0, InventorySlotLimit - usedSlotCount);
 
         if (!item.CanStack)
@@ -1435,10 +1512,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         foreach (LoadedLine line in loadedLines)
         {
-            if (line == null || line.Item == null || line.Quantity <= 0)
+            if (line == null || !line.HasItem || line.Quantity <= 0)
                 continue;
 
-            string itemId = line.Item.ItemId;
+            string itemId = line.ItemId;
             if (string.IsNullOrWhiteSpace(itemId))
                 continue;
 
@@ -1467,46 +1544,51 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         });
     }
 
-    private bool TryAddLoadedQuantity(
-        TradeItemData item,
-        int quantity,
-        long unitPrice,
-        bool ignoreSlotCapacity = false)
+    private bool TryAddLoadedQuantity(TradeItemData item, int quantity, long unitPrice, bool ignoreSlotCapacity = false, bool isSaved = false)
     {
-        if (item == null || quantity <= 0 ||
-            (!ignoreSlotCapacity && GetAvailableSlotCapacity(item) < quantity))
-            return false;
-
+        if (item == null || quantity <= 0 || (!ignoreSlotCapacity && GetAvailableSlotCapacity(item) < quantity)) return false;
         int remaining = quantity;
         int stackLimit = item.CanStack ? item.MaxCount : 1;
-
         if (item.CanStack)
         {
-            foreach (LoadedLine line in loadedLines.Where(line => line.Item == item && line.Quantity < stackLimit))
+            foreach (LoadedLine line in loadedLines.Where(line => line.Item == item && line.IsSaved == isSaved && line.Quantity < stackLimit))
             {
                 int added = Mathf.Min(stackLimit - line.Quantity, remaining);
                 line.Quantity += added;
                 remaining -= added;
-
-                if (remaining <= 0)
-                    return true;
+                if (remaining <= 0) return true;
             }
         }
-
         while (remaining > 0)
         {
             int added = Mathf.Min(stackLimit, remaining);
-            loadedLines.Add(new LoadedLine
-            {
-                Item = item,
-                Quantity = added,
-                UnitPrice = unitPrice
-            });
+            loadedLines.Add(new LoadedLine { Item = item, Quantity = added, UnitPrice = unitPrice, IsSaved = isSaved });
             remaining -= added;
         }
-
         return true;
     }
+    private void TryAddSavedQuantity(TradeItemViewData item, int quantity)
+    {
+        if (item == null || quantity <= 0 || string.IsNullOrWhiteSpace(item.itemId))
+            return;
+
+        LoadedLine existing = loadedLines.FirstOrDefault(line =>
+            line.IsSaved && string.Equals(line.ItemId, item.itemId, StringComparison.Ordinal));
+        if (existing != null)
+        {
+            existing.Quantity += quantity;
+            return;
+        }
+
+        loadedLines.Add(new LoadedLine
+        {
+            SavedItem = item,
+            Quantity = quantity,
+            UnitPrice = 0L,
+            IsSaved = true
+        });
+    }
+
 
     private void ReturnToShop(LoadedLine line, int requestedCount)
     {
@@ -1525,12 +1607,36 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             loadedLines.Remove(line);
     }
 
-    private LoadedLine GetVisibleLoadedLine(int slotIndex)
+    private List<LoadedSlotView> BuildLoadedSlotViews()
     {
         return loadedLines
-            .Where(line => line.Quantity > 0)
-            .Skip(slotIndex)
-            .FirstOrDefault();
+            .Where(line => line.HasItem && line.Quantity > 0)
+            .GroupBy(line => line.ItemId, StringComparer.Ordinal)
+            .Select(group => new LoadedSlotView
+            {
+                ItemId = group.Key,
+                PresentationLine = group.FirstOrDefault(line => line.IsSaved) ?? group.First(),
+                Quantity = group.Sum(line => line.Quantity)
+            })
+            .ToList();
+    }
+
+    private LoadedSlotView GetVisibleLoadedSlot(int slotIndex)
+    {
+        if (slotIndex < 0)
+            return null;
+        List<LoadedSlotView> slots = BuildLoadedSlotViews();
+        return slotIndex < slots.Count ? slots[slotIndex] : null;
+    }
+
+    private LoadedLine GetVisibleReservedLine(int slotIndex)
+    {
+        LoadedSlotView slot = GetVisibleLoadedSlot(slotIndex);
+        return slot == null
+            ? null
+            : loadedLines.FirstOrDefault(line => !line.IsSaved
+                && line.Quantity > 0
+                && string.Equals(line.ItemId, slot.ItemId, StringComparison.Ordinal));
     }
 
     private void ResetCargo()
@@ -1560,9 +1666,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         }));
     }
 
-    private static bool IsFood(TradeItemData item)
+    private static bool IsFood(LoadedLine line)
     {
-        return item != null && item.Category == TradeItemCategory.DraftAnimalsFood;
+        return line != null && line.Category == TradeItemCategory.DraftAnimalsFood;
     }
 
     private TMP_Text FindText(string objectName)

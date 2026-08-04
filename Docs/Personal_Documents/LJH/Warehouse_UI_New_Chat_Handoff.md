@@ -9,9 +9,9 @@
 
 ## 먼저 읽을 문서
 
-1. `Docs/Warehouse_External_Script_Change_Ledger.md`
-2. `Docs/Warehouse_Runtime_Connection_2026-08-03.md`
-3. `Docs/Warehouse_Inventory_UI_Implementation_Spec.md`
+1. `Docs/Personal_Documents/LJH/Warehouse_External_Script_Change_Ledger.md`
+2. `Docs/Personal_Documents/LJH/Warehouse_Runtime_Connection_2026-08-03.md`
+3. `Docs/Personal_Documents/LJH/Warehouse_Inventory_UI_Implementation_Spec.md`
 4. `output/pdf/WareHouse_UI_Approved_Revisions.pdf`
 
 문서와 코드가 다르면 현재 코드와 변경·복구 장부를 우선한다. 오래된 WarehouseCapacityData 안은 사용하지 않는다.
