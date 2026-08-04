@@ -130,11 +130,14 @@ Item Max Quantity = 10
 ##### Source Id
 
 - 가격 변동을 발생시킨 데이터나 규칙의 식별자다.
-- 디버그와 가격 변동 내역 식별에 사용할 수 있도록 중복되지 않는 값을 권장한다.
+- `Modifier Type = Season` 이고 판매가(`SellPrice`)에 쓸 때는 디버그용 임의 문자열이 아니라, 현재 게임 계절과 일치하는 기술 ID만 유효하다.
+  - 허용 값: `spring`, `summer`, `autumn`, `winter` (소문자, 대소문자 구분)
+  - 계절 판매가 작성 절차: [`TradeItem_Seasonal_SellPrice_Modifier_Setup_Guide.md`](./TradeItem_Seasonal_SellPrice_Modifier_Setup_Guide.md)
 
 ##### Display Name
 
 - 가격 변동 원인을 UI 또는 디버그에서 식별하기 위한 이름이다.
+- Season 판매가 매칭에는 사용되지 않는다. 계절 식별은 반드시 `Source Id`에 넣는다.
 
 ##### Modifier Target
 
@@ -194,18 +197,21 @@ TradeItemData.Base Buy Price
 ```text
 TradeItemData.Base Sell Price
 → Affect Modify 확인
-→ SellPrice 대상 Modifier 적용
+→ (판매 commit 시) Season + SellPrice Modifier를 현재 계절 Source Id로 필터
+→ 남은 SellPrice 대상 Modifier 적용
 → 최종 단가 계산
-→ UI 판매 표시와 실제 판매 정산에 사용
+→ 실제 판매 정산(commit)에 사용
 ```
 
-- 판매가는 상품 SO에서 결정적으로 다시 계산한다.
-- 플레이 중 Inspector 값을 바꾸면 판매 표시와 정산에 바로 반영될 수 있다.
+- 판매 commit 단가는 상품 SO와 commit 시점 `world.currentSeasonId`로 결정적으로 계산한다.
+- Season SellPrice의 `Source Id`가 현재 계절과 맞지 않으면 그 항목은 적용되지 않는다.
+- 판매 패널 UI 표시가 항상 commit 단가와 같다고 가정하지 않는다. 최종 지급 기준은 판매 확정 결과다.
+- 계절 판매가 SO 작성: [`TradeItem_Seasonal_SellPrice_Modifier_Setup_Guide.md`](./TradeItem_Seasonal_SellPrice_Modifier_Setup_Guide.md)
 - 운영 빌드에서는 SO가 런타임에 변경되지 않는 것을 전제로 한다.
 
 ## 설정 예시
 
-기본 구매가 100, 기본 판매가 150인 상품에 구매가 10% 증가와 판매가 20 추가를 적용하는 예시다.
+기본 구매가 100, 기본 판매가 150인 상품에 구매가 10% 증가와, **여름**에만 판매가 20 추가를 적용하는 예시다.
 
 ```text
 Affect Modify = true
@@ -218,6 +224,7 @@ Modifier 1
 
 Modifier 2
 - Modifier Type = Season
+- Source Id = summer
 - Modifier Target = SellPrice
 - Modifier Operation = Add
 - Value = 20
@@ -226,9 +233,12 @@ Modifier 2
 예상 결과:
 
 ```text
-구매가 = 110
-판매가 = 170
+구매가(재고 갱신 시) = 110
+판매가(여름 commit) = 170
+판매가(여름이 아닌 commit) = 150
 ```
+
+계절별 판매가 전용 예시·체크리스트는 [`TradeItem_Seasonal_SellPrice_Modifier_Setup_Guide.md`](./TradeItem_Seasonal_SellPrice_Modifier_Setup_Guide.md)를 본다.
 
 ## Check
 
