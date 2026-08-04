@@ -52,6 +52,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NPC_cartoon_farmer
       objectReference: {fileID: 0}
+    - target: {fileID: 8169388602083474532, guid: c35da279e41c4ee47bc9d3ab0f92e71a, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 8488598695986945207, guid: 3173b197b8f3039438d4d2de748f7235, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
