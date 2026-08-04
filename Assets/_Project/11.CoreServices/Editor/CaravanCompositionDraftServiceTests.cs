@@ -62,6 +62,35 @@ public sealed class CaravanCompositionDraftServiceTests
     }
 
     [Test]
+    public void MixedAnimalContentTypes_AreRejectedBeforeDraftMutation()
+    {
+        OwnedTransportInventoryService inventory = CreateInventory();
+        inventory.RegisterAnimal(new OwnedDraftAnimalInstance("animal-c", "Donkey"));
+        var service = new CaravanCompositionDraftService(inventory);
+
+        CaravanCompositionDraftFailure result = service.TrySet(
+            "caravan-a",
+            "wagon-a",
+            new[] { "animal-a", "animal-c" });
+
+        Assert.That(result, Is.EqualTo(CaravanCompositionDraftFailure.MixedAnimalType));
+    }
+
+    [Test]
+    public void SameAnimalContentType_WithDifferentInstances_IsAllowed()
+    {
+        OwnedTransportInventoryService inventory = CreateInventory();
+        var service = new CaravanCompositionDraftService(inventory);
+
+        CaravanCompositionDraftFailure result = service.TrySet(
+            "caravan-a",
+            "wagon-a",
+            new[] { "animal-a", "animal-b" });
+
+        Assert.That(result, Is.EqualTo(CaravanCompositionDraftFailure.None));
+    }
+
+    [Test]
     public void WalkingComposition_RejectsSelectedAnimals()
     {
         OwnedTransportInventoryService inventory = CreateInventory();

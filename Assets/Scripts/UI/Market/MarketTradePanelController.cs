@@ -296,6 +296,8 @@ namespace ND.UI.Market
 
         private MarketTradePanelModel model;
         private bool allowPreparationAccess;
+        // Overview/TradePrepare selection uses the selected Caravan town, not player.currentTownId.
+        private bool caravanPreparationAccess;
         private bool arrivalSaleAccess;
         private bool townPurchaseAccess;
         private string activeCaravanId = string.Empty;
@@ -381,7 +383,7 @@ namespace ND.UI.Market
                 return FailOpen(accessError);
 
             marketData = caravanMarket;
-            return OpenResolved(
+            bool opened = OpenResolved(
                 root,
                 caravanId,
                 string.Empty,
@@ -389,6 +391,8 @@ namespace ND.UI.Market
                 allowPreparation: true,
                 isArrivalSale: false,
                 isTownPurchase: false);
+            caravanPreparationAccess = opened;
+            return opened;
         }
 
         /// <summary>
@@ -503,6 +507,9 @@ namespace ND.UI.Market
             bool isArrivalSale,
             bool isTownPurchase)
         {
+            // OpenResolved is shared by all market entry points; explicit Caravan preparation
+            // opts back into the selected Caravan town contract after this method returns.
+            caravanPreparationAccess = false;
 
             allowPreparationAccess = allowPreparation;
             arrivalSaleAccess = isArrivalSale;
@@ -616,6 +623,7 @@ namespace ND.UI.Market
             model?.CancelDraft();
             model = null;
             allowPreparationAccess = false;
+            caravanPreparationAccess = false;
             arrivalSaleAccess = false;
             townPurchaseAccess = false;
             activeCaravanId = string.Empty;
@@ -702,11 +710,17 @@ namespace ND.UI.Market
                             root?.SharedGameData,
                             activeCaravanId,
                             model.MarketId)
-                    : ValidateTownMarketAccess(
-                    root?.CurrentSaveData,
-                    root?.SharedGameData,
-                    model.MarketId,
-                    allowPreparationAccess);
+                    : caravanPreparationAccess
+                        ? ValidateCaravanPreparationAccess(
+                            root?.CurrentSaveData,
+                            root?.SharedGameData,
+                            activeCaravanId,
+                            model.MarketId)
+                        : ValidateTownMarketAccess(
+                            root?.CurrentSaveData,
+                            root?.SharedGameData,
+                            model.MarketId,
+                            allowPreparationAccess);
             if (!string.IsNullOrEmpty(accessError))
             {
                 result = MarketTransactionResult.Fail(accessError, model?.TradingCurrency ?? 0L);
@@ -902,6 +916,7 @@ namespace ND.UI.Market
             string failedTradeId = activeTradeId;
             model = null;
             allowPreparationAccess = false;
+            caravanPreparationAccess = false;
             arrivalSaleAccess = false;
             townPurchaseAccess = false;
             activeCaravanId = string.Empty;

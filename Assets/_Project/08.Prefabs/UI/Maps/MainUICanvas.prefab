@@ -156,7 +156,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: 0, y: 100}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &8986648155740644273
 MonoBehaviour:
@@ -7575,7 +7575,7 @@ MonoBehaviour:
   animalPanel: {fileID: 7012238858217736278}
   cargoPanel: {fileID: 4266983898957612183}
   marketTradePanel: {fileID: 3144294454164010168}
-  departureWarning: {fileID: 0}
+  departureWarning: {fileID: 1962801421393486745}
 --- !u!1 &5000784561348236439
 GameObject:
   m_ObjectHideFlags: 0
@@ -9274,6 +9274,22 @@ MonoBehaviour:
   content: {fileID: 5569034887112714976}
   font: {fileID: 11400000, guid: 77d5be160e835be46a88f3320153f667, type: 2}
   itemHeight: 60
+  headerText: {fileID: 1742253033942895436}
+  sections:
+  - title: "건물"
+    initiallyExpanded: 0
+    contentSource: 0
+    entries: []
+  - title: "환경"
+    initiallyExpanded: 0
+    contentSource: 1
+    entries:
+    - label: "나무"
+      interactable: 1
+      selected:
+        m_PersistentCalls:
+          m_Calls: []
+  editModeButtonPrefab: {fileID: 11400001, guid: a17e66f21f5940879c4ef77d34b86001, type: 3}
   popupRuntimeBinding: {fileID: 4165532345562317664}
 --- !u!1 &6087472138938868381
 GameObject:

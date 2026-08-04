@@ -10,22 +10,21 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: eadc130ef2c03854a861d0901c84e75d, type: 3}
-  m_Name: DraftAnimal_donkey
+  m_Name: DraftAnimal_Donkey
   m_EditorClassIdentifier: Assembly-CSharp::DraftAnimalData
   draftAnimalId: Donkey
-  displayName: Donkey
+  displayName: "\uB2F9\uB098\uADC0"
   icon: {fileID: -897165449, guid: 55b2c05e0d2a3a1458148901aee174a8, type: 3}
   prefab: {fileID: 4799058025368450483, guid: 12d0e3a1793621848970d513da096a79, type: 3}
-  description: 'Donkey Can pull wagon
-
-'
+  description: "\uB2F9\uB098\uADC0, \uB290\uB9B0 \uC18D\uB3C4, \uC2DD\uB7C9\uC744
+    \uC801\uAC8C \uC18C\uBAA8\uD55C\uB2E4. "
   animalType: 1
-  feedConsumption: 1
-  baseMoveSpeed: 10
+  feedConsumption: 0.1
+  baseMoveSpeed: 2
   increaseOverLoad: 5
   increaseMaxLoad: 20
   rarity: 1
-  baseBuyPrice: 10
+  baseBuyPrice: 100
   canStack: 0
   maxCount: 99
   affectModify: 0

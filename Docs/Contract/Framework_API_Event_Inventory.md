@@ -1,5 +1,19 @@
 # Framework API and Event Inventory
 
+## Caravan Setting 2A implementation update
+
+The canonical contract is [Caravan Setting Production Service Contract](./Caravan_Setting_Production_Service_Contract.md).
+
+| Surface | Current status | Notes |
+|---|---|---|
+| `FrameworkRoot.CaravanSetting` | Implemented | Exposes `CaravanSettingApplicationService` with explicit SaveData, save, shared-data, and asset-resolution dependencies. |
+| Existing Caravan Setting Provider/Command contracts | Implemented in production facade | Query and command behavior is available without depending on `TestCaravanSettingService`. |
+| Save transaction rollback | Implemented | One save attempt; failed save or exception restores the runtime snapshot. |
+| `CaravanSettingRuntimeBridge` | Implemented, Scene migration pending | The InGame Scene still uses `TestCaravanSettingService`; do not report the migration as complete. |
+| Equipment definition identity and unassigned inventory | Contract pending (2B) | No name guessing or implicit replacement is allowed. |
+
+The older generic Preparation rows below describe the broader v7 target command/event model. They must not be read as denying the implemented 2A Caravan Setting facade or as claiming the pending Scene and 2B work is complete.
+
 ## Arrival-sale active-path classification
 
 See `Arrival_Sale_Settlement_Claim_Policy.md`. Active concepts are `MarketTransactionCommand.Execute`, `CaravanArrivalSaleController.ConfirmSaleAndOpenSettlement`, `SettlementUiBridge.PresentSettlement`, and `TradeProgressCoordinator.ClaimSettlement(caravanId, tradeId)`. Post-save sale events are `CaravanCargoChanged` and `TradingCurrencyChanged`. `JourneyRunner.BeginSettlement`, `JourneyRunner.CancelSettlement`, and `JourneyState.Selling` exist but are unused by the product path; no selling command/event should be invented.

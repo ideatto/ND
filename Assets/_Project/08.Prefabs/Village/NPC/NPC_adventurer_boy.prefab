@@ -52,6 +52,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NPC_adventurer_boy
       objectReference: {fileID: 0}
+    - target: {fileID: 1039478418541733902, guid: b80bf6e3285d1b243a6476c79b29afdb, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 1553663757799325975, guid: 258fe5124aaa8a349a7d2abcacfe3627, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

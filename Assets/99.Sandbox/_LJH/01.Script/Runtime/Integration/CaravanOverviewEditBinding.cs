@@ -366,7 +366,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         {
             FailCargoRequest(
                 CaravanLoadSettingFailureCodes.InvalidDraft,
-                "The selected Caravan cargo data is invalid.");
+                "선택한 카라반의 화물 데이터를 불러올 수 없습니다.");
         }
     }
 
@@ -376,7 +376,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         {
             ShowFailure(
                 CaravanLoadSettingFailureCodes.ServiceUnavailable,
-                "Caravan cargo changes cannot be saved yet.");
+                "화물 변경을 처리할 서비스가 연결되지 않았습니다.");
             return;
         }
 
@@ -390,7 +390,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
             Debug.LogError($"Caravan load setting Command failed: {exception}", this);
             ShowFailure(
                 CaravanLoadSettingFailureCodes.SaveFailed,
-                "Caravan cargo changes could not be saved.");
+                "화물 변경 사항을 저장하지 못했습니다.");
             return;
         }
 
@@ -398,7 +398,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         {
             ShowFailure(
                 result != null ? result.errorCode : CaravanLoadSettingFailureCodes.SaveFailed,
-                result != null ? result.userMessage : "Caravan cargo changes could not be saved.");
+                result != null ? result.userMessage : "화물 변경 사항을 저장하지 못했습니다.");
             return;
         }
 
@@ -438,7 +438,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
     {
         string safeCode = string.IsNullOrWhiteSpace(errorCode) ? "UNKNOWN" : errorCode.Trim();
         string safeMessage = string.IsNullOrWhiteSpace(userMessage)
-            ? "The Caravan setting request failed."
+            ? "카라반 요청을 처리하지 못했습니다."
             : userMessage.Trim();
 
         Debug.LogWarning($"[CaravanSetting] {safeCode} - {safeMessage}", this);

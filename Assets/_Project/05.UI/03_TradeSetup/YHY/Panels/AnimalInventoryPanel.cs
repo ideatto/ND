@@ -363,6 +363,9 @@ public class AnimalInventoryPanel : MonoBehaviour
         int placed = counts.TryGetValue(selectionKey, out int c) ? c : 0;
         if (placed >= a.ownedCount) return;             // 소지 다 씀
         if (TotalSelected() >= maxReq) return;          // 슬롯 꽉 참
+        // 첫 선택의 콘텐츠 종류가 이 편성에서 허용할 동물 종류를 결정한다.
+        // 인스턴스 ID가 달라도 같은 SO 콘텐츠 ID라면 함께 편성할 수 있다.
+        if (!CanSelectAnimalType(a.id)) return;
         counts[selectionKey] = placed + 1;
         FillSlots();                                    // 슬롯 채움 + 인벤토리 잔량 갱신
         OnSelectionChanged?.Invoke(BuildPicks(), IsValid());
@@ -380,8 +383,37 @@ public class AnimalInventoryPanel : MonoBehaviour
             int remain = a.ownedCount - placed;
             SetLabel(invButtons[i], $"{a.name}\n(x{remain})");
             if (invButtons[i] != null)
-                invButtons[i].interactable = allowEditing && hasWagon && a.canSelect && remain > 0 && !full;
+                invButtons[i].interactable = allowEditing
+                    && hasWagon
+                    && a.canSelect
+                    && remain > 0
+                    && !full
+                    && CanSelectAnimalType(a.id);
         }
+    }
+
+    /// <summary>
+    /// 선택이 비어 있으면 모든 종류를 허용하고, 첫 선택 이후에는 같은 콘텐츠 ID만 허용한다.
+    /// UI 차단은 사용자 피드백용이며 저장 Command의 동일 검증을 대체하지 않는다.
+    /// </summary>
+    private bool CanSelectAnimalType(string candidateContentId)
+    {
+        string selectedContentId = GetSelectedAnimalContentId();
+        return string.IsNullOrEmpty(selectedContentId)
+            || string.Equals(selectedContentId, candidateContentId, StringComparison.Ordinal);
+    }
+
+    private string GetSelectedAnimalContentId()
+    {
+        for (int index = 0; index < animals.Count; index++)
+        {
+            AnimalEntry animal = animals[index];
+            string key = SelectionKey(animal);
+            if (counts.TryGetValue(key, out int selected) && selected > 0)
+                return animal.id ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     private int TotalSelected()
@@ -443,27 +475,27 @@ public class AnimalInventoryPanel : MonoBehaviour
         OnSelectionChanged?.Invoke(BuildPicks(), IsValid());
     }
 
-    /// <summary>웨건 정보 텍스트(요구량·속도·적재증가)를 현재 선택 기준으로 갱신.</summary>
+    /// <summary>현재 마차의 동물 요구량, 속도, 적재 슬롯과 최종 최대 적재량을 갱신한다.</summary>
     private void UpdateInfo()
     {
         int total = 0;
-        float sumSpeed = 0f, sumOver = 0f, sumMax = 0f;
+        float sumSpeed = 0f, sumMax = 0f;
         foreach (AnimalEntry a in animals)
         {
             int c = counts.TryGetValue(SelectionKey(a), out int v) ? v : 0;
             if (c <= 0) continue;
             total += c;
             sumSpeed += a.moveSpeed * c;
-            sumOver += a.incOverLoad * c;
             sumMax += a.incMaxLoad * c;
         }
         if (wagonInfoText != null)
         {
             float curSpeed = wagonBaseSpeed + sumSpeed;
             string state = IsValid() ? "충족" : (total < minReq ? "부족" : "초과");
+            float totalMaxLoad = Mathf.Max(0f, currentWagon.maxLoad + sumMax);
             wagonInfoText.text =
                 $"[{wagonName}]  동물 {minReq}~{maxReq} · 현재 {total} · {state}\n" +
-                $"이동속도 {curSpeed:0.#}  ·  적재+ 평균 {sumOver:0.#} / 최대 {sumMax:0.#}";
+                $"이동속도 {curSpeed:0.#} · 적재 슬롯 {Mathf.Max(0, currentWagon.slotCount)}칸 · 최대 적재 {totalMaxLoad:0.#}";
         }
     }
 

@@ -48,6 +48,62 @@ public sealed class TradePrepareStartAdapter
         this.commitSink = commitSink;
     }
 
+    /// <summary>Runs projected departure checks without mutating SaveData or invoking start.</summary>
+    public TradePrepareStartResult ValidateDeparture(
+        TradePrepareDraft draft,
+        TradePrepareBuildContext context)
+    {
+        draft = draft ?? new TradePrepareDraft();
+        context = context ?? new TradePrepareBuildContext();
+        TradePrepareViewData viewData = viewDataBuilder.Build(draft, context);
+
+        if (!TradePrepareCaravanFactory.TryCreateDeparture(
+                draft, context, out CaravanData caravan,
+                out string caravanErrorCode, out string caravanErrorMessage))
+        {
+            return CreateFailure(caravanErrorCode, caravanErrorMessage, string.Empty,
+                viewData.startCondition, null);
+        }
+
+        DepartureValidationResult departure = CaravanValidator.Validate(caravan);
+        if (departure == null || !departure.canDepart)
+        {
+            return CreateFailure(ErrorCoreDepartureBlocked,
+                CreateCoreDepartureBlockedMessage(departure), string.Empty,
+                viewData.startCondition, departure);
+        }
+
+        if (viewData.startCondition == null || !viewData.startCondition.canStart)
+        {
+            return CreateFailure(ErrorPrepareBlocked,
+                viewData.startCondition != null
+                    ? viewData.startCondition.disabledReason
+                    : "Trade preparation validation failed.",
+                string.Empty, viewData.startCondition, departure);
+        }
+
+        RouteData route = TradePrepareCaravanFactory.ResolveSelectedRoute(draft, context);
+        if (route == null)
+        {
+            return CreateFailure(ErrorRouteNotFound, "Selected route could not be resolved.",
+                string.Empty, viewData.startCondition, departure);
+        }
+
+        if (!TryValidateRouteForStart(draft, context, route, out string routeValidationMessage))
+        {
+            return CreateFailure(ErrorRouteValidationFailed, routeValidationMessage, string.Empty,
+                viewData.startCondition, departure);
+        }
+
+        return new TradePrepareStartResult
+        {
+            succeeded = true,
+            errorCode = ErrorNone,
+            errorMessage = string.Empty,
+            prepareCondition = viewData.startCondition,
+            departureValidation = departure
+        };
+    }
     public TradePrepareStartResult TryStartTrade(
         TradePrepareDraft draft,
         TradePrepareBuildContext context,

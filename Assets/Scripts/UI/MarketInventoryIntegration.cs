@@ -632,7 +632,9 @@ namespace ND.Framework.CargoLoading
             // Publish only after SaveData persistence succeeds. UI subscribers re-read the saved
             // Caravan snapshot, and failed/rolled-back transactions never emit refresh signals.
             MarketInventoryChangeTracker.Publish(MarketId);
-            FrameworkEvents.RaiseCaravanCargoChanged(CaravanId);
+            FrameworkEvents.RaiseCaravanCargoChanged(
+                CaravanId,
+                CaravanCargoChangeSource.MarketTransaction);
             FrameworkEvents.RaiseTradingCurrencyChanged(calculation.TradingCurrencyAfter);
             return successfulResult;
         }
@@ -661,8 +663,15 @@ namespace ND.Framework.CargoLoading
                     Item = item,
                     Quantity = entry.quantity,
                     UnitPrice = Math.Max(0L, entry.item.basePrice),
-                    Weight = Math.Max(0f, entry.item.weight),
-                    MaxStackQuantity = Math.Max(1, entry.item.maxCount)
+                    // SaveData owns the persisted quantity, while the catalog owns the current
+                    // item specification. Reading an old weight snapshot here makes capacity
+                    // validation disagree with Cargo UI after an SO balance change.
+                    Weight = item != null
+                        ? Math.Max(0f, item.Weight)
+                        : Math.Max(0f, entry.item.weight),
+                    MaxStackQuantity = item != null
+                        ? Math.Max(1, item.MaxCount)
+                        : Math.Max(1, entry.item.maxCount)
                 });
             }
 

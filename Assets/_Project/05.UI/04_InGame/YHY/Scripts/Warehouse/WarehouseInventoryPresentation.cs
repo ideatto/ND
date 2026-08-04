@@ -27,6 +27,7 @@ namespace ND.UI.InGame.Warehouse
         public string DisplayName;
         public string Description;
         public long BaseBuyPrice;
+        public float Weight;
         public Sprite Icon;
         public bool IsCatalogMissing;
     }
@@ -91,7 +92,9 @@ namespace ND.UI.InGame.Warehouse
                 return new WarehouseItemTooltipViewData
                 {
                     ItemId = itemId, DisplayName = item.DisplayName, Description = item.Description,
-                    BaseBuyPrice = Math.Max(0L, item.BaseBuyPrice), Icon = item.Icon
+                    BaseBuyPrice = Math.Max(0L, item.BaseBuyPrice),
+                    Weight = Math.Max(0f, item.Weight),
+                    Icon = item.Icon
                 };
             }
             return new WarehouseItemTooltipViewData

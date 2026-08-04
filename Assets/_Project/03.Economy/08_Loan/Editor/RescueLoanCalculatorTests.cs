@@ -13,7 +13,7 @@ namespace ND.Economy.Editor
             Issue_RejectsEligibleBoundaryAndActiveLoan();
             Repay_AllowsPartialAndFullRepayment();
             Repay_RejectsAutomaticRecoveryRiskAndInvalidAmounts();
-            Repay_RejectsRestrictedMode();
+            Repay_AllowsImmediateRestrictedModeRepayment();
         }
 
         private static void Status_OffersLoanBelowMinimumWithoutActiveLoan()
@@ -153,7 +153,7 @@ namespace ND.Economy.Editor
             CheckEqual(RescueLoanFailureReason.RepaymentExceedsBalance, overpay.FailureReason, "Overpayment");
         }
 
-        private static void Repay_RejectsRestrictedMode()
+        private static void Repay_AllowsImmediateRestrictedModeRepayment()
         {
             RepayRescueLoanResult result = RescueLoanCalculator.Repay(new RepayRescueLoanInput
             {
@@ -166,7 +166,9 @@ namespace ND.Economy.Editor
                 RequestedAmount = 1000L
             });
 
-            CheckEqual(RescueLoanFailureReason.InvalidState, result.FailureReason, "Restricted repayment");
+            Check(result.Success, "Immediate repayment should succeed after issue.");
+            CheckEqual(0L, result.RemainingPrincipalAfter, "Immediate repayment balance");
+            Check(!result.IsRestrictedPreparationAfter, "Full repayment should clear restriction.");
         }
 
         private static void Check(bool condition, string message)

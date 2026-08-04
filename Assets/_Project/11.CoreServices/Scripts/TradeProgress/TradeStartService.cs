@@ -700,6 +700,7 @@ namespace ND.Framework
                 return result;
             }
 
+            FrameworkEvents.RaiseTradingCurrencyChanged(data.player.tradingCurrency);
             FrameworkEvents.RaiseRescueLoanIssued(calculation);
             if (calculation.EnterRestrictedMode)
             {
@@ -750,6 +751,7 @@ namespace ND.Framework
                 return result;
             }
 
+            FrameworkEvents.RaiseTradingCurrencyChanged(data.player.tradingCurrency);
             FrameworkEvents.RaiseRescueLoanRepaid(calculation);
             if (!calculation.IsActiveAfter)
             {

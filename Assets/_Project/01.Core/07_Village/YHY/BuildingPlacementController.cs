@@ -25,6 +25,30 @@ using ND.Framework;
 public class BuildingPlacementController : MonoBehaviour,
     IPointerDownHandler, IPointerUpHandler, IDragHandler, IScrollHandler
 {
+    [Header("편집 모드")]
+    [SerializeField] private bool editMode;
+
+    /// <summary>외부 저장/종료 UI가 현재 편집 상태를 표시하고 버튼 상태를 갱신할 때 조회한다.</summary>
+    public bool IsEditMode => editMode;
+
+    /// <summary>
+    /// 건물 선택 입력을 명시적으로 허용한다. 진입 UI의 닫기 처리는 호출자 책임으로 분리한다.
+    /// </summary>
+    public void EnterEditMode()
+    {
+        editMode = true;
+    }
+
+    /// <summary>
+    /// 선택 하이라이트와 임시 배치 상태를 먼저 정리한 뒤 일반 탐색 상태로 복귀한다.
+    /// 향후 편집 저장 버튼은 저장 성공 이후 이 메서드를 호출해야 한다.
+    /// </summary>
+    public void ExitEditMode()
+    {
+        CancelPlacementSelection();
+        editMode = false;
+    }
+
     [SerializeField] private RawImage view;            // RT를 그리는 RawImage(비면 자기 자신)
     [SerializeField] private Camera villageCamera;     // 마을 카메라(비면 런타임 탐색)
     [SerializeField] private Color highlightTint = new Color(1f, 0.85f, 0.4f); // 선택 하이라이트 색
@@ -313,6 +337,14 @@ public class BuildingPlacementController : MonoBehaviour,
         // 건물 추가로 새로 생긴 건물을 격자에 등록·정렬(런타임 생성분은 sceneLoaded를 안 타므로 여기서 흡수).
         RegisterExistingBuildings();
 
+        // 일반 탐색 중에는 건물을 클릭해도 선택/이동 상태로 들어가지 않는다.
+        // 편집 버튼이 명시적으로 상태를 전환한 뒤에만 기존 배치 입력을 허용한다.
+        if (!editMode)
+        {
+            SetSelected(null);
+            return;
+        }
+
         if (IsOverButton(e.position)) return;   // 회전 버튼 클릭이면 선택 해제 안 함
         if (!TryMakeRay(e.position, out Ray ray)) return;
 
@@ -485,6 +517,7 @@ public class BuildingPlacementController : MonoBehaviour,
     // 선택된 건물의 양 옆에 작은 좌/우 회전 버튼 표시(건물 따라다님. 임시 IMGUI, 추후 uGUI 교체 가능).
     private void OnGUI()
     {
+        if (!editMode) return;
         if (!TryButtonRects(out Rect left, out Rect right)) return;
         GUIStyle s = new GUIStyle(GUI.skin.button) { fontSize = 52 };
         // 화면좌표(좌하단 원점) → GUI좌표(좌상단 원점): y 뒤집기

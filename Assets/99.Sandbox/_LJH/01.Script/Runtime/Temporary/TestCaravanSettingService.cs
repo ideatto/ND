@@ -30,14 +30,6 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
     public const string TravelingCaravanId = "test-caravan-traveling";
     // Temporary instance ownership is still local, but content IDs must resolve against the
     // official SO catalog consumed by TradePrepareViewDataBuilder.
-    public const string WagonContentId = "Wagon_M";
-    public const string WagonInstanceId = "test-wagon-instance-01";
-    public const string AnimalContentId = "Horse";
-    public const string FirstAnimalInstanceId = "test-horse-instance-01";
-    public const string SecondAnimalInstanceId = "test-horse-instance-02";
-    public const float WagonMaxLoad = 30f;
-    public const int WagonInventorySlotCount = 5;
-    public const int WagonDurability = 100;
 
     // TODO(PRODUCTION): Remove these Inspector fixtures with this service. The replacement catalog
     // must come from the selected Caravan's current-town MarketData/SharedGameData provider.
@@ -57,7 +49,8 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
     private readonly CaravanSavedCargoService savedCargoService =
         new CaravanSavedCargoService();
     private FrameworkSaveData saveDataOverrideForTests;
-
+    private ND.Framework.ISaveService saveServiceOverrideForTests;
+    private CaravanTransportCatalogProvider transportCatalog;
     public CaravanSettingViewData GetSetting(string caravanId)
     {
         string normalizedCaravanId = NormalizeId(caravanId);
@@ -68,9 +61,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         string blockedReason = canEdit
             ? string.Empty
             : "Caravan settings cannot be changed while the Caravan is traveling.";
-        CaravanCompositionSnapshot composition = canEdit
-            ? GetComposition(normalizedCaravanId)
-            : CreateLegacyTravelingComposition(normalizedCaravanId);
+        CaravanCompositionSnapshot composition = GetComposition(normalizedCaravanId);
         return CreateSettingSnapshot(
             normalizedCaravanId,
             displayName,
@@ -84,69 +75,68 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
     public CaravanSettingCommandResult Execute(CaravanSettingDraft draft)
     {
         if (draft == null || string.IsNullOrEmpty(NormalizeId(draft.caravanId)))
-        {
-            return CaravanSettingCommandResult.Failure(
-                CaravanSettingFailureCodes.InvalidDraft,
-                "The Caravan setting request is invalid.");
-        }
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.InvalidDraft, "The Caravan setting request is invalid.");
 
         string caravanId = NormalizeId(draft.caravanId);
-        if (!TryResolveCaravan(caravanId, out JourneyState state, out _))
-        {
-            return CaravanSettingCommandResult.Failure(
-                CaravanSettingFailureCodes.CaravanNotFound,
-                "The selected Caravan could not be found.");
-        }
+        if (!TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData caravan))
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.CaravanNotFound, "선택한 카라반을 찾을 수 없습니다.");
+        if (caravan.state != JourneyState.Prepare)
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.CaravanNotEditable, "Caravan settings can only be changed during Preparation.");
 
-        if (state != JourneyState.Prepare)
+        string wagonId = NormalizeId(draft.selectedWagonInstanceId);
+        var animalIds = new List<string>();
+        var uniqueAnimalIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int index = 0; index < draft.SelectedAnimalInstanceIds.Count; index++)
         {
-            return CaravanSettingCommandResult.Failure(
-                CaravanSettingFailureCodes.CaravanNotEditable,
-                "Caravan settings can only be changed during Preparation.");
-        }
-
-        string wagonInstanceId = NormalizeId(draft.selectedWagonInstanceId);
-        var validatedAnimalIds = new List<string>();
-        IReadOnlyList<string> draftAnimalIds = draft.SelectedAnimalInstanceIds;
-        for (int index = 0; index < draftAnimalIds.Count; index++)
-        {
-            string animalInstanceId = NormalizeId(draftAnimalIds[index]);
-            if (validatedAnimalIds.Contains(animalInstanceId))
-            {
-                return CaravanSettingCommandResult.Failure(
-                    CaravanSettingFailureCodes.InvalidComposition,
-                    "The same animal instance cannot be selected more than once.");
-            }
-
-            validatedAnimalIds.Add(animalInstanceId);
+            string animalId = NormalizeId(draft.SelectedAnimalInstanceIds[index]);
+            if (!uniqueAnimalIds.Add(animalId))
+                return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.InvalidComposition, "The same animal cannot be selected more than once.");
+            animalIds.Add(animalId);
         }
 
         EnsureCompositionServices();
-        CaravanCompositionDraftFailure compositionFailure = compositionDrafts.Validate(
-            caravanId,
-            wagonInstanceId,
-            validatedAnimalIds);
-        if (compositionFailure != CaravanCompositionDraftFailure.None)
-            return MapCompositionFailure(compositionFailure);
-
-        GetCapacity(wagonInstanceId, out float nextMaxLoad, out int nextMaxSlots);
-        cargoDrafts.TryGet(caravanId, out CaravanCargoDraftSnapshot cargoDraft);
-        if (GetPlannedCargoLoad(caravanId, cargoDraft?.Items) > nextMaxLoad
-            || (cargoDraft?.Items.Count ?? 0) > nextMaxSlots)
+        if (!transportInventory.TryGetWagon(wagonId, out OwnedWagonInstance ownedWagon)
+            || !transportCatalog.TryGetWagon(ownedWagon.ContentId, out WagonData wagon))
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.AssetNotOwned, "The selected wagon is not available.");
+        var animalAssets = new List<DraftAnimalData>(animalIds.Count);
+        for (int index = 0; index < animalIds.Count; index++)
         {
-            return CaravanSettingCommandResult.Failure(
-                CaravanSettingFailureCodes.CargoCapacityExceeded,
-                "Unload cargo before changing to a Caravan setting with lower capacity.");
+            if (!transportInventory.TryGetAnimal(animalIds[index], out OwnedDraftAnimalInstance ownedAnimal)
+                || !transportCatalog.TryGetDraftAnimal(ownedAnimal.ContentId, out DraftAnimalData animal))
+                return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.AssetNotOwned, "A selected draft animal is not available.");
+            animalAssets.Add(animal);
         }
 
-        // Apply only after every cargo validation passes so a failed command cannot leave partial state.
-        compositionFailure = compositionDrafts.TrySet(
-            caravanId,
-            wagonInstanceId,
-            validatedAnimalIds);
-        if (compositionFailure != CaravanCompositionDraftFailure.None)
-            return MapCompositionFailure(compositionFailure);
+        CaravanCompositionDraftFailure failure = compositionDrafts.Validate(caravanId, wagonId, animalIds);
+        if (failure != CaravanCompositionDraftFailure.None) return MapCompositionFailure(failure);
+        if (!AreAnimalsEligible(wagon, animalAssets))
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.InvalidComposition, "A selected animal is not eligible for this wagon.");
 
+        if (GetSavedCargoLoad(caravan) > wagon.MaxLoad
+            || savedCargoService.CreateSnapshot(caravan).Items.Count > wagon.InventorySlotCount)
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.CargoCapacityExceeded, "Unload cargo before changing to a Caravan setting with lower capacity.");
+
+        FrameworkSaveData saveData = ResolveSaveData();
+        ND.Framework.ISaveService saveService = saveServiceOverrideForTests ?? FrameworkRoot.Instance?.SaveService;
+        if (saveData == null || saveService == null)
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.SaveFailed, "Caravan setting changes could not be saved.");
+
+        ND.Framework.WagonSaveData previousWagon = caravan.wagon;
+        List<ND.Framework.AnimalSaveData> previousAnimals = caravan.animals;
+        caravan.wagon = CreateWagonSaveData(wagon, wagonId);
+        caravan.animals = CreateAnimalSaveData(animalAssets, animalIds);
+        ND.Framework.SaveResult saveResult = null;
+        try { saveResult = saveService.Save(saveData); }
+        catch (Exception exception) { Debug.LogError($"Caravan composition save failed: {exception}", this); }
+
+        if (saveResult == null || !saveResult.Succeeded)
+        {
+            caravan.wagon = previousWagon;
+            caravan.animals = previousAnimals;
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.SaveFailed, "Caravan setting changes could not be saved.");
+        }
+
+        compositionDrafts.Clear(caravanId);
         return CaravanSettingCommandResult.Success();
     }
 
@@ -157,48 +147,42 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             return null;
 
         bool canEdit = state == JourneyState.Prepare;
-        string capacityWagonInstanceId = canEdit
-            ? GetComposition(normalizedCaravanId).WagonInstanceId
-            : WagonInstanceId;
+        string capacityWagonInstanceId = GetComposition(normalizedCaravanId).WagonInstanceId;
         GetCapacity(capacityWagonInstanceId, out float maxLoad, out int maxSlots);
-        CargoItemViewData[] plannedItems = Array.Empty<CargoItemViewData>();
-        if (canEdit)
+
+        CargoItemViewData[] plannedItems;
+        if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
         {
-            if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
-            {
-                string savedCargoSignature = savedCargoService
-                    .CreateSnapshot(savedCaravan)
-                    .BaselineSignature;
-                bool useDraft = cargoDrafts.TryGetCompatible(
-                    normalizedCaravanId,
-                    savedCargoSignature,
-                    out CaravanCargoDraftSnapshot cargoDraft);
-                if (useDraft)
-                {
-                    plannedItems = CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items);
-                }
-                else
-                {
-                    plannedItems = CreateSavedCargoSnapshot(savedCaravan);
-                }
-            }
-            else
-            {
-                // Standalone smoke fixtures have no FrameworkRoot and intentionally keep their
-                // temporary in-memory plan.
-                plannedItems = cargoDrafts.TryGet(
-                        normalizedCaravanId,
-                        out CaravanCargoDraftSnapshot cargoDraft)
-                    ? CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items)
-                    : Array.Empty<CargoItemViewData>();
-            }
+            // Prepare may project a compatible draft over the saved baseline. Traveling must never
+            // consume a draft, but it still exposes the committed cargo as read-only state.
+            string savedCargoSignature = savedCargoService
+                .CreateSnapshot(savedCaravan)
+                .BaselineSignature;
+            CaravanCargoDraftSnapshot cargoDraft = null;
+            bool useDraft = canEdit && cargoDrafts.TryGetCompatible(
+                normalizedCaravanId,
+                savedCargoSignature,
+                out cargoDraft);
+            plannedItems = useDraft
+                ? CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items)
+                : CreateSavedCargoSnapshot(savedCaravan);
         }
+        else if (canEdit && cargoDrafts.TryGet(
+                     normalizedCaravanId,
+                     out CaravanCargoDraftSnapshot cargoDraft))
+        {
+            // Standalone smoke fixtures have no Framework save and intentionally remain draft-only.
+            plannedItems = CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items);
+        }
+        else
+        {
+            plannedItems = Array.Empty<CargoItemViewData>();
+        }
+
         int usedSlots = plannedItems.Length;
         float currentLoad = 0f;
         for (int index = 0; index < plannedItems.Length; index++)
-        {
             currentLoad += plannedItems[index].totalWeight;
-        }
 
         return new CaravanLoadSettingViewData
         {
@@ -228,7 +212,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.InvalidDraft,
-                "The Caravan cargo request is invalid.");
+                "화물 적재 요청이 올바르지 않습니다.");
         }
 
         string caravanId = NormalizeId(draft.caravanId);
@@ -236,14 +220,28 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.CaravanNotFound,
-                "The selected Caravan could not be found.");
+                "선택한 카라반을 찾을 수 없습니다.");
         }
 
         if (state != JourneyState.Prepare)
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.CaravanNotEditable,
-                "Caravan cargo can only be changed during Preparation.");
+                "화물은 카라반이 준비 중일 때만 변경할 수 있습니다.");
+        }
+
+        // The S4 draft is the final Cargo plan, so it contains both the committed SaveData
+        // baseline and new Market reservations. Only the quantity added above that baseline is
+        // a Market selection and may therefore be rejected by the current-town catalog.
+        var savedQuantityByItemId = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData baselineCaravan))
+        {
+            CaravanSavedCargoSnapshot baseline = savedCargoService.CreateSnapshot(baselineCaravan);
+            for (int index = 0; index < baseline.Items.Count; index++)
+            {
+                CaravanSavedCargoItem item = baseline.Items[index];
+                savedQuantityByItemId[item.ItemId] = item.Quantity;
+            }
         }
 
         var validatedItems = new List<CaravanLoadItemDraft>();
@@ -259,14 +257,15 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                 {
                     return CaravanLoadSettingCommandResult.Failure(
                         CaravanLoadSettingFailureCodes.InvalidDraft,
-                        "The Caravan cargo plan contains an invalid or duplicate item.");
+                        "화물 적재 목록에 잘못되었거나 중복된 항목이 있습니다.");
                 }
 
-                if (!IsAvailableCargoItem(caravanId, itemId))
+                savedQuantityByItemId.TryGetValue(itemId, out int savedQuantity);
+                if (item.quantity > savedQuantity && !IsAvailableCargoItem(caravanId, itemId))
                 {
                     return CaravanLoadSettingCommandResult.Failure(
                         CaravanLoadSettingFailureCodes.ItemUnavailable,
-                        "The selected cargo item is not available in the Caravan catalog.");
+                        "추가하려는 화물을 현재 마을의 상점에서 구매할 수 없습니다.");
                 }
 
                 totalQuantity += item.quantity;
@@ -284,7 +283,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.CargoCapacityExceeded,
-                "The Caravan cargo plan exceeds the temporary S4 capacity.");
+                "화물의 무게 또는 슬롯 수가 카라반의 적재 한도를 초과했습니다.");
         }
 
         var nextDraftItems = new List<CaravanCargoDraftItem>(validatedItems.Count);
@@ -305,7 +304,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.InvalidDraft,
-                "The Caravan cargo plan could not be stored.");
+                "화물 적재 초안을 저장하지 못했습니다.");
         }
         return CaravanLoadSettingCommandResult.Success();
     }
@@ -394,44 +393,87 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         cargoDrafts.ClearAll();
         compositionDrafts = null;
         transportInventory = null;
+        transportCatalog = null;
+    }
+
+    internal void SetSaveServiceForTests(ND.Framework.ISaveService saveService)
+    {
+        saveServiceOverrideForTests = saveService;
     }
 
     private CaravanCompositionSnapshot GetComposition(string caravanId)
     {
         EnsureCompositionServices();
-        return compositionDrafts.GetOrCreate(
-            caravanId,
-            WagonInstanceId,
-            new[] { FirstAnimalInstanceId, SecondAnimalInstanceId });
-    }
-
-    private static CaravanCompositionSnapshot CreateLegacyTravelingComposition(string caravanId)
-    {
-        return new CaravanCompositionSnapshot(
-            NormalizeId(caravanId),
-            WagonInstanceId,
-            new[] { FirstAnimalInstanceId, SecondAnimalInstanceId });
+        string wagonId = string.Empty;
+        var animalIds = new List<string>();
+        bool hasSavedCaravan = TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData caravan);
+        if (hasSavedCaravan)
+        {
+            wagonId = NormalizeId(caravan.wagon?.instanceId);
+            if (string.IsNullOrEmpty(wagonId)) wagonId = NormalizeId(caravan.wagon?.wagonName);
+            if (caravan.animals != null)
+            {
+                for (int index = 0; index < caravan.animals.Count; index++)
+                {
+                    ND.Framework.AnimalSaveData animal = caravan.animals[index];
+                    string id = NormalizeId(animal?.instanceId);
+                    if (string.IsNullOrEmpty(id)) id = NormalizeId(animal?.animalName);
+                    if (!string.IsNullOrEmpty(id)) animalIds.Add(id);
+                }
+            }
+        }
+        return compositionDrafts.GetOrCreate(caravanId, wagonId, animalIds);
     }
 
     private void EnsureCompositionServices()
     {
-        if (compositionDrafts != null)
-            return;
-
+        if (compositionDrafts != null) return;
+        transportCatalog = new CaravanTransportCatalogProvider();
+        // TODO(PRODUCTION-OWNERSHIP): The SO catalog is temporarily exposed as owned instances so
+        // the sandbox UI remains usable. Delete this catalog-to-ownership registration when the
+        // player-owned wagon/animal inventory provider supplies stable instance IDs.
         transportInventory = new OwnedTransportInventoryService();
-        transportInventory.RegisterWagon(new OwnedWagonInstance(
-            WagonInstanceId,
-            WagonContentId,
-            WagonMaxLoad,
-            WagonInventorySlotCount,
-            1,
-            2));
-        transportInventory.RegisterAnimal(new OwnedDraftAnimalInstance(
-            FirstAnimalInstanceId,
-            AnimalContentId));
-        transportInventory.RegisterAnimal(new OwnedDraftAnimalInstance(
-            SecondAnimalInstanceId,
-            AnimalContentId));
+        foreach (WagonData wagon in transportCatalog.Wagons)
+            transportInventory.RegisterWagon(new OwnedWagonInstance(wagon.WagonId, wagon.WagonId, wagon.MaxLoad, wagon.InventorySlotCount, wagon.MinRequireAnimals, wagon.MaxPullAnimals));
+        foreach (DraftAnimalData animal in transportCatalog.DraftAnimals)
+            transportInventory.RegisterAnimal(new OwnedDraftAnimalInstance(animal.DraftAnimalId, animal.DraftAnimalId));
+        // Compatibility bridge for saves created before the ownership provider exists. Keep the
+        // content-ID fallback while legacy saves are supported; remove it after save migration.
+        FrameworkSaveData saveData = ResolveSaveData();
+        if (saveData?.caravans != null)
+        {
+            for (int caravanIndex = 0; caravanIndex < saveData.caravans.Count; caravanIndex++)
+            {
+                FrameworkCaravanSaveData saved = saveData.caravans[caravanIndex];
+                if (saved == null) continue;
+
+                string wagonInstanceId = NormalizeId(saved.wagon?.instanceId);
+                string wagonContentId = NormalizeId(saved.wagon?.wagonName);
+                if (string.IsNullOrEmpty(wagonContentId)) wagonContentId = wagonInstanceId;
+                if (!string.IsNullOrEmpty(wagonInstanceId)
+                    && transportCatalog.TryGetWagon(wagonContentId, out WagonData wagon))
+                {
+                    transportInventory.RegisterWagon(new OwnedWagonInstance(
+                        wagonInstanceId, wagonContentId, wagon.MaxLoad, wagon.InventorySlotCount,
+                        wagon.MinRequireAnimals, wagon.MaxPullAnimals));
+                }
+
+                if (saved.animals == null) continue;
+                for (int animalIndex = 0; animalIndex < saved.animals.Count; animalIndex++)
+                {
+                    ND.Framework.AnimalSaveData animalSave = saved.animals[animalIndex];
+                    string animalInstanceId = NormalizeId(animalSave?.instanceId);
+                    string animalContentId = NormalizeId(animalSave?.animalName);
+                    if (string.IsNullOrEmpty(animalContentId)) animalContentId = animalInstanceId;
+                    if (!string.IsNullOrEmpty(animalInstanceId)
+                        && transportCatalog.TryGetDraftAnimal(animalContentId, out _))
+                    {
+                        transportInventory.RegisterAnimal(
+                            new OwnedDraftAnimalInstance(animalInstanceId, animalContentId));
+                    }
+                }
+            }
+        }
         compositionDrafts = new CaravanCompositionDraftService(transportInventory);
     }
 
@@ -447,6 +489,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                     CaravanSettingFailureCodes.AssetNotOwned,
                     "One or more selected transport instances are not available.");
             case CaravanCompositionDraftFailure.DuplicateAnimal:
+            case CaravanCompositionDraftFailure.MixedAnimalType:
             case CaravanCompositionDraftFailure.InvalidComposition:
                 return CaravanSettingCommandResult.Failure(
                     CaravanSettingFailureCodes.InvalidComposition,
@@ -457,34 +500,37 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                     "The Caravan setting request is invalid.");
         }
     }
-
     private CargoItemViewData[] CreateSavedCargoSnapshot(FrameworkCaravanSaveData caravan)
     {
-        CaravanSavedCargoSnapshot snapshot = savedCargoService.CreateSnapshot(caravan);
-        if (snapshot.Items.Count == 0)
+        IReadOnlyList<CaravanSavedCargoPresentationItem> snapshot =
+            savedCargoService.CreatePresentation(
+                caravan,
+                FrameworkRoot.Instance?.SharedGameData);
+        if (snapshot.Count == 0)
             return Array.Empty<CargoItemViewData>();
 
-        var result = new CargoItemViewData[snapshot.Items.Count];
-        for (int index = 0; index < snapshot.Items.Count; index++)
+        var result = new CargoItemViewData[snapshot.Count];
+        for (int index = 0; index < snapshot.Count; index++)
         {
-            CaravanSavedCargoItem item = snapshot.Items[index];
+            CaravanSavedCargoPresentationItem item = snapshot[index];
+            SharedTradeItemDefinition definition = item.Definition;
             TradeItemSaveData savedItem = item.SavedItem;
-            TradeItemData catalogItem = FindCatalogItem(item.ItemId);
-            float unitWeight = catalogItem != null
-                ? Mathf.Max(0f, catalogItem.Weight)
+            Enum.TryParse(definition?.Category, true, out TradeItemCategory category);
+            float unitWeight = definition != null
+                ? Mathf.Max(0f, definition.Weight)
                 : Mathf.Max(0f, savedItem.weight);
             result[index] = new CargoItemViewData
             {
                 itemId = item.ItemId,
-                displayName = catalogItem != null ? catalogItem.DisplayName : savedItem.itemName,
-                icon = catalogItem != null ? catalogItem.Icon : null,
-                category = catalogItem != null ? catalogItem.Category : default,
+                displayName = definition?.DisplayName ?? savedItem.itemName,
+                icon = definition?.Icon,
+                category = category,
                 quantity = item.Quantity,
                 unitWeight = unitWeight,
                 totalWeight = unitWeight * item.Quantity,
                 purchaseUnitPrice = Math.Max(0L, savedItem.basePrice),
-                estimatedSellUnitPrice = catalogItem != null
-                    ? Math.Max(0L, catalogItem.BaseSellPrice)
+                estimatedSellUnitPrice = definition != null
+                    ? Math.Max(0L, definition.BaseSellPrice)
                     : Math.Max(0L, savedItem.basePrice),
                 totalPurchasePrice = Math.Max(0L, savedItem.basePrice) * item.Quantity
             };
@@ -503,30 +549,71 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             CaravanCargoDraftItem item = plannedCargo[index];
             TradeItemData catalogItem = FindCatalogItem(item.ItemId);
             TryGetOfficialCatalogItem(caravanId, item.ItemId, out CaravanMarketCatalogItem officialItem);
+            CaravanSavedCargoPresentationItem savedItem =
+                FindSavedCargoPresentation(caravanId, item.ItemId);
+            SharedTradeItemDefinition savedDefinition = savedItem?.Definition;
+            TradeItemSaveData savedData = savedItem?.SavedItem;
+            Enum.TryParse(savedDefinition?.Category, true, out TradeItemCategory savedCategory);
             float unitWeight = officialItem?.Definition != null
                 ? Mathf.Max(0f, officialItem.Definition.Weight)
-                : catalogItem != null ? Mathf.Max(0f, catalogItem.Weight) : 0f;
+                : catalogItem != null
+                    ? Mathf.Max(0f, catalogItem.Weight)
+                    : savedDefinition != null
+                        ? Mathf.Max(0f, savedDefinition.Weight)
+                        : Mathf.Max(0f, savedData?.weight ?? 0f);
             long buyPrice = officialItem != null
                 ? officialItem.BuyUnitPrice
-                : catalogItem != null ? Math.Max(0L, catalogItem.BaseBuyPrice) : 0L;
+                : catalogItem != null
+                    ? Math.Max(0L, catalogItem.BaseBuyPrice)
+                    : Math.Max(0L, savedData?.basePrice ?? 0L);
+            long sellPrice = catalogItem != null
+                ? Math.Max(0L, catalogItem.BaseSellPrice)
+                : savedDefinition != null
+                    ? Math.Max(0L, savedDefinition.BaseSellPrice)
+                    : Math.Max(0L, savedData?.basePrice ?? 0L);
             result[index] = new CargoItemViewData
             {
                 itemId = item.ItemId,
                 displayName = catalogItem != null
                     ? catalogItem.DisplayName
-                    : officialItem?.Definition?.DisplayName ?? item.ItemId,
-                icon = catalogItem != null ? catalogItem.Icon : officialItem?.Definition?.Icon,
-                category = catalogItem != null ? catalogItem.Category : default,
+                    : officialItem?.Definition?.DisplayName
+                        ?? savedDefinition?.DisplayName
+                        ?? savedData?.itemName
+                        ?? item.ItemId,
+                icon = catalogItem != null
+                    ? catalogItem.Icon
+                    : officialItem?.Definition?.Icon ?? savedDefinition?.Icon,
+                category = catalogItem != null ? catalogItem.Category : savedCategory,
                 quantity = item.Quantity,
                 unitWeight = unitWeight,
                 totalWeight = unitWeight * item.Quantity,
                 purchaseUnitPrice = buyPrice,
-                estimatedSellUnitPrice = catalogItem != null ? Math.Max(0L, catalogItem.BaseSellPrice) : 0L,
+                estimatedSellUnitPrice = sellPrice,
                 totalPurchasePrice = MultiplyClamped(buyPrice, item.Quantity)
             };
         }
 
         return result;
+    }
+
+    private CaravanSavedCargoPresentationItem FindSavedCargoPresentation(
+        string caravanId,
+        string itemId)
+    {
+        if (!TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData caravan))
+            return null;
+
+        IReadOnlyList<CaravanSavedCargoPresentationItem> items =
+            savedCargoService.CreatePresentation(
+                caravan,
+                FrameworkRoot.Instance?.SharedGameData);
+        for (int index = 0; index < items.Count; index++)
+        {
+            if (string.Equals(items[index].ItemId, itemId, StringComparison.Ordinal))
+                return items[index];
+        }
+
+        return null;
     }
 
     private FrameworkSaveData ResolveSaveData()
@@ -553,78 +640,80 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
     }
 
     private CaravanSettingViewData CreateSettingSnapshot(
-        string caravanId,
-        string displayName,
-        JourneyState state,
-        bool canEdit,
-        string blockedReason,
-        string snapshotWagonInstanceId,
+        string caravanId, string displayName, JourneyState state, bool canEdit,
+        string blockedReason, string snapshotWagonInstanceId,
         IReadOnlyList<string> snapshotAnimalInstanceIds)
     {
-        string[] animalIds = CopyIds(snapshotAnimalInstanceIds);
+        EnsureCompositionServices();
+        string[] selectedAnimalIds = CopyIds(snapshotAnimalInstanceIds);
+        var wagonViews = new List<WagonViewData>();
+        foreach (WagonData wagon in transportCatalog.Wagons)
+        {
+            // SaveData stores an owned instance ID while the SO catalog stores shared content IDs.
+            // Preserve the selected physical wagon identity so S3 can restore and commit it safely.
+            string wagonInstanceId = wagon.WagonId;
+            if (!string.IsNullOrWhiteSpace(snapshotWagonInstanceId)
+                && transportInventory.TryGetWagon(snapshotWagonInstanceId, out OwnedWagonInstance selectedWagon)
+                && string.Equals(selectedWagon.ContentId, wagon.WagonId, StringComparison.Ordinal))
+                wagonInstanceId = selectedWagon.InstanceId;
+
+            wagonViews.Add(new WagonViewData
+            {
+                wagonId = wagon.WagonId, wagonInstanceId = wagonInstanceId,
+                displayName = wagon.DisplayName, icon = wagon.Icon, description = wagon.Description,
+                wagonType = wagon.WagonType, baseMoveSpeed = wagon.BaseMoveSpeed,
+                currentDurability = wagon.MaxDurability, maxDurability = wagon.MaxDurability,
+                overLoad = wagon.Overload, maxLoad = wagon.MaxLoad,
+                inventorySlotCount = wagon.InventorySlotCount,
+                eligibleAnimalTypes = wagon.EligibleAnimalTypes,
+                minRequireAnimals = wagon.MinRequireAnimals, maxPullAnimals = wagon.MaxPullAnimals,
+                ownedAmount = 1, isOwned = true, canSelect = canEdit,
+                disabledReason = canEdit ? string.Empty : blockedReason
+            });
+        }
+        var animalViews = new List<DraftAnimalViewData>();
+        var selectedAnimalContentIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int index = 0; index < selectedAnimalIds.Length; index++)
+        {
+            string selectedInstanceId = selectedAnimalIds[index];
+            if (!transportInventory.TryGetAnimal(selectedInstanceId, out OwnedDraftAnimalInstance ownedAnimal)
+                || !transportCatalog.TryGetDraftAnimal(ownedAnimal.ContentId, out DraftAnimalData selectedAnimal))
+                continue;
+
+            selectedAnimalContentIds.Add(ownedAnimal.ContentId);
+            animalViews.Add(CreateAnimalSettingView(selectedAnimal, selectedInstanceId, true, canEdit, blockedReason));
+        }
+        foreach (DraftAnimalData animal in transportCatalog.DraftAnimals)
+        {
+            // Keep a temporary catalog fallback for unselected types until the player-owned
+            // transport inventory supplies every instance, without replacing saved instance IDs.
+            if (!selectedAnimalContentIds.Contains(animal.DraftAnimalId))
+                animalViews.Add(CreateAnimalSettingView(animal, animal.DraftAnimalId, false, canEdit, blockedReason));
+        }
         return new CaravanSettingViewData
         {
-            caravanId = caravanId,
-            caravanDisplayName = displayName,
-            state = state,
-            canEdit = canEdit,
-            editBlockedReason = canEdit ? string.Empty : blockedReason,
+            caravanId = caravanId, caravanDisplayName = displayName, state = state,
+            canEdit = canEdit, editBlockedReason = canEdit ? string.Empty : blockedReason,
             selectedWagonInstanceId = snapshotWagonInstanceId,
-            selectedAnimalInstanceIds = animalIds,
-            wagons = new[]
-            {
-                new WagonViewData
-                {
-                    wagonId = WagonContentId,
-                    wagonInstanceId = WagonInstanceId,
-                    displayName = "Test Medium Wagon",
-                    wagonType = WagonType.WagonWithAnimals,
-                    maxLoad = WagonMaxLoad,
-                    inventorySlotCount = WagonInventorySlotCount,
-                    currentDurability = WagonDurability,
-                    maxDurability = WagonDurability,
-                    minRequireAnimals = 1,
-                    maxPullAnimals = 2,
-                    eligibleAnimalTypes = new[] { DraftAnimalType.Horse },
-                    ownedAmount = 1,
-                    isOwned = true,
-                    canSelect = canEdit,
-                    disabledReason = canEdit ? string.Empty : blockedReason
-                }
-            },
-            draftAnimals = new[]
-            {
-                CreateAnimalViewData(
-                    FirstAnimalInstanceId,
-                    ContainsId(animalIds, FirstAnimalInstanceId),
-                    canEdit,
-                    blockedReason),
-                CreateAnimalViewData(
-                    SecondAnimalInstanceId,
-                    ContainsId(animalIds, SecondAnimalInstanceId),
-                    canEdit,
-                    blockedReason)
-            }
+            selectedAnimalInstanceIds = selectedAnimalIds,
+            wagons = wagonViews.ToArray(), draftAnimals = animalViews.ToArray()
         };
     }
 
-    private static DraftAnimalViewData CreateAnimalViewData(
-        string animalInstanceId,
-        bool selected,
-        bool canEdit,
-        string blockedReason)
+
+
+    private static DraftAnimalViewData CreateAnimalSettingView(
+        DraftAnimalData animal, string instanceId, bool selected, bool canEdit, string blockedReason)
     {
         return new DraftAnimalViewData
         {
-            draftAnimalId = AnimalContentId,
-            draftAnimalInstanceId = animalInstanceId,
-            displayName = "Test Horse",
-            animalType = DraftAnimalType.Horse,
-            ownedAmount = 1,
-            selectedAmount = selected ? 1 : 0,
-            maxSelectableAmount = 1,
-            isEligibleForSelectedWagon = true,
-            canSelect = canEdit,
+            draftAnimalId = animal.DraftAnimalId, draftAnimalInstanceId = instanceId,
+            displayName = animal.DisplayName, icon = animal.Icon, description = animal.Description,
+            animalType = animal.AnimalType, feedConsumption = animal.FeedConsumption,
+            baseMoveSpeed = animal.BaseMoveSpeed, increaseOverLoad = animal.IncreaseOverLoad,
+            increaseMaxLoad = animal.IncreaseMaxLoad, ownedAmount = 1,
+            selectedAmount = selected ? 1 : 0, maxSelectableAmount = 1,
+            isEligibleForSelectedWagon = true, canSelect = canEdit,
             disabledReason = canEdit ? string.Empty : blockedReason
         };
     }
@@ -794,7 +883,14 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         TradeItemData catalogItem = FindCatalogItem(itemId);
         if (catalogItem != null)
             return Mathf.Max(0f, catalogItem.Weight);
-        return 0f;
+
+        // A committed Cargo item may legitimately be absent from the current-town Market.
+        // Capacity validation must still use its persisted unit weight instead of treating it as 0.
+        CaravanSavedCargoPresentationItem savedItem =
+            FindSavedCargoPresentation(caravanId, itemId);
+        if (savedItem?.Definition != null)
+            return Mathf.Max(0f, savedItem.Definition.Weight);
+        return Mathf.Max(0f, savedItem?.SavedItem?.weight ?? 0f);
     }
 
     private bool TryResolveOfficialCatalog(
@@ -822,11 +918,18 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             && catalog.TryGetItem(itemId, out item);
     }
 
-    private static void GetCapacity(string wagonInstanceId, out float maxLoad, out int maxSlots)
+    private void GetCapacity(string wagonInstanceId, out float maxLoad, out int maxSlots)
     {
-        bool hasWagon = NormalizeId(wagonInstanceId) == WagonInstanceId;
-        maxLoad = hasWagon ? WagonMaxLoad : 0f;
-        maxSlots = hasWagon ? WagonInventorySlotCount : 0;
+        EnsureCompositionServices();
+        if (transportInventory.TryGetWagon(wagonInstanceId, out OwnedWagonInstance ownedWagon)
+            && transportCatalog.TryGetWagon(ownedWagon.ContentId, out WagonData wagon))
+        {
+            maxLoad = wagon.MaxLoad;
+            maxSlots = wagon.InventorySlotCount;
+            return;
+        }
+        maxLoad = 0f;
+        maxSlots = 0;
     }
 
     private float GetPlannedCargoLoad(
@@ -858,6 +961,73 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         }
 
         return load;
+    }
+
+    private static bool AreAnimalsEligible(WagonData wagon, IReadOnlyList<DraftAnimalData> animals)
+    {
+        DraftAnimalType[] eligibleTypes = wagon.EligibleAnimalTypes;
+        for (int index = 0; index < animals.Count; index++)
+        {
+            bool eligible = eligibleTypes.Length == 0;
+            for (int typeIndex = 0; typeIndex < eligibleTypes.Length; typeIndex++)
+                eligible |= eligibleTypes[typeIndex] == animals[index].AnimalType;
+            if (!eligible) return false;
+        }
+        return true;
+    }
+
+    private static float GetSavedCargoLoad(FrameworkCaravanSaveData caravan)
+    {
+        float total = 0f;
+        if (caravan?.cargo == null) return total;
+        for (int index = 0; index < caravan.cargo.Count; index++)
+        {
+            ND.Framework.CargoEntrySaveData entry = caravan.cargo[index];
+            if (entry?.item != null && entry.quantity > 0)
+                total += Mathf.Max(0f, entry.item.weight) * entry.quantity;
+        }
+        return total;
+    }
+
+    private static ND.Framework.WagonSaveData CreateWagonSaveData(
+        WagonData wagon,
+        string instanceId)
+    {
+        return new ND.Framework.WagonSaveData
+        {
+            instanceId = NormalizeId(instanceId),
+            wagonName = wagon.WagonId,
+            overLoad = wagon.Overload,
+            maxLoad = wagon.MaxLoad,
+            minAnimals = wagon.MinRequireAnimals,
+            maxAnimals = wagon.MaxPullAnimals,
+            speedModifier = wagon.BaseMoveSpeed,
+            maxDurability = wagon.MaxDurability,
+            inventorySlotCount = wagon.InventorySlotCount
+        };
+    }
+
+    private static List<ND.Framework.AnimalSaveData> CreateAnimalSaveData(
+        IReadOnlyList<DraftAnimalData> animals,
+        IReadOnlyList<string> instanceIds)
+    {
+        var result = new List<ND.Framework.AnimalSaveData>(animals.Count);
+        for (int index = 0; index < animals.Count; index++)
+        {
+            DraftAnimalData animal = animals[index];
+            result.Add(new ND.Framework.AnimalSaveData
+            {
+                instanceId = NormalizeId(instanceIds[index]),
+                animalName = animal.DraftAnimalId,
+                speed = animal.BaseMoveSpeed,
+                foodPerKm = animal.FeedConsumption,
+                increaseOverLoad = animal.IncreaseOverLoad,
+                increaseMaxLoad = animal.IncreaseMaxLoad,
+                animalType = animal.AnimalType
+            });
+        }
+
+        return result;
     }
 
     private static string[] CopyIds(IReadOnlyList<string> source)
