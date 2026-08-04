@@ -1,5 +1,7 @@
 # Multi-active TradeProgressCoordinator Plan
 
+> Caravan Setting production access and its remaining Scene migration are now governed by [Caravan Setting Production Service Contract](./Caravan_Setting_Production_Service_Contract.md). The 2A application service is implemented, but equipment identity/inventory 2B and InGame Scene migration remain pending.
+
 ## Current arrival-sale limitation
 
 `Arrival_Sale_Settlement_Claim_Policy.md` is canonical for the current product flow. Sale uses explicit `caravanId`; presentation and Claim use `caravanId + full tradeId`; `selectedCaravanId` remains a UI facade. Multiple pending entries may coexist, but global `LastSettlementResult`, legacy singular pending restore, and shared arrival-sale button resolution remain compatibility risks. This plan must not be read as claiming complete Multi-Caravan sale/settlement restore.

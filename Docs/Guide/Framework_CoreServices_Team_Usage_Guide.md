@@ -71,6 +71,7 @@ M2 통합 검증 기록: [`Docs/Personal_Documents/CSU/0711_m2-pause-failed-forc
 | `SaveService` | Load / Save / Reset / HasSaveData |
 | `CurrentSaveData` | 현재 공유 SaveData 참조 |
 | `SharedGameData` | ID → 기준 데이터 조회 (`ISharedGameDataProvider`) |
+| `CaravanSetting` | Caravan 편성·화물·시장·저장 조회 및 저장 Command (`CaravanSettingApplicationService`) |
 | `SceneFlow` | Boot/Title/Loading/InGame 전환 |
 | `TradeStart` | 무역 출발 |
 | `TradeProgressCoordinator` | 진행률 · 정산 생성 · claim |
@@ -89,6 +90,8 @@ var shared = root.SharedGameData;
 
 - `CurrentSaveData`는 **공유 mutable 참조**이다. 바꾸면 다른 서비스에도 바로 보인다.
 - 영속화가 필요하면 `SaveService.Save(CurrentSaveData)`를 호출한다(많은 흐름은 이미 내부에서 저장한다).
+- Caravan Setting UI는 `CaravanSetting`의 Provider/Command 계약 또는 runtime bridge를 사용한다. `SaveData`를 직접 수정하지 않는다.
+- 현재 production application service는 구현됐지만 InGame Scene은 아직 `TestCaravanSettingService`를 참조한다. 장비 definition ID와 미배정 inventory 계약 및 Scene 이전 조건은 [Caravan Setting Production Service Contract](../Contract/Caravan_Setting_Production_Service_Contract.md)를 따른다.
 
 ---
 

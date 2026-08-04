@@ -319,6 +319,9 @@ namespace ND.Framework
         /// <summary>Caravan 생성, 저장 및 저장 실패 원복을 담당하는 Production command service이다.</summary>
         public CaravanManagementService CaravanManagement { get; private set; }
 
+        /// <summary>Caravan 설정·화물 조회와 저장 command를 제공하는 production application boundary이다.</summary>
+        public CaravanSettingApplicationService CaravanSetting { get; private set; }
+
         /// <summary>마을 건물 배치 변경과 영속 저장을 하나의 SaveData 트랜잭션으로 처리한다.</summary>
         public BuildingPlacementCommand BuildingPlacement { get; private set; }
 
@@ -744,6 +747,10 @@ namespace ND.Framework
                 () => CurrentSaveData,
                 SaveService,
                 TradeProgressCoordinator.GetOrCreateRuntimeCaravan);
+            CaravanSetting = new CaravanSettingApplicationService(
+                () => CurrentSaveData,
+                SaveService,
+                () => SharedGameData);
 
             // 실제 MinimumTradeCost는 Content/Progression 공급 전까지 0으로 두어 command가 안전하게 거부되게 한다.
             ConfigureRescueLoanDefinition(new RescueLoanDefinition());
