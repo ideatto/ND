@@ -8,6 +8,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
+using FrameworkSaveData = ND.Framework.SaveData;
+using FrameworkTradeProgressSaveData = ND.Framework.TradeProgressSaveData;
 
 public sealed class CaravanSettingPlayModeSmokeTests
 {
@@ -16,6 +19,7 @@ public sealed class CaravanSettingPlayModeSmokeTests
     private const string InGameSceneName = "InGame";
     private const int SceneLoadTimeoutFrames = 300;
     private SceneSetup[] originalSceneSetup;
+    private string originalRuntimeSaveJson;
 
     [UnitySetUp]
     public IEnumerator SetUp()
@@ -29,16 +33,66 @@ public sealed class CaravanSettingPlayModeSmokeTests
         originalSceneSetup = EditorSceneManager.GetSceneManagerSetup();
         EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
         yield return new EnterPlayMode();
+        InstallDeterministicSaveFixture();
     }
 
     [UnityTearDown]
     public IEnumerator TearDown()
     {
         if (Application.isPlaying)
+        {
+            RestoreRuntimeSave();
             yield return new ExitPlayMode();
+        }
 
         if (originalSceneSetup != null && originalSceneSetup.Length > 0)
             EditorSceneManager.RestoreSceneManagerSetup(originalSceneSetup);
+    }
+
+    private void InstallDeterministicSaveFixture()
+    {
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        Assert.That(root, Is.Not.Null, "FrameworkRoot was not created before the smoke fixture setup.");
+        Assert.That(root.CurrentSaveData, Is.Not.Null, "FrameworkRoot has no runtime SaveData to isolate.");
+
+        originalRuntimeSaveJson = JsonUtility.ToJson(root.CurrentSaveData);
+        var fixture = new FrameworkSaveData();
+        fixture.caravans.Clear();
+        fixture.tradeProgressEntries.Clear();
+        fixture.pendingSettlements.Clear();
+        fixture.caravanActivityLogs.Clear();
+        fixture.player.currentTownId = ND.Framework.CaravanManagementService.InitialCaravanTownId;
+        fixture.world.unlockedCaravanSlotIndices.Clear();
+        fixture.world.unlockedCaravanSlotIndices.Add(0);
+
+        const string caravanId = "caravan-setting-ui-smoke";
+        fixture.caravans.Add(new FrameworkCaravanSaveData
+        {
+            caravanId = caravanId,
+            slotIndex = 0,
+            currentTownId = ND.Framework.CaravanManagementService.InitialCaravanTownId,
+            state = JourneyState.Prepare
+        });
+        fixture.tradeProgressEntries.Add(new FrameworkTradeProgressSaveData
+        {
+            caravanId = caravanId,
+            state = ND.Framework.TradeProgressState.None
+        });
+        fixture.selectedCaravanId = caravanId;
+
+        JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(fixture), root.CurrentSaveData);
+        root.InGameScreenRouter.RefreshFromSaveData(root.CurrentSaveData, true);
+    }
+
+    private void RestoreRuntimeSave()
+    {
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        if (root == null || root.CurrentSaveData == null || string.IsNullOrEmpty(originalRuntimeSaveJson))
+            return;
+
+        JsonUtility.FromJsonOverwrite(originalRuntimeSaveJson, root.CurrentSaveData);
+        root.InGameScreenRouter.RefreshFromSaveData(root.CurrentSaveData, true);
+        originalRuntimeSaveJson = null;
     }
 
     [UnityTest]
