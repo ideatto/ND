@@ -193,6 +193,10 @@ Packages/packages-lock.json linguist-generated
 # Unity binary asset exception
 LightingData.asset      lfs
 
+# TerrainData는 바이너리 .asset — *.asset(unity-yaml, eol=lf)의 줄바꿈 정규화가
+# 바이너리 내용을 손상시킴(CR 제거). 바이너리로 지정해 변환을 막는다.
+*_TerrainData.asset      binary
+
 # Text-based but usually generated 3D data
 *.gltf                  lfs
 
