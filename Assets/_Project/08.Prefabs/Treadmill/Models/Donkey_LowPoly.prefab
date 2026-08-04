@@ -63,7 +63,7 @@ PrefabInstance:
     - target: {fileID: -7745225826220379731, guid: f27be663e093b2e408a463cbfbdbc710, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: d14d683cf902b3746bb293e98c1b2796, type: 2}
+      objectReference: {fileID: -4599305041146110635, guid: 98e37febd7a688543928c5fe21f1ac70, type: 3}
     - target: {fileID: 919132149155446097, guid: f27be663e093b2e408a463cbfbdbc710, type: 3}
       propertyPath: m_Name
       value: Donkey_LowPoly
