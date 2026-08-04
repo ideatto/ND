@@ -218,21 +218,29 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
     /// </summary>
     private void CreateHeaderEditModeControls()
     {
-        bool editing = placementController != null && placementController.IsEditMode;
+        ResolvePlacementController();
         if (headerEditModeButton == null)
-            // Keep the entry button visually paired with the existing Close button (120 x 56).
-            // A narrower width wraps the Korean label and makes the header controls look unrelated.
+            // \uAE30\uC874 \uC704\uCE58\u00B7\uC2A4\uD0C0\uC77C \uADF8\uB300\uB85C. \uB77C\uBCA8\uC740 \uC0C1\uD0DC\uC5D0 \uB530\uB77C \uD3B8\uC9D1\uBAA8\uB4DC/\uD3B8\uC9D1\uC644\uB8CC\uB85C \uD1A0\uAE00\uB41C\uB2E4.
             headerEditModeButton = CreateHeaderButton(editModeButtonPrefab, "\uD3B8\uC9D1\uBAA8\uB4DC", 120f);
         headerEditModeButton.onClick.RemoveAllListeners();
         headerEditModeButton.onClick.AddListener(() =>
         {
             ResolvePlacementController();
-            placementController?.EnterEditMode();
-            // Close the catalog immediately so it does not block village edit input.
-            Close();
+            placementController?.ToggleEditMode();   // \uD3B8\uC9D1 \uC9C4\uC785 \u2194 \uC885\uB8CC
+            UpdateEditModeButtonLabel();             // \uAC19\uC740 \uBC84\uD2BC \uB77C\uBCA8\uB9CC \uAC31\uC2E0(\uC790\uB9AC \uC720\uC9C0)
         });
         headerEditModeButton.gameObject.SetActive(true);
-        headerEditModeButton.interactable = !editing;
+        headerEditModeButton.interactable = true;
+        UpdateEditModeButtonLabel();
+    }
+
+    // \uD3B8\uC9D1 \uC0C1\uD0DC\uC5D0 \uB9DE\uCDB0 \uD3B8\uC9D1 \uBC84\uD2BC \uB77C\uBCA8\uC744 '\uD3B8\uC9D1\uBAA8\uB4DC'/'\uD3B8\uC9D1\uC644\uB8CC'\uB85C \uAC31\uC2E0(\uBC84\uD2BC\uC740 \uADF8\uB300\uB85C \uB450\uACE0 \uD14D\uC2A4\uD2B8\uB9CC).
+    private void UpdateEditModeButtonLabel()
+    {
+        if (headerEditModeButton == null) return;
+        bool editing = placementController != null && placementController.IsEditMode;
+        TMPro.TMP_Text label = headerEditModeButton.GetComponentInChildren<TMPro.TMP_Text>(true);
+        if (label != null) label.text = editing ? "\uD3B8\uC9D1\uC644\uB8CC" : "\uD3B8\uC9D1\uBAA8\uB4DC";
     }
 
     private Button CreateHeaderButton(Button prefab, string label, float width)

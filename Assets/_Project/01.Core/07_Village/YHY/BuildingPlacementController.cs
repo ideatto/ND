@@ -514,17 +514,81 @@ public class BuildingPlacementController : MonoBehaviour,
 
     private const float BtnW = 100f, BtnH = 100f, BtnOff = 150f;   // 회전 버튼 크기 + 중심에서 좌우 간격
 
-    // 선택된 건물의 양 옆에 작은 좌/우 회전 버튼 표시(건물 따라다님. 임시 IMGUI, 추후 uGUI 교체 가능).
-    private void OnGUI()
+    [Header("회전 버튼(uGUI)")]
+    [Tooltip("좌/우 회전 버튼에 쓸 '위 화살표' 스프라이트. 좌=+90°·우=-90° 회전해 표시. view 아래 uGUI 버튼으로 생성되어 캔버스 정렬을 따른다(다른 UI 패널이 위로 뜨면 자연히 가려짐 = '화살표가 패널 뚫고 나오는' 문제 해결).")]
+    [SerializeField] private Sprite rotateArrowSprite;
+    [SerializeField] private float arrowButtonSize = 64f;   // 회전 버튼 픽셀 크기
+    private RectTransform leftArrow, rightArrow;            // 런타임 생성(view 자식) 회전 버튼
+    private bool arrowsBuilt;
+
+    // 선택 건물 양옆 회전 버튼(uGUI). IMGUI(OnGUI)는 캔버스보다 무조건 위에 그려져 패널을 뚫었지만,
+    // 이건 view 아래 캔버스 요소라 다른 패널과 정렬을 공유한다. 매 프레임 화면 위치만 갱신.
+    private void LateUpdate()
     {
-        if (!editMode) return;
-        if (!TryButtonRects(out Rect left, out Rect right)) return;
-        GUIStyle s = new GUIStyle(GUI.skin.button) { fontSize = 52 };
-        // 화면좌표(좌하단 원점) → GUI좌표(좌상단 원점): y 뒤집기
-        Rect lg = new Rect(left.x, Screen.height - left.y - left.height, left.width, left.height);
-        Rect rg = new Rect(right.x, Screen.height - right.y - right.height, right.width, right.height);
-        if (GUI.Button(lg, "◀", s)) RotateLeft();
-        if (GUI.Button(rg, "▶", s)) RotateRight();
+        if (!editMode || !ArrowsReady() || !TryButtonRects(out Rect left, out Rect right))
+        {
+            SetArrowsVisible(false);
+            return;
+        }
+        SetArrowsVisible(true);
+        PlaceArrow(leftArrow, left.center);
+        PlaceArrow(rightArrow, right.center);
+    }
+
+    // 스프라이트·view가 준비되면 버튼 2개를 1회 생성(view 자식). 준비 안 되면 false.
+    private bool ArrowsReady()
+    {
+        if (rotateArrowSprite == null || view == null) return false;
+        if (!arrowsBuilt) BuildArrows();
+        return arrowsBuilt;
+    }
+
+    private void BuildArrows()
+    {
+        leftArrow = CreateArrowButton("RotateLeftBtn", 90f, RotateLeft);     // 위 화살표 +90°(CCW) → 왼쪽
+        rightArrow = CreateArrowButton("RotateRightBtn", -90f, RotateRight); // 위 화살표 -90°(CW) → 오른쪽
+        arrowsBuilt = leftArrow != null && rightArrow != null;
+    }
+
+    // view 아래에 회전 버튼 하나 생성(Image=스프라이트, z로 회전, Button onClick 연결).
+    private RectTransform CreateArrowButton(string btnName, float zRot, UnityEngine.Events.UnityAction onClick)
+    {
+        var go = new GameObject(btnName, typeof(RectTransform), typeof(CanvasRenderer),
+            typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+        var rt = go.GetComponent<RectTransform>();
+        rt.SetParent(view.rectTransform, false);
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(arrowButtonSize, arrowButtonSize);
+        rt.localRotation = Quaternion.Euler(0f, 0f, zRot);   // '위 화살표'를 좌/우로 돌림
+        var img = go.GetComponent<UnityEngine.UI.Image>();
+        img.sprite = rotateArrowSprite;
+        img.preserveAspect = true;
+        img.raycastTarget = true;
+        var btn = go.GetComponent<UnityEngine.UI.Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(onClick);
+        go.SetActive(false);   // 기본 숨김(선택 시 표시)
+        return rt;
+    }
+
+    // 화면좌표(스크린 픽셀) → view 로컬좌표로 변환해 버튼 배치.
+    private void PlaceArrow(RectTransform arrow, Vector2 screenCenter)
+    {
+        if (arrow == null) return;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(view.rectTransform, screenCenter, uiCamera, out Vector2 local))
+            arrow.anchoredPosition = local;
+    }
+
+    private void SetArrowsVisible(bool on)
+    {
+        if (leftArrow != null && leftArrow.gameObject.activeSelf != on) leftArrow.gameObject.SetActive(on);
+        if (rightArrow != null && rightArrow.gameObject.activeSelf != on) rightArrow.gameObject.SetActive(on);
+    }
+
+    /// <summary>편집모드 토글: 편집 중이면 종료(ExitEditMode), 아니면 진입(EnterEditMode). 편집 버튼 UI가 호출.</summary>
+    public void ToggleEditMode()
+    {
+        if (editMode) ExitEditMode(); else EnterEditMode();
     }
 
     /// <summary>선택 건물 기준 좌/우 버튼의 화면좌표(좌하단 원점) 사각형. 선택 없거나 화면 밖이면 false.</summary>
