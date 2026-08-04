@@ -15,10 +15,10 @@ MonoBehaviour:
   defaultBackground: {fileID: 21300000, guid: 78d54b350a417ba4b977255491c07657, type: 3}
   entries:
   - seasonId: spring
-    backgroundSprite: {fileID: 21300000, guid: 78d54b350a417ba4b977255491c07657, type: 3}
+    backgroundSprite: {fileID: 21300000, guid: 7b558d04c2528354ca98ee620756fdee, type: 3}
   - seasonId: summer
-    backgroundSprite: {fileID: 0}
+    backgroundSprite: {fileID: 21300000, guid: d3f7f5c97bfb9f144860b2cfa405cc4e, type: 3}
   - seasonId: autumn
-    backgroundSprite: {fileID: 0}
+    backgroundSprite: {fileID: 21300000, guid: 1ea8dbae6075cd745bed78acded4142c, type: 3}
   - seasonId: winter
-    backgroundSprite: {fileID: 0}
+    backgroundSprite: {fileID: 21300000, guid: ed58d710c7b340844b7845ab55e1ae94, type: 3}
