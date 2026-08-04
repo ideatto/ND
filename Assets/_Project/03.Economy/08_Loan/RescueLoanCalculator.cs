@@ -115,11 +115,6 @@ namespace ND.Economy
                 return FailRepay(input, RescueLoanFailureReason.InsufficientCurrency);
             }
 
-            if (input.IsRestrictedPreparation)
-            {
-                return FailRepay(input, RescueLoanFailureReason.InvalidState);
-            }
-
             long tradeMoneyAfter = input.TradeMoneyBefore - input.RequestedAmount;
             if (tradeMoneyAfter < input.MinimumTradeCost)
             {
