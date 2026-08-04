@@ -49,7 +49,17 @@ Sale quantity selection is a runtime-only draft. Editing it does not mutate orig
 
 Partial selling is supported. Selling all Cargo is optional, unsold Cargo remains in the caravan, and an empty draft may continue to settlement presentation. Existing transaction behavior removes Cargo entries reduced to zero.
 
-Current arrival sale uses `TradeItemData.BaseSellPrice` at transaction commit, not a destination-market dynamic stock price.
+Current arrival sale resolves its sell unit price from `TradeItemData.BaseSellPrice` and eligible modifiers at transaction commit, not from a destination-market dynamic stock price.
+
+### Seasonal SellPrice policy
+
+Seasonal `TradeItem` pricing applies to `SellPrice` at market sale commit. Seasonal `BuyPrice` is not enabled by this policy. The Season ID present at the durable market sale transaction determines the applicable modifier; neither the departure season nor the Claim-time season determines the sale price.
+
+The stable technical Season IDs are `spring`, `summer`, `autumn`, and `winter`. A matching modifier must have `ModifierType` `Season`, must target `SellPrice` or its runtime equivalent that includes `SellPrice`, and must have a `SourceId` that exactly matches the current canonical Season ID. Matching is ordinal and case-sensitive. Empty, invalid, non-canonical, or non-matching `SourceId` values do not match. `DisplayName` is presentation-only and is never a season identifier.
+
+The market transaction supplies the commit-time season context. `SeasonalSellPriceModifierSelector` determines modifier eligibility, and `PriceCalculator` remains the arithmetic source of truth. `PriceCalculator` does not query global calendar state.
+
+The adjusted unit price and quantity-derived total revenue are committed during the durable market sale transaction. Claim reuses that committed item-sale result and does not reprice item sales. This policy requires no SaveData version change or migration.
 
 ### Durable sale-confirm transaction
 
@@ -65,6 +75,10 @@ Current arrival sale uses `TradeItemData.BaseSellPrice` at transaction commit, n
 Sale confirmation and Claim are separate commands. Sale proceeds are credited during successful sale-confirm Save, before Claim. `JourneyResultData` excludes item-trade revenue and FrameworkEconomy item-trade calculation is disabled for this path. Claim must not pay cargo-sale revenue again.
 
 A future Framework wrapper may add bookkeeping only after accounting for this boundary. It must not duplicate calculation, mutation, Save, rollback, or post-save events.
+
+### Explicitly deferred pricing work
+
+Sale-panel display alignment, Seasonal `BuyPrice`, the distance multiplier, lightning jackpot payout, and positive-profit-only settlement bonuses are outside this policy. This document does not claim that the sale panel displays the adjusted committed price or that distance and lightning pricing are Production-wired.
 
 ## Settlement presentation and Claim
 

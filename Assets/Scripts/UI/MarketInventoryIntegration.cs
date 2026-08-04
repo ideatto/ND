@@ -143,6 +143,8 @@ namespace ND.Framework.CargoLoading
     /// <summary>
     /// Owns market refresh and atomic buy/sell transactions.
     /// Consumers must use View for reads so query and mutation responsibilities stay explicit.
+    /// Sale commits capture <c>saveData.world.currentSeasonId</c> once per transaction and apply
+    /// seasonal SellPrice eligibility through <see cref="SeasonalSellPriceModifierSelector"/>.
     /// </summary>
     public sealed class MarketInventoryMutationSession
     {
@@ -220,7 +222,30 @@ namespace ND.Framework.CargoLoading
         internal long TradingCurrency =>
             saveData.player != null ? Math.Max(0L, saveData.player.tradingCurrency) : 0L;
 
+        /// <summary>
+        /// Resolves unit prices without seasonal SellPrice filtering.
+        /// Used by non-transaction preview paths that must not invent a commit-time season.
+        /// </summary>
         internal static PriceCalculationResult ResolveUnitPrices(TradeItemData item)
+        {
+            return ResolveUnitPrices(item, null, false);
+        }
+
+        /// <summary>
+        /// Resolves unit prices, optionally filtering Season SellPrice modifiers by canonical Season ID.
+        /// </summary>
+        /// <param name="currentSeasonId">
+        /// Commit-time canonical Season ID. Ignored when <paramref name="selectSeasonalSellPrice"/> is false.
+        /// Matching uses ordinal equality against modifier <c>SourceId</c>.
+        /// </param>
+        /// <param name="selectSeasonalSellPrice">
+        /// When true, only eligible Season SellPrice modifiers for <paramref name="currentSeasonId"/> remain;
+        /// non-season modifiers pass through unchanged. Arithmetic stays in <see cref="PriceCalculator"/>.
+        /// </param>
+        internal static PriceCalculationResult ResolveUnitPrices(
+            TradeItemData item,
+            string currentSeasonId,
+            bool selectSeasonalSellPrice)
         {
             if (item == null)
                 return new PriceCalculationResult();
@@ -228,6 +253,12 @@ namespace ND.Framework.CargoLoading
             List<PriceModifierInput> modifiers = item.AffectModify
                 ? LjhEconomyM1InputAdapter.ToPriceModifierInputs(item.Modifiers)
                 : new List<PriceModifierInput>();
+            if (selectSeasonalSellPrice)
+            {
+                modifiers = SeasonalSellPriceModifierSelector.SelectForSellPrice(
+                    modifiers,
+                    currentSeasonId);
+            }
             return PriceCalculator.CalculateUnitPrices(
                 item.BaseBuyPrice,
                 item.BaseSellPrice,
@@ -537,6 +568,8 @@ namespace ND.Framework.CargoLoading
                 CurrentCargoSlots = CalculateCurrentCargoSlots(),
                 MaximumCargoSlots = maximumCargoSlots
             };
+            // Capture once so every line in this transaction shares the same commit-time season.
+            string transactionSeasonId = saveData.world.currentSeasonId;
             foreach (MarketTransactionLine line in normalized.Values)
             {
                 TradeItemData item = catalogById[line.ItemId];
@@ -549,7 +582,10 @@ namespace ND.Framework.CargoLoading
                     BuyQuantity = line.BuyQuantity,
                     SellQuantity = line.SellQuantity,
                     BuyUnitPrice = Math.Max(0L, stock?.unitPrice ?? 0L),
-                    SellUnitPrice = ResolveUnitPrices(item).UnitSellPrice,
+                    SellUnitPrice = ResolveUnitPrices(
+                        item,
+                        transactionSeasonId,
+                        true).UnitSellPrice,
                     UnitWeight = Math.Max(0f, item.Weight),
                     MaxStackQuantity = Math.Max(1, item.MaxCount)
                 });
