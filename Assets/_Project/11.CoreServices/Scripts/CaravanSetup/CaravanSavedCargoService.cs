@@ -32,6 +32,24 @@ namespace ND.Framework
         }
     }
 
+    public sealed class CaravanSavedCargoPresentationItem
+    {
+        public string ItemId { get; }
+        public int Quantity { get; }
+        public TradeItemSaveData SavedItem { get; }
+        public SharedTradeItemDefinition Definition { get; }
+
+        internal CaravanSavedCargoPresentationItem(
+            CaravanSavedCargoItem item,
+            SharedTradeItemDefinition definition)
+        {
+            ItemId = item.ItemId;
+            Quantity = item.Quantity;
+            SavedItem = item.SavedItem;
+            Definition = definition;
+        }
+    }
+
     /// <summary>
     /// Normalizes persisted cargo into one entry per item and produces a stable draft baseline.
     /// </summary>
@@ -84,6 +102,28 @@ namespace ND.Framework
             }
 
             return new CaravanSavedCargoSnapshot(items, signature.ToString());
+        }
+
+        public IReadOnlyList<CaravanSavedCargoPresentationItem> CreatePresentation(
+            CaravanSaveData caravan,
+            ISharedGameDataProvider sharedGameData)
+        {
+            CaravanSavedCargoSnapshot snapshot = CreateSnapshot(caravan);
+            if (snapshot.Items.Count == 0)
+                return Array.Empty<CaravanSavedCargoPresentationItem>();
+
+            var result = new CaravanSavedCargoPresentationItem[snapshot.Items.Count];
+            for (int index = 0; index < snapshot.Items.Count; index++)
+            {
+                CaravanSavedCargoItem item = snapshot.Items[index];
+                SharedTradeItemDefinition definition = null;
+                if (sharedGameData != null && sharedGameData.IsLoaded)
+                    sharedGameData.TryGetTradeItem(item.ItemId, out definition);
+
+                result[index] = new CaravanSavedCargoPresentationItem(item, definition);
+            }
+
+            return result;
         }
 
         private static string NormalizeId(string value) => value?.Trim() ?? string.Empty;

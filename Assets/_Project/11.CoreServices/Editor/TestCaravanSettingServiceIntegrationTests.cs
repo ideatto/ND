@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using ND.Framework;
 using NUnit.Framework;
@@ -51,6 +52,85 @@ public sealed class TestCaravanSettingServiceIntegrationTests
     }
 
     [Test]
+    public void SavedCargoOutsideCurrentMarketCatalog_IsAcceptedAsDraftBaseline()
+    {
+        TradeItemData apple = CreateCatalogItem("apple", 1f);
+        FrameworkCaravanSaveData caravan = Caravan(
+            "caravan-a",
+            JourneyState.Prepare,
+            Entry("ore", 3, 10L));
+        service.SetSaveDataForTests(CreateSave(caravan));
+        service.SetCargoCatalogForTests(apple);
+        var draft = new CaravanLoadSettingDraft { caravanId = "caravan-a" };
+        draft.items.Add(new CaravanLoadItemDraft { itemId = "ore", quantity = 3 });
+        draft.items.Add(new CaravanLoadItemDraft { itemId = "apple", quantity = 2 });
+
+        CaravanLoadSettingCommandResult result =
+            ((ICaravanLoadSettingCommand)service).Execute(draft);
+
+        Assert.That(result.succeeded, Is.True);
+        CaravanLoadSettingViewData planned = service.GetLoadSetting("caravan-a");
+        Assert.That(planned.plannedItems
+            .Select(item => (item.itemId, item.quantity)),
+            Is.EquivalentTo(new[] { ("ore", 3), ("apple", 2) }));
+        Assert.That(planned.currentLoad, Is.EqualTo(5f));
+    }
+
+    [Test]
+    public void QuantityAddedToOffCatalogSavedCargo_IsRejectedInKorean()
+    {
+        FrameworkCaravanSaveData caravan = Caravan(
+            "caravan-a",
+            JourneyState.Prepare,
+            Entry("ore", 3, 10L));
+        service.SetSaveDataForTests(CreateSave(caravan));
+        service.SetCargoCatalogForTests();
+
+        CaravanLoadSettingCommandResult result = ExecuteCargo("caravan-a", "ore", 4);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(result.errorCode, Is.EqualTo(CaravanLoadSettingFailureCodes.ItemUnavailable));
+        Assert.That(result.userMessage, Is.EqualTo("추가하려는 화물을 현재 마을의 상점에서 구매할 수 없습니다."));
+    }
+
+    [Test]
+    public void StaleSelectedCaravanId_DoesNotChangeRequestedCaravanCargoSnapshot()
+    {
+        TradeItemData wood = CreateCatalogItem("wood", 0.1f);
+        TradeItemData ore = CreateCatalogItem("ore", 0.42f);
+        TradeItemData apple = CreateCatalogItem("apple", 1f);
+        FrameworkSaveData save = CreateSave(
+            Caravan(
+                "caravan-1",
+                JourneyState.Prepare,
+                EntryWithWeight("wood", 8, 10, 0.1f),
+                EntryWithWeight("ore", 69, 10, 0.42f)),
+            Caravan(
+                "caravan-2",
+                JourneyState.Prepare,
+                EntryWithWeight("apple", 4, 10, 1f)));
+        save.selectedCaravanId = "caravan-2";
+        service.SetSaveDataForTests(save);
+        service.SetCargoCatalogForTests(wood, ore, apple);
+
+        CaravanLoadSettingViewData first = service.GetLoadSetting("caravan-1");
+        CaravanLoadSettingViewData second = service.GetLoadSetting("caravan-2");
+        CaravanLoadSettingViewData firstAgain = service.GetLoadSetting("caravan-1");
+
+        Assert.That(first.caravanId, Is.EqualTo("caravan-1"));
+        Assert.That(first.plannedItems.Select(item => item.itemId),
+            Is.EquivalentTo(new[] { "wood", "ore" }));
+        Assert.That(first.currentLoad, Is.EqualTo(29.78f).Within(0.001f));
+        Assert.That(first.usedInventorySlotCount, Is.EqualTo(2));
+        Assert.That(first.maxInventorySlotCount, Is.EqualTo(5));
+        Assert.That(second.plannedItems, Has.Length.EqualTo(1));
+        Assert.That(second.plannedItems[0].itemId, Is.EqualTo("apple"));
+        Assert.That(firstAgain.plannedItems.Select(item => item.itemId),
+            Is.EquivalentTo(new[] { "wood", "ore" }));
+    }
+
+
+    [Test]
     public void SavedCargoChange_InvalidatesExistingDraftAndReturnsNewSavedBaseline()
     {
         TradeItemData apple = CreateCatalogItem("apple", 2f);
@@ -91,6 +171,30 @@ public sealed class TestCaravanSettingServiceIntegrationTests
         Assert.That(cargoResult.succeeded, Is.False);
         Assert.That(cargoResult.errorCode, Is.EqualTo(CaravanLoadSettingFailureCodes.CaravanNotEditable));
     }
+
+    [Test]
+    public void TravelingCaravan_ReadsCommittedCargoAndIgnoresPrepareDraft()
+    {
+        TradeItemData apple = CreateCatalogItem("apple", 1f);
+        TradeItemData cloth = CreateCatalogItem("cloth", 2f);
+        FrameworkCaravanSaveData caravan = Caravan(
+            "caravan-a",
+            JourneyState.Prepare,
+            Entry("apple", 2, 10));
+        service.SetSaveDataForTests(CreateSave(caravan));
+        service.SetCargoCatalogForTests(apple, cloth);
+        Assert.That(ExecuteCargo("caravan-a", "cloth", 3).succeeded, Is.True);
+
+        caravan.state = JourneyState.Traveling;
+        CaravanLoadSettingViewData traveling = service.GetLoadSetting("caravan-a");
+
+        Assert.That(traveling.canEdit, Is.False);
+        Assert.That(traveling.plannedItems, Has.Length.EqualTo(1));
+        Assert.That(traveling.plannedItems[0].itemId, Is.EqualTo("apple"));
+        Assert.That(traveling.plannedItems[0].quantity, Is.EqualTo(2));
+        Assert.That(traveling.currentLoad, Is.EqualTo(2f));
+    }
+
 
     [Test]
     public void CargoOverCapacity_IsRejectedWithoutReplacingPreviousDraft()
@@ -189,4 +293,16 @@ public sealed class TestCaravanSettingServiceIntegrationTests
             quantity = quantity
         };
     }
+
+    private static FrameworkCargoEntrySaveData EntryWithWeight(
+        string itemId,
+        int quantity,
+        long price,
+        float weight)
+    {
+        FrameworkCargoEntrySaveData entry = Entry(itemId, quantity, price);
+        entry.item.weight = weight;
+        return entry;
+    }
+
 }

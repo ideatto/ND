@@ -45,6 +45,8 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         currentScreenState = InGameScreenStateRouter.MapFromSaveData(currentSaveData);
         FrameworkEvents.LoadCompleted += HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
+
+        FrameworkEvents.CaravanCargoChanged += HandleCaravanCargoChanged;
         FrameworkEvents.CaravanCreated += HandleCaravanCreated;
         TryInitialize(currentSaveData);
         AttachSceneCaravanProviders();
@@ -54,6 +56,8 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     {
         FrameworkEvents.LoadCompleted -= HandleLoadCompleted;
         FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
+
+        FrameworkEvents.CaravanCargoChanged -= HandleCaravanCargoChanged;
         FrameworkEvents.CaravanCreated -= HandleCaravanCreated;
         DisposeFlow();
     }
@@ -93,6 +97,21 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         buildContext.caravanOptions = GetLatestCaravanOptions();
         flowController.UpdateBuildContext(buildContext);
     }
+
+    private void HandleCaravanCargoChanged(string caravanId)
+    {
+        string selectedCaravanId = flowController?.CurrentDraft?.departureCaravanId;
+        if (!string.Equals(caravanId?.Trim(), selectedCaravanId?.Trim(), StringComparison.Ordinal))
+            return;
+
+        // Warehouse commits directly to saved cargo. Refreshing through the provider invalidates a
+        // stale Prepare draft by baseline signature instead of merging or double-counting it.
+        // TODO(CARGO-CHANGE-SOURCE): Do not clear CaravanCargoDraftStore here. Market commits raise
+        // the same event synchronously, so clearing reservations would re-enter their transaction.
+        // Add an event source/revision before Warehouse changes can explicitly rebase reservations.
+        RefreshSelectedCaravanCargoPlan();
+    }
+
 
     public void RefreshFromFramework()
     {

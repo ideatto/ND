@@ -79,7 +79,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
 
         string caravanId = NormalizeId(draft.caravanId);
         if (!TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData caravan))
-            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.CaravanNotFound, "The selected Caravan could not be found.");
+            return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.CaravanNotFound, "선택한 카라반을 찾을 수 없습니다.");
         if (caravan.state != JourneyState.Prepare)
             return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.CaravanNotEditable, "Caravan settings can only be changed during Preparation.");
 
@@ -149,37 +149,40 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         bool canEdit = state == JourneyState.Prepare;
         string capacityWagonInstanceId = GetComposition(normalizedCaravanId).WagonInstanceId;
         GetCapacity(capacityWagonInstanceId, out float maxLoad, out int maxSlots);
-        CargoItemViewData[] plannedItems = Array.Empty<CargoItemViewData>();
-        if (canEdit)
+
+        CargoItemViewData[] plannedItems;
+        if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
         {
-            if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
-            {
-                string savedCargoSignature = savedCargoService
-                    .CreateSnapshot(savedCaravan)
-                    .BaselineSignature;
-                bool useDraft = cargoDrafts.TryGetCompatible(
-                    normalizedCaravanId,
-                    savedCargoSignature,
-                    out CaravanCargoDraftSnapshot cargoDraft);
-                plannedItems = useDraft
-                    ? CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items)
-                    : CreateSavedCargoSnapshot(savedCaravan);
-            }
-            else
-            {
-                plannedItems = cargoDrafts.TryGet(
-                        normalizedCaravanId,
-                        out CaravanCargoDraftSnapshot cargoDraft)
-                    ? CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items)
-                    : Array.Empty<CargoItemViewData>();
-            }
+            // Prepare may project a compatible draft over the saved baseline. Traveling must never
+            // consume a draft, but it still exposes the committed cargo as read-only state.
+            string savedCargoSignature = savedCargoService
+                .CreateSnapshot(savedCaravan)
+                .BaselineSignature;
+            CaravanCargoDraftSnapshot cargoDraft = null;
+            bool useDraft = canEdit && cargoDrafts.TryGetCompatible(
+                normalizedCaravanId,
+                savedCargoSignature,
+                out cargoDraft);
+            plannedItems = useDraft
+                ? CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items)
+                : CreateSavedCargoSnapshot(savedCaravan);
         }
+        else if (canEdit && cargoDrafts.TryGet(
+                     normalizedCaravanId,
+                     out CaravanCargoDraftSnapshot cargoDraft))
+        {
+            // Standalone smoke fixtures have no Framework save and intentionally remain draft-only.
+            plannedItems = CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items);
+        }
+        else
+        {
+            plannedItems = Array.Empty<CargoItemViewData>();
+        }
+
         int usedSlots = plannedItems.Length;
         float currentLoad = 0f;
         for (int index = 0; index < plannedItems.Length; index++)
-        {
             currentLoad += plannedItems[index].totalWeight;
-        }
 
         return new CaravanLoadSettingViewData
         {
@@ -209,7 +212,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.InvalidDraft,
-                "The Caravan cargo request is invalid.");
+                "화물 적재 요청이 올바르지 않습니다.");
         }
 
         string caravanId = NormalizeId(draft.caravanId);
@@ -217,14 +220,28 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.CaravanNotFound,
-                "The selected Caravan could not be found.");
+                "선택한 카라반을 찾을 수 없습니다.");
         }
 
         if (state != JourneyState.Prepare)
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.CaravanNotEditable,
-                "Caravan cargo can only be changed during Preparation.");
+                "화물은 카라반이 준비 중일 때만 변경할 수 있습니다.");
+        }
+
+        // The S4 draft is the final Cargo plan, so it contains both the committed SaveData
+        // baseline and new Market reservations. Only the quantity added above that baseline is
+        // a Market selection and may therefore be rejected by the current-town catalog.
+        var savedQuantityByItemId = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData baselineCaravan))
+        {
+            CaravanSavedCargoSnapshot baseline = savedCargoService.CreateSnapshot(baselineCaravan);
+            for (int index = 0; index < baseline.Items.Count; index++)
+            {
+                CaravanSavedCargoItem item = baseline.Items[index];
+                savedQuantityByItemId[item.ItemId] = item.Quantity;
+            }
         }
 
         var validatedItems = new List<CaravanLoadItemDraft>();
@@ -240,14 +257,15 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                 {
                     return CaravanLoadSettingCommandResult.Failure(
                         CaravanLoadSettingFailureCodes.InvalidDraft,
-                        "The Caravan cargo plan contains an invalid or duplicate item.");
+                        "화물 적재 목록에 잘못되었거나 중복된 항목이 있습니다.");
                 }
 
-                if (!IsAvailableCargoItem(caravanId, itemId))
+                savedQuantityByItemId.TryGetValue(itemId, out int savedQuantity);
+                if (item.quantity > savedQuantity && !IsAvailableCargoItem(caravanId, itemId))
                 {
                     return CaravanLoadSettingCommandResult.Failure(
                         CaravanLoadSettingFailureCodes.ItemUnavailable,
-                        "The selected cargo item is not available in the Caravan catalog.");
+                        "추가하려는 화물을 현재 마을의 상점에서 구매할 수 없습니다.");
                 }
 
                 totalQuantity += item.quantity;
@@ -265,7 +283,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.CargoCapacityExceeded,
-                "The Caravan cargo plan exceeds the temporary S4 capacity.");
+                "화물의 무게 또는 슬롯 수가 카라반의 적재 한도를 초과했습니다.");
         }
 
         var nextDraftItems = new List<CaravanCargoDraftItem>(validatedItems.Count);
@@ -286,7 +304,7 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         {
             return CaravanLoadSettingCommandResult.Failure(
                 CaravanLoadSettingFailureCodes.InvalidDraft,
-                "The Caravan cargo plan could not be stored.");
+                "화물 적재 초안을 저장하지 못했습니다.");
         }
         return CaravanLoadSettingCommandResult.Success();
     }
@@ -481,34 +499,37 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
                     "The Caravan setting request is invalid.");
         }
     }
-
     private CargoItemViewData[] CreateSavedCargoSnapshot(FrameworkCaravanSaveData caravan)
     {
-        CaravanSavedCargoSnapshot snapshot = savedCargoService.CreateSnapshot(caravan);
-        if (snapshot.Items.Count == 0)
+        IReadOnlyList<CaravanSavedCargoPresentationItem> snapshot =
+            savedCargoService.CreatePresentation(
+                caravan,
+                FrameworkRoot.Instance?.SharedGameData);
+        if (snapshot.Count == 0)
             return Array.Empty<CargoItemViewData>();
 
-        var result = new CargoItemViewData[snapshot.Items.Count];
-        for (int index = 0; index < snapshot.Items.Count; index++)
+        var result = new CargoItemViewData[snapshot.Count];
+        for (int index = 0; index < snapshot.Count; index++)
         {
-            CaravanSavedCargoItem item = snapshot.Items[index];
+            CaravanSavedCargoPresentationItem item = snapshot[index];
+            SharedTradeItemDefinition definition = item.Definition;
             TradeItemSaveData savedItem = item.SavedItem;
-            TradeItemData catalogItem = FindCatalogItem(item.ItemId);
-            float unitWeight = catalogItem != null
-                ? Mathf.Max(0f, catalogItem.Weight)
+            Enum.TryParse(definition?.Category, true, out TradeItemCategory category);
+            float unitWeight = definition != null
+                ? Mathf.Max(0f, definition.Weight)
                 : Mathf.Max(0f, savedItem.weight);
             result[index] = new CargoItemViewData
             {
                 itemId = item.ItemId,
-                displayName = catalogItem != null ? catalogItem.DisplayName : savedItem.itemName,
-                icon = catalogItem != null ? catalogItem.Icon : null,
-                category = catalogItem != null ? catalogItem.Category : default,
+                displayName = definition?.DisplayName ?? savedItem.itemName,
+                icon = definition?.Icon,
+                category = category,
                 quantity = item.Quantity,
                 unitWeight = unitWeight,
                 totalWeight = unitWeight * item.Quantity,
                 purchaseUnitPrice = Math.Max(0L, savedItem.basePrice),
-                estimatedSellUnitPrice = catalogItem != null
-                    ? Math.Max(0L, catalogItem.BaseSellPrice)
+                estimatedSellUnitPrice = definition != null
+                    ? Math.Max(0L, definition.BaseSellPrice)
                     : Math.Max(0L, savedItem.basePrice),
                 totalPurchasePrice = Math.Max(0L, savedItem.basePrice) * item.Quantity
             };
@@ -527,30 +548,71 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
             CaravanCargoDraftItem item = plannedCargo[index];
             TradeItemData catalogItem = FindCatalogItem(item.ItemId);
             TryGetOfficialCatalogItem(caravanId, item.ItemId, out CaravanMarketCatalogItem officialItem);
+            CaravanSavedCargoPresentationItem savedItem =
+                FindSavedCargoPresentation(caravanId, item.ItemId);
+            SharedTradeItemDefinition savedDefinition = savedItem?.Definition;
+            TradeItemSaveData savedData = savedItem?.SavedItem;
+            Enum.TryParse(savedDefinition?.Category, true, out TradeItemCategory savedCategory);
             float unitWeight = officialItem?.Definition != null
                 ? Mathf.Max(0f, officialItem.Definition.Weight)
-                : catalogItem != null ? Mathf.Max(0f, catalogItem.Weight) : 0f;
+                : catalogItem != null
+                    ? Mathf.Max(0f, catalogItem.Weight)
+                    : savedDefinition != null
+                        ? Mathf.Max(0f, savedDefinition.Weight)
+                        : Mathf.Max(0f, savedData?.weight ?? 0f);
             long buyPrice = officialItem != null
                 ? officialItem.BuyUnitPrice
-                : catalogItem != null ? Math.Max(0L, catalogItem.BaseBuyPrice) : 0L;
+                : catalogItem != null
+                    ? Math.Max(0L, catalogItem.BaseBuyPrice)
+                    : Math.Max(0L, savedData?.basePrice ?? 0L);
+            long sellPrice = catalogItem != null
+                ? Math.Max(0L, catalogItem.BaseSellPrice)
+                : savedDefinition != null
+                    ? Math.Max(0L, savedDefinition.BaseSellPrice)
+                    : Math.Max(0L, savedData?.basePrice ?? 0L);
             result[index] = new CargoItemViewData
             {
                 itemId = item.ItemId,
                 displayName = catalogItem != null
                     ? catalogItem.DisplayName
-                    : officialItem?.Definition?.DisplayName ?? item.ItemId,
-                icon = catalogItem != null ? catalogItem.Icon : officialItem?.Definition?.Icon,
-                category = catalogItem != null ? catalogItem.Category : default,
+                    : officialItem?.Definition?.DisplayName
+                        ?? savedDefinition?.DisplayName
+                        ?? savedData?.itemName
+                        ?? item.ItemId,
+                icon = catalogItem != null
+                    ? catalogItem.Icon
+                    : officialItem?.Definition?.Icon ?? savedDefinition?.Icon,
+                category = catalogItem != null ? catalogItem.Category : savedCategory,
                 quantity = item.Quantity,
                 unitWeight = unitWeight,
                 totalWeight = unitWeight * item.Quantity,
                 purchaseUnitPrice = buyPrice,
-                estimatedSellUnitPrice = catalogItem != null ? Math.Max(0L, catalogItem.BaseSellPrice) : 0L,
+                estimatedSellUnitPrice = sellPrice,
                 totalPurchasePrice = MultiplyClamped(buyPrice, item.Quantity)
             };
         }
 
         return result;
+    }
+
+    private CaravanSavedCargoPresentationItem FindSavedCargoPresentation(
+        string caravanId,
+        string itemId)
+    {
+        if (!TryGetFrameworkCaravan(caravanId, out FrameworkCaravanSaveData caravan))
+            return null;
+
+        IReadOnlyList<CaravanSavedCargoPresentationItem> items =
+            savedCargoService.CreatePresentation(
+                caravan,
+                FrameworkRoot.Instance?.SharedGameData);
+        for (int index = 0; index < items.Count; index++)
+        {
+            if (string.Equals(items[index].ItemId, itemId, StringComparison.Ordinal))
+                return items[index];
+        }
+
+        return null;
     }
 
     private FrameworkSaveData ResolveSaveData()
@@ -793,7 +855,14 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         TradeItemData catalogItem = FindCatalogItem(itemId);
         if (catalogItem != null)
             return Mathf.Max(0f, catalogItem.Weight);
-        return 0f;
+
+        // A committed Cargo item may legitimately be absent from the current-town Market.
+        // Capacity validation must still use its persisted unit weight instead of treating it as 0.
+        CaravanSavedCargoPresentationItem savedItem =
+            FindSavedCargoPresentation(caravanId, itemId);
+        if (savedItem?.Definition != null)
+            return Mathf.Max(0f, savedItem.Definition.Weight);
+        return Mathf.Max(0f, savedItem?.SavedItem?.weight ?? 0f);
     }
 
     private bool TryResolveOfficialCatalog(

@@ -443,27 +443,27 @@ public class AnimalInventoryPanel : MonoBehaviour
         OnSelectionChanged?.Invoke(BuildPicks(), IsValid());
     }
 
-    /// <summary>웨건 정보 텍스트(요구량·속도·적재증가)를 현재 선택 기준으로 갱신.</summary>
+    /// <summary>현재 마차의 동물 요구량, 속도, 적재 슬롯과 최종 최대 적재량을 갱신한다.</summary>
     private void UpdateInfo()
     {
         int total = 0;
-        float sumSpeed = 0f, sumOver = 0f, sumMax = 0f;
+        float sumSpeed = 0f, sumMax = 0f;
         foreach (AnimalEntry a in animals)
         {
             int c = counts.TryGetValue(SelectionKey(a), out int v) ? v : 0;
             if (c <= 0) continue;
             total += c;
             sumSpeed += a.moveSpeed * c;
-            sumOver += a.incOverLoad * c;
             sumMax += a.incMaxLoad * c;
         }
         if (wagonInfoText != null)
         {
             float curSpeed = wagonBaseSpeed + sumSpeed;
             string state = IsValid() ? "충족" : (total < minReq ? "부족" : "초과");
+            float totalMaxLoad = Mathf.Max(0f, currentWagon.maxLoad + sumMax);
             wagonInfoText.text =
                 $"[{wagonName}]  동물 {minReq}~{maxReq} · 현재 {total} · {state}\n" +
-                $"이동속도 {curSpeed:0.#}  ·  적재+ 평균 {sumOver:0.#} / 최대 {sumMax:0.#}";
+                $"이동속도 {curSpeed:0.#} · 적재 슬롯 {Mathf.Max(0, currentWagon.slotCount)}칸 · 최대 적재 {totalMaxLoad:0.#}";
         }
     }
 
