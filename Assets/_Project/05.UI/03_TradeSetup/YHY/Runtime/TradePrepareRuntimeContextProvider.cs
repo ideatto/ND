@@ -48,6 +48,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 
         FrameworkEvents.CaravanCargoChangedDetailed += HandleCaravanCargoChanged;
         FrameworkEvents.CaravanCreated += HandleCaravanCreated;
+        FrameworkEvents.QuestRewardsCommitted += HandleQuestRewardsCommitted;
         TryInitialize(currentSaveData);
         AttachSceneCaravanProviders();
     }
@@ -59,6 +60,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
 
         FrameworkEvents.CaravanCargoChangedDetailed -= HandleCaravanCargoChanged;
         FrameworkEvents.CaravanCreated -= HandleCaravanCreated;
+        FrameworkEvents.QuestRewardsCommitted -= HandleQuestRewardsCommitted;
         DisposeFlow();
     }
 
@@ -96,6 +98,11 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         // 같은 TradePrepare 세션에서 즉시 선택할 수 있게 한다.
         buildContext.caravanOptions = GetLatestCaravanOptions();
         flowController.UpdateBuildContext(buildContext);
+    }
+
+    private void HandleQuestRewardsCommitted(QuestRewardsCommittedEvent _)
+    {
+        RefreshFromFramework();
     }
 
     private void HandleCaravanCargoChanged(
