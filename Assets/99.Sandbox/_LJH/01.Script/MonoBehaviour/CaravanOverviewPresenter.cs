@@ -311,6 +311,8 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         ND.Framework.FrameworkEvents.InGameScreenChanged += HandleInGameScreenChanged;
         ND.Framework.FrameworkEvents.TradeSettlementReady += HandleTradeSettlementReady;
         ND.Framework.FrameworkEvents.CaravanCargoChanged += HandleCaravanCargoChanged;
+        ND.Framework.FrameworkEvents.CaravanJourneyStateChanged +=
+            HandleCaravanJourneyStateChanged;
     }
 
     private void UnsubscribeFromFrameworkEvents()
@@ -319,6 +321,8 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         ND.Framework.FrameworkEvents.InGameScreenChanged -= HandleInGameScreenChanged;
         ND.Framework.FrameworkEvents.TradeSettlementReady -= HandleTradeSettlementReady;
         ND.Framework.FrameworkEvents.CaravanCargoChanged -= HandleCaravanCargoChanged;
+        ND.Framework.FrameworkEvents.CaravanJourneyStateChanged -=
+            HandleCaravanJourneyStateChanged;
     }
 
     private void HandleFrameworkLoadCompleted(ND.Framework.SaveData _)
@@ -341,6 +345,15 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
     private void HandleCaravanCargoChanged(string _)
     {
+        Refresh();
+    }
+
+    private void HandleCaravanJourneyStateChanged(
+    string caravanId,
+    JourneyState state)
+    {
+        // 이벤트 값을 slot에 직접 적용하지 않는다.
+        // Provider가 명시적인 caravanId 기반 SaveData를 다시 조회한다.
         Refresh();
     }
 

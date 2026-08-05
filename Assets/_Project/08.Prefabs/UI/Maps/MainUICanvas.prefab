@@ -400,6 +400,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingConstructionRuntimeHandler
   popupBinding: {fileID: 4165532345562317664}
   buildingListPanel: {fileID: 860223978485882865}
+  noticeUI: {fileID: 1962801421393486745}
 --- !u!1 &258919032755032797
 GameObject:
   m_ObjectHideFlags: 0

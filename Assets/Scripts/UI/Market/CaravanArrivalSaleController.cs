@@ -40,24 +40,16 @@ namespace ND.UI.Market
         public bool IsSalePending(string caravanId, string tradeId)
         {
             FrameworkRoot root = FrameworkRoot.Instance;
-            return root?.CurrentSaveData != null
-                && !string.IsNullOrWhiteSpace(caravanId)
-                && !string.IsNullOrWhiteSpace(tradeId)
-                && SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out _)
-                && SaveDataLookup.TryGetTradeProgress(
-                    root.CurrentSaveData,
-                    caravanId,
-                    out ND.Framework.TradeProgressSaveData progress)
-                && progress.state == ND.Framework.TradeProgressState.SettlementPending
-                && string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal)
-                && SaveDataLookup.TryGetPendingSettlement(
-                    root.CurrentSaveData,
-                    caravanId,
-                    tradeId,
-                    out PendingSettlementSaveData pending)
-                && pending != null
-                && pending.hasResult
-                && pending.grade != JourneyResultGrade.Failed;
+            if (root?.CurrentSaveData == null || string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId)
+                || !SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out ND.Framework.CaravanSaveData caravan) || caravan == null
+                || !SaveDataLookup.TryGetTradeProgress(root.CurrentSaveData, caravanId, out ND.Framework.TradeProgressSaveData progress) || progress == null
+                || !string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal)
+                || !SaveDataLookup.TryGetPendingSettlement(root.CurrentSaveData, caravanId, tradeId, out PendingSettlementSaveData pending)
+                || pending == null || !pending.hasResult || pending.claimed || pending.grade == JourneyResultGrade.Failed)
+                return false;
+
+            return caravan.state == JourneyState.Selling && progress.state == ND.Framework.TradeProgressState.Selling
+                || caravan.state == JourneyState.Settling && progress.state == ND.Framework.TradeProgressState.SettlementPending;
         }
 
         public bool TryResolveSinglePendingIdentity(out string caravanId, out string tradeId)
@@ -100,42 +92,30 @@ namespace ND.UI.Market
                 return Fail(ErrorPanelMissing);
             if (root == null || root.CurrentSaveData == null || root.SharedGameData == null)
                 return Fail(MarketInventoryMutationSession.ErrorInvalidFramework);
-            // After the sale is confirmed, the Framework intentionally keeps the same pending
-            // settlement until Payment claims it. Reusing the Caravan status action must reopen
-            // that receipt instead of reopening an already-completed sell-only market.
-            if (root.SettlementUiBridge != null
-                && root.SettlementUiBridge.IsSettlementPresentationRequested
-                && root.SettlementUiBridge.TryGetPendingSettlement(
-                    out string pendingCaravanId,
-                    out string pendingTradeId,
-                    out JourneyResultData pendingResult)
-                && pendingResult != null
-                && string.Equals(pendingCaravanId, caravanId, StringComparison.Ordinal)
-                && string.Equals(pendingTradeId, tradeId, StringComparison.Ordinal))
+            if (SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out ND.Framework.CaravanSaveData settlementCaravan)
+                && settlementCaravan?.state == JourneyState.Settling
+                && SaveDataLookup.TryGetTradeProgress(root.CurrentSaveData, caravanId, out ND.Framework.TradeProgressSaveData settlementProgress)
+                && settlementProgress.state == ND.Framework.TradeProgressState.SettlementPending
+                && string.Equals(settlementProgress.activeTradeId, tradeId, StringComparison.Ordinal)
+                && SaveDataLookup.TryGetPendingSettlement(root.CurrentSaveData, caravanId, tradeId, out PendingSettlementSaveData settlementPending)
+                && settlementPending != null && settlementPending.hasResult && !settlementPending.claimed
+                && settlementPending.grade != JourneyResultGrade.Failed)
             {
-                if (!root.SettlementUiBridge.PresentSettlement(
-                        pendingCaravanId,
-                        pendingTradeId))
-                {
+                if (root.SettlementUiBridge == null || !root.SettlementUiBridge.PresentSettlement(caravanId, tradeId))
                     return Fail(ErrorSettlementPresentation);
-                }
 
                 SetError(string.Empty);
-                SettlementRequested?.Invoke(pendingCaravanId, pendingTradeId);
+                SettlementRequested?.Invoke(caravanId, tradeId);
                 return true;
             }
 
-            if (string.IsNullOrWhiteSpace(caravanId)
-                || string.IsNullOrWhiteSpace(tradeId)
-                || !SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out _)
-                || !SaveDataLookup.TryGetTradeProgress(
-                    root.CurrentSaveData, caravanId, out ND.Framework.TradeProgressSaveData progress)
-                || progress.state != ND.Framework.TradeProgressState.SettlementPending
-                || !SaveDataLookup.TryGetPendingSettlement(
-                    root.CurrentSaveData, caravanId, tradeId, out PendingSettlementSaveData pending)
-                || pending == null
-                || !pending.hasResult
-                || pending.grade == JourneyResultGrade.Failed)
+            if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId)
+                || !SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out ND.Framework.CaravanSaveData savedCaravan)
+                || savedCaravan == null || savedCaravan.state != JourneyState.Selling
+                || !SaveDataLookup.TryGetTradeProgress(root.CurrentSaveData, caravanId, out ND.Framework.TradeProgressSaveData progress)
+                || progress.state != ND.Framework.TradeProgressState.Selling
+                || !SaveDataLookup.TryGetPendingSettlement(root.CurrentSaveData, caravanId, tradeId, out PendingSettlementSaveData pending)
+                || pending == null || !pending.hasResult || pending.grade == JourneyResultGrade.Failed)
             {
                 return Fail(ErrorPendingMissing);
             }
@@ -194,10 +174,24 @@ namespace ND.UI.Market
                 return Fail(ErrorIdentityMismatch);
             }
 
+            FrameworkRoot root = FrameworkRoot.Instance;
+            TradeProgressCoordinator coordinator =
+                root?.TradeProgressCoordinator;
+
+            if (coordinator == null)
+            {
+                return Fail(
+                    MarketInventoryMutationSession.ErrorInvalidFramework);
+            }
+
+            TradeProgressCoordinator.ArrivalSaleTransitionSnapshot
+                transitionSnapshot = null;
+            bool completionAlreadyPublished = false;
+
             if (marketPanel.Model.HasDraft)
             {
                 if (!SaveDataLookup.TryGetPendingSettlement(
-                        FrameworkRoot.Instance?.CurrentSaveData,
+                        root.CurrentSaveData,
                         activeCaravanId,
                         activeTradeId,
                         out PendingSettlementSaveData pending)
@@ -206,20 +200,60 @@ namespace ND.UI.Market
                     return Fail(ErrorPendingMissing);
                 }
 
-                long revenueBefore = pending.arrivalSaleRevenue;
-                var soldItemsBefore = pending.soldItems;
-                MarketTransactionResult transaction = marketPanel.Commit(
-                    result => TryStageArrivalSale(pending, result),
-                    () =>
-                    {
-                        pending.arrivalSaleRevenue = revenueBefore;
-                        pending.soldItems = soldItemsBefore;
-                    });
+                long revenueBefore =
+                    pending.arrivalSaleRevenue;
+                var soldItemsBefore =
+                    pending.soldItems;
+
+                MarketTransactionResult transaction =
+                    marketPanel.Commit(
+                        result =>
+                            TryStageArrivalSale(pending, result)
+                            && coordinator.TryStageArrivalSaleCompletion(
+                                activeCaravanId,
+                                activeTradeId,
+                                out transitionSnapshot),
+                        () =>
+                        {
+                            pending.arrivalSaleRevenue =
+                                revenueBefore;
+                            pending.soldItems =
+                                soldItemsBefore;
+
+                            coordinator.RollbackArrivalSaleCompletion(
+                                transitionSnapshot);
+                        });
+
                 if (transaction == null || !transaction.Success)
-                    return Fail(transaction?.ErrorCode ?? MarketInventoryMutationSession.ErrorInvalidTransaction);
+                {
+                    return Fail(
+                        transaction?.ErrorCode
+                        ?? MarketInventoryMutationSession
+                            .ErrorInvalidTransaction);
+                }
+            }
+            else
+            {
+                if (!coordinator.TryCommitEmptyArrivalSaleCompletion(
+                        activeCaravanId,
+                        activeTradeId,
+                        out bool saveFailed))
+                {
+                    return Fail(
+                        saveFailed
+                            ? MarketInventoryMutationSession.ErrorSaveFailed
+                            : MarketInventoryMutationSession.ErrorInvalidTransaction);
+                }
+
+                completionAlreadyPublished = true;
             }
 
-            FrameworkRoot root = FrameworkRoot.Instance;
+            if (!completionAlreadyPublished)
+            {
+                coordinator.PublishArrivalSaleCompletion(
+                    transitionSnapshot);
+            }
+
             if (!string.Equals(activeCaravanId, marketPanel.ActiveCaravanId, StringComparison.Ordinal)
                 || !string.Equals(activeTradeId, marketPanel.ActiveTradeId, StringComparison.Ordinal))
             {

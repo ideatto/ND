@@ -1,3 +1,4 @@
+
 /*
  * Technical Ownership
  * - Responsible Discipline: Framework & Integration
@@ -216,6 +217,25 @@ namespace ND.Framework
     /// </summary>
     public sealed class TradeProgressCoordinator
     {
+        /// <summary>
+        /// 판매 transaction 저장 실패 시 Journey 상태를 원래 값으로 복구하기 위한 snapshot이다.
+        /// UI는 내부 상태를 직접 변경하지 않고 이 객체를 Coordinator에 다시 전달한다.
+        /// </summary>
+        public sealed class ArrivalSaleTransitionSnapshot
+        {
+            internal SaveData SaveData;
+            internal int SaveVersionBefore;
+            internal long LastSavedUtcTicksBefore;
+            internal CaravanSaveData Caravan;
+            internal TradeProgressSaveData Progress;
+            internal CaravanData RuntimeCaravan;
+            internal JourneyState RuntimeStateBefore;
+            internal JourneyState CaravanStateBefore;
+            internal TradeProgressState ProgressStateBefore;
+            internal string CaravanId;
+            internal string TradeId;
+        }
+
         private readonly Func<SaveData> getCurrentSaveData;
         private readonly ISaveService saveService;
         private readonly IGameTimeProvider gameTimeProvider;
@@ -1486,6 +1506,189 @@ namespace ND.Framework
             return ClaimSettlementResult.Success(saveResult);
         }
 
+        /// <summary>
+        /// 판매 transaction과 같은 저장 단위에서 해당 Caravan을
+        /// Selling에서 Settling으로 전환할 준비를 한다.
+        /// 이 메서드는 상태만 stage하며 직접 저장하거나 이벤트를 발행하지 않는다.
+        /// </summary>
+        public bool TryStageArrivalSaleCompletion(
+            string caravanId,
+            string tradeId,
+            out ArrivalSaleTransitionSnapshot snapshot)
+        {
+            snapshot = null;
+
+            if (string.IsNullOrWhiteSpace(caravanId)
+                || string.IsNullOrWhiteSpace(tradeId))
+            {
+                return false;
+            }
+
+            SaveData saveData = GetSaveData();
+
+            if (!SaveDataLookup.TryGetCaravan(
+                    saveData,
+                    caravanId,
+                    out CaravanSaveData caravan)
+                || !SaveDataLookup.TryGetTradeProgress(
+                    saveData,
+                    caravanId,
+                    out TradeProgressSaveData progress)
+                || !SaveDataLookup.TryGetPendingSettlement(
+                    saveData,
+                    caravanId,
+                    tradeId,
+                    out PendingSettlementSaveData pending)
+                || caravan == null
+                || progress == null
+                || pending == null
+                || !pending.hasResult
+                || pending.grade == JourneyResultGrade.Failed
+                || !string.Equals(
+                    caravan.caravanId,
+                    caravanId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    progress.caravanId,
+                    caravanId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    progress.activeTradeId,
+                    tradeId,
+                    StringComparison.Ordinal)
+                || caravan.state != JourneyState.Selling
+                || progress.state != TradeProgressState.Selling)
+            {
+                return false;
+            }
+
+            CaravanData runtimeCaravan = GetOrCreateRuntimeCaravan(caravanId);
+            if (runtimeCaravan == null || !string.Equals(runtimeCaravan.caravanId, caravanId, StringComparison.Ordinal) || runtimeCaravan.state != JourneyState.Selling)
+            {
+                return false;
+            }
+
+            snapshot = new ArrivalSaleTransitionSnapshot
+            {
+                SaveData = saveData,
+                SaveVersionBefore = saveData.version,
+                LastSavedUtcTicksBefore = saveData.lastSavedUtcTicks,
+                Caravan = caravan,
+                Progress = progress,
+                RuntimeCaravan = runtimeCaravan,
+                RuntimeStateBefore = runtimeCaravan.state,
+                CaravanStateBefore = caravan.state,
+                ProgressStateBefore = progress.state,
+                CaravanId = caravanId,
+                TradeId = tradeId
+            };
+
+            caravan.state = JourneyState.Settling;
+            progress.state = TradeProgressState.SettlementPending;
+            runtimeCaravan.state = JourneyState.Settling;
+
+            return true;
+        }
+
+        public bool TryCommitEmptyArrivalSaleCompletion(string caravanId, string tradeId, out bool saveFailed)
+        {
+            saveFailed = false;
+
+            SaveData saveData = GetSaveData();
+            if (saveData == null)
+            {
+                return false;
+            }
+
+            string saveDataSnapshot = JsonUtility.ToJson(saveData);
+
+            if (!TryStageArrivalSaleCompletion(
+                    caravanId,
+                    tradeId,
+                    out ArrivalSaleTransitionSnapshot snapshot))
+            {
+                return false;
+            }
+
+            SaveResult saveResult = saveService != null
+                ? saveService.Save(saveData)
+                : null;
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                RollbackArrivalSaleCompletion(snapshot);
+                JsonUtility.FromJsonOverwrite(
+                    saveDataSnapshot,
+                    saveData);
+
+                saveFailed = true;
+                return false;
+            }
+
+            PublishArrivalSaleCompletion(snapshot);
+            return true;
+        }
+
+        /// <summary>
+        /// 판매 transaction 저장 실패 시 stage 전 상태로 복구한다.
+        /// </summary>
+        public void RollbackArrivalSaleCompletion(
+            ArrivalSaleTransitionSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            if (snapshot.Caravan != null)
+            {
+                snapshot.Caravan.state =
+                    snapshot.CaravanStateBefore;
+            }
+
+            if (snapshot.Progress != null)
+            {
+                snapshot.Progress.state =
+                    snapshot.ProgressStateBefore;
+            }
+
+            if (snapshot.RuntimeCaravan != null)
+            {
+                snapshot.RuntimeCaravan.state = snapshot.RuntimeStateBefore;
+            }
+
+            if (snapshot.SaveData != null)
+            {
+                snapshot.SaveData.version =
+                    snapshot.SaveVersionBefore;
+                snapshot.SaveData.lastSavedUtcTicks =
+                    snapshot.LastSavedUtcTicksBefore;
+            }
+        }
+
+        /// <summary>
+        /// 판매 transaction 저장 성공 후 Settling 상태 변경을 알린다.
+        /// </summary>
+        public void PublishArrivalSaleCompletion(
+            ArrivalSaleTransitionSnapshot snapshot)
+        {
+            if (snapshot == null
+                || string.IsNullOrWhiteSpace(snapshot.CaravanId)
+                || string.IsNullOrWhiteSpace(snapshot.TradeId))
+            {
+                return;
+            }
+
+            FrameworkLog.Info(
+                $"Arrival sale completion saved. " +
+                $"CaravanId: {snapshot.CaravanId}, " +
+                $"TradeId: {snapshot.TradeId}");
+
+            FrameworkEvents.RaiseCaravanJourneyStateChanged(
+                snapshot.CaravanId,
+                JourneyState.Settling);
+        }
+
         /// <summary>모든 durable pending settlement를 저장 데이터와 분리된 읽기 전용 목록으로 반환한다.</summary>
         public IReadOnlyList<PendingSettlementSaveData> GetPendingSettlements()
         {
@@ -1906,19 +2109,51 @@ namespace ND.Framework
                 return false;
             }
 
+            // 저장 실패 시 SaveData와 runtime Caravan을 모두 원래 상태로 복구하기 위한 snapshot이다.
+            string saveDataSnapshot = JsonUtility.ToJson(saveData);
+            string runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
+            string previousSettlementTradeId = LastSettlementTradeId;
+            JourneyResultData previousSettlementResult = LastSettlementResult;
+
             // Core settlement 결과가 없으면 UI에 표시하거나 claim할 데이터가 없으므로 중단한다.
             var result = JourneyRunner.Settle(caravan);
             if (result == null)
             {
-                FrameworkLog.Warning("Trade settlement was not created because Core returned no result.");
+                FrameworkLog.Warning(
+                    "Trade settlement was not created because Core returned no result.");
                 return false;
             }
 
             // 저장 데이터를 settlement pending으로 전환한 뒤 실제 상태가 바뀌었는지 검증한다.
-            tradeProgressRecorder.MarkSettlementPending(saveData);
-            if (saveData.tradeProgress.state != TradeProgressState.SettlementPending)
+            TradeProgressState expectedProgressState;
+
+            if (result.grade == JourneyResultGrade.Failed)
             {
-                FrameworkLog.Warning($"Trade settlement was not published because trade state is {saveData.tradeProgress.state}.");
+                tradeProgressRecorder.MarkSettlementPending(saveData);
+                expectedProgressState = TradeProgressState.SettlementPending;
+            }
+            else
+            {
+                tradeProgressRecorder.MarkSelling(saveData.tradeProgress);
+                expectedProgressState = TradeProgressState.Selling;
+            }
+
+            if (saveData.tradeProgress.state != expectedProgressState)
+            {
+                TradeProgressState actualProgressState =
+                    saveData.tradeProgress.state;
+
+                JsonUtility.FromJsonOverwrite(saveDataSnapshot, saveData);
+
+                JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, caravan);
+
+                LastSettlementTradeId = previousSettlementTradeId;
+                LastSettlementResult = previousSettlementResult;
+
+                FrameworkLog.Warning(
+                    $"Trade settlement was rolled back because trade state is " +
+                    $"{actualProgressState}. Expected: {expectedProgressState}.");
+
                 return false;
             }
 
@@ -1939,16 +2174,73 @@ namespace ND.Framework
                 FrameworkLog.Warning("Economy M1 settlement preview failed. Core settlement grade is still available.");
             }
 
-            // SettlementPending과 확정 정산 결과를 같은 저장 단위에 기록한다.
+            // 도착 상태와 확정 정산 결과를 같은 저장 단위에 기록한다.
+            // 정상 도착은 Selling, 실패는 SettlementPending 상태다.
             saveData.pendingSettlement = PendingSettlementSaveDataMapper.ToSave(result, settlementTradeId, settlementRouteId);
 
-            if (!CopyRuntimeToOwnedSave(saveData, caravan)) return false;
-            saveService?.Save(saveData);
-            FrameworkEvents.RaiseTradeSettlementReady(saveData.tradeProgress.caravanId, settlementTradeId, result);
+            if (!CopyRuntimeToOwnedSave(saveData, caravan))
+            {
+                JsonUtility.FromJsonOverwrite(saveDataSnapshot, saveData);
+
+                JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, caravan);
+
+                LastSettlementTradeId = previousSettlementTradeId;
+                LastSettlementResult = previousSettlementResult;
+
+                economySettlementBridge?.ClearPending(saveData.tradeProgress.caravanId, settlementTradeId);
+
+                FrameworkLog.Warning(
+                    $"Trade settlement was rolled back because the runtime Caravan " +
+                    $"could not be copied to SaveData. " +
+                    $"CaravanId: {saveData.tradeProgress.caravanId}, " +
+                    $"TradeId: {settlementTradeId}");
+
+                return false;
+            }
+
+            SaveResult saveResult = saveService != null
+                ? saveService.Save(saveData)
+                : null;
+
+            if (saveResult == null || !saveResult.Succeeded)
+            {
+                JsonUtility.FromJsonOverwrite(
+                    saveDataSnapshot,
+                    saveData);
+
+                JsonUtility.FromJsonOverwrite(
+                    runtimeCaravanSnapshot,
+                    caravan);
+
+                LastSettlementTradeId = previousSettlementTradeId;
+                LastSettlementResult = previousSettlementResult;
+
+                economySettlementBridge?.ClearPending(
+                    saveData.tradeProgress.caravanId,
+                    settlementTradeId);
+
+                FrameworkLog.Warning(
+                    $"Trade settlement was rolled back because save failed. " +
+                    $"CaravanId: {saveData.tradeProgress.caravanId}, " +
+                    $"TradeId: {settlementTradeId}");
+
+                return false;
+            }
+
+            // 저장 성공 이후에만 Journey 상태 변경을 알린다.
+            FrameworkEvents.RaiseCaravanJourneyStateChanged(
+                saveData.tradeProgress.caravanId,
+                caravan.state);
+
+            FrameworkEvents.RaiseTradeSettlementReady(
+                saveData.tradeProgress.caravanId,
+                settlementTradeId,
+                result);
+
             if (result.grade == JourneyResultGrade.Failed)
             {
-                // Successful arrivals wait for the caravan status UI and sell-only flow.
-                // Failed journeys have no destination market and show settlement immediately.
+                // 정상 도착은 판매 UI를 기다린다.
+                // 실패만 기존 정산 화면으로 이동한다.
                 inGameScreenRouter?.RequestScreen(InGameScreenState.Settlement);
             }
 
@@ -2001,10 +2293,26 @@ namespace ND.Framework
                 return false;
             }
 
-            tradeProgressRecorder.MarkSettlementPending(progress);
-            if (progress.state != TradeProgressState.SettlementPending)
+            TradeProgressState expectedProgressState;
+
+            if (result.grade == JourneyResultGrade.Failed)
             {
-                FrameworkLog.Warning($"Trade settlement was not published because trade state is {progress.state}.");
+                tradeProgressRecorder.MarkSettlementPending(progress);
+                expectedProgressState = TradeProgressState.SettlementPending;
+            }
+            else
+            {
+                tradeProgressRecorder.MarkSelling(progress);
+                expectedProgressState = TradeProgressState.Selling;
+            }
+
+            if (progress.state != expectedProgressState)
+            {
+                FrameworkLog.Warning(
+                    $"Trade settlement was not published because trade state is " +
+                    $"{progress.state}. Expected: {expectedProgressState}, " +
+                    $"CaravanId: {caravanId}, TradeId: {tradeId}");
+
                 return false;
             }
 
@@ -2141,6 +2449,12 @@ namespace ND.Framework
             for (var index = 0; index < notifications.Count; index++)
             {
                 var notification = notifications[index];
+                if (SaveDataLookup.TryGetCaravan(saveData, notification.CaravanId, out CaravanSaveData savedCaravan))
+                {
+                    FrameworkEvents.RaiseCaravanJourneyStateChanged(
+                        notification.CaravanId,
+                        savedCaravan.state);
+                }
                 FrameworkEvents.RaiseTradeSettlementReady(
                     notification.CaravanId, notification.TradeId, notification.Result);
                 if (isOfflineRestore)

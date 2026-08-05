@@ -9,7 +9,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(Button))]
 public sealed class BuildingMaterialTestButton : MonoBehaviour
 {
-    private const int GrantQuantity = 100;
+    private const int GrantQuantity = 5;
 
     private void Awake()
     {

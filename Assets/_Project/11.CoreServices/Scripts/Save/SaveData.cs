@@ -821,6 +821,12 @@ namespace ND.Framework
         /// <summary>
         /// 정산 claim 이후 실패 결과로 종료된 상태이다.
         /// </summary>
-        Failed
+        Failed,
+
+        /// <summary>
+        /// 정상 도착 후 목적지 판매를 기다리는 상태이다.
+        /// 저장 호환성을 위해 반드시 기존 값 뒤에 둔다.
+        /// </summary>
+        Selling
     }
 }

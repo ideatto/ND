@@ -21,7 +21,13 @@ namespace ND.UI.InGame.Warehouse
         private void Awake() => Resolve();
 
         /// <summary>SaveData references are not retained; the view keeps display values and a persistent caravan-ID callback.</summary>
-        public void Bind(ND.Framework.CaravanSaveData caravan, bool eligible, string reason, Action<string> onClicked)
+        public void Bind(
+            ND.Framework.CaravanSaveData caravan,
+            bool eligible,
+            string reason,
+            Action<string> onClicked,
+            bool showUnavailableOverlay = false,
+            string statusText = null)
         {
             Resolve();
             caravanId = caravan != null ? caravan.caravanId ?? string.Empty : string.Empty;
@@ -29,8 +35,11 @@ namespace ND.UI.InGame.Warehouse
             if (nameText != null)
                 nameText.text = caravan != null && !string.IsNullOrEmpty(caravan.caravanId)
                     ? "Caravan " + (caravan.slotIndex + 1) : "Empty";
-            if (stateText != null) stateText.text = caravan != null ? caravan.state.ToString() : string.Empty;
-            if (unavailableOverlay != null) unavailableOverlay.SetActive(!eligible);
+            if (stateText != null)
+                stateText.text = caravan != null ? statusText ?? caravan.state.ToString() : string.Empty;
+            // 404 is reserved for an unlocked slot with no Caravan data (or invalid slot data).
+            // A real Caravan outside BaseCamp keeps its identity/location visible and only disables selection.
+            if (unavailableOverlay != null) unavailableOverlay.SetActive(showUnavailableOverlay);
             if (unavailableReason != null) unavailableReason.text = reason ?? string.Empty;
             if (button != null)
             {

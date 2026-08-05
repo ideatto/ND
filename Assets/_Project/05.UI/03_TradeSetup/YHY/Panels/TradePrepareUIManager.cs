@@ -40,7 +40,6 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         public string caravanId;
         public string marketId;
         public TradeItemViewData[] selectedItems;
-        public TradeItemViewData[] reservedItems;
         public bool automaticCargoLoading;
         public bool restoreOwnedCargo;
         public long gold;                 // 현재 소지 골드
@@ -176,9 +175,6 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>Forwards an S3 UI Draft for Framework validation and persistence.</summary>
     public event Action<CaravanSettingDraft> OnCaravanSettingConfirmRequested;
 
-    /// <summary>Forwards an S4 UI Draft for Framework validation and persistence.</summary>
-    public event Action<CaravanLoadSettingDraft> OnCaravanCargoConfirmRequested;
-
     // ══ 진행 상태 ═══════════════════════════════════════════════
 
     private enum DetachedCaravanEditMode
@@ -201,7 +197,6 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     private bool wired;                  // 버튼/이벤트 중복 구독 방지
     private string activeCaravanEditId = "";
     private DetachedCaravanEditMode detachedCaravanEditMode;
-    private CaravanLoadSettingViewData activeDetachedCargoViewData;
 
     /// <summary>Identifies the Caravan currently waiting for or displaying detached edit data.</summary>
     public string ActiveCaravanEditId => activeCaravanEditId;
@@ -381,10 +376,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         // publish the same reservation and synchronously re-enter this method through the
         // market inventory refresh event.
         cargoPanel.RestoreSavedCargo(
-            BuildDetachedOwnedCargoSelection(viewData, config.reservedItems),
+            BuildDetachedOwnedCargoSelection(viewData),
             false);
-        cargoPanel.RestoreSelectedCargo(config.reservedItems, false, false);
-        activeDetachedCargoViewData = viewData;
 
         // Apply detached-only layout after the panel has initialized and restored its cargo.
         cargoPanel.SetDetachedPresentation(true);
@@ -392,10 +385,12 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     }
 
     /// <summary>Closes only a detached Overview edit instead of restarting the trade flow at S1.</summary>
-public void CloseCaravanEdit()
+    public void CloseCaravanEdit()
     {
-        // A successful synchronous Command can clear detached identity during Provider refresh.
-        // Hiding must therefore be idempotent instead of returning early on the cleared mode.
+        bool closingCargo = detachedCaravanEditMode == DetachedCaravanEditMode.Cargo;
+        if (closingCargo)
+            cargoPanel?.CancelCargoTransactionDraft?.Invoke();
+
         ClearDetachedCaravanEditState();
         ShowOnly(-1);
         SetTradeRootActive(false);
@@ -436,7 +431,6 @@ public void CloseCaravanEdit()
     {
         activeCaravanEditId = string.Empty;
         detachedCaravanEditMode = DetachedCaravanEditMode.None;
-        activeDetachedCargoViewData = null;
         if (cargoPanel != null && cargoPanel.TryCommitDetachedCargoPlan == TryConfirmDetachedCargoPlan)
         {
             cargoPanel.TryCommitDetachedCargoPlan = null;
@@ -458,95 +452,44 @@ public void CloseCaravanEdit()
     {
         if (detachedCaravanEditMode != DetachedCaravanEditMode.Cargo
             || string.IsNullOrWhiteSpace(activeCaravanEditId)
-            || cargoPanel == null)
+            || cargoPanel == null
+            || cargoPanel.TryCommitCargoTransaction == null)
         {
             return false;
         }
 
-        if (OnCaravanCargoConfirmRequested == null)
-        {
-            Debug.LogWarning(
-                $"Cannot confirm Caravan cargo edit for {activeCaravanEditId}: no command consumer is connected.",
-                this);
-            return false;
-        }
+        // Detached Overview Cargo uses the same immediate Market purchase as every other
+        // production Cargo entry point. No Cargo-only persistence fallback is allowed here.
 
-        // Capture the UI-owned selection before any synchronous command consumer can refresh S4.
-        CargoLoadingPanelController.CargoSelection[] selections = cargoPanel.BuildCargoSelections();
-        var draft = new CaravanLoadSettingDraft
-        {
-            caravanId = activeCaravanEditId
-        };
-        for (int index = 0; index < selections.Length; index++)
-        {
-            draft.items.Add(new CaravanLoadItemDraft
-            {
-                itemId = selections[index].itemId,
-                quantity = selections[index].quantity
-            });
-        }
-
-        if (cargoPanel.CanCommitCargoTransaction != null
-            && !cargoPanel.CanCommitCargoTransaction())
+        if (!cargoPanel.TryCommitCargoTransaction())
             return false;
 
-        // Detached Cargo confirmation only saves the Caravan's departure plan. The shared
-        // reservation already makes this quantity unavailable to other Caravans; payment and
-        // authoritative Market mutation must be handled by the later trade-start transaction.
-        OnCaravanCargoConfirmRequested.Invoke(draft);
-
-        // The synchronous Command consumer closes S4 only after success. A failure leaves the
-        // detached identity intact and therefore returns false to keep the Cargo panel open.
-        return detachedCaravanEditMode == DetachedCaravanEditMode.None;
+        CloseCaravanEdit();
+        return true;
     }
 
     private static TradeItemViewData[] BuildDetachedOwnedCargoSelection(
-        CaravanLoadSettingViewData viewData,
-        IReadOnlyList<TradeItemViewData> reservedItems)
+        CaravanLoadSettingViewData viewData)
     {
-        if (viewData == null || viewData.plannedItems == null || viewData.plannedItems.Length == 0)
-        {
+        if (viewData == null || viewData.plannedItems == null)
             return Array.Empty<TradeItemViewData>();
-        }
 
-        var reservedByItemId = (reservedItems ?? Array.Empty<TradeItemViewData>())
+        return viewData.plannedItems
             .Where(item => item != null
                 && !string.IsNullOrWhiteSpace(item.itemId)
-                && item.selectedBuyAmount > 0)
-            .GroupBy(item => item.itemId.Trim(), StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Sum(item => Math.Max(0, item.selectedBuyAmount)),
-                StringComparer.Ordinal);
-        var result = new List<TradeItemViewData>();
-        for (int index = 0; index < viewData.plannedItems.Length; index++)
-        {
-            CargoItemViewData item = viewData.plannedItems[index];
-            if (item == null || string.IsNullOrWhiteSpace(item.itemId) || item.quantity <= 0)
+                && item.quantity > 0)
+            .Select(item => new TradeItemViewData
             {
-                continue;
-            }
-
-            string itemId = item.itemId.Trim();
-            reservedByItemId.TryGetValue(itemId, out int reservedQuantity);
-            int ownedQuantity = Math.Max(0, item.quantity - reservedQuantity);
-            if (ownedQuantity == 0)
-                continue;
-
-            result.Add(new TradeItemViewData
-            {
-                itemId = itemId,
+                itemId = item.itemId.Trim(),
                 displayName = item.displayName ?? string.Empty,
                 icon = item.icon,
                 category = item.category,
-                ownedAmount = ownedQuantity,
+                ownedAmount = item.quantity,
                 unitWeight = item.unitWeight,
                 purchasePrice = item.purchaseUnitPrice,
                 sellPrice = item.estimatedSellUnitPrice
-            });
-        }
-
-        return result.ToArray();
+            })
+            .ToArray();
     }
 
     /// <summary>패널 C# 이벤트·버튼 구독(1회만). 정헌님 패널의 UnityEvent는 씬에서 연결.</summary>
@@ -969,9 +912,6 @@ public void CloseCaravanEdit()
                 cargoPanel.RestoreSavedCargo(cfg.selectedItems, false);
             else
                 cargoPanel.RestoreSelectedCargo(cfg.selectedItems, false, false);
-            // Rehydrating an existing reservation is presentation-only. Publishing it again
-            // would recursively trigger MarketInventoryChanged -> RefreshCargoIfVisible.
-            cargoPanel.RestoreSelectedCargo(cfg.reservedItems, false, false);
         }
         ShowOnly(3);
     }
@@ -986,9 +926,11 @@ public void CloseCaravanEdit()
             return;
 
         if (detachedCaravanEditMode == DetachedCaravanEditMode.Cargo
-            && activeDetachedCargoViewData != null)
+            && !string.IsNullOrWhiteSpace(activeCaravanEditId))
         {
-            ShowCaravanCargo(activeDetachedCargoViewData);
+            // ViewData is a point-in-time Provider result. Request a fresh snapshot by ID
+            // instead of treating a previous Saved Cargo/capacity snapshot as authoritative.
+            OnCaravanCargoDataRequested?.Invoke(activeCaravanEditId);
             return;
         }
 
@@ -1133,6 +1075,8 @@ public void CloseCaravanEdit()
         WireOnce();
         if (cancelWarning != null) cancelWarning.Close();
         ShowOnly(5);
+        if (progressCancel != null)
+            progressCancel.gameObject.SetActive(viewData != null && viewData.canCancel);
         if (progressPanel != null) progressPanel.BindFrameworkProgress(viewData);
     }
 

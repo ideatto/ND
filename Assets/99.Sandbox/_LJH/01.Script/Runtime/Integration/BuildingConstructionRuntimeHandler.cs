@@ -166,11 +166,6 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     /// </summary>
     private void ShowFailure(string userMessage, string diagnosticMessage)
     {
-        if (noticeUI == null)
-        {
-            noticeUI = FindFirstObjectByType<NoticeUI>(FindObjectsInactive.Include);
-        }
-
         noticeUI?.Show(userMessage);
         Debug.LogError(diagnosticMessage, this);
     }

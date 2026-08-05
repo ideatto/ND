@@ -187,6 +187,18 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// 정상 도착한 Caravan의 progress를 판매 대기 상태로 전환한다.
+        /// </summary>
+        public void MarkSelling(TradeProgressSaveData progress)
+        {
+            if (progress != null
+                && progress.state == TradeProgressState.Traveling)
+            {
+                progress.state = TradeProgressState.Selling;
+            }
+        }
+
+        /// <summary>
         /// 무역 진행 상태를 완료로 기록한다.
         /// </summary>
         /// <param name="saveData">변경할 저장 데이터.</param>

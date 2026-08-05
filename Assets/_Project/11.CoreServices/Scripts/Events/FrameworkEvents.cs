@@ -113,7 +113,11 @@ namespace ND.Framework
         public static event Action<string> CaravanCargoChanged;
         /// <summary>Detailed Cargo invalidation signal including the mutation source.</summary>
         public static event Action<string, CaravanCargoChangeSource> CaravanCargoChangedDetailed;
-
+        /// <summary>
+        /// 한 Caravan의 JourneyState가 저장에 성공한 후 발생한다.
+        /// 구독자는 전달받은 상태를 직접 적용하지 않고 caravanId 기준으로 SaveData를 다시 조회한다.
+        /// </summary>
+        public static event Action<string, JourneyState> CaravanJourneyStateChanged;
 
         /// <summary>구조 대출 발급 저장이 성공한 뒤 한 번 발생한다.</summary>
         public static event Action<IssueRescueLoanResult> RescueLoanIssued;
@@ -297,6 +301,21 @@ namespace ND.Framework
             FrameworkLog.Info($"CaravanCargoChanged event raised. CaravanId: {normalizedCaravanId}, Source: {source}");
             CaravanCargoChanged?.Invoke(normalizedCaravanId);
             CaravanCargoChangedDetailed?.Invoke(normalizedCaravanId, source);
+        }
+
+        public static void RaiseCaravanJourneyStateChanged(
+    string caravanId,
+    JourneyState state)
+        {
+            string normalizedCaravanId = caravanId ?? string.Empty;
+
+            FrameworkLog.Info(
+                $"CaravanJourneyStateChanged event raised. " +
+                $"CaravanId: {normalizedCaravanId}, State: {state}");
+
+            CaravanJourneyStateChanged?.Invoke(
+                normalizedCaravanId,
+                state);
         }
 
         public static void RaiseHomeInventoryChanged()

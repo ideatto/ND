@@ -1152,6 +1152,9 @@ namespace ND.Framework
 
 private void HandleSettlementReady(string caravanId, string tradeId, JourneyResultData result)
         {
+            if (result != null && result.grade != JourneyResultGrade.Failed)
+                return;
+
             if (!IsSettlementEntryValid("HandleSettlementReady", caravanId, tradeId, result))
                 return;
 
@@ -1176,8 +1179,8 @@ private void HandleSettlementReady(string caravanId, string tradeId, JourneyResu
 
             // Successful arrival belongs to the destination sale flow. Keeping it only in the
             // durable pending collection prevents it from occupying the immediate-failure cursor.
-            if (result.grade != JourneyResultGrade.Failed)
-                return;
+            //if (result.grade != JourneyResultGrade.Failed)
+            //    return;
 
             // Failed journeys have no destination sale phase. Only an empty cursor may present
             // this failure; later failures remain ordered in SaveData until the current claim
