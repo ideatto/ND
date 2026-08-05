@@ -15,7 +15,7 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
     private ITradeScreenView view;
     private InGameScreenState currentScreenState;
     private float nextTravelingRefreshTime;
-    
+
     private bool isTradeScreenOpen;
     private string presentedCaravanId = string.Empty;
     private string presentedTradeId = string.Empty;

@@ -109,7 +109,7 @@ namespace ND.UI.Market
                 return true;
             }
 
-            if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId) 
+            if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId)
                 || !SaveDataLookup.TryGetCaravan(root.CurrentSaveData, caravanId, out ND.Framework.CaravanSaveData savedCaravan)
                 || savedCaravan == null || savedCaravan.state != JourneyState.Selling
                 || !SaveDataLookup.TryGetTradeProgress(root.CurrentSaveData, caravanId, out ND.Framework.TradeProgressSaveData progress)
