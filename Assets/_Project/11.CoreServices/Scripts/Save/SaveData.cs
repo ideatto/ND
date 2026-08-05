@@ -433,6 +433,11 @@ namespace ND.Framework
         public float runWearRemainder;
 
         /// <summary>
+        /// 출발 시 고정한 거리 마모 디버그 배율이다.
+        /// </summary>
+        public double runDurabilityWearMultiplier = 1d;
+
+        /// <summary>
         /// 이번 무역 식량 바닥 여부이다.
         /// </summary>
         public bool runFoodDepleted;

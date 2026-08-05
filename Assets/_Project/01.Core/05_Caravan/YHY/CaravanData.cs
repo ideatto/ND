@@ -72,6 +72,7 @@ public class CaravanData
     public List<string> runLostMercenaryInstanceIds = new List<string>(); // 전투 패배로 소멸한 용병 개체 ID
     public int runStartDurability;    // 이번 무역 출발 시 내구도 (정산 손실 = 출발 - 도착) [M2 거리마모]
     public float runWearRemainder;    // 거리 마모 소수점 이월(1 미만 마모 누적) [M2 거리마모]
+    public double runDurabilityWearMultiplier = 1d; // 출발 시 고정한 거리 마모 디버그 배율
 
     // ── 식량 고갈 제한시간 (M2) ────────────────────────────────
     public bool runFoodDepleted;          // 이번 무역 식량 바닥 여부 (바닥나면 제한시간 시작)

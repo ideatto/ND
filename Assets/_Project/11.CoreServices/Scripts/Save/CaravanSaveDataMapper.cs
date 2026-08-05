@@ -74,6 +74,7 @@ namespace ND.Framework
                 runLostMercenaryInstanceIds = new List<string>(saveData.runLostMercenaryInstanceIds),
                 runStartDurability = saveData.runStartDurability,
                 runWearRemainder = saveData.runWearRemainder,
+                runDurabilityWearMultiplier = saveData.runDurabilityWearMultiplier,
                 runFoodDepleted = saveData.runFoodDepleted,
                 runFoodDepletedProgress = saveData.runFoodDepletedProgress,
                 starveGraceSeconds = saveData.starveGraceSeconds,
@@ -147,6 +148,7 @@ namespace ND.Framework
                 saveData.runLostMercenaryInstanceIds.AddRange(runtimeData.runLostMercenaryInstanceIds);
             saveData.runStartDurability = runtimeData.runStartDurability;
             saveData.runWearRemainder = runtimeData.runWearRemainder;
+            saveData.runDurabilityWearMultiplier = runtimeData.runDurabilityWearMultiplier;
             saveData.runFoodDepleted = runtimeData.runFoodDepleted;
             saveData.runFoodDepletedProgress = runtimeData.runFoodDepletedProgress;
             saveData.starveGraceSeconds = runtimeData.starveGraceSeconds;

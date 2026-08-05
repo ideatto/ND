@@ -38,6 +38,7 @@ public static class JourneyRunner
 {
     /// <summary>도착으로 판정하는 진행도 기준(상수로 열어둠).</summary>
     public const float ArrivalProgress = 1f;
+    private const double WearRoundingEpsilon = 0.000001d;
 
     /// <summary>
     /// 출발 시도. 검증 통과 시 이동 시작(소요 시간 계산·저장, 진행도 0으로).
@@ -76,6 +77,8 @@ public static class JourneyRunner
         caravan.runWagonDestroyed = false;                        // [2차] 지난 무역의 파괴 플래그 초기화
         caravan.runStartDurability = caravan.currentDurability;   // 출발 시 내구도 (정산 손실 계산 기준) [M2 거리마모]
         caravan.runWearRemainder = 0f;
+        caravan.runDurabilityWearMultiplier =
+            ND.Framework.WagonDurabilityWearDebugSettings.Multiplier;
         caravan.elapsedInGameSeconds = 0f;                        // [인게임시간] 누적 인게임 경과 초기화
         caravan.runFoodDepleted = false;
         caravan.runFoodDepletedProgress = 0f;
@@ -176,14 +179,22 @@ public static class JourneyRunner
         float delta = toProgress - fromProgress;
         if (delta <= 0f) return;                              // 정지/역행 시 마모 없음
         if (CaravanConfig.DurabilityWearPerKm <= 0f) return;  // 마모율 0이면 스킵
+        if (caravan.runDurabilityWearMultiplier <= 0d) return;
         if (caravan.currentDurability <= 0) return;           // 이미 0이면 그만
 
         float wornKm = delta * caravan.currentDistanceKm;     // 이번 구간 이동 거리(Km)
-        caravan.runWearRemainder += wornKm * CaravanConfig.DurabilityWearPerKm;
+        double wear =
+            wornKm *
+            CaravanConfig.DurabilityWearPerKm *
+            caravan.runDurabilityWearMultiplier;
+        caravan.runWearRemainder += (float)wear;
 
-        int units = (int)caravan.runWearRemainder;            // 정수 단위만 실제 적용, 나머지는 이월
+        int units = (int)System.Math.Floor(
+            caravan.runWearRemainder + WearRoundingEpsilon);  // 진행도 분할에 따른 극소 부동소수점 오차 보정
         if (units <= 0) return;
         caravan.runWearRemainder -= units;
+        if (caravan.runWearRemainder < 0f)
+            caravan.runWearRemainder = 0f;
 
         int actual = (caravan.currentDurability >= units) ? units : caravan.currentDurability;  // 0 밑으론 안 감
         caravan.currentDurability -= actual;
