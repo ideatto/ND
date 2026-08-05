@@ -223,12 +223,31 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                         conflicted,
                         false,
                         "Caravan 슬롯 데이터가 중복되었거나 식별자가 유효하지 않습니다.",
-                        _ => { });
+                        _ => { },
+                        true);
                     continue;
                 }
 
                 ND.Framework.CaravanSaveData caravan = validation.GetCaravanAt(slotIndex);
-                if (caravan == null) continue;
+                if (caravan == null)
+                {
+                    bool unlocked = save.world?.unlockedCaravanSlotIndices != null
+                        && save.world.unlockedCaravanSlotIndices.Contains(slotIndex);
+                    if (!unlocked) continue;
+
+                    GameObject emptyInstance = Instantiate(caravanSlotPrefab, caravanContent);
+                    emptyInstance.name = "CaravanSlotEmpty_" + slotIndex;
+                    WarehouseCaravanSlotView emptyView =
+                        emptyInstance.GetComponent<WarehouseCaravanSlotView>()
+                        ?? emptyInstance.AddComponent<WarehouseCaravanSlotView>();
+                    emptyView.Bind(
+                        null,
+                        false,
+                        "Caravan 데이터가 없습니다.",
+                        _ => { },
+                        true);
+                    continue;
+                }
 
                 bool eligible = IsEligible(caravan, baseTownId);
                 string reason = eligible ? string.Empty
@@ -239,12 +258,38 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                 instance.name = "Caravan_" + caravan.caravanId;
                 WarehouseCaravanSlotView view = instance.GetComponent<WarehouseCaravanSlotView>()
                     ?? instance.AddComponent<WarehouseCaravanSlotView>();
-                view.Bind(caravan, eligible, reason, id => SelectCaravan(id));
+                view.Bind(
+                    caravan,
+                    eligible,
+                    reason,
+                    id => SelectCaravan(id),
+                    false,
+                    BuildCaravanLocationText(caravan));
             }
 
             if (validation.HasInvalidEntries)
                 Debug.LogWarning("Invalid Caravan slot data was excluded from Warehouse selection.", this);
         }
+
+        private static string BuildCaravanLocationText(ND.Framework.CaravanSaveData caravan)
+        {
+            if (caravan == null) return string.Empty;
+
+            string townId = caravan.currentTownId?.Trim() ?? string.Empty;
+            string townName = townId;
+            ISharedGameDataProvider shared = FrameworkRoot.Instance?.SharedGameData;
+            if (!string.IsNullOrEmpty(townId)
+                && shared != null
+                && shared.TryGetTown(townId, out SharedTownDefinition town)
+                && town != null
+                && !string.IsNullOrWhiteSpace(town.DisplayName))
+            {
+                townName = town.DisplayName.Trim();
+            }
+
+            return string.IsNullOrEmpty(townName) ? "현재 위치 없음" : townName;
+        }
+
 
         /// <summary>Reads the latest SaveData and refreshes both inventories, capacity, title, and load.</summary>
         private void RefreshInventories()
