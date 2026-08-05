@@ -95,6 +95,8 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
                 PlayerMainManager.Instance,
                 FrameworkRoot.Instance?.SharedGameData);
 
+        ApplyEnvironmentGoldGate(viewData);   // 환경 아이템이면 골드 부족 시 확정을 막는다.
+
         confirmPresenter?.Show(viewData);
     }
 
@@ -130,8 +132,69 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
                 PlayerMainManager.Instance,
                 FrameworkRoot.Instance?.SharedGameData);
 
+        InjectEnvironmentGoldRequirement(viewData);   // 환경 아이템이면 요구조건 목록 맨 앞에 '골드 N' 행을 추가한다.
+
         confirmPresenter?.Hide();
         detailPresenter?.Show(viewData);
+    }
+
+    // ── 환경 아이템 골드 비용 표시/게이트 ──
+    // 환경 아이템은 건물과 달리 BuildData 재료가 아니라 거래재화(골드)로 짓는다. 비용 원본은
+    // VillageBuildingRegistry.CatalogEntry.envCost(Core/윤호영)이며 BuildData에는 없다.
+    // 그래서 팝업 표시 직전에 '골드 N' 요구 행을 목록에 끼워넣어 통나무/돌과 동일하게 보이게 한다.
+
+    /// <summary>환경 아이템이면 상세 팝업 요구조건 목록 맨 앞에 '골드 N(보유/필요)' 행을 추가하고, 부족하면 버튼을 막는다.</summary>
+    private static void InjectEnvironmentGoldRequirement(BuildingDetailViewData viewData)
+    {
+        if (viewData == null || string.IsNullOrEmpty(viewData.buildId)) return;
+
+        VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
+        if (registry == null) return;
+        if (!registry.TryGetCatalogEnvironmentEntry(viewData.buildId, out _, out _, out long cost)) return;   // 건물이면 건너뜀
+
+        PlayerMainManager player = PlayerMainManager.Instance;
+        long owned = player != null ? player.Gold : 0;
+        bool satisfied = owned >= cost;
+
+        var goldRow = new ItemRequirementViewData
+        {
+            itemId = "__gold__",
+            displayName = "골드",
+            icon = null,
+            ownedQuantity = owned > int.MaxValue ? int.MaxValue : (int)owned,
+            requiredQuantity = cost > int.MaxValue ? int.MaxValue : (int)cost,
+            isSatisfied = satisfied
+        };
+
+        ItemRequirementViewData[] existing = viewData.itemRequirements ?? System.Array.Empty<ItemRequirementViewData>();
+        var merged = new ItemRequirementViewData[existing.Length + 1];
+        merged[0] = goldRow;                                   // 골드를 맨 앞에
+        System.Array.Copy(existing, 0, merged, 1, existing.Length);
+        viewData.itemRequirements = merged;
+
+        if (!satisfied)
+        {
+            viewData.canProceed = false;
+            if (string.IsNullOrWhiteSpace(viewData.disabledReason)) viewData.disabledReason = "골드가 부족합니다.";
+        }
+    }
+
+    /// <summary>환경 아이템이면 확인 팝업도 골드 부족 시 확정을 막는다.</summary>
+    private static void ApplyEnvironmentGoldGate(BuildingConfirmViewData viewData)
+    {
+        if (viewData == null || string.IsNullOrEmpty(viewData.buildId)) return;
+
+        VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
+        if (registry == null) return;
+        if (!registry.TryGetCatalogEnvironmentEntry(viewData.buildId, out _, out _, out long cost)) return;
+
+        PlayerMainManager player = PlayerMainManager.Instance;
+        long owned = player != null ? player.Gold : 0;
+        if (owned < cost)
+        {
+            viewData.canConfirm = false;
+            if (string.IsNullOrWhiteSpace(viewData.disabledReason)) viewData.disabledReason = "골드가 부족합니다.";
+        }
     }
 
     // 현재 Popup 흐름에서 선택한 건물과 같은 요청인지 확인한다.

@@ -54,12 +54,22 @@ public class VillageBuildingRegistry : MonoBehaviour
         // 건설 Popup과 실제 비용 처리가 같은 레벨별 요구조건을 사용하도록 BuildData 원본을 직접 연결한다.
         // 기존 displayName 기반 SaveData 계약은 이번 작업에서 유지하므로 displayName과 함께 보관한다.
         public BuildData buildData;
+        // 카테고리 구분: 이 항목이 '환경 아이템'인지. 건물추가 UI가 '건물'/'환경' 탭을 나눌 때만 쓴다.
+        // (환경 아이템은 건물과 달리 다중 설치·레벨 없음·거래재화 비용 파이프라인을 탄다.)
+        public bool isEnvironment;
+        // 환경 아이템 1개를 지을 때 소모하는 거래재화(tradingCurrency) 비용이다.
+        // 건물은 아이템(requireItems)으로 짓지만 환경은 재화로 짓는 첫 케이스라 여기에 종류별 값 하나만 둔다.
+        // isEnvironment가 false인 건물 항목에서는 사용하지 않는다.
+        public long envCost;
     }
 
     [SerializeField] private List<Building> buildings = new List<Building>();
     [SerializeField] private Color highlightColor = new Color(1f, 0.9f, 0.3f);
     [SerializeField] private GameObject fallbackPrefab;
     [SerializeField] private List<CatalogEntry> catalog = new List<CatalogEntry>();
+
+    // 저장 복원 중인지. 복원 중 새로 만든 건물은 '유저 신축'이 아니므로 화면 중앙 포커스 대상에서 제외한다.
+    private bool isRestoringFromSave;
 
     // ── 지어진 건물 ──
     public int Count => buildings.Count;
@@ -72,6 +82,9 @@ public class VillageBuildingRegistry : MonoBehaviour
     public int CatalogCount => catalog.Count;
     public string GetCatalogName(int index) =>
         (index >= 0 && index < catalog.Count) ? catalog[index].displayName : string.Empty;
+    /// <summary>이 카탈로그 항목이 '환경 아이템'인지(건물추가 UI의 건물/환경 탭 분리용).</summary>
+    public bool GetCatalogIsEnvironment(int index) =>
+        index >= 0 && index < catalog.Count && catalog[index] != null && catalog[index].isEnvironment;
     /// <summary>이 종류의 현재 레벨(안 지어졌으면 0).</summary>
     public int GetCatalogLevel(int index)
     {
@@ -145,7 +158,42 @@ public class VillageBuildingRegistry : MonoBehaviour
         return true;
     }
 
-private void Awake()
+    /// <summary>
+    /// buildId로 '환경 아이템' 카탈로그 항목을 찾아 BuildData·displayName·거래재화 비용을 반환한다.
+    /// isEnvironment=false인 건물 항목은 무시한다(환경 전용 건설 경로에서만 사용).
+    /// 동일 buildId 중복은 모호한 요청이므로 실패한다.
+    /// </summary>
+    public bool TryGetCatalogEnvironmentEntry(string buildId, out BuildData buildData, out string displayName, out long envCost)
+    {
+        buildData = null;
+        displayName = string.Empty;
+        envCost = 0;
+
+        if (string.IsNullOrEmpty(buildId)) return false;
+
+        CatalogEntry found = null;
+        foreach (CatalogEntry entry in catalog)
+        {
+            if (entry == null || entry.buildData == null || !entry.isEnvironment) continue;   // 환경 항목만
+            if (!string.Equals(entry.buildData.BuildId, buildId, System.StringComparison.Ordinal)) continue;
+
+            if (found != null)
+            {
+                Debug.LogError($"Village environment catalog has duplicate buildId '{buildId}'.", this);
+                return false;
+            }
+            found = entry;
+        }
+
+        if (found == null || string.IsNullOrWhiteSpace(found.displayName)) return false;
+
+        buildData = found.buildData;
+        displayName = found.displayName;
+        envCost = found.envCost;
+        return true;
+    }
+
+    private void Awake()
     {
         Instance = this;
         foreach (Building b in buildings)
@@ -159,6 +207,7 @@ private void Awake()
     // FrameworkRoot·SaveData가 준비된 뒤 거점 건물 진행을 복원한다.
     private void Start()
     {
+        StripEnvironmentBuildingSaveEntries();   // 과거 잘못 저장된 '환경' 건물 항목 제거(마이그레이션, 팀원 세이브 치유).
         SeedMissingBuildingsToSave();   // 뉴게임: SaveData에 없는 거점 건물을 채운다(이미 있으면 보존). 이동 저장의 전제.
         RestoreFromSaveData();
         BuildingPlacementController placementController =
@@ -223,10 +272,20 @@ private void Awake()
         if (savedBuildings == null) return;
 
         // 저장된 항목마다 "씬 반영"만 수행 — 저장은 이미 확정된 상태이므로 다시 쓰지 않는다.
-        foreach (VillageBuildingSaveData saved in savedBuildings)
+        // 복원 중 새로 만든 건물은 유저 신축이 아니므로 화면 중앙 포커스를 하지 않는다.
+        isRestoringFromSave = true;
+        try
         {
-            if (saved == null) continue;
-            ApplySavedBuildingLevel(saved.displayName, saved.level);
+            foreach (VillageBuildingSaveData saved in savedBuildings)
+            {
+                if (saved == null) continue;
+                if (IsEnvironmentCatalogByName(saved.displayName)) continue;   // 환경은 건물 경로로 복원하지 않음(다중·삭제는 환경 매니저 담당).
+                ApplySavedBuildingLevel(saved.displayName, saved.level);
+            }
+        }
+        finally
+        {
+            isRestoringFromSave = false;
         }
     }
 
@@ -272,6 +331,14 @@ public void ApplySavedBuildingLevel(string displayName, int targetLevel)
         BuildNew(ResolveRuntimeRootPrefab(catalogEntry), levelData, displayName);
         Building built = FindByName(displayName);
         if (built != null) built.level = targetLevel;
+
+        // 유저가 방금 지은 새 건물이면(복원 중이 아니면) 화면 중앙으로 옮기고 편집모드 선택으로 포커스한다.
+        // 다른 마을/늦게 로드된 기존 건물은 이 경로를 타지 않으므로 폴링 오작동(엉뚱한 건물 이동)이 없다.
+        if (!isRestoringFromSave && built != null && built.instanceRoot != null)
+        {
+            BuildingPlacementController controller = FindAnyObjectByType<BuildingPlacementController>();
+            if (controller != null) controller.FocusNewlyBuilt(built.instanceRoot.transform);
+        }
     }
 
     /// <summary>
@@ -324,6 +391,7 @@ public void ApplySavedBuildingLevel(string displayName, int targetLevel)
         foreach (Building b in buildings)
         {
             if (b == null || string.IsNullOrEmpty(b.displayName) || b.level < 1) continue;
+            if (IsEnvironmentCatalogByName(b.displayName)) continue;   // 환경은 건물 저장(villageBuildings) 대상이 아님.
 
             // 이미 저장돼 있으면(로드된 게임) 건너뛴다 — 레벨·좌표 보존
             bool exists = false;
@@ -450,6 +518,91 @@ private void BuildNew(GameObject rootPrefab, DataPerLevel levelData, string disp
 
         buildings.Add(building);
         CacheBuildingRenderers(building);
+    }
+
+    /// <summary>
+    /// 환경 아이템 인스턴스 하나를 생성한다.
+    /// 건물과 달리 <b>buildings 목록·villageBuildings 저장을 건드리지 않는다</b>(다중 설치·레벨 없음).
+    /// 외형·footprint는 건물과 동일한 BuildData 파이프라인을 재사용하고, PlacedEnvironment 표식을 붙여 반환한다.
+    /// 격자 점유·저장은 호출자(BuildingPlacementController/VillageEnvironmentManager)가 담당한다.
+    /// </summary>
+    /// <param name="envId">환경 종류 키(BuildData.buildId).</param>
+    /// <param name="instanceId">이 설치 인스턴스의 고유 ID.</param>
+    /// <param name="position">생성 월드 위치(격자 정렬 전 임시 위치).</param>
+    public GameObject BuildEnvironmentInstance(string envId, string instanceId, Vector3 position)
+    {
+        if (string.IsNullOrEmpty(envId) || string.IsNullOrEmpty(instanceId)) return null;
+
+        CatalogEntry entry = FindEnvironmentCatalog(envId);
+        if (entry == null)
+        {
+            Debug.LogError($"Environment build failed: catalog not found. envId={envId}", this);
+            return null;
+        }
+
+        DataPerLevel levelData = ResolveLevelData(entry, 1);   // 환경은 레벨이 없어 항상 레벨1 데이터를 쓴다.
+        if (entry.buildData != null && levelData == null)
+        {
+            Debug.LogError($"Environment appearance is missing (level 1). envId={envId}", this);
+            return null;
+        }
+
+        GameObject rootPrefab = ResolveRuntimeRootPrefab(entry);
+        GameObject go = rootPrefab != null
+            ? Instantiate(rootPrefab)
+            : GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+        string shortId = instanceId.Length > 8 ? instanceId.Substring(0, 8) : instanceId;
+        go.name = "Env_" + entry.displayName + "_" + shortId;
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, gameObject.scene);
+        go.transform.position = position;
+
+        // 공통 wrapper(Building_RuntimeRoot) 사용 시에만 외형 주입 + Collider/footprint 보정.
+        if (go.transform.Find("VisualRoot") != null)
+        {
+            ApplyAppearanceToRuntimeRoot(go, levelData);
+            RefreshRuntimeRootCollider(go, levelData);
+        }
+
+        // 인스턴스 식별 표식 부착(이동/삭제/저장 분기용).
+        PlacedEnvironment marker = go.GetComponent<PlacedEnvironment>();
+        if (marker == null) marker = go.AddComponent<PlacedEnvironment>();
+        marker.Initialize(instanceId, envId);
+        return go;
+    }
+
+    /// <summary>buildId로 '환경 아이템' 카탈로그 항목을 찾는다(없으면 null).</summary>
+    private CatalogEntry FindEnvironmentCatalog(string envId)
+    {
+        foreach (CatalogEntry entry in catalog)
+            if (entry != null && entry.isEnvironment && entry.buildData != null
+                && string.Equals(entry.buildData.BuildId, envId, System.StringComparison.Ordinal))
+                return entry;
+        return null;
+    }
+
+    /// <summary>displayName이 '환경 아이템' 카탈로그 종류인지. 건물 저장/복원 경로에서 환경을 배제하는 데 쓴다.</summary>
+    private bool IsEnvironmentCatalogByName(string displayName)
+    {
+        if (string.IsNullOrEmpty(displayName)) return false;
+        foreach (CatalogEntry entry in catalog)
+            if (entry != null && entry.isEnvironment && entry.displayName == displayName) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 과거(환경 분리 이전) 재현님 건물 경로로 잘못 저장된 '환경' 항목을 villageBuildings에서 제거한다.
+    /// 환경은 villageEnvironments에만 저장되어야 하며, villageBuildings에 남아 있으면 팝업이 '최대 레벨'로 막고
+    /// 삭제 불가한 건물 인스턴스가 생긴다. 매 로드마다 호출해도 안전(idempotent)하다.
+    /// </summary>
+    private void StripEnvironmentBuildingSaveEntries()
+    {
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root == null || root.CurrentSaveData == null || root.CurrentSaveData.player == null) return;
+
+        List<VillageBuildingSaveData> list = root.CurrentSaveData.player.villageBuildings;
+        if (list == null) return;
+        list.RemoveAll(e => e != null && IsEnvironmentCatalogByName(e.displayName));
     }
 
 

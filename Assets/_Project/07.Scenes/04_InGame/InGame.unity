@@ -611,6 +611,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 204965473}
   m_CullTransparentMesh: 1
+--- !u!1 &264600662 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 235082941164848027, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+  m_PrefabInstance: {fileID: 841212660}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &264600663 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4165532345562317664, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+  m_PrefabInstance: {fileID: 841212660}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 264600662}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83e27136f14d4094bae51c44892a3d63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingPopupRuntimeBinding
+--- !u!114 &264600664
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 264600662}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2207a381faeb7084d9954eab4323983b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VillageEnvironmentManager
+  popupBinding: {fileID: 264600663}
+  placementController: {fileID: 1874843858}
+  noticeUI: {fileID: 1527842263}
 --- !u!224 &286494564 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 2355144627824305741, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
@@ -1952,6 +1983,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6064639208301837526, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 841212665}
+    - targetCorrespondingSourceObject: {fileID: 235082941164848027, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 264600664}
   m_SourcePrefab: {fileID: 100100000, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
 --- !u!1 &841212661 stripped
 GameObject:
@@ -2602,6 +2636,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.FrameworkDebugBridge
   debugTimeScale: 10
   debugInGameTimeMultiplier: 60
+  calendarDebugScale: 1
+  calendarTargetMonth: 1
+  calendarOfflineSeconds: 3600
   debugSeasonId: winter
   debugDisasterId: drought
   debugRouteEventId: debug_route_event_001
@@ -5409,6 +5446,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: VillageView (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
+      propertyPath: deleteIconSprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 62f790d680719944e9249ec90eae7c6a, type: 3}
     - target: {fileID: 6302923003883896727, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -5494,6 +5535,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
+--- !u!114 &1874843858 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
+  m_PrefabInstance: {fileID: 1874843857}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc373b26632b83b49b010fc3ef6ea466, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingPlacementController
 --- !u!1001 &1988144640
 PrefabInstance:
   m_ObjectHideFlags: 0

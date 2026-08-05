@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe788a43db47f334c8b4adc7f173c672, type: 3}
+  m_Name: Build_Env_WoodenCrates
+  m_EditorClassIdentifier: Assembly-CSharp::BuildData
+  buildId: WoodenCrates
+  displayName: "\uB098\uBB34 \uC0C1\uC790"
+  description: 
+  dataPerLevels:
+  - level: 1
+    buildPrefab: {fileID: 7389372932580481433, guid: 1a667f1a7f72ead4fb869f1eab7e606c, type: 3}
+    visualScale: {x: 1, y: 1, z: 1}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 1
+    footprintCellsZ: 1
+    buildRequirements:
+      requireItems: []

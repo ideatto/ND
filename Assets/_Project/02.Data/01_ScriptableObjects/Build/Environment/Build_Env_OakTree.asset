@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe788a43db47f334c8b4adc7f173c672, type: 3}
+  m_Name: Build_Env_OakTree
+  m_EditorClassIdentifier: Assembly-CSharp::BuildData
+  buildId: OakTree
+  displayName: "\uC624\uD06C\uB098\uBB34"
+  description: 
+  dataPerLevels:
+  - level: 1
+    buildPrefab: {fileID: 3813007837163626338, guid: 9ea899c0d445efa478560bfb67752b18, type: 3}
+    visualScale: {x: 1, y: 1, z: 1}
+    visualEulerAngles: {x: 0, y: 0, z: 0}
+    visualOffset: {x: 0, y: 0, z: 0}
+    footprintCellsX: 2
+    footprintCellsZ: 2
+    buildRequirements:
+      requireItems: []

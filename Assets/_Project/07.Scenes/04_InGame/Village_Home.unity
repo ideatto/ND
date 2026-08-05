@@ -54046,24 +54046,93 @@ MonoBehaviour:
   - displayName: "\uC0C1\uC810"
     prefab: {fileID: 0}
     buildData: {fileID: 11400000, guid: 1c25557e3dff25c44a9619db8fd7b6a7, type: 2}
+    isEnvironment: 0
+    envCost: 0
   - displayName: "\uCC3D\uACE0"
     prefab: {fileID: 0}
     buildData: {fileID: 11400000, guid: b55dc2ae6d125fc4a8cb294bb2e31221, type: 2}
+    isEnvironment: 0
+    envCost: 0
   - displayName: "\uBAA9\uC7A5"
     prefab: {fileID: 0}
     buildData: {fileID: 11400000, guid: 0a137ed9d48fedc4ab8b2178af1a0913, type: 2}
+    isEnvironment: 0
+    envCost: 0
   - displayName: "\uC624\uB450\uB9C9"
     prefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
     buildData: {fileID: 11400000, guid: 6a20518e706ff964599a7f000e905d84, type: 2}
+    isEnvironment: 0
+    envCost: 0
   - displayName: "\uD48D\uCC28"
     prefab: {fileID: 3136727155675721361, guid: fa572a195ad2d054082cc5bac7fd7097, type: 3}
     buildData: {fileID: 11400000, guid: 4b064345be86a5c4bbd3b3d42072321f, type: 2}
+    isEnvironment: 0
+    envCost: 0
   - displayName: "\uBE75\uC9D1"
     prefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     buildData: {fileID: 11400000, guid: 36370e4bc577148448efe47144bd7cf0, type: 2}
+    isEnvironment: 0
+    envCost: 0
   - displayName: "\uBCA0\uC774\uC2A4 \uCEA0\uD504"
     prefab: {fileID: 0}
     buildData: {fileID: 11400000, guid: 971038b3f7d63734992d6faffe696ba0, type: 2}
+    isEnvironment: 0
+    envCost: 0
+  - displayName: "\uC624\uD06C\uB098\uBB34"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 59eeada54a53ce843b0e1840c330e4b7, type: 2}
+    isEnvironment: 1
+    envCost: 200
+  - displayName: "\uB09C\uC7C1\uC774 \uC11D\uC0C1"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 9d90dac8b7f026e46a099fccca78ce5f, type: 2}
+    isEnvironment: 1
+    envCost: 150
+  - displayName: "\uB3CC \uBD84\uC218"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 63761369cb9c66945b7806398968e14b, type: 2}
+    isEnvironment: 1
+    envCost: 250
+  - displayName: "\uBE44\uC11D"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 0d99578c466e6de4ab20985bfa7b68a6, type: 2}
+    isEnvironment: 1
+    envCost: 100
+  - displayName: "\uAC00\uB85C\uB4F1"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 0c29cbc6033b54449a49395038729f53, type: 2}
+    isEnvironment: 1
+    envCost: 120
+  - displayName: "\uB098\uBB34"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 3878a87a8eb7e9e48887f2c00d00d928, type: 2}
+    isEnvironment: 1
+    envCost: 180
+  - displayName: "\uB098\uBB34 \uBCA4\uCE58"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 32363044bb9b3f24bbe93af591d4b132, type: 2}
+    isEnvironment: 1
+    envCost: 100
+  - displayName: "\uB098\uBB34 \uC0C1\uC790"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: b7e2520d52b8a564999fc2fd6e8ac219, type: 2}
+    isEnvironment: 1
+    envCost: 80
+  - displayName: "\uB098\uBB34 \uC6B8\uD0C0\uB9AC"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 41b18299e39f6fd4aa7b92710a41324a, type: 2}
+    isEnvironment: 1
+    envCost: 90
+  - displayName: "\uD654\uB2E8"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 68c9a81f94ce36946a014d1a705c5d39, type: 2}
+    isEnvironment: 1
+    envCost: 110
+  - displayName: "\uD45C\uC9C0\uD310"
+    prefab: {fileID: 0}
+    buildData: {fileID: 11400000, guid: 302faa1f84ddd79438fa58ce8d1ea0bc, type: 2}
+    isEnvironment: 1
+    envCost: 100
 --- !u!4 &903399488
 Transform:
   m_ObjectHideFlags: 0

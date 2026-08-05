@@ -249,6 +249,12 @@ namespace ND.Framework
         /// 거점 마을에 보유한 건물 진행 목록이다. 키는 displayName이며 level 1 이상이 보유 상태이다.
         /// </summary>
         public List<VillageBuildingSaveData> villageBuildings = new List<VillageBuildingSaveData>();
+
+        /// <summary>
+        /// 거점 마을에 설치한 환경 아이템(오크나무·벤치·울타리 등) 목록이다.
+        /// 건물과 달리 종류당 여러 개가 가능하고 레벨이 없으며, 인스턴스마다 고유 ID로 구분한다.
+        /// </summary>
+        public List<VillageEnvironmentSaveData> villageEnvironments = new List<VillageEnvironmentSaveData>();
     }
 
     /// <summary>
@@ -290,6 +296,33 @@ namespace ND.Framework
         /// <summary>
         /// Y축 기준 90도 회전 단계다. 저장 정규화 후 범위는 0~3이다.
         /// </summary>
+        public int yawStep;
+    }
+
+    /// <summary>
+    /// 거점 마을에 설치한 '환경 아이템' 한 개의 저장 데이터이다.
+    /// </summary>
+    /// <remarks>
+    /// 건물(VillageBuildingSaveData)과 달리 <b>종류당 여러 개</b>가 존재할 수 있고 <b>레벨이 없다</b>.
+    /// 따라서 종류(displayName) 키가 아니라 인스턴스마다 고유 instanceId로 식별한다(삭제·이동 대상 구분용).
+    /// 위치·회전은 건물과 동일하게 VillageGrid 논리 셀 좌표 + yawStep(0~3)로 저장한다.
+    /// </remarks>
+    [Serializable]
+    public sealed class VillageEnvironmentSaveData
+    {
+        /// <summary>이 설치 인스턴스의 고유 ID다. 종류가 같아도 인스턴스마다 다르다(삭제 대상 식별용).</summary>
+        public string instanceId = string.Empty;
+
+        /// <summary>환경 아이템 종류 키다. 카탈로그 BuildData의 buildId와 일치한다.</summary>
+        public string envId = string.Empty;
+
+        /// <summary>VillageGrid의 논리 X 셀 좌표다.</summary>
+        public int gridCellX;
+
+        /// <summary>VillageGrid의 논리 Z 셀 좌표다.</summary>
+        public int gridCellZ;
+
+        /// <summary>Y축 기준 90도 회전 단계다. 범위는 0~3이다.</summary>
         public int yawStep;
     }
 
