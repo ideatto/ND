@@ -162,7 +162,7 @@ namespace ND.UI.Market
                 var popupData = CargoSellViewDataBuilder.Build(
                     caravanId,
                     tradeId,
-                    caravanId,
+                    ResolveCaravanDisplayName(savedCaravan),
                     destinationTown.DisplayName,
                     savedCaravan.cargo,
                     marketPanel.Model.Items,
@@ -401,6 +401,14 @@ namespace ND.UI.Market
                 ? MarketInventoryMutationSession.ErrorInvalidFramework
                 : error);
             return false;
+        }
+
+        private static string ResolveCaravanDisplayName(ND.Framework.CaravanSaveData caravan)
+        {
+            string displayName = caravan?.displayName?.Trim() ?? string.Empty;
+            return string.IsNullOrEmpty(displayName)
+                ? $"Caravan {(caravan != null ? caravan.slotIndex + 1 : 1)}"
+                : displayName;
         }
 
         private void SetError(string error)

@@ -120,7 +120,12 @@ namespace ND.Framework
                 saveData.caravanId = runtimeData.caravanId;
             }
 
-            saveData.displayName = runtimeData.displayName?.Trim() ?? string.Empty;
+            // displayName is SaveData-owned user metadata. Journey runtime instances can remain
+            // stale after a rename, so state synchronization must not overwrite a saved name.
+            if (string.IsNullOrWhiteSpace(saveData.displayName))
+            {
+                saveData.displayName = runtimeData.displayName?.Trim() ?? string.Empty;
+            }
 
             if (!string.IsNullOrEmpty(runtimeData.currentTownId))
             {

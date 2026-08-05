@@ -1,4 +1,7 @@
+using System.Reflection;
 using ND.Framework;
+using ND.UI.Market;
+using ND.UI.InGame.Warehouse;
 using NUnit.Framework;
 using UnityEngine;
 using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
@@ -6,6 +9,30 @@ using FrameworkSaveData = ND.Framework.SaveData;
 
 public sealed class CaravanSelectionOptionServiceTests
 {
+    [Test]
+    public void WarehouseCargoTitle_UsesSavedNameAndSlotFallback()
+    {
+        MethodInfo resolve = typeof(WarehouseInventoryPopupController).GetMethod(
+            "ResolveCargoTitle",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.That(resolve, Is.Not.Null);
+
+        var named = new FrameworkCaravanSaveData
+        {
+            slotIndex = 1,
+            displayName = "  Sunset Company  "
+        };
+        var legacy = new FrameworkCaravanSaveData
+        {
+            slotIndex = 1,
+            displayName = " "
+        };
+
+        Assert.That(resolve.Invoke(null, new object[] { named }), Is.EqualTo("Sunset Company Cargo"));
+        Assert.That(resolve.Invoke(null, new object[] { legacy }), Is.EqualTo("Caravan 2 Cargo"));
+        Assert.That(resolve.Invoke(null, new object[] { null }), Is.EqualTo("Cargo"));
+    }
+
     [Test]
     public void CreateOptions_ReturnsEmptyForMissingSave()
     {
@@ -77,6 +104,77 @@ public sealed class CaravanSelectionOptionServiceTests
 
         Assert.That(runtime.displayName, Is.EqualTo("서부 상단"));
         Assert.That(copied.displayName, Is.EqualTo("서부 상단"));
+    }
+
+    [Test]
+    public void MapperCopyToSave_DoesNotOverwriteSavedNameFromStaleRuntime()
+    {
+        var runtime = new CaravanData
+        {
+            caravanId = "caravan-a",
+            displayName = "Caravan 1",
+            state = JourneyState.Traveling
+        };
+        var saved = new FrameworkCaravanSaveData
+        {
+            caravanId = "caravan-a",
+            displayName = "Northern Traders",
+            state = JourneyState.Prepare
+        };
+
+        CaravanSaveDataMapper.CopyToSave(runtime, saved);
+
+        Assert.That(saved.displayName, Is.EqualTo("Northern Traders"));
+        Assert.That(saved.state, Is.EqualTo(JourneyState.Traveling));
+    }
+
+    [Test]
+    public void SaveQuery_UsesSavedNameAndSlotFallback()
+    {
+        FrameworkSaveData save = CreateSave(
+            new FrameworkCaravanSaveData
+            {
+                caravanId = "named",
+                slotIndex = 2,
+                displayName = "  Northern Traders  "
+            },
+            new FrameworkCaravanSaveData
+            {
+                caravanId = "legacy",
+                slotIndex = 3,
+                displayName = string.Empty
+            });
+        var service = new CaravanSaveQueryService();
+
+        Assert.That(service.TryGet(save, "named", out CaravanSaveQueryResult named), Is.True);
+        Assert.That(service.TryGet(save, "legacy", out CaravanSaveQueryResult legacy), Is.True);
+        Assert.That(named.DisplayName, Is.EqualTo("Northern Traders"));
+        Assert.That(legacy.DisplayName, Is.EqualTo("Caravan 4"));
+    }
+
+    [Test]
+    public void ArrivalSaleDisplayName_UsesSavedNameAndNeverCaravanId()
+    {
+        MethodInfo resolve = typeof(CaravanArrivalSaleController).GetMethod(
+            "ResolveCaravanDisplayName",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(resolve, Is.Not.Null);
+
+        var named = new FrameworkCaravanSaveData
+        {
+            caravanId = "guid-like-id",
+            slotIndex = 1,
+            displayName = "  Sunset Company  "
+        };
+        var legacy = new FrameworkCaravanSaveData
+        {
+            caravanId = "another-guid",
+            slotIndex = 2,
+            displayName = string.Empty
+        };
+
+        Assert.That(resolve.Invoke(null, new object[] { named }), Is.EqualTo("Sunset Company"));
+        Assert.That(resolve.Invoke(null, new object[] { legacy }), Is.EqualTo("Caravan 3"));
     }
 
     [Test]
