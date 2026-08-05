@@ -22,6 +22,9 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
     [Tooltip("도착 판매 행 동작이 정확한 Caravan·Trade ID를 바인딩할 공유 버튼입니다.")]
     [SerializeField] private CaravanArrivalSaleButton arrivalSaleButton;
 
+    [Tooltip("Assign the MainUI TreadmillPanel when MainUI editing is available. Short-clicking a Caravan name opens this panel.")]
+    [SerializeField] private TreadmillPanel treadmillPanel;
+
     private ICaravanOverviewViewDataProvider provider;
     private bool hasRuntimeProviderOverride;
     private readonly HashSet<int> createPendingSlots = new HashSet<int>();
@@ -131,6 +134,19 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             CaravanSlotView slotView = slotViews[viewArrayIndex];
             slotView.Bind(block);
 
+            if (treadmillPanel != null
+                && treadmillPanel.IsOpen
+                && string.Equals(
+                    treadmillPanel.CurrentCaravanId,
+                    block.caravanId,
+                    StringComparison.Ordinal))
+            {
+                string treadmillDisplayName = string.IsNullOrWhiteSpace(block.displayName)
+                    ? $"Caravan {block.slotIndex + 1}"
+                    : block.displayName.Trim();
+                treadmillPanel.RefreshDisplayName(block.caravanId, treadmillDisplayName);
+            }
+
             if (createPendingSlots.Contains(block.slotIndex))
             {
                 if (block.slotState == CaravanSlotState.Empty)
@@ -237,6 +253,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             slotView.CreateRequested += HandleCreateRequested;
             slotView.UnlockHintRequested += HandleUnlockHintRequested;
             slotView.RenameRequested += HandleRenameRequested;
+            slotView.TreadmillRequested += HandleTreadmillRequested;
         }
     }
 
@@ -261,6 +278,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             slotView.CreateRequested -= HandleCreateRequested;
             slotView.UnlockHintRequested -= HandleUnlockHintRequested;
             slotView.RenameRequested -= HandleRenameRequested;
+            slotView.TreadmillRequested -= HandleTreadmillRequested;
         }
     }
 
@@ -300,6 +318,19 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
     private void HandleRenameRequested(string caravanId)
     {
         RenameRequested?.Invoke(caravanId);
+    }
+
+    private void HandleTreadmillRequested(string caravanId, string displayName)
+    {
+        if (treadmillPanel == null)
+        {
+            Debug.LogWarning(
+                $"TreadmillPanel is not connected. CaravanId={caravanId}",
+                this);
+            return;
+        }
+
+        treadmillPanel.Toggle(caravanId, displayName);
     }
 
     private void HandleUnlockHintRequested(string unlockHintText)

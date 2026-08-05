@@ -16,7 +16,7 @@ namespace ND.Framework
     /// <summary>Validates and persists one Caravan display name by stable caravanId.</summary>
     public sealed class CaravanRenameService
     {
-        public const int MaxLength = 20;
+        public const int MaxLength = 8;
         private readonly Func<SaveData> getSaveData;
         private readonly ISaveService saveService;
 

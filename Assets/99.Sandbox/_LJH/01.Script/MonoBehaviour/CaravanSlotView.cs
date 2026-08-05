@@ -67,6 +67,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private CaravanSlotState currentState = CaravanSlotState.Unknown;
     private string currentCaravanId = string.Empty;
+    private string currentDisplayName = string.Empty;
     private string currentArrivalSaleTradeId = string.Empty;
     private string currentUnlockHintText = string.Empty;
     private bool isCreatePending;
@@ -85,6 +86,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     public event Action<int> CreateRequested;
     public event Action<string> UnlockHintRequested;
     public event Action<string> RenameRequested;
+    public event Action<string, string> TreadmillRequested;
 
     private void OnEnable()
     {
@@ -163,6 +165,7 @@ public sealed class CaravanSlotView : MonoBehaviour
         string displayName = string.IsNullOrWhiteSpace(data.displayName)
             ? $"Caravan {slotIndex + 1}"
             : data.displayName;
+        currentDisplayName = displayName;
 
         SetDisplayNameVisible(true);
         SetDisplayNameInteractable(true);
@@ -543,14 +546,19 @@ public sealed class CaravanSlotView : MonoBehaviour
         CaravanDisplayNameLongPressTrigger trigger =
             target.GetComponent<CaravanDisplayNameLongPressTrigger>()
             ?? target.AddComponent<CaravanDisplayNameLongPressTrigger>();
-        trigger.Bind(() =>
-        {
-            if (currentState == CaravanSlotState.Occupied
-                && !string.IsNullOrWhiteSpace(currentCaravanId))
+        trigger.Bind(
+            () =>
             {
-                RenameRequested?.Invoke(currentCaravanId);
-            }
-        });
+                if (currentState == CaravanSlotState.Occupied
+                    && !string.IsNullOrWhiteSpace(currentCaravanId))
+                    TreadmillRequested?.Invoke(currentCaravanId, currentDisplayName);
+            },
+            () =>
+            {
+                if (currentState == CaravanSlotState.Occupied
+                    && !string.IsNullOrWhiteSpace(currentCaravanId))
+                    RenameRequested?.Invoke(currentCaravanId);
+            });
     }
 
     private void SetDisplayNameInteractable(bool interactable)
@@ -578,33 +586,51 @@ public sealed class CaravanDisplayNameLongPressTrigger : MonoBehaviour,
     IPointerExitHandler
 {
     private const float HoldSeconds = 1f;
-    private Action completed;
+    private Action tapped;
+    private Action held;
     private Coroutine holdRoutine;
+    private bool isPointerDown;
+    private bool didHold;
 
-    public void Bind(Action onCompleted) => completed = onCompleted;
+    public void Bind(Action onTapped, Action onHeld)
+    {
+        tapped = onTapped;
+        held = onHeld;
+    }
 
     public void OnPointerDown(PointerEventData eventData)
     {
         Cancel();
+        isPointerDown = true;
+        didHold = false;
         holdRoutine = StartCoroutine(WaitForHold());
     }
 
-    public void OnPointerUp(PointerEventData eventData) => Cancel();
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        bool invokeTap = isPointerDown && !didHold;
+        Cancel();
+        if (invokeTap) tapped?.Invoke();
+    }
     public void OnPointerExit(PointerEventData eventData) => Cancel();
 
     private System.Collections.IEnumerator WaitForHold()
     {
         yield return new WaitForSecondsRealtime(HoldSeconds);
         holdRoutine = null;
-        completed?.Invoke();
+        didHold = true;
+        held?.Invoke();
     }
 
     private void OnDisable() => Cancel();
 
     private void Cancel()
     {
-        if (holdRoutine == null) return;
-        StopCoroutine(holdRoutine);
-        holdRoutine = null;
+        isPointerDown = false;
+        if (holdRoutine != null)
+        {
+            StopCoroutine(holdRoutine);
+            holdRoutine = null;
+        }
     }
 }

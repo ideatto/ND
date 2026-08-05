@@ -25,6 +25,7 @@ public class TreadmillPanel : MonoBehaviour
 
     /// <summary>현재 이 패널이 보여주는 마차 id(2단계 트레드밀이 참조).</summary>
     public string CurrentCaravanId { get; private set; }
+    public bool IsOpen => slide != null && slide.IsOpen;
 
     private void Awake()
     {
@@ -35,14 +36,59 @@ public class TreadmillPanel : MonoBehaviour
     /// <summary>지정 마차 기준으로 패널을 연다(왼→오 슬라이드).</summary>
     public void Open(string caravanId)
     {
+        Open(caravanId, string.Empty);
+    }
+
+    /// <summary>Opens one Caravan lane and renders the supplied presentation name.</summary>
+    public void Open(string caravanId, string displayName)
+    {
         CurrentCaravanId = caravanId;
-        if (caravanLabel != null) caravanLabel.text = "마차 " + Short(caravanId);
+        if (caravanLabel != null)
+            caravanLabel.text = string.IsNullOrWhiteSpace(displayName)
+                ? "마차 " + Short(caravanId)
+                : displayName.Trim();
         if (slide != null) slide.SetOpen(true);
         // 마차별 독립 레인 매니저가 있으면 그 마차 전용 레인을 보인다(레인 간 상태가 안 섞임).
         // 없으면(단일 인스턴스 하위호환) 예전처럼 하나뿐인 스테이지를 재구성한다.
         if (TreadmillLaneManager.Instance != null) TreadmillLaneManager.Instance.Show(caravanId);
         else if (stage != null) stage.ShowCaravan(caravanId);   // 데이터 기반 마차+동물 세우기
         Debug.Log("[Treadmill] 패널 열림 — 마차 " + caravanId);
+    }
+
+    /// <summary>
+    /// Closes an already open panel when the same Caravan is selected again.
+    /// Selecting another Caravan keeps the panel open and switches its lane.
+    /// </summary>
+    public void Toggle(string caravanId, string displayName)
+    {
+        bool isSameCaravan = string.Equals(
+            CurrentCaravanId,
+            caravanId,
+            System.StringComparison.Ordinal);
+
+        if (slide != null && slide.IsOpen && isSameCaravan)
+        {
+            Close();
+            return;
+        }
+
+        Open(caravanId, displayName);
+    }
+
+    /// <summary>Refreshes only the label for the Caravan currently shown by this panel.</summary>
+    public void RefreshDisplayName(string caravanId, string displayName)
+    {
+        if (!IsOpen
+            || !string.Equals(
+                CurrentCaravanId,
+                caravanId,
+                System.StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (caravanLabel != null)
+            caravanLabel.text = displayName?.Trim() ?? string.Empty;
     }
 
     /// <summary>패널을 닫는다(닫기 버튼 등에 연결).</summary>
