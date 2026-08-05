@@ -291,6 +291,11 @@ namespace ND.Framework
                 return TradeDepartureResult.Departed(tradeId, saveResult);
             }
 
+            // 저장 성공 이후에만 알린다.
+            FrameworkEvents.RaiseCaravanJourneyStateChanged(
+                caravanId,
+                runtimeCaravan.state);
+
             setActiveCaravan?.Invoke(runtimeCaravan);
             if (saveData.selectedCaravanId == caravanId)
             {
@@ -527,6 +532,11 @@ namespace ND.Framework
                     FrameworkEvents.RaiseRescueRestrictedModeExited();
                 }
             }
+
+            // 이 위치는 saveService.Save 성공 검사를 통과한 뒤이다.
+            FrameworkEvents.RaiseCaravanJourneyStateChanged(
+                targetCaravanId,
+                caravan.state);
 
             clearSettlementCache?.Invoke();
             setActiveCaravan?.Invoke(caravan);
