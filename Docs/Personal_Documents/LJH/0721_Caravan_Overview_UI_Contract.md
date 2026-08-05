@@ -162,3 +162,14 @@ UI가 `JourneyState`만 보고 편집 가능 여부를 다시 계산하지 않�
 - 자산 중복 배치 차단 규칙
 - 출발 시 구매·재고 차감 transaction
 - 저장 실패와 rollback 결과를 포함하는 Framework Command 결과
+
+---
+
+## 9. 2026-08-05 Caravan 표시 이름 연결
+
+- `CaravanSaveData.displayName`이 Caravan별 표시 이름의 영속 원본이다. 비어 있는 legacy 저장은 슬롯 기반 기본 이름을 표시한다.
+- 이름 영역은 Journey 상태와 분리하며, 1초 이상 누르면 `RenameRequested(caravanId)` 의도만 발행한다.
+- `CaravanRenamePopup.prefab`은 `MainUICanvas.prefab`에 초기 비활성으로 배치한다. Presenter가 런타임에 Popup이나 Binding을 생성하지 않는다.
+- `CaravanOverviewRenameBinding`이 Presenter 의도와 Popup을 연결하고, 실제 검증·저장·rollback은 `CaravanRenameService`가 명시적 `caravanId`로 수행한다.
+- UI는 `SaveData`를 직접 변경하지 않으며 저장 성공 후 Provider를 다시 조회해 표시를 갱신한다.
+- Journey 표시 문자열은 공용 UI formatter를 사용하여 Warehouse와 Caravan Overview가 Sandbox View 구현을 서로 참조하지 않는다.

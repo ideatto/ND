@@ -95,8 +95,6 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 
 - `Docs/Personal_Documents/LJH/Warehouse_External_Script_Change_Ledger.md`: 외부·내부·Prefab·Scene·삭제와 복구 절차를 통합했다.
 - `Docs/Personal_Documents/LJH/Warehouse_Runtime_Connection_2026-08-03.md`: 현재 데이터 흐름, 상태 전이, 검증, debug 제거를 반영했다.
-- `Docs/Personal_Documents/LJH/Warehouse_UI_New_Chat_Handoff.md`: 폐기된 capacity asset 안을 제거하고 현재 정책과 남은 작업을 반영했다.
-- `Docs/Personal_Documents/LJH/Cargo_Sell_UI_Status_2026-08-03.md`: Cargo 판매 Popup 외형·Build UI 조립 상태, 보류 데이터 연결, Caravan 정상화 이후 검증을 기록했다.
 
 ## completed 발생 시 절차
 
@@ -162,7 +160,8 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 
 ### 2026-08-03 Cargo Sell Build UI 조립
 
-- `CargoSellPopup.prefab`: Cargo와 판매 대기 목록의 외형 Prefab이다. 실제 시장 transaction 연결은 아직 보류 상태다.
-- `Build UI.unity`: `BuildingPopupPreviewCanvas` 아래에 전체 화면 Stretch·scale 1·초기 비활성 Prefab 인스턴스로 조립했다.
-- 상세한 상호작용과 후속 데이터 연결은 `Docs/Personal_Documents/LJH/Cargo_Sell_UI_Status_2026-08-03.md`를 기준으로 한다.
+- `CargoSellPopup.prefab`: Cargo와 판매 대기 목록을 표시하며 구매 단가 그룹별 판매 draft를 전달한다.
+- `MainUICanvas.prefab`: Popup을 초기 비활성 Prefab 인스턴스로 배치하고 `CaravanArrivalSaleController`에 연결했다.
+- 빈 draft 확정은 판매 없이 정산으로 진행하며, backdrop/닫기는 draft를 폐기한다. 저장 실패 시 대상 Caravan만 rollback하고 Journey 이벤트를 발행하지 않는다.
+- 도착 후 판매 상태 계약은 `Docs/Personal_Documents/LJH/0805_Selling_Map_and_Restart_Recovery_Request.md`와 현재 production 코드를 기준으로 한다.
 
