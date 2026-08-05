@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: MountTown
   displayName: "\uC0B0\uAF2D\uB300\uAE30\uB9C8\uC744"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 4a825c88128208243810276079692806, type: 3}
   unlockedByDefault: 0
   description: "\uC0B0\uAF2D\uB300\uAE30\uC758 \uAD11\uC0B0 \uB9C8\uC744. \uAD11\uC11D\uACFC
     \uBCF4\uC11D\uC774 \uB09C\uB2E4."
