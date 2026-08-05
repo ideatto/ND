@@ -131,36 +131,24 @@ public CaravanOverviewViewData GetOverview()
     /// Resolves one exact, eligible Arrival Sale Pending from the row Caravan identity.
     /// Duplicate progress or Pending entries fail closed through the canonical lookup contract.
     /// </summary>
-    private bool TryResolveArrivalSaleTradeId(
-        FrameworkSaveData saveData,
-        string caravanId,
-        out string tradeId)
+    private bool TryResolveArrivalSaleTradeId(FrameworkSaveData saveData, string caravanId, out string tradeId)
     {
         tradeId = string.Empty;
         if (string.IsNullOrWhiteSpace(caravanId)
-            || !SaveDataLookup.TryGetTradeProgress(
-                saveData,
-                caravanId,
-                out FrameworkTradeProgressSaveData progress)
-            || progress.state != FrameworkTradeProgressState.SettlementPending
+            || !SaveDataLookup.TryGetCaravan(saveData, caravanId, out FrameworkCaravanSaveData caravan) || caravan == null
+            || !SaveDataLookup.TryGetTradeProgress(saveData, caravanId, out FrameworkTradeProgressSaveData progress) || progress == null
             || string.IsNullOrWhiteSpace(progress.activeTradeId))
-        {
             return false;
-        }
+
+        bool canOpenSale = caravan.state == JourneyState.Selling && progress.state == FrameworkTradeProgressState.Selling;
+        bool canReopenSettlement = caravan.state == JourneyState.Settling && progress.state == FrameworkTradeProgressState.SettlementPending;
+        if (!canOpenSale && !canReopenSettlement) return false;
 
         string requestedTradeId = progress.activeTradeId;
-        if (!SaveDataLookup.TryGetPendingSettlement(
-                saveData,
-                caravanId,
-                requestedTradeId,
-                out PendingSettlementSaveData pending)
-            || pending == null
-            || !pending.hasResult
-            || pending.grade == JourneyResultGrade.Failed)
+        if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, requestedTradeId, out PendingSettlementSaveData pending)
+            || pending == null || !pending.hasResult || pending.claimed || pending.grade == JourneyResultGrade.Failed)
         {
-            Debug.LogWarning(
-                $"Arrival Sale row disabled. CaravanId={caravanId}, TradeId={requestedTradeId}, Reason=ExactPendingInvalid",
-                this);
+            Debug.LogWarning($"Arrival Sale row disabled. CaravanId={caravanId}, TradeId={requestedTradeId}, Reason=ExactPendingInvalid", this);
             return false;
         }
 

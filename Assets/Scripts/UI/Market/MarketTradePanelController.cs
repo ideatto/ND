@@ -770,14 +770,29 @@ namespace ND.UI.Market
         {
             if (saveData == null || sharedGameData == null || !sharedGameData.IsLoaded)
                 return MarketInventoryMutationSession.ErrorInvalidFramework;
-            if (!SaveDataLookup.TryGetCaravan(saveData, caravanId, out _))
+            if (!SaveDataLookup.TryGetCaravan(saveData, caravanId, out ND.Framework.CaravanSaveData caravan))
+            {
                 return MarketInventoryMutationSession.ErrorInvalidCaravan;
-            if (string.IsNullOrWhiteSpace(tradeId))
-                return ErrorArrivalSaleIdentityMismatch;
-            if (!SaveDataLookup.TryGetTradeProgress(
-                    saveData, caravanId, out ND.Framework.TradeProgressSaveData progress)
-                || progress.state != ND.Framework.TradeProgressState.SettlementPending)
+            }
+
+            if (caravan.state != JourneyState.Selling)
+            {
                 return ErrorNotInTown;
+            }
+
+            if (string.IsNullOrWhiteSpace(tradeId))
+            {
+                return ErrorArrivalSaleIdentityMismatch;
+            }
+
+            if (!SaveDataLookup.TryGetTradeProgress(
+                    saveData,
+                    caravanId,
+                    out ND.Framework.TradeProgressSaveData progress)
+                || progress.state != ND.Framework.TradeProgressState.Selling)
+            {
+                return ErrorNotInTown;
+            }
             if (!string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal))
                 return ErrorArrivalSaleIdentityMismatch;
             if (!SaveDataLookup.TryGetPendingSettlement(saveData, caravanId, tradeId, out PendingSettlementSaveData pending)

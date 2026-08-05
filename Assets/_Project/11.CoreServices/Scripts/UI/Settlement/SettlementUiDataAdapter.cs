@@ -487,11 +487,13 @@ namespace ND.Framework
 
         private static bool IsSettlementScreenActive()
         {
-            // Use the same SaveData router as the screen presenter so adapter visibility cannot
-            // disagree with the Framework state after loading a pending settlement.
             var root = FrameworkRoot.Instance;
-            return InGameScreenStateRouter.MapFromSaveData(root != null ? root.CurrentSaveData : null)
-                == InGameScreenState.Settlement;
+            // A settlement can be presented for a Caravan other than selectedCaravanId.
+            // Use the screen router that PresentSettlement explicitly advanced instead of
+            // remapping the selected Caravan's legacy SaveData aliases here.
+            return root != null
+                && root.InGameScreenRouter != null
+                && root.InGameScreenRouter.CurrentScreenState == InGameScreenState.Settlement;
         }
 
         private void ClearClaimProcessing()
