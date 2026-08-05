@@ -319,6 +319,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         }
 
         // Only a successful Command may close S3 and refresh the Overview from authoritative data.
+        TreadmillLaneManager.Instance?.RefreshActive();
         tradePrepareUi?.CloseCaravanEdit();
         overviewPresenter?.Refresh();
         tradePrepareRuntimeContext?.RefreshCaravanSetting(draft.caravanId);
