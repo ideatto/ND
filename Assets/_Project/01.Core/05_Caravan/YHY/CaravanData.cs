@@ -29,6 +29,9 @@ public class CaravanData
     // This data holder does not generate, replace, or derive the value from a trade ID.
     public string caravanId = string.Empty;
 
+    // 사용자가 지정한 Caravan 표시 이름. 비어 있으면 표시 계층에서 슬롯 기반 기본 이름을 사용한다.
+    public string displayName = string.Empty;
+
     // 현재 머무는 마을의 안정적인 ID. 이동 중에는 출발 마을을 유지하며,
     // 정산 Claim이 성공한 뒤 Framework가 도착지 또는 복귀 거점으로 갱신한다.
     public string currentTownId = string.Empty;

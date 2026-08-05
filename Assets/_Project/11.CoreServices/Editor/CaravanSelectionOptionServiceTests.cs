@@ -1,5 +1,6 @@
 using ND.Framework;
 using NUnit.Framework;
+using UnityEngine;
 using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
 using FrameworkSaveData = ND.Framework.SaveData;
 
@@ -35,6 +36,92 @@ public sealed class CaravanSelectionOptionServiceTests
         Assert.That(options[0].currentTownId, Is.EqualTo("town-a"));
         Assert.That(options[0].canSelect, Is.True);
         Assert.That(options[0].disabledReason, Is.Empty);
+    }
+
+    [Test]
+    public void CreateOptions_UsesSavedDisplayNameAndFallsBackForLegacySave()
+    {
+        FrameworkSaveData save = CreateSave(
+            new FrameworkCaravanSaveData
+            {
+                caravanId = "named",
+                displayName = " 북부 교역대 ",
+                currentTownId = "town-a"
+            },
+            new FrameworkCaravanSaveData
+            {
+                caravanId = "legacy",
+                displayName = string.Empty,
+                currentTownId = "town-a"
+            });
+
+        TradePrepareCaravanOptionViewData[] options =
+            new CaravanSelectionOptionService().CreateOptions(save);
+
+        Assert.That(options[0].displayName, Is.EqualTo("북부 교역대"));
+        Assert.That(options[1].displayName, Is.EqualTo("Caravan 2"));
+    }
+
+    [Test]
+    public void MapperRoundTrip_PreservesDisplayName()
+    {
+        var saved = new FrameworkCaravanSaveData
+        {
+            caravanId = "caravan-a",
+            displayName = "서부 상단"
+        };
+
+        CaravanData runtime = CaravanSaveDataMapper.ToRuntime(saved);
+        var copied = new FrameworkCaravanSaveData();
+        CaravanSaveDataMapper.CopyToSave(runtime, copied);
+
+        Assert.That(runtime.displayName, Is.EqualTo("서부 상단"));
+        Assert.That(copied.displayName, Is.EqualTo("서부 상단"));
+    }
+
+    [Test]
+    public void OverviewProvider_UsesSavedDisplayName()
+    {
+        FrameworkSaveData save = CreateSave(new FrameworkCaravanSaveData
+        {
+            caravanId = "caravan-a",
+            slotIndex = 0,
+            displayName = "남부 교역대"
+        });
+        var go = new GameObject("provider-test");
+        try
+        {
+            var provider = go.AddComponent<SaveDataCaravanOverviewProviderBehaviour>();
+            provider.SetSaveDataForTests(save);
+            Assert.That(provider.GetOverview().caravans[0].displayName, Is.EqualTo("남부 교역대"));
+        }
+        finally
+        {
+            Object.DestroyImmediate(go);
+        }
+    }
+
+    [Test]
+    public void RenameService_SavesOnlyTargetAndRollsBackOnFailure()
+    {
+        FrameworkSaveData save = CreateSave(
+            new FrameworkCaravanSaveData { caravanId = "target", displayName = "기존" },
+            new FrameworkCaravanSaveData { caravanId = "other", displayName = "다른 캐러반" });
+        var failing = new RecordingSaveService(false);
+
+        CaravanRenameResult failed =
+            new CaravanRenameService(() => save, failing).Execute("target", "변경 이름");
+
+        Assert.That(failed.Succeeded, Is.False);
+        Assert.That(save.caravans[0].displayName, Is.EqualTo("기존"));
+        Assert.That(save.caravans[1].displayName, Is.EqualTo("다른 캐러반"));
+
+        CaravanRenameResult succeeded =
+            new CaravanRenameService(() => save, new RecordingSaveService(true))
+                .Execute("target", " 변경 이름 ");
+        Assert.That(succeeded.Succeeded, Is.True);
+        Assert.That(save.caravans[0].displayName, Is.EqualTo("변경 이름"));
+        Assert.That(save.caravans[1].displayName, Is.EqualTo("다른 캐러반"));
     }
 
     [Test]
@@ -91,5 +178,18 @@ public sealed class CaravanSelectionOptionServiceTests
         save.caravans.Clear();
         save.caravans.AddRange(caravans);
         return save;
+    }
+
+    private sealed class RecordingSaveService : ISaveService
+    {
+        private readonly bool succeeds;
+        public RecordingSaveService(bool succeeds) => this.succeeds = succeeds;
+        public bool HasSaveData() => true;
+        public FrameworkSaveData CreateNewGameData() => new FrameworkSaveData();
+        public FrameworkSaveData Load() => new FrameworkSaveData();
+        public SaveResult Save(FrameworkSaveData data) => succeeds
+            ? SaveResult.Success()
+            : SaveResult.Failure(SaveFailureReason.WriteFailed, "test");
+        public void ResetSaveData() { }
     }
 }

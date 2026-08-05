@@ -287,7 +287,8 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                 townName = town.DisplayName.Trim();
             }
 
-            return string.IsNullOrEmpty(townName) ? "현재 위치 없음" : townName;
+            if (string.IsNullOrEmpty(townName)) townName = "현재 위치 없음";
+            return $"{townName} · {ND.UI.CaravanJourneyStateLabel.Format(caravan.state)}";
         }
 
 

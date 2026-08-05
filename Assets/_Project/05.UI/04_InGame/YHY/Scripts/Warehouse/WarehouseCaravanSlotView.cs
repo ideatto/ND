@@ -33,8 +33,7 @@ namespace ND.UI.InGame.Warehouse
             caravanId = caravan != null ? caravan.caravanId ?? string.Empty : string.Empty;
             clicked = onClicked;
             if (nameText != null)
-                nameText.text = caravan != null && !string.IsNullOrEmpty(caravan.caravanId)
-                    ? "Caravan " + (caravan.slotIndex + 1) : "Empty";
+                nameText.text = ResolveDisplayName(caravan);
             if (stateText != null)
                 stateText.text = caravan != null ? statusText ?? caravan.state.ToString() : string.Empty;
             // 404 is reserved for an unlocked slot with no Caravan data (or invalid slot data).
@@ -66,5 +65,14 @@ namespace ND.UI.InGame.Warehouse
 
         private Transform Find(string objectName) =>
             GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == objectName);
+
+        private static string ResolveDisplayName(ND.Framework.CaravanSaveData caravan)
+        {
+            if (caravan == null || string.IsNullOrEmpty(caravan.caravanId)) return "Empty";
+            string displayName = caravan.displayName?.Trim() ?? string.Empty;
+            return string.IsNullOrEmpty(displayName)
+                ? "Caravan " + (caravan.slotIndex + 1)
+                : displayName;
+        }
     }
 }

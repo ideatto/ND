@@ -30,6 +30,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
     public event Action<string> SettingRequested;
     public event Action<string> CargoRequested;
     public event Action<int> CreateRequested;
+    public event Action<string> RenameRequested;
 
     private void OnEnable()
     {
@@ -235,6 +236,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             slotView.ArrivalSaleRequested += HandleArrivalSaleRequested;
             slotView.CreateRequested += HandleCreateRequested;
             slotView.UnlockHintRequested += HandleUnlockHintRequested;
+            slotView.RenameRequested += HandleRenameRequested;
         }
     }
 
@@ -258,6 +260,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             slotView.ArrivalSaleRequested -= HandleArrivalSaleRequested;
             slotView.CreateRequested -= HandleCreateRequested;
             slotView.UnlockHintRequested -= HandleUnlockHintRequested;
+            slotView.RenameRequested -= HandleRenameRequested;
         }
     }
 
@@ -292,6 +295,11 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
         // UI forwards intent only; Framework must create and persist the stable caravanId.
         CreateRequested?.Invoke(slotIndex);
+    }
+
+    private void HandleRenameRequested(string caravanId)
+    {
+        RenameRequested?.Invoke(caravanId);
     }
 
     private void HandleUnlockHintRequested(string unlockHintText)
