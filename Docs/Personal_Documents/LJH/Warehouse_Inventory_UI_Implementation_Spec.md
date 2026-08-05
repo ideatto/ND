@@ -3,7 +3,7 @@
 
 - 이 문서는 초기 설계와 구현 결정을 함께 보존한다.
 - Capacity SO와 고정 슬롯 풀 제안은 폐기되었다. 현행 Warehouse 슬롯 정책과 runtime 연결 상태는 `Warehouse_Runtime_Connection_2026-08-03.md`를 우선한다.
-- Cargo 판매 UI의 현재 외형·Build UI 조립과 후속 데이터 연결은 `Cargo_Sell_UI_Status_2026-08-03.md`를 우선한다.
+- 도착 후 Cargo 판매 상태는 `0805_Selling_Map_and_Restart_Recovery_Request.md`와 현재 production 코드를 우선한다.
 - 외부 파일 충돌·복구 범위는 `Warehouse_External_Script_Change_Ledger.md`를 우선한다.
 ﻿# Warehouse Inventory UI 구현 명세
 

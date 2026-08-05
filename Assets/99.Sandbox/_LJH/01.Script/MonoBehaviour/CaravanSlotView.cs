@@ -1,6 +1,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -72,6 +73,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     private bool canRequestSetting;
     private bool canRequestCargo;
     private bool canRequestArrivalSale;
+    private Button displayNameButton;
 
     public int SlotIndex => slotIndex;
     public bool IsCreatePending => isCreatePending;
@@ -82,9 +84,11 @@ public sealed class CaravanSlotView : MonoBehaviour
     public event Action<string, string> ArrivalSaleRequested;
     public event Action<int> CreateRequested;
     public event Action<string> UnlockHintRequested;
+    public event Action<string> RenameRequested;
 
     private void OnEnable()
     {
+        EnsureDisplayNameLongPress();
         // Re-register after prefab/scene activation so newly assigned button references are never skipped.
         RegisterButtonListeners();
     }
@@ -143,6 +147,7 @@ public sealed class CaravanSlotView : MonoBehaviour
         isCreatePending = false;
 
         SetDisplayNameVisible(true);
+        SetDisplayNameInteractable(false);
         SetText(displayNameText, unknownSlotLabel);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
@@ -160,6 +165,7 @@ public sealed class CaravanSlotView : MonoBehaviour
             : data.displayName;
 
         SetDisplayNameVisible(true);
+        SetDisplayNameInteractable(true);
         SetText(displayNameText, displayName);
         // Activate the display before touching its Animator. An inactive slot can
         // otherwise ignore the initial IsTraveling value when it becomes occupied.
@@ -182,6 +188,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     private void ShowEmpty()
     {
         SetDisplayNameVisible(true);
+        SetDisplayNameInteractable(false);
         SetText(displayNameText, emptySlotLabel);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
@@ -202,6 +209,7 @@ public sealed class CaravanSlotView : MonoBehaviour
         // The lock icon communicates this state by itself. Hide Empty-slot labels and
         // actions underneath the overlay so they do not compete with the icon.
         SetDisplayNameVisible(false);
+        SetDisplayNameInteractable(false);
         SetText(journeyStateText, "-");
         ClearJourneyStateIcon();
         ApplyActionIcons(false);
@@ -287,7 +295,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void ApplyJourneyStatePresentation(JourneyState state)
     {
-        SetText(journeyStateText, state.ToString());
+        SetText(journeyStateText, ND.UI.CaravanJourneyStateLabel.Format(state));
 
         Sprite stateIcon = ResolveJourneyStateIcon(state);
         bool canShowIcon = journeyStateIconImage != null && stateIcon != null;
@@ -343,6 +351,9 @@ public sealed class CaravanSlotView : MonoBehaviour
     private void SetTravelingAnimation(bool isTraveling)
     {
         if (journeyStateIconAnimator == null
+            || !journeyStateIconAnimator.isActiveAndEnabled
+            || !journeyStateIconAnimator.gameObject.activeInHierarchy
+            || journeyStateIconAnimator.runtimeAnimatorController == null
             || string.IsNullOrWhiteSpace(travelingAnimatorParameter))
         {
             return;
@@ -509,6 +520,44 @@ public sealed class CaravanSlotView : MonoBehaviour
         }
     }
 
+    private void EnsureDisplayNameLongPress()
+    {
+        if (displayNameText == null) return;
+        displayNameText.raycastTarget = false;
+        GameObject target = displayNameText.transform.parent != null
+            ? displayNameText.transform.parent.gameObject
+            : displayNameText.gameObject;
+        displayNameButton = target.GetComponent<Button>() ?? target.AddComponent<Button>();
+        displayNameButton.transition = Selectable.Transition.ColorTint;
+        displayNameButton.targetGraphic = target.GetComponent<Graphic>();
+        displayNameButton.navigation = new Navigation { mode = Navigation.Mode.None };
+        ColorBlock colors = displayNameButton.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color(0.94f, 0.94f, 0.94f, 1f);
+        colors.pressedColor = new Color(0.72f, 0.82f, 0.94f, 1f);
+        colors.selectedColor = colors.highlightedColor;
+        colors.disabledColor = Color.white;
+        colors.colorMultiplier = 1f;
+        colors.fadeDuration = 0.08f;
+        displayNameButton.colors = colors;
+        CaravanDisplayNameLongPressTrigger trigger =
+            target.GetComponent<CaravanDisplayNameLongPressTrigger>()
+            ?? target.AddComponent<CaravanDisplayNameLongPressTrigger>();
+        trigger.Bind(() =>
+        {
+            if (currentState == CaravanSlotState.Occupied
+                && !string.IsNullOrWhiteSpace(currentCaravanId))
+            {
+                RenameRequested?.Invoke(currentCaravanId);
+            }
+        });
+    }
+
+    private void SetDisplayNameInteractable(bool interactable)
+    {
+        if (displayNameButton != null) displayNameButton.interactable = interactable;
+    }
+
 #if UNITY_EDITOR
     private void OnValidate()
     {
@@ -520,4 +569,42 @@ public sealed class CaravanSlotView : MonoBehaviour
         }
     }
 #endif
+}
+
+[DisallowMultipleComponent]
+public sealed class CaravanDisplayNameLongPressTrigger : MonoBehaviour,
+    IPointerDownHandler,
+    IPointerUpHandler,
+    IPointerExitHandler
+{
+    private const float HoldSeconds = 1f;
+    private Action completed;
+    private Coroutine holdRoutine;
+
+    public void Bind(Action onCompleted) => completed = onCompleted;
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        Cancel();
+        holdRoutine = StartCoroutine(WaitForHold());
+    }
+
+    public void OnPointerUp(PointerEventData eventData) => Cancel();
+    public void OnPointerExit(PointerEventData eventData) => Cancel();
+
+    private System.Collections.IEnumerator WaitForHold()
+    {
+        yield return new WaitForSecondsRealtime(HoldSeconds);
+        holdRoutine = null;
+        completed?.Invoke();
+    }
+
+    private void OnDisable() => Cancel();
+
+    private void Cancel()
+    {
+        if (holdRoutine == null) return;
+        StopCoroutine(holdRoutine);
+        holdRoutine = null;
+    }
 }

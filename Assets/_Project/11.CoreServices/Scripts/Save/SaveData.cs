@@ -179,6 +179,7 @@ namespace ND.Framework
         public long sequence;
         public long occurredUtcTicks;
         public string caravanId = string.Empty;
+
         public string tradeId = string.Empty;
         public string routeId = string.Empty;
         public string townId = string.Empty;
@@ -337,6 +338,9 @@ namespace ND.Framework
     {
         /// <summary>배열 위치와 무관하게 caravan을 식별하는 고유 ID이다.</summary>
         public string caravanId = string.Empty;
+
+        /// <summary>사용자가 지정하고 저장하는 Caravan 표시 이름이다.</summary>
+        public string displayName = string.Empty;
 
         /// <summary>Caravan Overview의 고정 슬롯과 연결되는 영속 위치 값이다. 목록 인덱스로 대체하지 않는다.</summary>
         public int slotIndex;

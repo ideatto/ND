@@ -38,7 +38,8 @@ Cargo Sell UI의 판매 단가, 행 판매 금액, 총 판매 금액은 `Currenc
 ## 연결 범위
 
 이 정책은 `_LJH` 내부 UI/View 연결만으로 적용 가능하며, Cargo Sell 작업의 수정 금지 스크립트 10종을 변경할 필요가 없다.
-실제 판매 확정과 저장 연결은 별도 단계로 보류한다.
+실제 판매 확정과 저장은 기존 Market transaction과 TradeProgress 전환 경계에 연결되었다.
+Cargo Sell View는 금액 표시와 draft 편집만 담당하고 SaveData를 직접 변경하지 않는다.
 
 ## 확인할 경계값
 

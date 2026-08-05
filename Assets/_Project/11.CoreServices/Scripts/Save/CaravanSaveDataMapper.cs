@@ -52,6 +52,7 @@ namespace ND.Framework
             var caravan = new CaravanData
             {
                 caravanId = saveData.caravanId,
+                displayName = saveData.displayName,
                 currentTownId = saveData.currentTownId,
                 wagon = ToRuntime(saveData.wagon),
                 foodAmount = saveData.foodAmount,
@@ -118,6 +119,8 @@ namespace ND.Framework
             {
                 saveData.caravanId = runtimeData.caravanId;
             }
+
+            saveData.displayName = runtimeData.displayName?.Trim() ?? string.Empty;
 
             if (!string.IsNullOrEmpty(runtimeData.currentTownId))
             {

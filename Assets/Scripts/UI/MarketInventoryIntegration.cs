@@ -84,6 +84,17 @@ namespace ND.Framework.CargoLoading
         public string ItemId = string.Empty;
         public int BuyQuantity;
         public int SellQuantity;
+        public List<MarketSalePriceGroup> SalePriceGroups = new List<MarketSalePriceGroup>();
+    }
+
+    /// <summary>
+    /// Optional exact Cargo source for a sell line. Legacy callers may omit it and retain the
+    /// existing FIFO-by-item behavior; CargoSellPopup supplies it to preserve purchase groups.
+    /// </summary>
+    public sealed class MarketSalePriceGroup
+    {
+        public long PurchaseUnitPrice;
+        public int Quantity;
     }
 
     public sealed class MarketTransactionResult
@@ -546,6 +557,35 @@ namespace ND.Framework.CargoLoading
                     return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
                 }
 
+                IReadOnlyList<MarketSalePriceGroup> saleGroups =
+                    line.SalePriceGroups != null
+                        ? line.SalePriceGroups
+                        : (IReadOnlyList<MarketSalePriceGroup>)Array.Empty<MarketSalePriceGroup>();
+                if (saleGroups.Count > 0)
+                {
+                    if (line.BuyQuantity > 0
+                        || saleGroups.Any(group => group == null || group.Quantity <= 0)
+                        || saleGroups.GroupBy(
+                                group => Math.Max(0L, group.PurchaseUnitPrice))
+                            .Any(group => group.Count() > 1)
+                        || saleGroups.Sum(group => group.Quantity) != line.SellQuantity)
+                    {
+                        return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
+                    }
+
+                    foreach (MarketSalePriceGroup group in saleGroups)
+                    {
+                        int available = targetCaravan.cargo
+                            .Where(entry => entry?.item != null
+                                && string.Equals(entry.item.itemId, line.ItemId, StringComparison.Ordinal)
+                                && Math.Max(0L, entry.item.purchaseUnitPrice)
+                                    == Math.Max(0L, group.PurchaseUnitPrice))
+                            .Sum(entry => Math.Max(0, entry.quantity));
+                        if (group.Quantity > available)
+                            return MarketTransactionResult.Fail(ErrorInsufficientCargo, TradingCurrency);
+                    }
+                }
+
                 if ((tradeMode == MarketTradeMode.BuyOnly && line.SellQuantity > 0)
                     || (tradeMode == MarketTradeMode.SellOnly && line.BuyQuantity > 0))
                 {
@@ -617,7 +657,8 @@ namespace ND.Framework.CargoLoading
                         itemResult.BuyQuantity - itemResult.SellQuantity,
                         itemResult.BuyQuantity > 0
                             ? Math.Max(0L, transactionStock?.unitPrice ?? 0L)
-                            : 0L);
+                            : 0L,
+                        normalized[itemResult.ItemId].SalePriceGroups);
                     MarketStockSaveData stock = itemResult.SellQuantity > 0
                         ? GetOrCreateStock(itemResult.ItemId)
                         : FindStock(itemResult.ItemId);
@@ -901,7 +942,11 @@ namespace ND.Framework.CargoLoading
             }
         }
 
-        private void ApplyCargoDelta(string itemId, int delta, long purchaseUnitPrice = 0L)
+        private void ApplyCargoDelta(
+            string itemId,
+            int delta,
+            long purchaseUnitPrice = 0L,
+            IReadOnlyList<MarketSalePriceGroup> salePriceGroups = null)
         {
             List<CargoEntrySaveData> entries = targetCaravan.cargo
                 .Where(candidate => candidate?.item != null &&
@@ -910,6 +955,28 @@ namespace ND.Framework.CargoLoading
 
             if (delta < 0)
             {
+                if (salePriceGroups != null && salePriceGroups.Count > 0)
+                {
+                    foreach (MarketSalePriceGroup group in salePriceGroups)
+                    {
+                        int remainingInGroup = Math.Max(0, group.Quantity);
+                        long normalizedGroupPrice = Math.Max(0L, group.PurchaseUnitPrice);
+                        foreach (CargoEntrySaveData entry in entries.Where(entry =>
+                            Math.Max(0L, entry.item.purchaseUnitPrice) == normalizedGroupPrice).ToList())
+                        {
+                            int removed = Math.Min(remainingInGroup, Math.Max(0, entry.quantity));
+                            entry.quantity -= removed;
+                            remainingInGroup -= removed;
+                            if (entry.quantity <= 0)
+                                targetCaravan.cargo.Remove(entry);
+                            if (remainingInGroup == 0) break;
+                        }
+                        if (remainingInGroup > 0)
+                            throw new InvalidOperationException(ErrorInsufficientCargo);
+                    }
+                    return;
+                }
+
                 int remainingToSell = -delta;
                 foreach (CargoEntrySaveData entry in entries)
                 {

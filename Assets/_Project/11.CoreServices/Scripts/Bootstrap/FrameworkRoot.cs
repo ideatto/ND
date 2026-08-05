@@ -194,6 +194,7 @@ namespace ND.Framework
             {
                 caravanId = SaveDataLookup.NewCaravanId(),
                 slotIndex = slotIndex,
+                displayName = $"Caravan {slotIndex + 1}",
                 // 플레이어 위치와 무관하게 신규 Caravan은 항상 BaseCamp에서 시작한다.
                 currentTownId = InitialCaravanTownId
             };

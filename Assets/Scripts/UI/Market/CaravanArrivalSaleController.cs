@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using ND.Framework;
 using ND.Framework.CargoLoading;
+using ND.UI.CargoSell;
 using UnityEngine;
 
 namespace ND.UI.Market
@@ -21,6 +22,7 @@ namespace ND.UI.Market
         public const string ErrorIdentityMismatch = "ARRIVAL_SALE_IDENTITY_MISMATCH";
 
         [SerializeField] private MarketTradePanelController marketPanel;
+        [SerializeField] private CargoSellPopupController cargoSellPopup;
         [SerializeField] private MarketData[] marketCatalog = Array.Empty<MarketData>();
 
         private string activeCaravanId = string.Empty;
@@ -36,6 +38,14 @@ namespace ND.UI.Market
         public event Action<string> ErrorChanged;
         public event Action<string, string> SaleOpened;
         public event Action<string, string> SettlementRequested;
+
+        private void OnDisable()
+        {
+            if (cargoSellPopup == null)
+                return;
+            cargoSellPopup.ConfirmRequested -= HandleCargoSellConfirmed;
+            cargoSellPopup.CloseRequested -= HandleCargoSellClosed;
+        }
 
         public bool IsSalePending(string caravanId, string tradeId)
         {
@@ -136,8 +146,34 @@ namespace ND.UI.Market
                 return Fail(ErrorMarketMissing);
 
             marketPanel.ConfigureCatalog(marketCatalog);
+            marketPanel.SetExternalArrivalSalePresentation(cargoSellPopup != null);
             if (!marketPanel.OpenForArrivalSale(caravanId, tradeId, destinationMarket))
+            {
+                marketPanel.SetExternalArrivalSalePresentation(false);
                 return Fail(marketPanel.LastErrorCode);
+            }
+
+            if (cargoSellPopup != null)
+            {
+                cargoSellPopup.ConfirmRequested -= HandleCargoSellConfirmed;
+                cargoSellPopup.ConfirmRequested += HandleCargoSellConfirmed;
+                cargoSellPopup.CloseRequested -= HandleCargoSellClosed;
+                cargoSellPopup.CloseRequested += HandleCargoSellClosed;
+                var popupData = CargoSellViewDataBuilder.Build(
+                    caravanId,
+                    tradeId,
+                    caravanId,
+                    destinationTown.DisplayName,
+                    savedCaravan.cargo,
+                    marketPanel.Model.Items,
+                    Array.Empty<CargoSellPendingSaleRowViewData>(),
+                    marketPanel.Model.MaximumCargoWeight);
+                if (!cargoSellPopup.Open(popupData))
+                {
+                    marketPanel.Close();
+                    return Fail(ErrorPanelMissing);
+                }
+            }
 
             activeCaravanId = caravanId ?? string.Empty;
             activeTradeId = tradeId ?? string.Empty;
@@ -166,6 +202,12 @@ namespace ND.UI.Market
         /// </summary>
         public bool ConfirmSaleAndOpenSettlement()
         {
+            return ConfirmSaleAndOpenSettlement(null);
+        }
+
+        private bool ConfirmSaleAndOpenSettlement(
+            System.Collections.Generic.IReadOnlyList<MarketTransactionLine> explicitLines)
+        {
             if (!IsOpen || string.IsNullOrWhiteSpace(activeCaravanId) || string.IsNullOrWhiteSpace(activeTradeId))
                 return Fail(ErrorPendingMissing);
             if (!string.Equals(activeCaravanId, marketPanel.ActiveCaravanId, StringComparison.Ordinal)
@@ -188,7 +230,10 @@ namespace ND.UI.Market
                 transitionSnapshot = null;
             bool completionAlreadyPublished = false;
 
-            if (marketPanel.Model.HasDraft)
+            bool hasDraft = explicitLines != null
+                ? explicitLines.Count > 0
+                : marketPanel.Model.HasDraft;
+            if (hasDraft)
             {
                 if (!SaveDataLookup.TryGetPendingSettlement(
                         root.CurrentSaveData,
@@ -205,8 +250,8 @@ namespace ND.UI.Market
                 var soldItemsBefore =
                     pending.soldItems;
 
-                MarketTransactionResult transaction =
-                    marketPanel.Commit(
+                MarketTransactionResult transaction = explicitLines == null
+                    ? marketPanel.Commit(
                         result =>
                             TryStageArrivalSale(pending, result)
                             && coordinator.TryStageArrivalSaleCompletion(
@@ -222,6 +267,20 @@ namespace ND.UI.Market
 
                             coordinator.RollbackArrivalSaleCompletion(
                                 transitionSnapshot);
+                        })
+                    : marketPanel.CommitExplicit(
+                        explicitLines,
+                        result =>
+                            TryStageArrivalSale(pending, result)
+                            && coordinator.TryStageArrivalSaleCompletion(
+                                activeCaravanId,
+                                activeTradeId,
+                                out transitionSnapshot),
+                        () =>
+                        {
+                            pending.arrivalSaleRevenue = revenueBefore;
+                            pending.soldItems = soldItemsBefore;
+                            coordinator.RollbackArrivalSaleCompletion(transitionSnapshot);
                         });
 
                 if (transaction == null || !transaction.Success)
@@ -270,6 +329,8 @@ namespace ND.UI.Market
             activeCaravanId = string.Empty;
             activeTradeId = string.Empty;
             marketPanel.Close();
+            if (cargoSellPopup != null)
+                cargoSellPopup.gameObject.SetActive(false);
             SetError(string.Empty);
             SettlementRequested?.Invoke(caravanId, tradeId);
             return true;
@@ -307,6 +368,31 @@ namespace ND.UI.Market
         public void ConfirmSaleFromUi()
         {
             ConfirmSaleAndOpenSettlement();
+        }
+
+        private void HandleCargoSellConfirmed(
+            System.Collections.Generic.IReadOnlyList<CargoSellPendingSaleRowViewData> pending)
+        {
+            bool succeeded = ConfirmSaleAndOpenSettlement(CargoSellMarketTransactionBuilder.Build(pending));
+            if (!succeeded && cargoSellPopup != null)
+            {
+                // The sale may already be durably completed even when only settlement
+                // presentation fails. Do not leave a Settling Caravan inside a retryable sell UI.
+                bool saleCompleted = string.Equals(
+                    LastErrorCode,
+                    ErrorSettlementPresentation,
+                    StringComparison.Ordinal);
+                cargoSellPopup.SetSubmissionResult(saleCompleted, LastErrorCode);
+            }
+        }
+
+        private void HandleCargoSellClosed()
+        {
+            marketPanel?.Close();
+            activeCaravanId = string.Empty;
+            activeTradeId = string.Empty;
+            if (cargoSellPopup != null)
+                cargoSellPopup.gameObject.SetActive(false);
         }
 
         private bool Fail(string error)

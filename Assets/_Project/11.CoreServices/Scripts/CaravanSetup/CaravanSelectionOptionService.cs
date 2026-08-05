@@ -27,7 +27,7 @@ namespace ND.Framework
                 options.Add(new TradePrepareCaravanOptionViewData
                 {
                     caravanId = caravanId,
-                    displayName = $"Caravan {index + 1}",
+                    displayName = ResolveDisplayName(caravan, index),
                     currentTownId = currentTownId,
                     state = caravan.state,
                     canSelect = canSelect,
@@ -43,5 +43,13 @@ namespace ND.Framework
         }
 
         private static string NormalizeId(string value) => value?.Trim() ?? string.Empty;
+
+        private static string ResolveDisplayName(CaravanSaveData caravan, int fallbackIndex)
+        {
+            string displayName = caravan?.displayName?.Trim() ?? string.Empty;
+            return string.IsNullOrEmpty(displayName)
+                ? $"Caravan {fallbackIndex + 1}"
+                : displayName;
+        }
     }
 }
