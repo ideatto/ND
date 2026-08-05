@@ -45,7 +45,10 @@ namespace ND.Framework
         RequestInProgress,
         CoreRejected,
         RecordFailed,
-        SaveFailed
+        SaveFailed,
+        RouteLocked,
+        DepartureTownMismatch,
+        TownLocked
     }
 
     /// <summary>플레이어 출발 대상 caravan과 route를 지정하는 최소 요청이다.</summary>
@@ -230,6 +233,10 @@ namespace ND.Framework
             {
                 return TradeDepartureResult.Rejected(TradeDepartureFailureReason.RouteNotFound);
             }
+            TradeDepartureFailureReason accessFailure = ValidateRouteAccess(
+                saveData, sharedGameData, caravanSave.currentTownId, route);
+            if (accessFailure != TradeDepartureFailureReason.None)
+                return TradeDepartureResult.Rejected(accessFailure);
 
             var runtimeCaravan = getRuntimeCaravan != null
                 ? getRuntimeCaravan(caravanId)
@@ -416,6 +423,16 @@ namespace ND.Framework
             }
 
             string targetCaravanId = targetCaravanSave.caravanId;
+            ISharedGameDataProvider sharedGameData = getSharedGameData?.Invoke();
+            if (sharedGameData == null ||
+                !sharedGameData.TryGetRoute(routeId, out SharedRouteDefinition route) ||
+                ValidateRouteAccess(saveData, sharedGameData,
+                    targetCaravanSave.currentTownId, route) != TradeDepartureFailureReason.None)
+            {
+                FrameworkLog.Warning(
+                    $"Trade start was blocked because route access is locked or invalid. RouteId: {routeId}");
+                return CreateFrameworkBlockedResult();
+            }
             SaveDataLookup.TryGetTradeProgress(saveData, targetCaravanId, out var tradeProgressBefore);
             var tradeProgressSnapshot = tradeProgressBefore != null
                 ? JsonUtility.ToJson(tradeProgressBefore)
@@ -557,6 +574,38 @@ namespace ND.Framework
             return string.Equals(route.FromTownId, departureTownId, StringComparison.Ordinal)
                 ? route.ToTownId ?? string.Empty
                 : route.FromTownId ?? string.Empty;
+        }
+
+        private static TradeDepartureFailureReason ValidateRouteAccess(
+            SaveData saveData, ISharedGameDataProvider sharedGameData,
+            string departureTownId, SharedRouteDefinition route)
+        {
+            if (route == null || sharedGameData == null)
+                return TradeDepartureFailureReason.RouteNotFound;
+            if (!string.Equals(route.FromTownId, departureTownId, StringComparison.Ordinal))
+                return TradeDepartureFailureReason.DepartureTownMismatch;
+            if (!route.UnlockedByDefault && !ContainsId(saveData?.world?.unlockedRouteIds, route.Id))
+                return TradeDepartureFailureReason.RouteLocked;
+            if (!IsTownUnlocked(saveData, sharedGameData, route.FromTownId) ||
+                !IsTownUnlocked(saveData, sharedGameData, route.ToTownId))
+                return TradeDepartureFailureReason.TownLocked;
+            return TradeDepartureFailureReason.None;
+        }
+
+        private static bool IsTownUnlocked(
+            SaveData saveData, ISharedGameDataProvider sharedGameData, string townId)
+        {
+            if (ContainsId(saveData?.world?.unlockedTownIds, townId)) return true;
+            return sharedGameData.TryGetTown(townId, out SharedTownDefinition town) &&
+                town != null && town.UnlockedByDefault;
+        }
+
+        private static bool ContainsId(List<string> ids, string id)
+        {
+            if (ids == null || string.IsNullOrWhiteSpace(id)) return false;
+            for (int index = 0; index < ids.Count; index++)
+                if (string.Equals(ids[index], id, StringComparison.Ordinal)) return true;
+            return false;
         }
 
         // 날씨 투영 시작 시각(초) = 지금 게임시각. 날씨 시뮬(MinimapClouds)과 같은 소스(GameTime)라 정합.

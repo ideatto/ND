@@ -25,5 +25,17 @@ MonoBehaviour:
   rewards:
   - rewardType: 0
     value: 200
-    rewardId:
+    rewardId: 
+    encounterMultiplier: 1
+  - rewardType: 2
+    value: 0
+    rewardId: MountTown
+    encounterMultiplier: 1
+  - rewardType: 3
+    value: 0
+    rewardId: RiverToMount
+    encounterMultiplier: 1
+  - rewardType: 3
+    value: 0
+    rewardId: MountToRiver
     encounterMultiplier: 1

@@ -102,8 +102,15 @@ namespace ND.Framework
                 return Fail(MapFailure(build?.FailureReason));
 
             string snapshot = JsonUtility.ToJson(saveData);
+            long tradingCurrencyBefore = saveData.player.tradingCurrency;
+            QuestRewardsCommittedEvent committedEvent;
+            QuestCompletionResult completionResult;
             try
             {
+                var townsBefore = BuildIdSet(saveData.world.unlockedTownIds);
+                var routesBefore = BuildIdSet(saveData.world.unlockedRouteIds);
+                var specialtiesBefore = BuildSpecialtyKeySet(
+                    saveData.world.unlockedTownSpecialties);
                 ApplyPlan(saveData, caravan, quest, build.Plan, completedUtc);
                 SaveResult saved = saveService.Save(saveData);
                 if (saved == null || !saved.Succeeded)
@@ -116,7 +123,14 @@ namespace ND.Framework
                         SaveResult = saved
                     };
                 }
-                return new QuestCompletionResult
+                committedEvent = new QuestRewardsCommittedEvent(
+                    quest.Id,
+                    GetAddedIds(saveData.world.unlockedTownIds, townsBefore),
+                    GetAddedIds(saveData.world.unlockedRouteIds, routesBefore),
+                    GetAddedSpecialtyIds(
+                        saveData.world.unlockedTownSpecialties,
+                        specialtiesBefore));
+                completionResult = new QuestCompletionResult
                 {
                     Succeeded = true,
                     Plan = build.Plan,
@@ -128,6 +142,12 @@ namespace ND.Framework
                 JsonUtility.FromJsonOverwrite(snapshot, saveData);
                 return Fail(QuestCompletionFailureReason.InvalidDefinition);
             }
+
+            if (saveData.player.tradingCurrency != tradingCurrencyBefore)
+                FrameworkEvents.RaiseTradingCurrencyChanged(
+                    saveData.player.tradingCurrency);
+            FrameworkEvents.RaiseQuestRewardsCommitted(committedEvent);
+            return completionResult;
         }
 
         public static float ResolveBanditEncounterMultiplier(
@@ -309,6 +329,50 @@ namespace ND.Framework
             return entries.Exists(entry => entry != null &&
                 string.Equals(entry.townId, townId, StringComparison.Ordinal) &&
                 string.Equals(entry.itemId, itemId, StringComparison.Ordinal));
+        }
+
+        private static HashSet<string> BuildSpecialtyKeySet(
+            List<TownSpecialtyUnlockSaveData> entries)
+        {
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            if (entries == null) return result;
+            foreach (TownSpecialtyUnlockSaveData entry in entries)
+                if (entry != null)
+                    result.Add(BuildSpecialtyKey(entry.townId, entry.itemId));
+            return result;
+        }
+
+        private static HashSet<string> BuildIdSet(List<string> ids)
+        {
+            return ids == null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new HashSet<string>(ids, StringComparer.Ordinal);
+        }
+
+        private static List<string> GetAddedIds(List<string> current, HashSet<string> previous)
+        {
+            var result = new List<string>();
+            if (current == null) return result;
+            foreach (string id in current)
+                if (!string.IsNullOrWhiteSpace(id) && !previous.Contains(id)) result.Add(id);
+            return result;
+        }
+
+        private static List<string> GetAddedSpecialtyIds(
+            List<TownSpecialtyUnlockSaveData> current, HashSet<string> previous)
+        {
+            var result = new List<string>();
+            if (current == null) return result;
+            foreach (TownSpecialtyUnlockSaveData entry in current)
+                if (entry != null && !string.IsNullOrWhiteSpace(entry.itemId) &&
+                    !previous.Contains(BuildSpecialtyKey(entry.townId, entry.itemId)))
+                    result.Add(entry.itemId);
+            return result;
+        }
+
+        private static string BuildSpecialtyKey(string townId, string itemId)
+        {
+            return (townId ?? string.Empty) + "\n" + (itemId ?? string.Empty);
         }
 
         private static QuestRuntimeSaveData FindQuestState(

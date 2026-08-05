@@ -78,6 +78,7 @@ private void OnEnable()
         {
             FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
             FrameworkEvents.LoadCompleted += HandleLoadCompleted;
+            FrameworkEvents.QuestRewardsCommitted += HandleQuestRewardsCommitted;
             SubscribeTownClicks(true);
 
             // RefreshAll already rebuilds the lookup tables, so avoid collecting the same hierarchy twice on enable.
@@ -88,6 +89,7 @@ private void OnEnable()
         {
             FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
             FrameworkEvents.LoadCompleted -= HandleLoadCompleted;
+            FrameworkEvents.QuestRewardsCommitted -= HandleQuestRewardsCommitted;
             SubscribeTownClicks(false);
         }
 
@@ -151,6 +153,11 @@ private void OnEnable()
         }
 
         private void HandleLoadCompleted(FrameworkSaveData _)
+        {
+            RefreshAll();
+        }
+
+        private void HandleQuestRewardsCommitted(QuestRewardsCommittedEvent _)
         {
             RefreshAll();
         }

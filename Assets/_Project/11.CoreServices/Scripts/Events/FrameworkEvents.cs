@@ -29,10 +29,40 @@
  * - 이벤트 인자의 null 가능성은 발행하는 서비스의 상태 검증에 따른다.
  */
 using System;
+using System.Collections.Generic;
 using ND.Economy;
 
 namespace ND.Framework
 {
+    public sealed class QuestRewardsCommittedEvent
+    {
+        public QuestRewardsCommittedEvent(
+            string questId,
+            IReadOnlyList<string> unlockedTownIds,
+            IReadOnlyList<string> unlockedRouteIds,
+            IReadOnlyList<string> unlockedSpecialtyItemIds)
+        {
+            QuestId = questId ?? string.Empty;
+            UnlockedTownIds = Copy(unlockedTownIds);
+            UnlockedRouteIds = Copy(unlockedRouteIds);
+            UnlockedSpecialtyItemIds = Copy(unlockedSpecialtyItemIds);
+        }
+
+        public string QuestId { get; }
+        public IReadOnlyList<string> UnlockedTownIds { get; }
+        public IReadOnlyList<string> UnlockedRouteIds { get; }
+        public IReadOnlyList<string> UnlockedSpecialtyItemIds { get; }
+
+        private static string[] Copy(IReadOnlyList<string> source)
+        {
+            if (source == null || source.Count == 0) return Array.Empty<string>();
+            var result = new string[source.Count];
+            for (int index = 0; index < source.Count; index++)
+                result[index] = source[index] ?? string.Empty;
+            return result;
+        }
+    }
+
     /// <summary>Identifies why persisted Caravan Cargo changed.</summary>
     public enum CaravanCargoChangeSource
     {
@@ -144,6 +174,9 @@ namespace ND.Framework
         /// </remarks>
         public static event Action<string, string> RouteEventForced;
 
+        /// <summary>Raised after Quest rewards are persisted. Payload IDs are newly added entries.</summary>
+        public static event Action<QuestRewardsCommittedEvent> QuestRewardsCommitted;
+
         /// <summary>
         /// Raised after a previously unavailable calendar session has a valid current snapshot and synchronized world caches.
         /// The snapshot is a value copy. Subscribers must unsubscribe when their lifetime ends.
@@ -178,6 +211,26 @@ namespace ND.Framework
             if (previous.Season != current.Season) SeasonChanged?.Invoke(previous, current);
             if (!string.Equals(previous.ActiveDisasterId, current.ActiveDisasterId, StringComparison.Ordinal))
                 DisasterChanged?.Invoke(previous, current);
+        }
+
+        public static void RaiseQuestRewardsCommitted(QuestRewardsCommittedEvent committed)
+        {
+            if (committed == null) return;
+            FrameworkLog.Info(
+                $"QuestRewardsCommitted event raised. QuestId: {committed.QuestId}, " +
+                $"Towns: {committed.UnlockedTownIds.Count}, Routes: {committed.UnlockedRouteIds.Count}, " +
+                $"Specialties: {committed.UnlockedSpecialtyItemIds.Count}");
+            Action<QuestRewardsCommittedEvent> handlers = QuestRewardsCommitted;
+            if (handlers == null) return;
+            foreach (Delegate subscriber in handlers.GetInvocationList())
+            {
+                try { ((Action<QuestRewardsCommittedEvent>)subscriber)(committed); }
+                catch (Exception exception)
+                {
+                    FrameworkLog.Error(
+                        $"QuestRewardsCommitted subscriber failed after save commit: {exception.Message}");
+                }
+            }
         }
 
         /// <summary>
