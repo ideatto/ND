@@ -15,7 +15,10 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
     private ITradeScreenView view;
     private InGameScreenState currentScreenState;
     private float nextTravelingRefreshTime;
+    
     private bool isTradeScreenOpen;
+    private string presentedCaravanId = string.Empty;
+    private string presentedTradeId = string.Empty;
 
     private void OnEnable()
     {
@@ -72,6 +75,7 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
     /// </summary>
     public void OpenPreparationSelection()
     {
+        ClearPresentedTrade();
         isTradeScreenOpen = true;
         currentScreenState = InGameScreenState.Preparation;
         view?.ShowPreparation();
@@ -89,13 +93,31 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
         view?.ShowSettlement();
     }
 
+    /// <summary>
+    /// Opens S7 for one explicit trade. Framework owns progress; this presenter only keeps
+    /// the identity required to avoid showing another Caravan's mirrored legacy state.
+    /// </summary>
+    public void OpenTravelingScreen(string caravanId, string tradeId)
+    {
+        if (string.IsNullOrWhiteSpace(caravanId) || string.IsNullOrWhiteSpace(tradeId))
+            return;
+
+        presentedCaravanId = caravanId.Trim();
+        presentedTradeId = tradeId.Trim();
+        isTradeScreenOpen = true;
+        currentScreenState = InGameScreenState.Traveling;
+        nextTravelingRefreshTime = 0f;
+        RefreshTravelingView();
+    }
+
+
     /// <summary>Closes the trade UI without changing Framework trade state.</summary>
     public void CloseTradeScreen()
     {
         isTradeScreenOpen = false;
+        ClearPresentedTrade();
         view?.HideTradeScreens();
     }
-
     private void HandleScreenChanged(InGameScreenState state)
     {
         InGameScreenState previousState = currentScreenState;
@@ -219,10 +241,23 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
     private void RefreshTravelingView()
     {
         FrameworkRoot root = FrameworkRoot.Instance;
-        TradeProgressViewData progressViewData = TradeProgressViewDataBuilder.Build(
-            root != null ? root.CurrentSaveData : null,
-            root);
+        TradeProgressViewData progressViewData =
+            !string.IsNullOrEmpty(presentedCaravanId) && !string.IsNullOrEmpty(presentedTradeId)
+                ? TradeProgressViewDataBuilder.Build(
+                    root != null ? root.CurrentSaveData : null,
+                    root,
+                    presentedCaravanId,
+                    presentedTradeId)
+                : TradeProgressViewDataBuilder.Build(
+                    root != null ? root.CurrentSaveData : null,
+                    root);
         view?.ShowTraveling(progressViewData);
+    }
+
+    private void ClearPresentedTrade()
+    {
+        presentedCaravanId = string.Empty;
+        presentedTradeId = string.Empty;
     }
 
 #if UNITY_EDITOR

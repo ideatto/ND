@@ -203,8 +203,15 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         return loadedLines
             .Where(line => line.HasItem && line.Quantity > 0)
             .GroupBy(line => line.ItemId, StringComparer.Ordinal)
-            .Sum(group => RequiredSlots(group.Sum(line => line.Quantity), group.First().CanStack, group.First().MaxCount));
+            .Sum(group =>
+            {
+                TradeItemData definition = FindShopItem(group.Key);
+                bool canStack = definition != null ? definition.CanStack : group.First().CanStack;
+                int maxCount = definition != null ? definition.MaxCount : group.First().MaxCount;
+                return RequiredSlots(group.Sum(line => line.Quantity), canStack, maxCount);
+            });
     }
+
 
     private static int RequiredSlots(int quantity, bool canStack, int maxCount)
     {
@@ -410,7 +417,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             ? null
             : nextButton.GetComponentInChildren<TMP_Text>(true);
         if (nextLabel != null)
-            nextLabel.text = detached ? "물품 적재" : "용병 고용";
+            nextLabel.text = "구매";
 
         if (nextButton != null)
         {
@@ -585,8 +592,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         if (TryCommitDetachedCargoPlan != null)
         {
-            // Detached S4 owns no market transaction or next mercenary step. Its synchronous
-            // command consumer closes the edit only after a successful plan confirmation.
             TryCommitDetachedCargoPlan.Invoke();
             return;
         }
@@ -594,24 +599,12 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (!CanProceed)
             return;
 
-        // Market trading is committed at the cargo step, independently from departure.
-        // A failed transaction must not advance to mercenary/summary or start a trade.
+        // The Cargo purchase UI is independent. Commit first, then close this panel only.
         if (TryCommitCargoTransaction != null && !TryCommitCargoTransaction())
             return;
 
-        if (mercenaryHireController == null)
-            EnsureMercenaryHirePanel();
-
         ClosePurchasePopupImmediate();
-        HidePanel(() =>
-        {
-            if (mercenaryHireController != null)
-                mercenaryHireController.Show(MercenaryBudget);
-            else if (mercenaryStepPanel != null)
-                mercenaryStepPanel.SetActive(true);
-
-            onMercenaryHireRequested.Invoke();
-        });
+        HidePanel(null);
     }
 
     public void ReturnFromMercenaryHire()
@@ -981,7 +974,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         TMP_Text nextLabel = nextButton == null ? null : nextButton.GetComponentInChildren<TMP_Text>(true);
         if (nextLabel != null)
         {
-            nextLabel.text = "용병 고용";
+            nextLabel.text = "구매";
             nextLabel.fontSize = 22f;
         }
 
@@ -1430,21 +1423,40 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private int GetAvailableSlotCapacity(TradeItemData item)
     {
-        if (item == null)
+        if (item == null || string.IsNullOrWhiteSpace(item.ItemId))
             return 0;
 
-        int usedSlotCount = loadedLines.Count(line => line.HasItem && line.Quantity > 0);
-        int emptySlotCount = Mathf.Max(0, InventorySlotLimit - usedSlotCount);
+        int slotsUsedByOtherItems = loadedLines
+            .Where(line => line.HasItem
+                && line.Quantity > 0
+                && !string.Equals(line.ItemId, item.ItemId, StringComparison.Ordinal))
+            .GroupBy(line => line.ItemId, StringComparer.Ordinal)
+            .Sum(group =>
+            {
+                TradeItemData definition = FindShopItem(group.Key);
+                bool canStack = definition != null ? definition.CanStack : group.First().CanStack;
+                int maxCount = definition != null ? definition.MaxCount : group.First().MaxCount;
+                return RequiredSlots(group.Sum(line => line.Quantity), canStack, maxCount);
+            });
+        int slotsAvailableForItem = Mathf.Max(0, InventorySlotLimit - slotsUsedByOtherItems);
+        int currentQuantity = loadedLines
+            .Where(line => line.HasItem
+                && string.Equals(line.ItemId, item.ItemId, StringComparison.Ordinal))
+            .Sum(line => Mathf.Max(0, line.Quantity));
 
-        if (!item.CanStack)
-            return emptySlotCount;
-
-        int partialStackCapacity = loadedLines
-            .Where(line => line.Item == item && line.Quantity > 0 && line.Quantity < item.MaxCount)
-            .Sum(line => item.MaxCount - line.Quantity);
-
-        return partialStackCapacity + emptySlotCount * item.MaxCount;
+        int capacity = item.CanStack
+            ? slotsAvailableForItem * Mathf.Max(1, item.MaxCount) - currentQuantity
+            : slotsAvailableForItem - currentQuantity;
+        return Mathf.Max(0, capacity);
     }
+
+    private TradeItemData FindShopItem(string itemId)
+    {
+        return (shopItems ?? Array.Empty<TradeItemData>())
+            .FirstOrDefault(item => item != null
+                && string.Equals(item.ItemId, itemId, StringComparison.Ordinal));
+    }
+
 
     private int GetAffordableCount(int shopIndex)
     {

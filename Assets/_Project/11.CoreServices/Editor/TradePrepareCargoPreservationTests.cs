@@ -31,7 +31,9 @@ public sealed class TradePrepareCargoPreservationTests
             tests.CreateFinalCargoQuantities_LoadsEverySavedStackAndAggregatesDuplicateItems();
             tests.CreateFinalCargoQuantities_DoesNotDoubleCommittedCargoAfterDraftClears();
             tests.Create_PreservesSavedCargoMissingFromCurrentMarketCatalog();
-            Debug.Log("Trade prepare cargo preservation probe passed (4/4).");
+            tests.ReplaceCargoPlan_EmptyPlanPublishesAuthoritativeTransition();
+            tests.SelectingFourCaravans_DoesNotCarryPreviousCargo();
+            Debug.Log("Trade prepare cargo preservation probe passed (6/6).");
         }
         catch (Exception exception)
         {
@@ -120,6 +122,57 @@ public sealed class TradePrepareCargoPreservationTests
                 maxCount = 99
             }
         });
+    }
+
+    [Test]
+    public void ReplaceCargoPlan_EmptyPlanPublishesAuthoritativeTransition()
+    {
+        var store = new TradePrepareDraftStore();
+        store.Reset("town-a");
+        store.SelectDepartureCaravan("caravan-2");
+
+        int changed = 0;
+        store.DraftChanged += _ => changed++;
+        store.ReplaceCargoPlan(Array.Empty<CargoItemViewData>());
+
+        Assert.That(changed, Is.EqualTo(1));
+        Assert.That(store.Current.hasAuthoritativeCargoPlan, Is.True);
+        Assert.That(store.Current.selectedBuyItems, Is.Empty);
+    }
+
+    [Test]
+    public void SelectingFourCaravans_DoesNotCarryPreviousCargo()
+    {
+        var store = new TradePrepareDraftStore();
+        store.Reset("town-a");
+
+        for (int index = 1; index <= 4; index++)
+        {
+            string caravanId = "caravan-" + index;
+            store.SelectDepartureCaravan(caravanId);
+            CargoItemViewData[] plan = index % 2 == 0
+                ? Array.Empty<CargoItemViewData>()
+                : new[]
+                {
+                    new CargoItemViewData
+                    {
+                        itemId = "item-" + index,
+                        quantity = index
+                    }
+                };
+
+            store.ReplaceCargoPlan(plan);
+            TradePrepareDraft snapshot = store.Current;
+
+            Assert.That(snapshot.departureCaravanId, Is.EqualTo(caravanId));
+            Assert.That(snapshot.hasAuthoritativeCargoPlan, Is.True);
+            Assert.That(snapshot.selectedBuyItems.Count, Is.EqualTo(plan.Length));
+            if (plan.Length > 0)
+            {
+                Assert.That(snapshot.selectedBuyItems[0].itemId, Is.EqualTo("item-" + index));
+                Assert.That(snapshot.selectedBuyItems[0].quantity, Is.EqualTo(index));
+            }
+        }
     }
 }
 #endif

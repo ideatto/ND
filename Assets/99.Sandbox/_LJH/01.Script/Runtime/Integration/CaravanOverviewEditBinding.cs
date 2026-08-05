@@ -75,8 +75,6 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
 
     private void OnEnable()
     {
-        ResolveSceneReferences();
-
         if (!hasRuntimeServiceOverride || !hasRuntimeLoadServiceOverride)
         {
             ResolveSerializedServices();
@@ -108,7 +106,6 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
             tradePrepareUi.OnCaravanSettingDataRequested += HandleSettingDataRequested;
             tradePrepareUi.OnCaravanSettingConfirmRequested += HandleSettingConfirmRequested;
             tradePrepareUi.OnCaravanCargoDataRequested += HandleCargoDataRequested;
-            tradePrepareUi.OnCaravanCargoConfirmRequested += HandleCargoConfirmRequested;
             tradePrepareUi.OnCaravanEditClosed += HandleEditClosed;
         }
     }
@@ -126,7 +123,6 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
             tradePrepareUi.OnCaravanSettingDataRequested -= HandleSettingDataRequested;
             tradePrepareUi.OnCaravanSettingConfirmRequested -= HandleSettingConfirmRequested;
             tradePrepareUi.OnCaravanCargoDataRequested -= HandleCargoDataRequested;
-            tradePrepareUi.OnCaravanCargoConfirmRequested -= HandleCargoConfirmRequested;
             tradePrepareUi.OnCaravanEditClosed -= HandleEditClosed;
         }
 
@@ -370,42 +366,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         }
     }
 
-    private void HandleCargoConfirmRequested(CaravanLoadSettingDraft draft)
-    {
-        if (loadSettingCommand == null)
-        {
-            ShowFailure(
-                CaravanLoadSettingFailureCodes.ServiceUnavailable,
-                "화물 변경을 처리할 서비스가 연결되지 않았습니다.");
-            return;
-        }
 
-        CaravanLoadSettingCommandResult result;
-        try
-        {
-            result = loadSettingCommand.Execute(draft != null ? draft.CreateSnapshot() : null);
-        }
-        catch (Exception exception)
-        {
-            Debug.LogError($"Caravan load setting Command failed: {exception}", this);
-            ShowFailure(
-                CaravanLoadSettingFailureCodes.SaveFailed,
-                "화물 변경 사항을 저장하지 못했습니다.");
-            return;
-        }
-
-        if (result == null || !result.succeeded)
-        {
-            ShowFailure(
-                result != null ? result.errorCode : CaravanLoadSettingFailureCodes.SaveFailed,
-                result != null ? result.userMessage : "화물 변경 사항을 저장하지 못했습니다.");
-            return;
-        }
-
-        tradePrepareUi?.CloseCaravanEdit();
-        overviewPresenter?.Refresh();
-        tradePrepareRuntimeContext?.RefreshCaravanCargoPlan(draft.caravanId);
-    }
 
     private static long ReadCurrentTradingCurrency()
     {
@@ -434,16 +395,46 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         ClearCurrentEdit();
     }
 
-    private void ShowFailure(string errorCode, string userMessage)
+private void ShowFailure(string errorCode, string userMessage)
     {
         string safeCode = string.IsNullOrWhiteSpace(errorCode) ? "UNKNOWN" : errorCode.Trim();
-        string safeMessage = string.IsNullOrWhiteSpace(userMessage)
-            ? "카라반 요청을 처리하지 못했습니다."
+        string diagnosticMessage = string.IsNullOrWhiteSpace(userMessage)
+            ? "Caravan request failed without a service message."
             : userMessage.Trim();
+        string localizedMessage = GetLocalizedFailureMessage(safeCode);
 
-        Debug.LogWarning($"[CaravanSetting] {safeCode} - {safeMessage}", this);
-        noticeUI?.Show(safeMessage);
+        // Service messages remain diagnostic; this UI boundary owns player-facing localization.
+        Debug.LogWarning($"[CaravanSetting] {safeCode} - {diagnosticMessage}", this);
+        noticeUI?.Show(localizedMessage);
     }
+
+private static string GetLocalizedFailureMessage(string errorCode)
+    {
+        switch (errorCode)
+        {
+            case CaravanSettingFailureCodes.ServiceUnavailable:
+                return "카라반 설정 서비스를 사용할 수 없습니다.";
+            case CaravanSettingFailureCodes.CaravanNotFound:
+                return "선택한 카라반을 찾을 수 없습니다.";
+            case CaravanSettingFailureCodes.CaravanNotEditable:
+                return "현재 상태에서는 카라반 설정을 변경할 수 없습니다.";
+            case CaravanSettingFailureCodes.InvalidDraft:
+                return "선택한 카라반 설정이 올바르지 않습니다.";
+            case CaravanSettingFailureCodes.InvalidComposition:
+                return "선택한 운송 구성을 적용할 수 없습니다.";
+            case CaravanSettingFailureCodes.AssetNotOwned:
+                return "선택한 이동 수단 또는 동물을 사용할 수 없습니다.";
+            case CaravanSettingFailureCodes.CargoCapacityExceeded:
+                return "현재 적재 화물을 수용할 수 없어 해당 운송 구성으로 변경할 수 없습니다.";
+            case CaravanSettingFailureCodes.SaveFailed:
+                return "카라반 설정 변경 사항을 저장하지 못했습니다.";
+            case CaravanLoadSettingFailureCodes.ItemUnavailable:
+                return "선택한 상품을 현재 적재할 수 없습니다.";
+            default:
+                return "카라반 요청을 처리하지 못했습니다.";
+        }
+    }
+
 
     private void ResolveSerializedServices()
     {
@@ -521,32 +512,6 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         }
     }
 
-    private void ResolveSceneReferences()
-    {
-        // The connector lives outside nested UI Prefabs, so it resolves scene instances after Prefab expansion.
-        if (overviewPresenter == null)
-        {
-            overviewPresenter = FindFirstObjectByType<CaravanOverviewPresenter>(FindObjectsInactive.Include);
-        }
-
-        if (tradePrepareUi == null)
-        {
-            tradePrepareUi = FindFirstObjectByType<TradePrepareUIManager>(FindObjectsInactive.Include);
-        }
-
-        if (noticeUI == null)
-        {
-            noticeUI = FindFirstObjectByType<NoticeUI>(FindObjectsInactive.Include);
-        }
-
-
-        if (tradePrepareRuntimeContext == null)
-        {
-            tradePrepareRuntimeContext = FindFirstObjectByType<TradePrepareRuntimeContextProvider>(
-                FindObjectsInactive.Include);
-        }
-    }
-
     private void InjectTradePrepareProviders()
     {
         if (tradePrepareRuntimeContext == null)
@@ -563,7 +528,6 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
     {
         // Most scenes keep the Presenter and its edit Binding on the same Overview object.
         overviewPresenter = GetComponent<CaravanOverviewPresenter>();
-        ResolveSceneReferences();
     }
 
     private void OnValidate()
@@ -572,8 +536,6 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
         {
             overviewPresenter = GetComponent<CaravanOverviewPresenter>();
         }
-
-        ResolveSceneReferences();
 
         if (settingProviderBehaviour != null
             && !(settingProviderBehaviour is ICaravanSettingViewDataProvider))

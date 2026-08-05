@@ -153,19 +153,9 @@ public sealed class TestCaravanSettingService : MonoBehaviour,
         CargoItemViewData[] plannedItems;
         if (TryGetFrameworkCaravan(normalizedCaravanId, out FrameworkCaravanSaveData savedCaravan))
         {
-            // Prepare may project a compatible draft over the saved baseline. Traveling must never
-            // consume a draft, but it still exposes the committed cargo as read-only state.
-            string savedCargoSignature = savedCargoService
-                .CreateSnapshot(savedCaravan)
-                .BaselineSignature;
-            CaravanCargoDraftSnapshot cargoDraft = null;
-            bool useDraft = canEdit && cargoDrafts.TryGetCompatible(
-                normalizedCaravanId,
-                savedCargoSignature,
-                out cargoDraft);
-            plannedItems = useDraft
-                ? CreatePlannedCargoSnapshot(normalizedCaravanId, cargoDraft.Items)
-                : CreateSavedCargoSnapshot(savedCaravan);
+            // Framework-backed Cargo is authoritative after an immediate Market purchase.
+            // UI working state must never be restored through the provider or mixed across Caravans.
+            plannedItems = CreateSavedCargoSnapshot(savedCaravan);
         }
         else if (canEdit && cargoDrafts.TryGet(
                      normalizedCaravanId,

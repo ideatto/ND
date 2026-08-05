@@ -20,7 +20,6 @@ public sealed class CaravanOverviewCreationBinding : MonoBehaviour
 
     private void OnEnable()
     {
-        ResolveSceneReferences();
         if (overviewPresenter == null)
         {
             Debug.LogError(
@@ -99,28 +98,16 @@ public sealed class CaravanOverviewCreationBinding : MonoBehaviour
         }
     }
 
-    private void ResolveSceneReferences()
-    {
-        // This connector lives outside nested UI Prefabs and resolves their scene instances.
-        if (overviewPresenter == null)
-        {
-            overviewPresenter =
-                FindFirstObjectByType<CaravanOverviewPresenter>(FindObjectsInactive.Include);
-        }
-
-        if (noticeUI == null)
-            noticeUI = FindFirstObjectByType<NoticeUI>(FindObjectsInactive.Include);
-    }
-
 #if UNITY_EDITOR
     private void Reset()
     {
-        ResolveSceneReferences();
+        overviewPresenter = GetComponent<CaravanOverviewPresenter>();
     }
 
     private void OnValidate()
     {
-        ResolveSceneReferences();
+        if (overviewPresenter == null)
+            overviewPresenter = GetComponent<CaravanOverviewPresenter>();
     }
 #endif
 }

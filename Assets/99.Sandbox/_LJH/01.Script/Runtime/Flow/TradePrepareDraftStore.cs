@@ -187,6 +187,7 @@ public sealed class TradePrepareDraftStore
     // duplicate bundles into departure validation.
     public void ReplaceCargoPlan(CargoItemViewData[] plannedItems)
     {
+        bool wasAuthoritative = current.hasAuthoritativeCargoPlan;
         current.hasAuthoritativeCargoPlan = true;
         plannedItems = plannedItems ?? Array.Empty<CargoItemViewData>();
         var replacements = new List<TradeItemBundle>();
@@ -220,7 +221,13 @@ public sealed class TradePrepareDraftStore
         }
 
         if (AreSameCargo(current.selectedBuyItems, replacements))
+        {
+            // Selecting an empty-Cargo Caravan still changes the source of truth from the
+            // legacy fallback to an authoritative empty plan, so ViewData must rebuild once.
+            if (!wasAuthoritative)
+                NotifyChanged();
             return;
+        }
 
         current.selectedBuyItems.Clear();
         current.selectedBuyItems.AddRange(replacements);

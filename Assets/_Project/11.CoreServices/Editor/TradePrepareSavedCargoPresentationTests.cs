@@ -29,8 +29,7 @@ public sealed class TradePrepareSavedCargoPresentationTests
 
         TradeItemViewData[] restored = Invoke<TradeItemViewData[]>(
             "BuildOwnedCargoSelection",
-            loaded,
-            new Dictionary<string, int>());
+            (object)loaded);
 
         Assert.That(restored.Select(item => (item.itemId, item.ownedAmount)),
             Is.EquivalentTo(new[] { ("wood", 8), ("ore", 69) }));
@@ -122,4 +121,62 @@ private TradeItemData CreateItem(string itemId, float weight = 1f)
 
 
 
+
+
+[Test]
+    public void CargoPanel_FullSlotsCanPurchaseIntoMatchingSavedStack()
+    {
+        TradeItemData bread = CreateItem("bread", 0.5f);
+        TradeItemData stover = CreateItem("stover", 0.1f);
+        GameObject host = new GameObject("CargoPanelMatchingStackTest");
+        try
+        {
+            CargoLoadingPanelController panel = host.AddComponent<CargoLoadingPanelController>();
+            panel.Configure(
+                1000,
+                30f,
+                0,
+                new[] { bread, stover },
+                new[] { 100, 100 },
+                new long[] { 1, 1 });
+            panel.SetDetachedInventorySlotLimit(2);
+            panel.RestoreSavedCargo(new[]
+            {
+                new TradeItemViewData
+                {
+                    itemId = "bread",
+                    displayName = "bread",
+                    ownedAmount = 4,
+                    unitWeight = 0.5f
+                },
+                new TradeItemViewData
+                {
+                    itemId = "stover",
+                    displayName = "stover",
+                    ownedAmount = 6,
+                    unitWeight = 0.1f
+                }
+            }, false);
+
+            MethodInfo capacityMethod = typeof(CargoLoadingPanelController).GetMethod(
+                "GetAvailableSlotCapacity",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(capacityMethod, Is.Not.Null);
+            Assert.That((int)capacityMethod.Invoke(panel, new object[] { stover }), Is.EqualTo(93));
+
+            panel.RestoreSelectedCargo(new[]
+            {
+                new TradeItemViewData { itemId = "stover", selectedBuyAmount = 3 }
+            }, false, false);
+
+            Assert.That(panel.BuildCargoSelections()
+                    .Single(item => item.itemId == "stover")
+                    .quantity,
+                Is.EqualTo(9));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(host);
+        }
+    }
 }

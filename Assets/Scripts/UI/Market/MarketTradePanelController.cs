@@ -382,12 +382,17 @@ namespace ND.UI.Market
             if (!string.IsNullOrEmpty(accessError))
                 return FailOpen(accessError);
 
+            // Each Cargo UI opening is a new purchase session. Rebuild its Saved Cargo and
+            // capacity baseline even when marketId and caravanId match the previous session.
+            if (model != null)
+                Close();
+
             marketData = caravanMarket;
             bool opened = OpenResolved(
                 root,
                 caravanId,
                 string.Empty,
-                MarketTradeMode.BuyAndSell,
+                MarketTradeMode.BuyOnly,
                 allowPreparation: true,
                 isArrivalSale: false,
                 isTownPurchase: false);
@@ -978,7 +983,8 @@ namespace ND.UI.Market
     {
         public static List<MarketTransactionLine> Build(
             IReadOnlyList<CargoLoadingPanelController.CargoSelection> finalCargo,
-            IReadOnlyList<MarketTradeItemState> marketItems)
+            IReadOnlyList<MarketTradeItemState> marketItems,
+            bool allowSell = true)
         {
             Dictionary<string, int> finalQuantities =
                 (finalCargo ?? Array.Empty<CargoLoadingPanelController.CargoSelection>())
@@ -997,14 +1003,14 @@ namespace ND.UI.Market
 
                 finalQuantities.TryGetValue(marketItem.ItemId, out int finalQuantity);
                 int delta = finalQuantity - Math.Max(0, marketItem.CargoQuantity);
-                if (delta == 0)
+                if (delta == 0 || (!allowSell && delta < 0))
                     continue;
 
                 lines.Add(new MarketTransactionLine
                 {
                     ItemId = marketItem.ItemId,
                     BuyQuantity = Math.Max(0, delta),
-                    SellQuantity = Math.Max(0, -delta)
+                    SellQuantity = allowSell ? Math.Max(0, -delta) : 0
                 });
             }
 
