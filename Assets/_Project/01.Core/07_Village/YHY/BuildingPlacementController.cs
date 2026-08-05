@@ -182,6 +182,10 @@ public class BuildingPlacementController : MonoBehaviour,
             Transform t = pb.transform;
             if (!registered.Add(t)) continue;   // 이미 등록된 건물은 건너뜀
 
+            // 환경 아이템은 NPC 목표가 아니다. 배치·점유는 생성(RegisterNewEnvironment)·복원(RestoreEnvironments)에서
+            // 이미 처리되므로 여기서는 NPC 목록/욕구 태그만 건너뛴다.
+            if (pb.GetComponent<PlacedEnvironment>() != null) continue;
+
             // 신규 건물: NPC 공유 목록에 추가 + 욕구 태그 부여(모든 NPC가 즉시 인식)
             npcBuildingList.Add(pb);
             AssignNeed(pb);
@@ -218,7 +222,9 @@ public class BuildingPlacementController : MonoBehaviour,
         for (int i = 0; i < all.Length; i++)
         {
             PlaceableBuilding placeable = all[i];
-            if (placeable != null && placeable.isActiveAndEnabled)
+            // 환경 아이템은 건물 복원 경로에서 제외한다(NPC 표적화·중복 등록 방지). RestoreEnvironments가 전담.
+            if (placeable != null && placeable.isActiveAndEnabled
+                && placeable.GetComponent<PlacedEnvironment>() == null)
             {
                 pending.Add(placeable);
             }
@@ -276,6 +282,75 @@ public class BuildingPlacementController : MonoBehaviour,
 
         foreach (PlaceableBuilding placeable in pending)
             RegisterAtAuthoredOrNearest(placeable);
+
+        RestoreEnvironments();   // 저장된 환경 아이템(다중·회전)을 재생성·배치한다.
+    }
+
+    /// <summary>
+    /// 저장된 환경 아이템 목록을 씬·격자에 반영한다(로드 복원). <b>멱등</b>이다:
+    /// 건물 업그레이드 등으로 여러 번 호출돼도, 이미 있는 인스턴스는 재사용(재생성 금지)하고
+    /// 없는 것만 생성하며, 저장에 없는 고아 인스턴스는 제거한다.
+    /// </summary>
+    private void RestoreEnvironments()
+    {
+        FrameworkRoot root = FrameworkRoot.Instance;
+        System.Collections.Generic.List<VillageEnvironmentSaveData> list =
+            root != null && root.CurrentSaveData != null && root.CurrentSaveData.player != null
+                ? root.CurrentSaveData.player.villageEnvironments
+                : null;
+        if (list == null) return;
+
+        VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
+        if (registry == null) return;
+
+        // 이미 씬에 존재하는 환경 인스턴스를 instanceId로 매핑(중복 생성 방지).
+        var existing = new Dictionary<string, PlacedEnvironment>();
+        foreach (PlacedEnvironment pe in FindObjectsByType<PlacedEnvironment>())
+            if (pe != null && !string.IsNullOrEmpty(pe.InstanceId) && !existing.ContainsKey(pe.InstanceId))
+                existing.Add(pe.InstanceId, pe);
+
+        foreach (VillageEnvironmentSaveData e in list)
+        {
+            if (e == null || string.IsNullOrEmpty(e.instanceId) || string.IsNullOrEmpty(e.envId)) continue;
+
+            GameObject go;
+            if (existing.TryGetValue(e.instanceId, out PlacedEnvironment found) && found != null)
+            {
+                go = found.gameObject;          // 이미 있으면 재사용(재생성 안 함)
+                existing.Remove(e.instanceId);  // 처리 완료 표시(남는 건 고아)
+            }
+            else
+            {
+                go = registry.BuildEnvironmentInstance(e.envId, e.instanceId, Vector3.zero);
+                if (go == null) continue;
+            }
+
+            Transform t = go.transform;
+            int yaw = BuildingPlacementCommand.NormalizeYawStep(e.yawStep);
+            t.rotation = Quaternion.Euler(0f, yaw * GridRotateStep, 0f);
+
+            PlaceableBuilding pb = go.GetComponent<PlaceableBuilding>();
+            int sx = 1, sz = 1;
+            if (pb != null) pb.GetRotatedCells(out sx, out sz);
+
+            int cx = e.gridCellX, cz = e.gridCellZ;
+            if (!grid.CanPlace(cx, cz, sx, sz, t)
+                && !grid.FindNearestFree(cx, cz, sx, sz, t, out cx, out cz))
+            {
+                // 자리 못 찾음(드문 경우): 저장 좌표에 그대로 두되 점유는 생략한다.
+                t.position = grid.CellToWorldCenter(e.gridCellX, e.gridCellZ, sx, sz);
+                registered.Add(t);
+                continue;
+            }
+
+            grid.Occupy(cx, cz, sx, sz, t);
+            t.position = grid.CellToWorldCenter(cx, cz, sx, sz);
+            registered.Add(t);
+        }
+
+        // 저장 목록에 없는데 씬에 남은 환경 인스턴스(고아)는 제거해 정합성을 지킨다.
+        foreach (KeyValuePair<string, PlacedEnvironment> kv in existing)
+            if (kv.Value != null) Destroy(kv.Value.gameObject);
     }
 
     private static int CountSavedMatches(List<VillageBuildingSaveData> saved, string displayName)
@@ -517,8 +592,11 @@ public class BuildingPlacementController : MonoBehaviour,
     [Header("회전 버튼(uGUI)")]
     [Tooltip("좌/우 회전 버튼에 쓸 '위 화살표' 스프라이트. 좌=+90°·우=-90° 회전해 표시. view 아래 uGUI 버튼으로 생성되어 캔버스 정렬을 따른다(다른 UI 패널이 위로 뜨면 자연히 가려짐 = '화살표가 패널 뚫고 나오는' 문제 해결).")]
     [SerializeField] private Sprite rotateArrowSprite;
+    [Tooltip("환경 아이템 삭제 버튼 아이콘(icon_cancel_x). 비면 빨간 사각형으로 폴백.")]
+    [SerializeField] private Sprite deleteIconSprite;
     [SerializeField] private float arrowButtonSize = 64f;   // 회전 버튼 픽셀 크기
     private RectTransform leftArrow, rightArrow;            // 런타임 생성(view 자식) 회전 버튼
+    private RectTransform deleteButton;                     // 환경 아이템 선택 시 표시되는 삭제 버튼(런타임 생성)
     private bool arrowsBuilt;
 
     // 선택 건물 양옆 회전 버튼(uGUI). IMGUI(OnGUI)는 캔버스보다 무조건 위에 그려져 패널을 뚫었지만,
@@ -528,11 +606,42 @@ public class BuildingPlacementController : MonoBehaviour,
         if (!editMode || !ArrowsReady() || !TryButtonRects(out Rect left, out Rect right))
         {
             SetArrowsVisible(false);
+            SetDeleteVisible(false);
             return;
         }
         SetArrowsVisible(true);
         PlaceArrow(leftArrow, left.center);
         PlaceArrow(rightArrow, right.center);
+
+        // 삭제 버튼: 환경 아이템을 선택했을 때만 표시(건물은 삭제 대상 아님). 선택 오브젝트 아래에 배치.
+        bool isEnv = selected != null && selected.GetComponent<PlacedEnvironment>() != null;
+        if (isEnv && TryDeleteRect(out Rect del))
+        {
+            SetDeleteVisible(true);
+            PlaceArrow(deleteButton, del.center);
+        }
+        else
+        {
+            SetDeleteVisible(false);
+        }
+    }
+
+    private void SetDeleteVisible(bool on)
+    {
+        if (deleteButton != null && deleteButton.gameObject.activeSelf != on)
+            deleteButton.gameObject.SetActive(on);
+    }
+
+    /// <summary>선택 오브젝트 중심 '아래쪽'의 삭제 버튼 화면 사각형. 선택 없거나 화면 밖이면 false.</summary>
+    private bool TryDeleteRect(out Rect rect)
+    {
+        rect = default(Rect);
+        if (selected == null) return false;
+        Collider col = selected.GetComponentInChildren<Collider>();
+        Vector3 center = col != null ? col.bounds.center : selected.position;
+        if (!TryWorldToScreen(center, out Vector2 sp)) return false;
+        rect = new Rect(sp.x - BtnW * 0.5f, sp.y - BtnOff - BtnH * 0.5f, BtnW, BtnH);   // 중심 아래
+        return true;
     }
 
     // 스프라이트·view가 준비되면 버튼 2개를 1회 생성(view 자식). 준비 안 되면 false.
@@ -547,7 +656,38 @@ public class BuildingPlacementController : MonoBehaviour,
     {
         leftArrow = CreateArrowButton("RotateLeftBtn", 90f, RotateLeft);     // 위 화살표 +90°(CCW) → 왼쪽
         rightArrow = CreateArrowButton("RotateRightBtn", -90f, RotateRight); // 위 화살표 -90°(CW) → 오른쪽
+        deleteButton = CreateDeleteButton();                                 // 환경 아이템 삭제 버튼(빨간 ✕)
         arrowsBuilt = leftArrow != null && rightArrow != null;
+    }
+
+    // view 아래에 환경 삭제 버튼 하나 생성(icon_cancel_x 아이콘, onClick=삭제).
+    private RectTransform CreateDeleteButton()
+    {
+        var go = new GameObject("DeleteEnvBtn", typeof(RectTransform), typeof(CanvasRenderer),
+            typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+        var rt = go.GetComponent<RectTransform>();
+        rt.SetParent(view.rectTransform, false);
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(arrowButtonSize, arrowButtonSize);
+
+        var img = go.GetComponent<UnityEngine.UI.Image>();
+        if (deleteIconSprite != null)
+        {
+            img.sprite = deleteIconSprite;       // icon_cancel_x
+            img.preserveAspect = true;
+            img.color = Color.white;
+        }
+        else
+        {
+            img.color = new Color(0.85f, 0.2f, 0.2f, 0.95f);   // 아이콘 미지정 시 빨간 사각형 폴백
+        }
+        img.raycastTarget = true;
+        var btn = go.GetComponent<UnityEngine.UI.Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(DeleteSelectedEnvironment);
+
+        go.SetActive(false);   // 기본 숨김(환경 선택 시 표시)
+        return rt;
     }
 
     // view 아래에 회전 버튼 하나 생성(Image=스프라이트, z로 회전, Button onClick 연결).
@@ -681,6 +821,11 @@ public class BuildingPlacementController : MonoBehaviour,
     {
         if (isPlacementCommitInProgress || placementSnapshot.Building == null) return;
         Transform building = placementSnapshot.Building;
+
+        // 환경 아이템이면 건물 저장 경로(displayName) 대신 환경 저장 경로(instanceId)로 분기한다.
+        PlacedEnvironment placedEnv = building.GetComponent<PlacedEnvironment>();
+        if (placedEnv != null) { CommitEnvironmentPlacement(building, placedEnv); return; }
+
         PlaceableBuilding placeable = building.GetComponent<PlaceableBuilding>();
         VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
         FrameworkRoot root = FrameworkRoot.Instance;
@@ -736,6 +881,157 @@ public class BuildingPlacementController : MonoBehaviour,
             placementSnapshot = default;
             isPlacementCommitInProgress = false;
         }
+    }
+
+    /// <summary>환경 아이템 이동/회전 확정: 저장을 instanceId 기준 villageEnvironments로 갱신한다.</summary>
+    private void CommitEnvironmentPlacement(Transform building, PlacedEnvironment placedEnv)
+    {
+        PlaceableBuilding placeable = building.GetComponent<PlaceableBuilding>();
+        if (placeable == null) { RollbackRuntimePlacement(); placementSnapshot = default; return; }
+
+        placeable.GetRotatedCells(out int sx, out int sz);
+        GetLogicalCell(building, sx, sz, out int cx, out int cz);
+        if (!grid.CanPlace(cx, cz, sx, sz, building)) { RollbackRuntimePlacement(); placementSnapshot = default; return; }
+
+        int yawStep = Mathf.RoundToInt(
+            Mathf.Repeat(building.eulerAngles.y, 360f) / GridRotateStep) % 4;
+        isPlacementCommitInProgress = true;
+        try
+        {
+            grid.Clear(building);
+            grid.Occupy(cx, cz, sx, sz, building);
+
+            VillageEnvironmentManager manager = VillageEnvironmentManager.Instance;
+            if (manager == null || !manager.UpdatePlacement(placedEnv.InstanceId, cx, cz, yawStep))
+            {
+                // 저장 실패 → 원위치/원점유로 롤백(씬↔저장 정합성).
+                RollbackRuntimePlacement();
+                Debug.LogWarning(
+                    $"Environment placement save failed. instanceId={placedEnv.InstanceId}, cell=({cx},{cz}), yawStep={yawStep}");
+            }
+        }
+        finally
+        {
+            placementSnapshot = default;
+            isPlacementCommitInProgress = false;
+        }
+    }
+
+    /// <summary>
+    /// 새 환경 인스턴스를 <b>화면 중앙</b>(막혔으면 가장 가까운 빈 칸)에 배치·점유·등록하고 그 셀·회전을 반환한다.
+    /// 등록만 하고 NPC 목록에는 넣지 않는다(환경은 NPC 목표가 아님). VillageEnvironmentManager가 호출.
+    /// </summary>
+    public bool RegisterNewEnvironment(PlaceableBuilding placeable, out int cx, out int cz, out int yawStep)
+    {
+        cx = 0; cz = 0; yawStep = 0;
+        if (placeable == null || grid == null) return false;
+
+        Transform t = placeable.transform;
+        t.rotation = Quaternion.identity;                 // 신규는 회전 0에서 시작
+        placeable.GetRotatedCells(out int sx, out int sz);
+
+        // 화면 중앙 바닥 지점의 셀에서 시작(확인하기 쉽게). 실패하면 격자 중앙으로 폴백.
+        int startX, startZ;
+        if (!TryGetCameraCenterCell(t, sx, sz, out startX, out startZ))
+        {
+            startX = gridWidth / 2; startZ = gridHeight / 2;
+            if (!grid.CanPlace(startX, startZ, sx, sz, t)
+                && !grid.FindNearestFree(startX, startZ, sx, sz, t, out startX, out startZ))
+                return false;
+        }
+
+        grid.Occupy(startX, startZ, sx, sz, t);
+        t.position = grid.CellToWorldCenter(startX, startZ, sx, sz);
+        registered.Add(t);                                 // 폴링 재등록 방지
+        cx = startX; cz = startZ; yawStep = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// 카메라 화면 중앙이 바라보는 바닥(y=0) 지점을 sx×sz 오브젝트가 들어갈 빈 칸으로 변환한다.
+    /// 막혀 있으면 가장 가까운 빈 칸을 찾는다. 신축 후 "화면 가운데에 놓기"에 사용.
+    /// </summary>
+    private bool TryGetCameraCenterCell(Transform mover, int sx, int sz, out int cx, out int cz)
+    {
+        cx = 0; cz = 0;
+        Camera cam = ResolveCamera();
+        if (cam == null || grid == null) return false;
+
+        Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));   // 화면 정중앙 광선
+        if (Mathf.Abs(ray.direction.y) < 1e-4f) return false;
+        float dist = -ray.origin.y / ray.direction.y;                    // y=0 평면과 교차
+        if (dist <= 0f) return false;
+        Vector3 hit = ray.origin + ray.direction * dist;
+
+        Vector3 corner = hit - new Vector3(sx * 0.5f, 0f, sz * 0.5f) * VillageGrid.CellSize;
+        grid.WorldToCell(corner, out cx, out cz);
+        if (!grid.CanPlace(cx, cz, sx, sz, mover)
+            && !grid.FindNearestFree(cx, cz, sx, sz, mover, out cx, out cz))
+            return false;
+        return true;
+    }
+
+    /// <summary>
+    /// 새로 지은 건물/환경을 <b>화면 중앙</b>으로 옮기고 편집모드로 전환해 선택 상태에 둔다.
+    /// (신축 직후 어디 지어졌는지 못 찾는 문제 해결 — 바로 보고 옮길 수 있게.)
+    /// </summary>
+    public void FocusNewlyBuilt(Transform building)
+    {
+        if (building == null || grid == null) return;
+
+        PlaceableBuilding pb = building.GetComponent<PlaceableBuilding>();
+        if (pb != null)
+        {
+            pb.GetRotatedCells(out int sx, out int sz);
+            if (TryGetCameraCenterCell(building, sx, sz, out int cx, out int cz))
+            {
+                grid.Clear(building);
+                grid.Occupy(cx, cz, sx, sz, building);
+                building.position = grid.CellToWorldCenter(cx, cz, sx, sz);
+            }
+        }
+        EnterEditMode();
+        SetSelected(building);
+    }
+
+    /// <summary>이미 배치된 오브젝트를 편집모드로 전환해 선택만 한다(환경 신축용 — 위치는 이미 중앙).</summary>
+    public void EnterEditModeAndSelect(Transform building)
+    {
+        if (building == null) return;
+        EnterEditMode();
+        SetSelected(building);
+    }
+
+    /// <summary>환경 인스턴스의 격자 점유·등록을 해제한다(삭제/저장 롤백 공용, 씬 파괴는 호출자 몫).</summary>
+    public void UnregisterEnvironment(PlaceableBuilding placeable)
+    {
+        if (placeable == null) return;
+        Transform t = placeable.transform;
+        if (grid != null) grid.Clear(t);
+        registered.Remove(t);
+        npcBuildingList.Remove(placeable);
+    }
+
+    /// <summary>현재 선택이 환경 아이템인지(삭제 버튼 활성 조건).</summary>
+    public bool HasEnvironmentSelected =>
+        editMode && selected != null && selected.GetComponent<PlacedEnvironment>() != null;
+
+    /// <summary>선택된 환경 아이템을 삭제한다(환불 없음): 저장 제거 → 하이라이트/선택 해제 → 격자 해제 → 파괴.</summary>
+    public void DeleteSelectedEnvironment()
+    {
+        if (selected == null) return;
+        PlacedEnvironment placedEnv = selected.GetComponent<PlacedEnvironment>();
+        if (placedEnv == null) return;
+
+        PlaceableBuilding placeable = selected.GetComponent<PlaceableBuilding>();
+        GameObject go = selected.gameObject;
+
+        VillageEnvironmentManager manager = VillageEnvironmentManager.Instance;
+        manager?.RemoveEnvironmentSave(placedEnv.InstanceId);   // 저장 목록 제거 + 저장
+
+        SetSelected(null);                    // 하이라이트 복원 후 선택 해제(파괴 전에)
+        UnregisterEnvironment(placeable);     // 격자 점유/등록 해제
+        Destroy(go);                          // 씬 인스턴스 파괴
     }
 
     private void RollbackRuntimePlacement()

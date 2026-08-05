@@ -21,6 +21,7 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
     public enum SectionContentSource
     {
         RegistryBuildings,
+        RegistryEnvironment,   // 레지스트리 항목 중 '환경'만 표시(건물과 동일 배치·비용 파이프라인, 필터만 다름)
         InspectorEntries
     }
 
@@ -148,7 +149,7 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
         {
             title = "환경",
             initiallyExpanded = false,
-            contentSource = SectionContentSource.InspectorEntries
+            contentSource = SectionContentSource.RegistryEnvironment   // 레지스트리의 환경 항목을 건물과 동일 방식으로 표시
         });
     }
 
@@ -206,9 +207,11 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
                 continue;
 
             if (section.contentSource == SectionContentSource.RegistryBuildings)
-                CreateRegistryBuildingRows();
-
-            CreateInspectorRows(section);
+                CreateRegistryBuildingRows(environmentOnly: false);       // 건물 탭: 환경 아님만
+            else if (section.contentSource == SectionContentSource.RegistryEnvironment)
+                CreateRegistryBuildingRows(environmentOnly: true);        // 환경 탭: 환경만(같은 파이프라인)
+            else
+                CreateInspectorRows(section);                            // InspectorEntries(임시 placeholder)
         }
     }
 
@@ -275,7 +278,7 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
                 text.font = font;
         }
         return button;
-    }    private void CreateRegistryBuildingRows()
+    }    private void CreateRegistryBuildingRows(bool environmentOnly)
     {
         VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
         if (registry == null)
@@ -283,6 +286,8 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 
         for (int i = 0; i < registry.CatalogCount; i++)
         {
+            if (registry.GetCatalogIsEnvironment(i) != environmentOnly)
+                continue;   // 이 섹션(건물/환경) 카테고리에 맞는 항목만 표시
             int catalogIndex = i;
             Button row = CreateRow(
                 $"{registry.GetCatalogName(i)}  Lv.{registry.GetCatalogLevel(i)}",

@@ -50,6 +50,14 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         // 기존 싱글톤을 통해 현재 활성 Registry를 사용한다.
         VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
 
+        // [환경 아이템 분기] 환경 아이템은 거래재화 비용 + 다중 설치 + 삭제 파이프라인을 별도로 쓰므로
+        // 이 건물(아이템 비용 + 레벨업) 트랜잭션에서 건너뛴다. VillageEnvironmentManager가 처리한다.
+        if (registry != null &&
+            registry.TryGetCatalogEnvironmentEntry(buildId, out _, out _, out _))
+        {
+            return;
+        }
+
         if(registry == null ||
            !registry.TryGetCatalogEntry(
                buildId,
