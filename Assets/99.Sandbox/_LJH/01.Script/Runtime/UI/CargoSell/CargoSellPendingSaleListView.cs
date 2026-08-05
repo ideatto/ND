@@ -18,7 +18,7 @@ namespace ND.UI.CargoSell
         private TMP_Text pendingCountText;
         private TMP_Text totalSalePriceText;
         private Action<CargoSellPendingSaleRowViewData> leftClicked;
-        private Action<string> rightClicked;
+        private Action<CargoSellPendingSaleRowViewData> rightClicked;
 
         private void Awake()
         {
@@ -29,7 +29,7 @@ namespace ND.UI.CargoSell
 
         public void SetInteractionCallbacks(
             Action<CargoSellPendingSaleRowViewData> onLeftClicked,
-            Action<string> onRightClicked)
+            Action<CargoSellPendingSaleRowViewData> onRightClicked)
         {
             leftClicked = onLeftClicked;
             rightClicked = onRightClicked;

@@ -146,6 +146,23 @@ namespace ND.UI.Market
             return result;
         }
 
+        public MarketTransactionResult Commit(
+            IReadOnlyList<MarketTransactionLine> lines,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
+        {
+            MarketTransactionResult result = MarketTransactionCommand.Execute(
+                commands,
+                lines,
+                maximumCargoWeight,
+                maximumCargoSlots,
+                stageBeforeSave,
+                rollbackStagedData);
+            if (result.Success)
+                Refresh();
+            return result;
+        }
+
         public void Refresh()
         {
             Dictionary<string, MarketStockView> stocks = query.Stocks
@@ -313,6 +330,12 @@ namespace ND.UI.Market
         public string ActiveCaravanId => activeCaravanId;
         public string ActiveTradeId => activeTradeId;
         public string LastErrorCode { get; private set; } = string.Empty;
+        public bool UsesExternalArrivalSalePresentation { get; private set; }
+
+        public void SetExternalArrivalSalePresentation(bool enabled)
+        {
+            UsesExternalArrivalSalePresentation = enabled;
+        }
 
         private void OnEnable()
         {
@@ -634,6 +657,7 @@ namespace ND.UI.Market
             activeCaravanId = string.Empty;
             observedMarketRevision = 0;
             activeTradeId = string.Empty;
+            UsesExternalArrivalSalePresentation = false;
             SetError(string.Empty);
             RaiseStateChanged();
         }
@@ -698,6 +722,22 @@ namespace ND.UI.Market
             Func<MarketTransactionResult, bool> stageBeforeSave = null,
             Action rollbackStagedData = null)
         {
+            return CommitInternal(null, stageBeforeSave, rollbackStagedData);
+        }
+
+        public MarketTransactionResult CommitExplicit(
+            IReadOnlyList<MarketTransactionLine> lines,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
+        {
+            return CommitInternal(lines, stageBeforeSave, rollbackStagedData);
+        }
+
+        private MarketTransactionResult CommitInternal(
+            IReadOnlyList<MarketTransactionLine> explicitLines,
+            Func<MarketTransactionResult, bool> stageBeforeSave,
+            Action rollbackStagedData)
+        {
             MarketTransactionResult result;
             FrameworkRoot root = FrameworkRoot.Instance;
             string accessError = model == null
@@ -732,7 +772,9 @@ namespace ND.UI.Market
             }
             else
             {
-                result = model.Commit(stageBeforeSave, rollbackStagedData);
+                result = explicitLines == null
+                    ? model.Commit(stageBeforeSave, rollbackStagedData)
+                    : model.Commit(explicitLines, stageBeforeSave, rollbackStagedData);
             }
             SetError(result.Success ? string.Empty : result.ErrorCode);
             RaiseStateChanged();

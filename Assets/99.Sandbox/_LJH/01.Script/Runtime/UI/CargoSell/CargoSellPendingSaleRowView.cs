@@ -44,12 +44,12 @@ namespace ND.UI.CargoSell
         private TMP_Text lineRevenueText;
         private CargoSellPendingSaleRowViewData data;
         private Action<CargoSellPendingSaleRowViewData> leftClicked;
-        private Action<string> rightClicked;
+        private Action<CargoSellPendingSaleRowViewData> rightClicked;
 
         public void Bind(
             CargoSellPendingSaleRowViewData value,
             Action<CargoSellPendingSaleRowViewData> onLeftClicked,
-            Action<string> onRightClicked)
+            Action<CargoSellPendingSaleRowViewData> onRightClicked)
         {
             Resolve();
             data = value;
@@ -77,7 +77,7 @@ namespace ND.UI.CargoSell
         public void OnPointerClick(PointerEventData eventData)
         {
             if (eventData != null && eventData.button == PointerEventData.InputButton.Right && data != null)
-                rightClicked?.Invoke(data.ItemId);
+                rightClicked?.Invoke(data);
         }
 
         private void NotifyLeftClick()
