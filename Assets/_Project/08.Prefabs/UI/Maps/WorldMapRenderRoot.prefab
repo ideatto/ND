@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &97124857500866575
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7932146359907975258}
+  m_Layer: 0
+  m_Name: StartPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7932146359907975258
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 97124857500866575}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -4.5, y: -1.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6763634421691393368}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &603150915644822093
 GameObject:
   m_ObjectHideFlags: 0
@@ -123,6 +154,296 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
   m_BlendShapeWeights: []
+--- !u!1 &906105247548895228
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6763634421691393368}
+  - component: {fileID: 4795456216032730791}
+  - component: {fileID: 6014024621939448660}
+  - component: {fileID: 620960459130964845}
+  m_Layer: 0
+  m_Name: Route_WindyToBase
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6763634421691393368
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 906105247548895228}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 7932146359907975258}
+  - {fileID: 312931127212685875}
+  m_Father: {fileID: 5942647615646957316}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4795456216032730791
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 906105247548895228}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dab5c7d4c32e743048dfca98e2d5914f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Splines::UnityEngine.Splines.SplineContainer
+  m_Spline:
+    m_EditModeType: 1
+    m_Knots: []
+    m_MetaData: []
+    m_Closed: 0
+    m_IntData:
+      m_Data: []
+    m_FloatData:
+      m_Data: []
+    m_Float4Data:
+      m_Data: []
+    m_ObjectData:
+      m_Data: []
+  m_Splines:
+  - m_EditModeType: 1
+    m_Knots:
+    - Position:
+        x: 3.45
+        y: 3.18
+        z: 0
+      TangentIn:
+        x: 0
+        y: 0
+        z: 0.62113845
+      TangentOut:
+        x: -0
+        y: -0
+        z: -0.62113845
+      Rotation:
+        value:
+          x: 0.087766625
+          y: 0.7016388
+          z: -0.087766625
+          w: 0.7016388
+    - Position:
+        x: -2.57
+        y: 4.71
+        z: 0
+      TangentIn:
+        x: 0
+        y: 0
+        z: 1.5191444
+      TangentOut:
+        x: -0
+        y: -0
+        z: -1.5543962
+      Rotation:
+        value:
+          x: -0.17846496
+          y: 0.68421507
+          z: 0.17846496
+          w: 0.68421507
+    - Position:
+        x: -4.5
+        y: -1.5
+        z: 0
+      TangentIn:
+        x: 0
+        y: 0
+        z: 0.6502999
+      TangentOut:
+        x: -0
+        y: -0
+        z: -0.6502999
+      Rotation:
+        value:
+          x: -0.41928926
+          y: 0.5693826
+          z: 0.41928926
+          w: 0.5693826
+    m_MetaData:
+    - Mode: 4
+      Tension: 0.5
+    - Mode: 4
+      Tension: 0.5
+    - Mode: 4
+      Tension: 0.5
+    m_Closed: 0
+    m_IntData:
+      m_Data: []
+    m_FloatData:
+      m_Data: []
+    m_Float4Data:
+      m_Data: []
+    m_ObjectData:
+      m_Data: []
+  m_Knots:
+    m_KnotsLink: []
+--- !u!120 &6014024621939448660
+LineRenderer:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 906105247548895228}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 0
+  m_LightProbeUsage: 0
+  m_ReflectionProbeUsage: 0
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: c3cc4f2673f9bee4eb369779a6242e21, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_Positions:
+  - {x: 103.45, y: 103.18, z: 0}
+  - {x: 102.92641, y: 103.38136, z: -0.0000000075454425}
+  - {x: 102.40727, y: 103.602684, z: -0.000000017420966}
+  - {x: 101.88692, y: 103.82173, z: -0.000000027011934}
+  - {x: 101.36379, y: 104.0336, z: -0.00000003573054}
+  - {x: 100.837105, y: 104.23478, z: -0.000000043169393}
+  - {x: 100.30532, y: 104.42184, z: -0.000000048903708}
+  - {x: 99.76709, y: 104.58986, z: -0.00000005235504}
+  - {x: 99.22095, y: 104.73122, z: -0.000000052636572}
+  - {x: 98.66588, y: 104.83236, z: -0.0000000482249}
+  - {x: 98.104645, y: 104.86601, z: -0.00000003618341}
+  - {x: 97.55197, y: 104.76738, z: -0.00000000976501}
+  - {x: 97.10628, y: 104.434975, z: 0.000000024178295}
+  - {x: 96.794586, y: 103.965454, z: 0.00000003833838}
+  - {x: 96.56192, y: 103.45281, z: 0.000000041967162}
+  - {x: 96.37586, y: 102.92036, z: 0.000000039888228}
+  - {x: 96.221054, y: 102.377945, z: 0.000000034369485}
+  - {x: 96.08859, y: 101.82961, z: 0.000000026710952}
+  - {x: 95.97283, y: 101.27747, z: 0.000000017797937}
+  - {x: 95.86986, y: 100.72279, z: 0.000000008366374}
+  - {x: 95.77653, y: 100.16638, z: -8.0170004e-10}
+  - {x: 95.68983, y: 99.60965, z: -0.000000008568058}
+  - {x: 95.60459, y: 99.05097, z: -0.000000012536415}
+  - {x: 95.5, y: 98.5, z: 0}
+  m_Parameters:
+    serializedVersion: 3
+    widthMultiplier: 0.08
+    widthCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    colorGradient:
+      serializedVersion: 2
+      key0: {r: 0.54901963, g: 0.4509804, b: 0.3019608, a: 1}
+      key1: {r: 0.54901963, g: 0.4509804, b: 0.3019608, a: 1}
+      key2: {r: 0, g: 0, b: 0, a: 0}
+      key3: {r: 0, g: 0, b: 0, a: 0}
+      key4: {r: 0, g: 0, b: 0, a: 0}
+      key5: {r: 0, g: 0, b: 0, a: 0}
+      key6: {r: 0, g: 0, b: 0, a: 0}
+      key7: {r: 0, g: 0, b: 0, a: 0}
+      ctime0: 0
+      ctime1: 65535
+      ctime2: 0
+      ctime3: 0
+      ctime4: 0
+      ctime5: 0
+      ctime6: 0
+      ctime7: 0
+      atime0: 0
+      atime1: 65535
+      atime2: 0
+      atime3: 0
+      atime4: 0
+      atime5: 0
+      atime6: 0
+      atime7: 0
+      m_Mode: 0
+      m_ColorSpace: -1
+      m_NumColorKeys: 2
+      m_NumAlphaKeys: 2
+    numCornerVertices: 2
+    numCapVertices: 2
+    alignment: 0
+    textureMode: 0
+    textureScale: {x: 1, y: 1}
+    shadowBias: 0.5
+    generateLightingData: 0
+  m_UseWorldSpace: 1
+  m_Loop: 0
+  m_ApplyActiveColorSpace: 1
+--- !u!114 &620960459130964845
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 906105247548895228}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae276190b4694a22ab17c1d3def83d14, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.RouteVisual
+  routeId: WindyToBase
+  pathType: 1
+  startPoint: {fileID: 7932146359907975258}
+  endPoint: {fileID: 312931127212685875}
+  splineContainer: {fileID: 4795456216032730791}
+  lineRenderer: {fileID: 6014024621939448660}
+  lineResolution: 24
+  defaultColor: {r: 0.55, g: 0.45, b: 0.3, a: 1}
+  activeColor: {r: 0.95, g: 0.75, b: 0.2, a: 1}
+  lineWidth: 0.08
 --- !u!1 &907262739341408206
 GameObject:
   m_ObjectHideFlags: 0
@@ -727,6 +1048,7 @@ Transform:
   - {fileID: 4605574015567813057}
   - {fileID: 6198843347827988203}
   - {fileID: 5586269992279832284}
+  - {fileID: 6763634421691393368}
   m_Father: {fileID: 1880415000449159704}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3358393352568777511
@@ -1194,6 +1516,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: MountTown
+  townData: {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
+  iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 114247275344971264}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1297,6 +1621,37 @@ Transform:
   m_Children:
   - {fileID: 3691274268806784536}
   m_Father: {fileID: 1880415000449159704}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4746066750362149316
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 312931127212685875}
+  m_Layer: 0
+  m_Name: EndPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &312931127212685875
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4746066750362149316}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 3.31, y: 3.1, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6763634421691393368}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5051798345224722896
 GameObject:
@@ -2510,6 +2865,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: RiverTown
+  townData: {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
+  iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 7010911206374391207}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
@@ -2881,6 +3238,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: BaseCamp
+  townData: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
+  iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 6928380865777902891}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}
@@ -3139,6 +3498,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
   townId: WindyTown
+  townData: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 2969474632424115417}
   unlockedColor: {r: 1, g: 1, b: 1, a: 1}

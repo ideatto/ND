@@ -125,6 +125,49 @@ namespace ND.Framework
                 return true;
             }
 
+            // [Selling] 목적지 마을에 도착해 판매 중인 상태다. currentTownId는 아직 출발지(거점)이므로
+            // 그걸 쓰면 마커가 거점으로 튄다. 정산(SettlementPending)과 동일하게 commit/route로 목적지 마을을 구해 표시한다.
+            if (progress.state == TradeProgressState.Selling)
+            {
+                if (string.IsNullOrEmpty(progress.activeTradeId))
+                    return TryUseCurrentTown(
+                        caravan, progress.activeTradeId, CaravanMapDisplayIssue.InvalidIdentity, out state);
+
+                TradePreparationCommitSaveData sellingCommit =
+                    FindCommit(saveData, caravan.caravanId, progress.activeTradeId, out bool sellingCommitAmbiguous);
+
+                string sellingDestination = sellingCommit != null ? sellingCommit.destinationTownId : string.Empty;
+                if (string.IsNullOrEmpty(sellingDestination))
+                {
+                    string sellingRouteId = sellingCommit != null && !string.IsNullOrEmpty(sellingCommit.routeId)
+                        ? sellingCommit.routeId
+                        : progress.activeRouteId;
+                    string sellingOrigin = sellingCommit != null && !string.IsNullOrEmpty(sellingCommit.currentTownId)
+                        ? sellingCommit.currentTownId
+                        : caravan.currentTownId;
+                    sellingDestination = ResolveOppositeTown(sharedGameData, sellingRouteId, sellingOrigin);
+                }
+
+                if (!string.IsNullOrEmpty(sellingDestination))
+                    return TryUseTown(
+                        caravan.caravanId, progress.activeTradeId, sellingDestination,
+                        sellingCommitAmbiguous ? CaravanMapDisplayIssue.AmbiguousPreparationCommit : CaravanMapDisplayIssue.None,
+                        out state);
+
+                // 목적지를 못 구하면 최소한 경로 끝(진행 100%)에 표시해 거점으로 튀지 않게 한다.
+                if (!string.IsNullOrEmpty(progress.activeRouteId)
+                    && sharedGameData != null
+                    && sharedGameData.TryGetRoute(progress.activeRouteId, out _))
+                {
+                    state = CaravanMapDisplayState.OnRoute(
+                        caravan.caravanId, progress.activeTradeId, progress.activeRouteId, 1f);
+                    return true;
+                }
+
+                return TryUseCurrentTown(
+                    caravan, progress.activeTradeId, CaravanMapDisplayIssue.UnresolvedDestination, out state);
+            }
+
             if (progress.state != TradeProgressState.SettlementPending
                 || string.IsNullOrEmpty(progress.activeTradeId))
             {
