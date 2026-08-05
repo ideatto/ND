@@ -134,6 +134,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe48aa2481896874a88cf69839d02aed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingMaterialTestButton
+  items:
+  - item: {fileID: 11400000, guid: e70021528395dfa4ebac5f411e79ec65, type: 2}
+    purchaseUnitPrice: 0
+  - item: {fileID: 11400000, guid: 63af5decbf34d1747ab76c42cf4e8942, type: 2}
+    purchaseUnitPrice: 0
+  grantQuantity: 5
 --- !u!1 &4541991839727777878
 GameObject:
   m_ObjectHideFlags: 0
