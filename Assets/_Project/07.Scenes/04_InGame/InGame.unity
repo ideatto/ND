@@ -1720,6 +1720,30 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6538778410395126768, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6538778410395126768, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6538778410395126768, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6538778410395126768, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6538778410395126768, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6538778410395126768, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6650849684144050659, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -2602,6 +2626,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.FrameworkDebugBridge
   debugTimeScale: 10
   debugInGameTimeMultiplier: 60
+  calendarDebugScale: 1
+  calendarTargetMonth: 1
+  calendarOfflineSeconds: 3600
   debugSeasonId: winter
   debugDisasterId: drought
   debugRouteEventId: debug_route_event_001
@@ -5408,6 +5435,10 @@ PrefabInstance:
     - target: {fileID: 3942359996107727175, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
       propertyPath: m_Name
       value: VillageView (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
+      propertyPath: npcCubeSize
+      value: 0.6
       objectReference: {fileID: 0}
     - target: {fileID: 6302923003883896727, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
       propertyPath: m_Pivot.x
