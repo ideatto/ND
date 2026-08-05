@@ -134,6 +134,19 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             CaravanSlotView slotView = slotViews[viewArrayIndex];
             slotView.Bind(block);
 
+            if (treadmillPanel != null
+                && treadmillPanel.IsOpen
+                && string.Equals(
+                    treadmillPanel.CurrentCaravanId,
+                    block.caravanId,
+                    StringComparison.Ordinal))
+            {
+                string treadmillDisplayName = string.IsNullOrWhiteSpace(block.displayName)
+                    ? $"Caravan {block.slotIndex + 1}"
+                    : block.displayName.Trim();
+                treadmillPanel.RefreshDisplayName(block.caravanId, treadmillDisplayName);
+            }
+
             if (createPendingSlots.Contains(block.slotIndex))
             {
                 if (block.slotState == CaravanSlotState.Empty)
@@ -317,7 +330,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
             return;
         }
 
-        treadmillPanel.Open(caravanId, displayName);
+        treadmillPanel.Toggle(caravanId, displayName);
     }
 
     private void HandleUnlockHintRequested(string unlockHintText)
