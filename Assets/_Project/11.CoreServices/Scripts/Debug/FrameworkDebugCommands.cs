@@ -181,6 +181,32 @@ namespace ND.Framework
         }
 
         /// <summary>
+        /// Gets the session-only distance wear multiplier captured at caravan departure.
+        /// </summary>
+        public double WagonDurabilityWearMultiplier =>
+            WagonDurabilityWearDebugSettings.Multiplier;
+
+        public bool TrySetWagonDurabilityWearMultiplier(double multiplier)
+        {
+            return WagonDurabilityWearDebugSettings.TrySetMultiplier(multiplier);
+        }
+
+        public double IncreaseWagonDurabilityWearMultiplier()
+        {
+            return WagonDurabilityWearDebugSettings.IncreaseMultiplier();
+        }
+
+        public double DecreaseWagonDurabilityWearMultiplier()
+        {
+            return WagonDurabilityWearDebugSettings.DecreaseMultiplier();
+        }
+
+        public double ResetWagonDurabilityWearMultiplier()
+        {
+            return WagonDurabilityWearDebugSettings.ResetMultiplier();
+        }
+
+        /// <summary>
         /// Unity time scale을 변경한다.
         /// </summary>
         /// <param name="scale">적용할 time scale.</param>

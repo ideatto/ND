@@ -61,6 +61,8 @@ namespace ND.DebugTools
         private string lastCurrencyResult = "실행한 재화 명령이 없습니다.";
         private string wagonRepairMultiplierInput = "1";
         private string lastWagonRepairMultiplierResult = "실행한 배율 명령이 없습니다.";
+        private string wagonDurabilityWearMultiplierInput = "1";
+        private string lastWagonDurabilityWearMultiplierResult = "실행한 마모 배율 명령이 없습니다.";
         private string calendarTargetMonthInput = string.Empty;
         private string calendarOfflineHoursInput = string.Empty;
         private string lastCalendarResult = "실행한 달력 명령이 없습니다.";
@@ -173,6 +175,7 @@ namespace ND.DebugTools
                 DrawForceArrivalControl();
                 DrawCurrencyControls();
                 DrawWagonRepairMultiplierControl();
+                DrawWagonDurabilityWearMultiplierControl();
             }
 
             GUILayout.EndScrollView();
@@ -441,6 +444,173 @@ namespace ND.DebugTools
                     ? invocation.InnerException
                     : exception;
                 lastWagonRepairMultiplierResult = $"명령 실행 실패: {cause.GetType().Name}: {cause.Message}";
+            }
+        }
+
+        private void DrawWagonDurabilityWearMultiplierControl()
+        {
+            var state = ResolveWagonDurabilityWearMultiplierState();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("[마차 거리 마모 배율]", labelStyle);
+            GUILayout.Label(
+                $"현재 세션 값: {(state.HasCurrentValue ? state.CurrentValue.ToString("0.##", CultureInfo.InvariantCulture) + "x" : "N/A")}",
+                labelStyle);
+            GUILayout.Label($"사용 가능 여부: {(state.CanExecute ? "사용 가능" : state.DisabledReason)}", labelStyle);
+            GUILayout.Label("출발할 때 Caravan에 고정되며, 이미 이동 중인 Caravan에는 영향을 주지 않습니다.", labelStyle);
+            GUILayout.Label("거리 마모에만 적용되며 이벤트성 내구도 손실에는 적용되지 않습니다.", labelStyle);
+
+            var previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && state.CanExecute;
+            GUILayout.BeginHorizontal();
+            var decrease = GUILayout.Button("-0.25x", GUILayout.Width(72f));
+            var increase = GUILayout.Button("+0.25x", GUILayout.Width(72f));
+            var reset = GUILayout.Button("1x 초기화", GUILayout.Width(80f));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("직접 입력:", labelStyle, GUILayout.Width(72f));
+            wagonDurabilityWearMultiplierInput = GUILayout.TextField(wagonDurabilityWearMultiplierInput);
+            var apply = GUILayout.Button("적용", GUILayout.Width(64f));
+            GUILayout.EndHorizontal();
+            GUI.enabled = previousEnabled;
+
+            if (decrease)
+                ExecuteWagonDurabilityWearMultiplierCommand("DecreaseWagonDurabilityWearMultiplier");
+            else if (increase)
+                ExecuteWagonDurabilityWearMultiplierCommand("IncreaseWagonDurabilityWearMultiplier");
+            else if (reset)
+                ExecuteWagonDurabilityWearMultiplierCommand("ResetWagonDurabilityWearMultiplier");
+            else if (apply)
+                ExecuteWagonDurabilityWearMultiplierApply(wagonDurabilityWearMultiplierInput);
+
+            GUILayout.Label($"최근 마모 배율 실행 결과: {lastWagonDurabilityWearMultiplierResult}", labelStyle);
+        }
+
+        private WagonRepairMultiplierState ResolveWagonDurabilityWearMultiplierState()
+        {
+            var state = new WagonRepairMultiplierState();
+
+            try
+            {
+                state.Root = GetFrameworkRoot();
+                if (state.Root == null)
+                {
+                    state.DisabledReason = "Framework를 사용할 수 없음";
+                    return state;
+                }
+
+                var debugCommandsProperty = state.Root.GetType().GetProperty(
+                    "DebugCommands",
+                    BindingFlags.Public | BindingFlags.Instance);
+                state.DebugCommands = debugCommandsProperty?.GetValue(state.Root);
+                if (state.DebugCommands == null)
+                {
+                    state.DisabledReason = "DebugCommands를 사용할 수 없음";
+                    return state;
+                }
+
+                var type = state.DebugCommands.GetType();
+                state.ValueProperty = type.GetProperty(
+                    "WagonDurabilityWearMultiplier",
+                    BindingFlags.Public | BindingFlags.Instance);
+                state.SetMethod = type.GetMethod(
+                    "TrySetWagonDurabilityWearMultiplier",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(double) },
+                    null);
+
+                if (state.ValueProperty == null || !state.ValueProperty.CanRead || state.SetMethod == null)
+                {
+                    state.DisabledReason = "마차 거리 마모 배율 API를 사용할 수 없음";
+                    return state;
+                }
+
+                var value = state.ValueProperty.GetValue(state.DebugCommands);
+                if (!(value is double currentValue))
+                {
+                    state.DisabledReason = "마차 거리 마모 배율 값을 사용할 수 없음";
+                    return state;
+                }
+
+                state.CurrentValue = currentValue;
+                state.HasCurrentValue = true;
+                state.CanExecute = true;
+                state.DisabledReason = string.Empty;
+                return state;
+            }
+            catch (Exception exception)
+            {
+                state.DisabledReason = $"마차 거리 마모 배율을 사용할 수 없음: {exception.GetType().Name}";
+                return state;
+            }
+        }
+
+        private void ExecuteWagonDurabilityWearMultiplierApply(string input)
+        {
+            if (!double.TryParse(input?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var multiplier))
+            {
+                lastWagonDurabilityWearMultiplierResult = "적용하지 않았습니다. 0부터 1000 사이의 숫자를 입력하세요.";
+                return;
+            }
+
+            var state = ResolveWagonDurabilityWearMultiplierState();
+            if (!state.CanExecute)
+            {
+                lastWagonDurabilityWearMultiplierResult = $"적용하지 않았습니다. {state.DisabledReason}.";
+                return;
+            }
+
+            try
+            {
+                var applied = state.SetMethod.Invoke(state.DebugCommands, new object[] { multiplier });
+                lastWagonDurabilityWearMultiplierResult = applied is bool succeeded && succeeded
+                    ? $"다음 출발부터 {multiplier:0.##}x를 적용합니다."
+                    : "적용하지 않았습니다. 0부터 1000 사이의 숫자를 입력하세요.";
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+                lastWagonDurabilityWearMultiplierResult = $"명령 실행 실패: {cause.GetType().Name}: {cause.Message}";
+            }
+        }
+
+        private void ExecuteWagonDurabilityWearMultiplierCommand(string methodName)
+        {
+            var state = ResolveWagonDurabilityWearMultiplierState();
+            if (!state.CanExecute)
+            {
+                lastWagonDurabilityWearMultiplierResult = $"실행하지 않았습니다. {state.DisabledReason}.";
+                return;
+            }
+
+            try
+            {
+                var method = state.DebugCommands.GetType().GetMethod(
+                    methodName,
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (method == null)
+                {
+                    lastWagonDurabilityWearMultiplierResult = "마모 배율 명령 API를 사용할 수 없습니다.";
+                    return;
+                }
+
+                var result = method.Invoke(state.DebugCommands, null);
+                lastWagonDurabilityWearMultiplierResult = result is double multiplier
+                    ? $"다음 출발부터 {multiplier:0.##}x를 적용합니다."
+                    : "마모 배율 명령이 값을 반환하지 않았습니다.";
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException invocation && invocation.InnerException != null
+                    ? invocation.InnerException
+                    : exception;
+                lastWagonDurabilityWearMultiplierResult = $"명령 실행 실패: {cause.GetType().Name}: {cause.Message}";
             }
         }
 
