@@ -69,11 +69,15 @@ public class TreadmillLaneManager : MonoBehaviour
         active = lane;
     }
 
-    /// <summary>현재 표시 중인 레인을 최신 저장 데이터의 마차·동물 편성으로 다시 구성한다.</summary>
-    public void RefreshActive()
+    /// <summary>이미 생성된 해당 Caravan 레인을 최신 저장 데이터의 마차·동물 편성으로 다시 구성한다.</summary>
+    public void RefreshCaravan(string caravanId)
     {
-        if (active == null || active.stage == null || string.IsNullOrEmpty(active.caravanId)) return;
-        active.stage.ShowCaravan(active.caravanId);
+        if (string.IsNullOrEmpty(caravanId)
+            || !lanes.TryGetValue(caravanId, out TreadmillLane lane)
+            || lane == null
+            || lane.stage == null) return;
+
+        lane.stage.ShowCaravan(caravanId);
     }
 
     // 마차 전용 레인을 얻거나(있으면) 만든다(없으면). 첫 마차=원본 재사용, 이후=복제.
