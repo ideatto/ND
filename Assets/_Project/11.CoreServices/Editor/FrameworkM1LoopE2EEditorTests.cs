@@ -13,6 +13,9 @@
  * Important Notes
  * - Editor 전용이며 Player build에 포함되지 않는다.
  * - 성공 로그는 정적·Editor 경로 검증 결과이며 Play Mode runtime PASS를 의미하지 않는다.
+ * - Claim regression은 Depart → ForceComplete → empty arrival sale(또는 failed settle) →
+ *   SettlementPending → ClaimSettlement 경로로 Lucky 소비/유지와 town 정합을 검증한다.
+ * - 출발 fixture는 BaseToRiver의 FromTown(BaseCamp)으로 caravan/player currentTownId를 맞춘다.
  */
 #if UNITY_EDITOR
 using System;
@@ -27,6 +30,7 @@ namespace ND.Framework.Editor
     public static class FrameworkM1LoopE2EEditorTests
     {
         private const string RouteId = "BaseToRiver";
+        private const string DepartureTownId = "BaseCamp";
         private const string ItemId = "Apple";
         private const float DistanceKm = 100f;
 
@@ -442,8 +446,10 @@ namespace ND.Framework.Editor
                         "Disabled online tick consumed a Traveling entry before offline restore.");
                 }
 
+                // 성공 도착은 Selling으로 들어가며, Claim 전 empty/arrival sale 완료 후에만
+                // SettlementPending이 된다.
                 if (!context.Coordinator.ApplyOfflineProgressOnLoad(context.SaveData)
-                    || progress.state != TradeProgressState.SettlementPending
+                    || progress.state != TradeProgressState.Selling
                     || offlineCount != 1
                     || readyCount != 1)
                 {
@@ -582,7 +588,7 @@ namespace ND.Framework.Editor
                 FrameworkEvents.TradeSettlementReady -= onReady;
             }
 
-            if (firstProgress.state != TradeProgressState.SettlementPending
+            if (firstProgress.state != TradeProgressState.Selling
                 || secondProgress.state != TradeProgressState.Traveling
                 || context.SaveData.selectedCaravanId != selectedBefore
                 || !SaveDataLookup.TryGetPendingSettlement(
@@ -628,8 +634,8 @@ namespace ND.Framework.Editor
                 FrameworkEvents.TradeSettlementReady -= onReady;
             }
 
-            if (firstProgress.state != TradeProgressState.SettlementPending
-                || secondProgress.state != TradeProgressState.SettlementPending
+            if (firstProgress.state != TradeProgressState.Selling
+                || secondProgress.state != TradeProgressState.Selling
                 || !SaveDataLookup.TryGetPendingSettlement(context.SaveData, firstId, first.TradeId, out _)
                 || !SaveDataLookup.TryGetPendingSettlement(
                     context.SaveData, secondSave.caravanId, second.TradeId, out _)
@@ -731,7 +737,7 @@ namespace ND.Framework.Editor
                 FrameworkEvents.TradeOfflineCompleted -= onOffline;
             }
 
-            if (firstProgress.state != TradeProgressState.SettlementPending
+            if (firstProgress.state != TradeProgressState.Selling
                 || secondProgress.state != TradeProgressState.Traveling
                 || context.SaveData.selectedCaravanId != selectedBefore
                 || !SaveDataLookup.TryGetPendingSettlement(
@@ -838,39 +844,153 @@ namespace ND.Framework.Editor
 
         private static void RunClaimRegressionChecks()
         {
+            RunZeroSaleClaimLuckyRegressionChecks();
+            RunFailedTradeClaimLuckyRegressionChecks();
+        }
+
+        /// <summary>
+        /// 성공 도착 후 판매 수량 0 완료 → Claim 경로에서 Lucky 소비/유지 계약을 검증한다.
+        /// </summary>
+        private static void RunZeroSaleClaimLuckyRegressionChecks()
+        {
             var save = new ConfigurableSaveService();
             var context = TestContext.Create(save);
-            var caravan = CreateSampleCaravan(context.GameTime);
-            if (!context.TradeStart.TryStartTrade(
-                    caravan, DistanceKm, "claim-regression", RouteId).canDepart)
-                throw new InvalidOperationException("Claim regression setup failed to start.");
+            InitializeSelectedCaravan(context);
 
-            context.Coordinator.ForceCompleteActiveTrade();
             var caravanId = context.SaveData.selectedCaravanId;
-            var tradeId = context.SaveData.tradeProgress.activeTradeId;
-            var snapshot = JsonUtility.ToJson(context.SaveData);
-            save.ShouldSucceed = false;
-            var failed = context.Coordinator.ClaimSettlement(caravanId, tradeId);
-            if (failed.Succeeded
-                || failed.FailureReason != ClaimSettlementFailureReason.SaveFailed
-                || JsonUtility.ToJson(context.SaveData) != snapshot
-                || !context.Coordinator.TryGetPendingEconomyResult(caravanId, tradeId, out _))
+            var departure = context.TradeStart.Depart(new TradeDepartureRequest
+            {
+                CaravanId = caravanId,
+                RouteId = RouteId
+            });
+            if (!departure.DepartureSucceeded)
             {
                 throw new InvalidOperationException(
-                    "Claim save failure did not roll back state or retain the retryable Economy result.");
+                    "Claim zero-sale regression departure failed: " + departure.FailureReason);
             }
 
-            save.ShouldSucceed = true;
-            var succeeded = context.Coordinator.ClaimSettlement(caravanId, tradeId);
-            if (!succeeded.Succeeded
-                || context.Coordinator.TryGetPendingEconomyResult(caravanId, tradeId, out _)
-                || context.Coordinator.ClaimSettlement(caravanId, tradeId).Succeeded)
+            if (!SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanId, out var progress)
+                || string.IsNullOrWhiteSpace(progress.activeTradeId))
             {
-                throw new InvalidOperationException("Explicit claim or duplicate claim prevention regressed.");
+                throw new InvalidOperationException(
+                    "Claim zero-sale regression did not create an active trade progress entry.");
             }
-            SaveDataLookup.TryGetCaravan(context.SaveData, caravanId, out var caravanSave);
-            if (string.IsNullOrWhiteSpace(caravanSave.currentTownId))
-                throw new InvalidOperationException("Claim did not retain the destination currentTownId.");
+
+            var tradeId = progress.activeTradeId;
+            context.Coordinator.ForceCompleteActiveTrade();
+            if (!SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanId, out progress)
+                || progress.state != TradeProgressState.Selling)
+            {
+                throw new InvalidOperationException(
+                    "Claim zero-sale regression did not enter Selling after forced arrival.");
+            }
+
+            if (!context.Coordinator.TryCommitEmptyArrivalSaleCompletion(
+                    caravanId, tradeId, out var arrivalSaveFailed)
+                || arrivalSaveFailed
+                || !SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanId, out progress)
+                || progress.state != TradeProgressState.SettlementPending)
+            {
+                throw new InvalidOperationException(
+                    "Claim zero-sale regression failed to reach SettlementPending.");
+            }
+
+            AssertClaimLuckyConsumptionContract(context, save, caravanId, tradeId, expectDestinationTown: true);
+        }
+
+        /// <summary>
+        /// 실패 무역이 Selling을 건너뛰고 SettlementPending으로 들어간 뒤 Claim 시 Lucky를 소비하는지 검증한다.
+        /// </summary>
+        private static void RunFailedTradeClaimLuckyRegressionChecks()
+        {
+            var save = new ConfigurableSaveService();
+            var context = TestContext.Create(save);
+            InitializeSelectedCaravan(context);
+
+            var caravanId = context.SaveData.selectedCaravanId;
+            var departure = context.TradeStart.Depart(new TradeDepartureRequest
+            {
+                CaravanId = caravanId,
+                RouteId = RouteId
+            });
+            if (!departure.DepartureSucceeded)
+            {
+                throw new InvalidOperationException(
+                    "Claim failed-trade regression departure failed: " + departure.FailureReason);
+            }
+
+            if (!SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanId, out var progress)
+                || string.IsNullOrWhiteSpace(progress.activeTradeId)
+                || !context.Coordinator.TryGetRuntimeCaravan(caravanId, out var runtime)
+                || runtime == null)
+            {
+                throw new InvalidOperationException(
+                    "Claim failed-trade regression setup could not resolve trade runtime state.");
+            }
+
+            var tradeId = progress.activeTradeId;
+            runtime.runFatalReason = JourneyFailureReason.FoodDepleted;
+            context.Coordinator.ForceCompleteActiveTrade();
+            if (!SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanId, out progress)
+                || progress.state != TradeProgressState.SettlementPending)
+            {
+                throw new InvalidOperationException(
+                    "Claim failed-trade regression did not enter SettlementPending.");
+            }
+
+            AssertClaimLuckyConsumptionContract(context, save, caravanId, tradeId, expectDestinationTown: false);
+        }
+
+        /// <summary>
+        /// Claim Save 실패 시 Lucky 유지, 성공 시 전량 소비, 다른 tradeId 격리, 중복 Claim 거부를 검증한다.
+        /// </summary>
+        private static void AssertClaimLuckyConsumptionContract(
+            TestContext context,
+            ConfigurableSaveService save,
+            string caravanId,
+            string tradeId,
+            bool expectDestinationTown)
+        {
+            var otherTradeId = "claim-regression-other-" + Guid.NewGuid().ToString("N");
+            WeatherLuckyStore.Add(tradeId);
+            WeatherLuckyStore.Add(tradeId);
+            WeatherLuckyStore.Add(otherTradeId);
+            try
+            {
+                var snapshot = JsonUtility.ToJson(context.SaveData);
+                save.ShouldSucceed = false;
+                var failed = context.Coordinator.ClaimSettlement(caravanId, tradeId);
+                if (failed.Succeeded
+                    || failed.FailureReason != ClaimSettlementFailureReason.SaveFailed
+                    || JsonUtility.ToJson(context.SaveData) != snapshot
+                    || !context.Coordinator.TryGetPendingEconomyResult(caravanId, tradeId, out _)
+                    || WeatherLuckyStore.GetCount(tradeId) != 2)
+                {
+                    throw new InvalidOperationException(
+                        "Claim save failure did not roll back state or retain Lucky and Economy results.");
+                }
+
+                save.ShouldSucceed = true;
+                var succeeded = context.Coordinator.ClaimSettlement(caravanId, tradeId);
+                if (!succeeded.Succeeded
+                    || context.Coordinator.TryGetPendingEconomyResult(caravanId, tradeId, out _)
+                    || context.Coordinator.ClaimSettlement(caravanId, tradeId).Succeeded
+                    || WeatherLuckyStore.GetCount(tradeId) != 0
+                    || WeatherLuckyStore.GetCount(otherTradeId) != 1)
+                {
+                    throw new InvalidOperationException(
+                        "Explicit claim, Lucky consumption, isolation, or duplicate prevention regressed.");
+                }
+
+                SaveDataLookup.TryGetCaravan(context.SaveData, caravanId, out var caravanSave);
+                if (expectDestinationTown && string.IsNullOrWhiteSpace(caravanSave.currentTownId))
+                    throw new InvalidOperationException("Claim did not retain the destination currentTownId.");
+            }
+            finally
+            {
+                WeatherLuckyStore.Consume(tradeId);
+                WeatherLuckyStore.Consume(otherTradeId);
+            }
         }
 
         private static void RunExactForcedTradeCompletionChecks()
@@ -910,9 +1030,9 @@ namespace ND.Framework.Editor
             SaveDataLookup.TryGetTradeProgress(context.SaveData, caravanB, out var progressB);
             if (!result.Succeeded
                 || result.FailureReason != ForcedTradeCompletionFailureReason.None
-                || progressA.state != TradeProgressState.SettlementPending
+                || progressA.state != TradeProgressState.Selling
                 || progressB.state != TradeProgressState.Traveling
-                || runtimeA.state != JourneyState.Settling
+                || runtimeA.state != JourneyState.Selling
                 || JsonUtility.ToJson(runtimeB) != saveB
                 || context.SaveData.selectedCaravanId != selectedBefore
                 || !SaveDataLookup.TryGetPendingSettlement(
@@ -1147,12 +1267,17 @@ namespace ND.Framework.Editor
         {
             var runtime = CreateSampleCaravan(context.GameTime);
             runtime.caravanId = caravanId;
+            runtime.currentTownId = DepartureTownId;
             var save = new CaravanSaveData();
             CaravanSaveDataMapper.CopyToSave(runtime, save);
+            save.currentTownId = DepartureTownId;
             context.SaveData.caravans.Add(save);
             return save;
         }
 
+        /// <summary>
+        /// 선택 Caravan에 출발 가능한 sample loadout을 넣고 BaseToRiver FromTown에 town ID를 맞춘다.
+        /// </summary>
         private static void InitializeSelectedCaravan(TestContext context)
         {
             if (!SaveDataLookup.TryGetCaravan(
@@ -1163,7 +1288,10 @@ namespace ND.Framework.Editor
 
             var runtime = CreateSampleCaravan(context.GameTime);
             runtime.caravanId = selectedSave.caravanId;
+            runtime.currentTownId = DepartureTownId;
             CaravanSaveDataMapper.CopyToSave(runtime, selectedSave);
+            selectedSave.currentTownId = DepartureTownId;
+            context.SaveData.player.currentTownId = DepartureTownId;
         }
 
         private static TradeStartService CreateDepartureCommand(
