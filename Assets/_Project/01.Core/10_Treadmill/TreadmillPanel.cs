@@ -35,8 +35,17 @@ public class TreadmillPanel : MonoBehaviour
     /// <summary>지정 마차 기준으로 패널을 연다(왼→오 슬라이드).</summary>
     public void Open(string caravanId)
     {
+        Open(caravanId, string.Empty);
+    }
+
+    /// <summary>Opens one Caravan lane and renders the supplied presentation name.</summary>
+    public void Open(string caravanId, string displayName)
+    {
         CurrentCaravanId = caravanId;
-        if (caravanLabel != null) caravanLabel.text = "마차 " + Short(caravanId);
+        if (caravanLabel != null)
+            caravanLabel.text = string.IsNullOrWhiteSpace(displayName)
+                ? "마차 " + Short(caravanId)
+                : displayName.Trim();
         if (slide != null) slide.SetOpen(true);
         // 마차별 독립 레인 매니저가 있으면 그 마차 전용 레인을 보인다(레인 간 상태가 안 섞임).
         // 없으면(단일 인스턴스 하위호환) 예전처럼 하나뿐인 스테이지를 재구성한다.
