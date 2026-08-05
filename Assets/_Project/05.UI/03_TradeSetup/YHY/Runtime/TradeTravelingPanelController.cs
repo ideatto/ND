@@ -56,8 +56,34 @@ public static class TradeProgressViewDataBuilder
 {
     public static TradeProgressViewData Build(FrameworkSaveData save, FrameworkRoot root)
     {
-        if (save?.tradeProgress == null || save.tradeProgress.state != FrameworkTradeProgressState.Traveling) return null;
-        var progress = save.tradeProgress;
+        string caravanId = save?.selectedCaravanId;
+        if (!SaveDataLookup.TryGetTradeProgress(save, caravanId, out var progress))
+        {
+            progress = save?.tradeProgress;
+            caravanId = progress?.caravanId;
+        }
+
+        return Build(save, root, caravanId, progress?.activeTradeId);
+    }
+
+    public static TradeProgressViewData Build(
+        FrameworkSaveData save,
+        FrameworkRoot root,
+        string caravanId,
+        string tradeId)
+    {
+        if (save == null
+            || string.IsNullOrWhiteSpace(caravanId)
+            || string.IsNullOrWhiteSpace(tradeId)
+            || !SaveDataLookup.TryGetTradeProgress(save, caravanId, out var progress)
+            || progress == null
+            || progress.state != FrameworkTradeProgressState.Traveling
+            || !string.Equals(progress.caravanId, caravanId, StringComparison.Ordinal)
+            || !string.Equals(progress.activeTradeId, tradeId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
         DateTime now = root?.GameTime != null ? root.GameTime.CurrentUtc : DateTime.UtcNow;
         DateTime start = SafeUtc(progress.tradeStartUtcTick);
         DateTime end = SafeUtc(progress.expectedTradeEndUtcTick);
@@ -66,20 +92,34 @@ public static class TradeProgressViewDataBuilder
         float normalized = total > 0f ? Mathf.Clamp01(elapsed / total) : 0f;
 
         string from = "출발지", to = "목적지";
-        if (root?.SharedGameData != null && root.SharedGameData.TryGetRoute(progress.activeRouteId, out SharedRouteDefinition route))
+        if (root?.SharedGameData != null
+            && root.SharedGameData.TryGetRoute(progress.activeRouteId, out SharedRouteDefinition route))
         {
-            from = TownName(root.SharedGameData, route.FromTownId); to = TownName(root.SharedGameData, route.ToTownId);
+            from = TownName(root.SharedGameData, route.FromTownId);
+            to = TownName(root.SharedGameData, route.ToTownId);
         }
-        CaravanData caravan = save.caravan != null ? CaravanSaveDataMapper.ToRuntime(save.caravan) : null;
-        float food = caravan != null ? Mathf.Max(0f, CaravanCalculator.GetRemainingFood(caravan)) : 0f;
+
+        CaravanData caravan = SaveDataLookup.TryGetCaravan(save, caravanId, out var caravanSave)
+            ? CaravanSaveDataMapper.ToRuntime(caravanSave)
+            : null;
+        float food = caravan != null
+            ? Mathf.Max(0f, CaravanCalculator.GetRemainingFood(caravan))
+            : 0f;
         bool depleted = caravan != null && caravan.runFoodDepleted;
-        return new TradeProgressViewData {
-            activeTradeId = progress.activeTradeId, activeRouteId = progress.activeRouteId,
-            fromTownName = from, toTownName = to, totalTravelTime = total, elapsedTravelTime = elapsed,
-            remainingTravelTime = Mathf.Max(0f, total - elapsed), normalizedProgress = normalized,
-            statusTitle = depleted ? "식량 부족" : "무역 진행 중",
-            statusMessage = depleted ? $"식량 부족 · 남은 식량 {food:0.#}" : $"현재 식량 {food:0.#}",
-            canCancel = false, isCompleted = normalized >= 1f
+        return new TradeProgressViewData
+        {
+            activeTradeId = progress.activeTradeId,
+            activeRouteId = progress.activeRouteId,
+            fromTownName = from,
+            toTownName = to,
+            totalTravelTime = total,
+            elapsedTravelTime = elapsed,
+            remainingTravelTime = Mathf.Max(0f, total - elapsed),
+            normalizedProgress = normalized,
+            statusTitle = depleted ? "먹이 부족" : "무역 진행 중",
+            statusMessage = depleted ? $"먹이 부족 · 남은 먹이 {food:0.#}" : $"현재 먹이 {food:0.#}",
+            canCancel = false,
+            isCompleted = normalized >= 1f
         };
     }
     private static DateTime SafeUtc(long ticks) { return ticks > DateTime.MinValue.Ticks && ticks < DateTime.MaxValue.Ticks ? new DateTime(ticks, DateTimeKind.Utc) : DateTime.UtcNow; }
