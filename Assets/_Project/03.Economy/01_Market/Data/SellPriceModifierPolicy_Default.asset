@@ -1,0 +1,96 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef7b2db5db76c90408f0fa5d1250ebe0, type: 3}
+  m_Name: SellPriceModifierPolicy_Default
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Economy.SellPriceModifierPolicy
+  categorySeasonalRules:
+  - ruleId: spring-food
+    enabled: 1
+    category: 0
+    seasonId: spring
+    operation: 2
+    value: 0.05
+    modifierType: 20
+  - ruleId: summer-food
+    enabled: 1
+    category: 0
+    seasonId: summer
+    operation: 2
+    value: -0.1
+    modifierType: 20
+  - ruleId: autumn-material
+    enabled: 1
+    category: 1
+    seasonId: autumn
+    operation: 2
+    value: 0.1
+    modifierType: 20
+  - ruleId: autumn-luxury
+    enabled: 1
+    category: 3
+    seasonId: autumn
+    operation: 2
+    value: 0.05
+    modifierType: 20
+  - ruleId: winter-food
+    enabled: 1
+    category: 0
+    seasonId: winter
+    operation: 2
+    value: 0.2
+    modifierType: 20
+  - ruleId: winter-material
+    enabled: 1
+    category: 1
+    seasonId: winter
+    operation: 2
+    value: 0.05
+    modifierType: 20
+  luckyMoneyRule:
+    effectId: lucky_money_default
+    enabled: 1
+    operation: 2
+    value: 0.5
+    modifierType: 40
+  distanceRules:
+  - ruleId: distance_0_100
+    enabled: 1
+    minimumDistanceKm: 0
+    hasMaximumDistance: 1
+    maximumDistanceKm: 100
+    operation: 2
+    value: 0
+    modifierType: 40
+  - ruleId: distance_100_300
+    enabled: 1
+    minimumDistanceKm: 100
+    hasMaximumDistance: 1
+    maximumDistanceKm: 300
+    operation: 2
+    value: 0.05
+    modifierType: 40
+  - ruleId: distance_300_600
+    enabled: 1
+    minimumDistanceKm: 300
+    hasMaximumDistance: 1
+    maximumDistanceKm: 600
+    operation: 2
+    value: 0.1
+    modifierType: 40
+  - ruleId: distance_600_plus
+    enabled: 1
+    minimumDistanceKm: 600
+    hasMaximumDistance: 0
+    maximumDistanceKm: 0
+    operation: 2
+    value: 0.15
+    modifierType: 40

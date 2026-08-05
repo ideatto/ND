@@ -4,6 +4,7 @@ using System.Linq;
 using ND.Framework;
 using ND.Framework.CargoLoading;
 using UnityEngine;
+using SellPriceModifierPolicy = ND.Economy.SellPriceModifierPolicy;
 
 namespace ND.UI.Market
 {
@@ -205,7 +206,7 @@ namespace ND.UI.Market
                     CargoQuantity = held?.Quantity ?? 0,
                     BuyUnitPrice = stock?.UnitPrice ?? 0L,
                     SellUnitPrice = definition != null
-                        ? MarketInventoryMutationSession.ResolveUnitPrices(definition).UnitSellPrice
+                        ? commands.ResolvePreviewUnitPrices(definition).UnitSellPrice
                         : 0L
                 });
             }
@@ -305,6 +306,8 @@ namespace ND.UI.Market
 
         [SerializeField] private MarketData marketData;
         [SerializeField] private MarketData[] marketCatalog = Array.Empty<MarketData>();
+        [SerializeField, Tooltip("판매 미리보기와 거래 확정에 공통 적용할 판매가 정책입니다.")]
+        private SellPriceModifierPolicy sellPriceModifierPolicy;
         [SerializeField] private bool overrideMaximumCargoWeight;
         [SerializeField, Min(0f)] private float maximumCargoWeight = 100f;
         private bool overrideMaximumCargoSlots;
@@ -599,6 +602,7 @@ namespace ND.UI.Market
                 Mathf.Max(1, marketData.ItemMaxQuantity),
                 Mathf.Max(1f, marketData.ItemRenewalCycle),
                 CombineSeed(worldSeed, marketData.MarketId),
+                sellPriceModifierPolicy,
                 out MarketInventoryMutationSession commands,
                 out string error);
             if (!opened)
