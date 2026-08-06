@@ -5440,38 +5440,6 @@ PrefabInstance:
       propertyPath: npcCubeSize
       value: 0.6
       objectReference: {fileID: 0}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[0]'
-      value: 
-      objectReference: {fileID: 6364987720149795572, guid: e0cb1831c3aa39b4d9692d1a9225412c, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[1]'
-      value: 
-      objectReference: {fileID: 7827652132277353537, guid: ddedecda7c6c20a41b7a07ac411e6ae2, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[2]'
-      value: 
-      objectReference: {fileID: 6483760952164769238, guid: 3c000df72720ac44185d90b8f98c6ab0, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[3]'
-      value: 
-      objectReference: {fileID: 3355637711805676887, guid: 232b221c1dede454ca7d5776a743f057, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[4]'
-      value: 
-      objectReference: {fileID: 8684131442010789986, guid: 082327fbe1e41fc4cb956dba2b526149, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[5]'
-      value: 
-      objectReference: {fileID: 394481257576354904, guid: e8f0870d5af45914caa145c52db0dea2, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[6]'
-      value: 
-      objectReference: {fileID: 1444423513357166095, guid: 738adf41aa825834091d478039a9c64f, type: 3}
-    - target: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
-      propertyPath: 'npcPrefabs.Array.data[7]'
-      value: 
-      objectReference: {fileID: 6210364975586899393, guid: 2f70dbda1c95ca745a4ea10ea748ce26, type: 3}
     - target: {fileID: 6302923003883896727, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
