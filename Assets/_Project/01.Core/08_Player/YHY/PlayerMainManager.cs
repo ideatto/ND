@@ -361,36 +361,10 @@ public class PlayerMainManager : MonoBehaviour
         return true;
     }
 
-    /// <summary>Caravan에서 반환된 마차를 추가한다. 반환은 정원을 초과할 수 있다.</summary>
-    public bool ReturnWagon(ND.Framework.OwnedWagonSaveData wagon)
-    {
-        if (!CanReturnWagon(wagon, out _))
-            return false;
-
-        ND.Framework.OwnedWagonSaveData stored = Copy(wagon);
-        WagonInventoryList.Add(stored);
-        wagonsByInstanceId.Add(stored.instanceId, stored);
-        OnWagonInventoryChanged?.Invoke();
-        return true;
-    }
-
     /// <summary>일반 획득으로 역축을 추가한다. 정원 100마리를 초과할 수 없다.</summary>
     public bool TryAddDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal)
     {
         if (!CanAddDraftAnimal(animal, out _))
-            return false;
-
-        ND.Framework.OwnedDraftAnimalSaveData stored = Copy(animal);
-        DraftAnimalInventoryList.Add(stored);
-        draftAnimalsByInstanceId.Add(stored.instanceId, stored);
-        OnDraftAnimalInventoryChanged?.Invoke();
-        return true;
-    }
-
-    /// <summary>Caravan에서 반환된 역축을 추가한다. 반환은 정원을 초과할 수 있다.</summary>
-    public bool ReturnDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal)
-    {
-        if (!CanReturnDraftAnimal(animal, out _))
             return false;
 
         ND.Framework.OwnedDraftAnimalSaveData stored = Copy(animal);
@@ -514,30 +488,6 @@ public class PlayerMainManager : MonoBehaviour
             instanceId = source.instanceId.Trim(),
             contentId = source.contentId.Trim()
         };
-    }
-
-    private bool CanReturnWagon(ND.Framework.OwnedWagonSaveData wagon, out TransportInventoryValidationFailure failure)
-    {
-        if (!ValidateIdentity(wagon?.instanceId, wagon?.contentId, out failure)) return false;
-        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
-        if (catalog == null || !catalog.TryGetWagon(wagon.contentId, out _))
-        {
-            failure = TransportInventoryValidationFailure.ContentUnavailable;
-            return false;
-        }
-        return ValidateUniqueInstance(wagon.instanceId, out failure);
-    }
-
-    private bool CanReturnDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal, out TransportInventoryValidationFailure failure)
-    {
-        if (!ValidateIdentity(animal?.instanceId, animal?.contentId, out failure)) return false;
-        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
-        if (catalog == null || !catalog.TryGetDraftAnimal(animal.contentId, out _))
-        {
-            failure = TransportInventoryValidationFailure.ContentUnavailable;
-            return false;
-        }
-        return ValidateUniqueInstance(animal.instanceId, out failure);
     }
 
     private bool ValidateUniqueInstance(string instanceId, out TransportInventoryValidationFailure failure)

@@ -129,35 +129,24 @@ public sealed class PlayerTransportInventoryConsistencyTests
     }
 
     [Test]
-    public void NormalAcquisition_RespectsCapacity_ButReturnAllowsOverflow()
+    public void WagonAcquisition_RejectsCapacityOverflow()
     {
         for (int i = 0; i < PlayerMainManager.WagonInventoryCapacity; i++)
             Assert.That(manager.TryAddWagon(Wagon($"wagon-{i}", "Wagon_M")), Is.True);
 
         Assert.That(manager.TryAddWagon(Wagon("wagon-overflow-add", "Wagon_M")), Is.False);
         Assert.That(manager.WagonInventory, Has.Count.EqualTo(PlayerMainManager.WagonInventoryCapacity));
-
-        OwnedWagonSaveData returned = Wagon("wagon-overflow-return", "Wagon_M");
-        Assert.That(manager.ReturnWagon(returned), Is.True);
-        Assert.That(manager.WagonInventory, Has.Count.EqualTo(PlayerMainManager.WagonInventoryCapacity + 1));
-        Assert.That(manager.FindWagon(returned.instanceId, returned.contentId), Is.Not.Null);
-        Assert.That(manager.FindWagon(returned.instanceId, returned.contentId), Is.Not.SameAs(returned));
     }
 
     [Test]
-    public void DraftAnimalReturn_AllowsOverflow_AndRemainsIndexed()
+    public void DraftAnimalAcquisition_RejectsCapacityOverflow()
     {
         for (int i = 0; i < PlayerMainManager.DraftAnimalInventoryCapacity; i++)
             Assert.That(manager.TryAddDraftAnimal(Animal($"animal-{i}", "Horse")), Is.True);
 
         Assert.That(manager.TryAddDraftAnimal(Animal("animal-overflow-add", "Horse")), Is.False);
-
-        OwnedDraftAnimalSaveData returned = Animal("animal-overflow-return", "Horse");
-        Assert.That(manager.ReturnDraftAnimal(returned), Is.True);
         Assert.That(manager.DraftAnimalInventory,
-            Has.Count.EqualTo(PlayerMainManager.DraftAnimalInventoryCapacity + 1));
-        Assert.That(manager.FindDraftAnimal(returned.instanceId, returned.contentId), Is.Not.Null);
-        Assert.That(manager.FindDraftAnimal(returned.instanceId, returned.contentId), Is.Not.SameAs(returned));
+            Has.Count.EqualTo(PlayerMainManager.DraftAnimalInventoryCapacity));
     }
 
     [Test]
