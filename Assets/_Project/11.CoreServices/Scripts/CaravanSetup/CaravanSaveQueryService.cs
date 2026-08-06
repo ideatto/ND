@@ -16,7 +16,10 @@ namespace ND.Framework
             Caravan = caravan;
             SaveIndex = saveIndex;
             CaravanId = NormalizeId(caravan.caravanId);
-            DisplayName = $"Caravan {saveIndex + 1}";
+            string savedDisplayName = caravan.displayName?.Trim() ?? string.Empty;
+            DisplayName = string.IsNullOrEmpty(savedDisplayName)
+                ? $"Caravan {caravan.slotIndex + 1}"
+                : savedDisplayName;
             CurrentTownId = NormalizeId(caravan.currentTownId);
         }
 

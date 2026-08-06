@@ -4,6 +4,7 @@ using System.Linq;
 using ND.Framework;
 using ND.Framework.CargoLoading;
 using UnityEngine;
+using SellPriceModifierPolicy = ND.Economy.SellPriceModifierPolicy;
 
 namespace ND.UI.Market
 {
@@ -146,6 +147,23 @@ namespace ND.UI.Market
             return result;
         }
 
+        public MarketTransactionResult Commit(
+            IReadOnlyList<MarketTransactionLine> lines,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
+        {
+            MarketTransactionResult result = MarketTransactionCommand.Execute(
+                commands,
+                lines,
+                maximumCargoWeight,
+                maximumCargoSlots,
+                stageBeforeSave,
+                rollbackStagedData);
+            if (result.Success)
+                Refresh();
+            return result;
+        }
+
         public void Refresh()
         {
             Dictionary<string, MarketStockView> stocks = query.Stocks
@@ -188,7 +206,7 @@ namespace ND.UI.Market
                     CargoQuantity = held?.Quantity ?? 0,
                     BuyUnitPrice = stock?.UnitPrice ?? 0L,
                     SellUnitPrice = definition != null
-                        ? MarketInventoryMutationSession.ResolveUnitPrices(definition).UnitSellPrice
+                        ? commands.ResolvePreviewUnitPrices(definition).UnitSellPrice
                         : 0L
                 });
             }
@@ -288,6 +306,8 @@ namespace ND.UI.Market
 
         [SerializeField] private MarketData marketData;
         [SerializeField] private MarketData[] marketCatalog = Array.Empty<MarketData>();
+        [SerializeField, Tooltip("판매 미리보기와 거래 확정에 공통 적용할 판매가 정책입니다.")]
+        private SellPriceModifierPolicy sellPriceModifierPolicy;
         [SerializeField] private bool overrideMaximumCargoWeight;
         [SerializeField, Min(0f)] private float maximumCargoWeight = 100f;
         private bool overrideMaximumCargoSlots;
@@ -313,6 +333,12 @@ namespace ND.UI.Market
         public string ActiveCaravanId => activeCaravanId;
         public string ActiveTradeId => activeTradeId;
         public string LastErrorCode { get; private set; } = string.Empty;
+        public bool UsesExternalArrivalSalePresentation { get; private set; }
+
+        public void SetExternalArrivalSalePresentation(bool enabled)
+        {
+            UsesExternalArrivalSalePresentation = enabled;
+        }
 
         private void OnEnable()
         {
@@ -576,6 +602,7 @@ namespace ND.UI.Market
                 Mathf.Max(1, marketData.ItemMaxQuantity),
                 Mathf.Max(1f, marketData.ItemRenewalCycle),
                 CombineSeed(worldSeed, marketData.MarketId),
+                sellPriceModifierPolicy,
                 out MarketInventoryMutationSession commands,
                 out string error);
             if (!opened)
@@ -634,6 +661,7 @@ namespace ND.UI.Market
             activeCaravanId = string.Empty;
             observedMarketRevision = 0;
             activeTradeId = string.Empty;
+            UsesExternalArrivalSalePresentation = false;
             SetError(string.Empty);
             RaiseStateChanged();
         }
@@ -698,6 +726,22 @@ namespace ND.UI.Market
             Func<MarketTransactionResult, bool> stageBeforeSave = null,
             Action rollbackStagedData = null)
         {
+            return CommitInternal(null, stageBeforeSave, rollbackStagedData);
+        }
+
+        public MarketTransactionResult CommitExplicit(
+            IReadOnlyList<MarketTransactionLine> lines,
+            Func<MarketTransactionResult, bool> stageBeforeSave = null,
+            Action rollbackStagedData = null)
+        {
+            return CommitInternal(lines, stageBeforeSave, rollbackStagedData);
+        }
+
+        private MarketTransactionResult CommitInternal(
+            IReadOnlyList<MarketTransactionLine> explicitLines,
+            Func<MarketTransactionResult, bool> stageBeforeSave,
+            Action rollbackStagedData)
+        {
             MarketTransactionResult result;
             FrameworkRoot root = FrameworkRoot.Instance;
             string accessError = model == null
@@ -732,7 +776,9 @@ namespace ND.UI.Market
             }
             else
             {
-                result = model.Commit(stageBeforeSave, rollbackStagedData);
+                result = explicitLines == null
+                    ? model.Commit(stageBeforeSave, rollbackStagedData)
+                    : model.Commit(explicitLines, stageBeforeSave, rollbackStagedData);
             }
             SetError(result.Success ? string.Empty : result.ErrorCode);
             RaiseStateChanged();

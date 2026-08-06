@@ -57,7 +57,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.36, g: 0.52, b: 0.75, a: 1}
@@ -3087,6 +3087,7 @@ GameObject:
   - component: {fileID: 7548327363428238819}
   - component: {fileID: 6774066482766576795}
   - component: {fileID: 3914209834831377775}
+  - component: {fileID: 1930255170383493878}
   m_Layer: 0
   m_Name: CaravanScrollView
   m_TagString: Untagged
@@ -3216,6 +3217,20 @@ MonoBehaviour:
   - {fileID: 1866509051800295555}
   noticeUI: {fileID: 1962801421393486745}
   arrivalSaleButton: {fileID: 5580020709590859577}
+--- !u!114 &1930255170383493878
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1653295428482484966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1e7377030764718bd5106cf5adf5e03, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::CaravanOverviewRenameBinding
+  presenter: {fileID: 3914209834831377775}
+  popup: {fileID: 467987752373354970}
 --- !u!1 &1667321969378990882
 GameObject:
   m_ObjectHideFlags: 0
@@ -10437,6 +10452,8 @@ RectTransform:
   - {fileID: 5631159183884029540}
   - {fileID: 5892638138273619828}
   - {fileID: 4511640921377223670}
+  - {fileID: 5864937297942124299}
+  - {fileID: 7852929420955288143}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -15365,6 +15382,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: ArrivalSaleFlow
       objectReference: {fileID: 0}
+    - target: {fileID: 2058029641247876713, guid: ddc883b5f4be47544b3f356225831707, type: 3}
+      propertyPath: cargoSellPopup
+      value:
+      objectReference: {fileID: 4120789031140537463}
     - target: {fileID: 6670375325807137613, guid: ddc883b5f4be47544b3f356225831707, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -15459,7 +15480,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 50d0223f5ec14384a701050083008600, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Market.CaravanArrivalSaleButton
 --- !u!224 &6887077358998133614 stripped
 RectTransform:
@@ -15571,6 +15592,87 @@ PrefabInstance:
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8322236816774928590, guid: 188705fadc63c2045b8b287b0e6909f6, type: 3}
   m_PrefabInstance: {fileID: 886556018575945226}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &900850000000000001
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 2355144627824305741}
+    m_Modifications:
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7982352685420067184, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_Name
+      value: CargoSellPopup
+      objectReference: {fileID: 0}
+    - target: {fileID: 7982352685420067184, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+--- !u!114 &4120789031140537463 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3868466216676627574, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+  m_PrefabInstance: {fileID: 900850000000000001}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 178581e4bf6541b095755a57fe65e1b4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.CargoSell.CargoSellPopupController
+--- !u!224 &5864937297942124299 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 6765540422626227978, guid: 8afc018f3748e3742a59e1383cc559b3, type: 3}
+  m_PrefabInstance: {fileID: 900850000000000001}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &3105752687366381449
 PrefabInstance:
@@ -15684,6 +15786,119 @@ MonoBehaviour:
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8853798380506693885, guid: 87bedfe532f7fcb489fc0534313c3f98, type: 3}
   m_PrefabInstance: {fileID: 3105752687366381449}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &3998317677613392511
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 2355144627824305741}
+    m_Modifications:
+    - target: {fileID: 357631628749505450, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_Name
+      value: CaravanRenamePopup
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_Pivot.y
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+--- !u!114 &467987752373354970 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3531456388397867941, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+  m_PrefabInstance: {fileID: 3998317677613392511}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9fb5c5893d014dd9a37af5b210132e6c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::CaravanRenamePopupController
+--- !u!224 &7852929420955288143 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 6595474434592514096, guid: fa754be652d0dcf438eeeb1558b04052, type: 3}
+  m_PrefabInstance: {fileID: 3998317677613392511}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &4088376163872748966
 PrefabInstance:

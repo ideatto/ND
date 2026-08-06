@@ -84,6 +84,17 @@ namespace ND.Framework.CargoLoading
         public string ItemId = string.Empty;
         public int BuyQuantity;
         public int SellQuantity;
+        public List<MarketSalePriceGroup> SalePriceGroups = new List<MarketSalePriceGroup>();
+    }
+
+    /// <summary>
+    /// Optional exact Cargo source for a sell line. Legacy callers may omit it and retain the
+    /// existing FIFO-by-item behavior; CargoSellPopup supplies it to preserve purchase groups.
+    /// </summary>
+    public sealed class MarketSalePriceGroup
+    {
+        public long PurchaseUnitPrice;
+        public int Quantity;
     }
 
     public sealed class MarketTransactionResult
@@ -143,8 +154,8 @@ namespace ND.Framework.CargoLoading
     /// <summary>
     /// Owns market refresh and atomic buy/sell transactions.
     /// Consumers must use View for reads so query and mutation responsibilities stay explicit.
-    /// Sale commits capture <c>saveData.world.currentSeasonId</c> once per transaction and apply
-    /// seasonal SellPrice eligibility through <see cref="SeasonalSellPriceModifierSelector"/>.
+    /// Preview and sale commit resolve SellPrice through one contextual calculation contract.
+    /// Commit captures Season, saved route distance, and lucky state once for all transaction lines.
     /// </summary>
     public sealed class MarketInventoryMutationSession
     {
@@ -164,6 +175,7 @@ namespace ND.Framework.CargoLoading
         private readonly MarketTradeMode tradeMode;
         private readonly ISaveService saveService;
         private readonly IGameTimeProvider timeProvider;
+        private readonly SellPriceModifierPolicy sellPriceModifierPolicy;
         private readonly Dictionary<string, TradeItemData> catalogById;
         private readonly HashSet<string> stockItemIds;
         private readonly int slotCount;
@@ -187,13 +199,15 @@ namespace ND.Framework.CargoLoading
             int minimumGeneratedStock,
             int maximumGeneratedStock,
             double refreshIntervalSeconds,
-            int worldSeed)
+            int worldSeed,
+            SellPriceModifierPolicy sellPriceModifierPolicy)
         {
             this.saveData = saveData;
             this.targetCaravan = targetCaravan;
             this.tradeMode = tradeMode;
             this.saveService = saveService;
             this.timeProvider = timeProvider;
+            this.sellPriceModifierPolicy = sellPriceModifierPolicy;
             MarketId = string.IsNullOrWhiteSpace(marketId) ? "default-market" : marketId;
             this.slotCount = Math.Max(1, slotCount);
             this.minimumGeneratedStock = Math.Max(1, minimumGeneratedStock);
@@ -221,6 +235,39 @@ namespace ND.Framework.CargoLoading
 
         internal long TradingCurrency =>
             saveData.player != null ? Math.Max(0L, saveData.player.tradingCurrency) : 0L;
+
+        /// <summary>
+        /// Resolves preview unit prices from the current Caravan pricing context without mutation.
+        /// The same session policy and calculation boundary are used again by transaction commit.
+        /// </summary>
+        internal PriceCalculationResult ResolvePreviewUnitPrices(TradeItemData item)
+        {
+            return ResolveUnitPrices(item, CaptureSellPriceContext(), sellPriceModifierPolicy);
+        }
+
+        /// <summary>
+        /// Captures the authoritative Season, saved route-distance snapshot, and lucky state once.
+        /// Missing world or trade state falls back to values that preserve legacy sell pricing.
+        /// </summary>
+        private SellPriceCalculationContext CaptureSellPriceContext()
+        {
+            string seasonId = saveData?.world != null
+                ? saveData.world.currentSeasonId
+                : string.Empty;
+            float distanceKm = targetCaravan != null
+                ? Math.Max(0f, targetCaravan.currentDistanceKm)
+                : 0f;
+            bool isLuckyMoneyActive = false;
+            if (targetCaravan != null
+                && SaveDataLookup.TryGetTradeProgress(saveData, CaravanId, out TradeProgressSaveData progress)
+                && progress != null
+                && !string.IsNullOrWhiteSpace(progress.activeTradeId))
+            {
+                isLuckyMoneyActive = WeatherLuckyMoneyStateReader.IsActive(progress.activeTradeId);
+            }
+
+            return new SellPriceCalculationContext(seasonId, distanceKm, isLuckyMoneyActive);
+        }
 
         /// <summary>
         /// Resolves unit prices without seasonal SellPrice filtering.
@@ -263,6 +310,18 @@ namespace ND.Framework.CargoLoading
                 item.BaseBuyPrice,
                 item.BaseSellPrice,
                 modifiers);
+        }
+
+        /// <summary>
+        /// Resolves SellPrice through the shared contextual calculator. A null policy retains
+        /// existing item modifiers and seasonal selection without policy-authored effects.
+        /// </summary>
+        internal static PriceCalculationResult ResolveUnitPrices(
+            TradeItemData item,
+            SellPriceCalculationContext context,
+            SellPriceModifierPolicy policy)
+        {
+            return ContextualSellPriceCalculator.CalculateUnitPrices(item, context, policy);
         }
 
         internal IReadOnlyList<MarketStockView> Stocks
@@ -355,7 +414,8 @@ namespace ND.Framework.CargoLoading
             return TryOpen(
                 saveData, caravanId, MarketTradeMode.BuyAndSell, saveService, timeProvider, marketId,
                 stockCatalog, transactionCatalog, slotCount, 1, maximumGeneratedStock,
-                refreshIntervalSeconds, worldSeed, out session, out error);
+                refreshIntervalSeconds, worldSeed,
+                out session, out error);
         }
 
         public static bool TryOpen(
@@ -407,6 +467,31 @@ namespace ND.Framework.CargoLoading
             out MarketInventoryMutationSession session,
             out string error)
         {
+            return TryOpen(
+                saveData, caravanId, tradeMode, saveService, timeProvider, marketId,
+                stockCatalog, transactionCatalog, slotCount, minimumGeneratedStock,
+                maximumGeneratedStock, refreshIntervalSeconds, worldSeed, null,
+                out session, out error);
+        }
+
+        public static bool TryOpen(
+            SaveData saveData,
+            string caravanId,
+            MarketTradeMode tradeMode,
+            ISaveService saveService,
+            IGameTimeProvider timeProvider,
+            string marketId,
+            IEnumerable<TradeItemData> stockCatalog,
+            IEnumerable<TradeItemData> transactionCatalog,
+            int slotCount,
+            int minimumGeneratedStock,
+            int maximumGeneratedStock,
+            double refreshIntervalSeconds,
+            int worldSeed,
+            SellPriceModifierPolicy sellPriceModifierPolicy,
+            out MarketInventoryMutationSession session,
+            out string error)
+        {
             session = null;
             error = string.Empty;
 
@@ -436,7 +521,8 @@ namespace ND.Framework.CargoLoading
                 minimumGeneratedStock,
                 maximumGeneratedStock,
                 refreshIntervalSeconds,
-                worldSeed);
+                worldSeed,
+                sellPriceModifierPolicy);
 
             if (created.stockItemIds.Count == 0 || created.catalogById.Count == 0)
             {
@@ -546,6 +632,35 @@ namespace ND.Framework.CargoLoading
                     return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
                 }
 
+                IReadOnlyList<MarketSalePriceGroup> saleGroups =
+                    line.SalePriceGroups != null
+                        ? line.SalePriceGroups
+                        : (IReadOnlyList<MarketSalePriceGroup>)Array.Empty<MarketSalePriceGroup>();
+                if (saleGroups.Count > 0)
+                {
+                    if (line.BuyQuantity > 0
+                        || saleGroups.Any(group => group == null || group.Quantity <= 0)
+                        || saleGroups.GroupBy(
+                                group => Math.Max(0L, group.PurchaseUnitPrice))
+                            .Any(group => group.Count() > 1)
+                        || saleGroups.Sum(group => group.Quantity) != line.SellQuantity)
+                    {
+                        return MarketTransactionResult.Fail(ErrorInvalidTransaction, TradingCurrency);
+                    }
+
+                    foreach (MarketSalePriceGroup group in saleGroups)
+                    {
+                        int available = targetCaravan.cargo
+                            .Where(entry => entry?.item != null
+                                && string.Equals(entry.item.itemId, line.ItemId, StringComparison.Ordinal)
+                                && Math.Max(0L, entry.item.purchaseUnitPrice)
+                                    == Math.Max(0L, group.PurchaseUnitPrice))
+                            .Sum(entry => Math.Max(0, entry.quantity));
+                        if (group.Quantity > available)
+                            return MarketTransactionResult.Fail(ErrorInsufficientCargo, TradingCurrency);
+                    }
+                }
+
                 if ((tradeMode == MarketTradeMode.BuyOnly && line.SellQuantity > 0)
                     || (tradeMode == MarketTradeMode.SellOnly && line.BuyQuantity > 0))
                 {
@@ -568,8 +683,8 @@ namespace ND.Framework.CargoLoading
                 CurrentCargoSlots = CalculateCurrentCargoSlots(),
                 MaximumCargoSlots = maximumCargoSlots
             };
-            // Capture once so every line in this transaction shares the same commit-time season.
-            string transactionSeasonId = saveData.world.currentSeasonId;
+            // Capture once so every line shares one authoritative pricing snapshot.
+            SellPriceCalculationContext transactionContext = CaptureSellPriceContext();
             foreach (MarketTransactionLine line in normalized.Values)
             {
                 TradeItemData item = catalogById[line.ItemId];
@@ -584,8 +699,8 @@ namespace ND.Framework.CargoLoading
                     BuyUnitPrice = Math.Max(0L, stock?.unitPrice ?? 0L),
                     SellUnitPrice = ResolveUnitPrices(
                         item,
-                        transactionSeasonId,
-                        true).UnitSellPrice,
+                        transactionContext,
+                        sellPriceModifierPolicy).UnitSellPrice,
                     UnitWeight = Math.Max(0f, item.Weight),
                     MaxStackQuantity = Math.Max(1, item.MaxCount)
                 });
@@ -617,7 +732,8 @@ namespace ND.Framework.CargoLoading
                         itemResult.BuyQuantity - itemResult.SellQuantity,
                         itemResult.BuyQuantity > 0
                             ? Math.Max(0L, transactionStock?.unitPrice ?? 0L)
-                            : 0L);
+                            : 0L,
+                        normalized[itemResult.ItemId].SalePriceGroups);
                     MarketStockSaveData stock = itemResult.SellQuantity > 0
                         ? GetOrCreateStock(itemResult.ItemId)
                         : FindStock(itemResult.ItemId);
@@ -901,7 +1017,11 @@ namespace ND.Framework.CargoLoading
             }
         }
 
-        private void ApplyCargoDelta(string itemId, int delta, long purchaseUnitPrice = 0L)
+        private void ApplyCargoDelta(
+            string itemId,
+            int delta,
+            long purchaseUnitPrice = 0L,
+            IReadOnlyList<MarketSalePriceGroup> salePriceGroups = null)
         {
             List<CargoEntrySaveData> entries = targetCaravan.cargo
                 .Where(candidate => candidate?.item != null &&
@@ -910,6 +1030,28 @@ namespace ND.Framework.CargoLoading
 
             if (delta < 0)
             {
+                if (salePriceGroups != null && salePriceGroups.Count > 0)
+                {
+                    foreach (MarketSalePriceGroup group in salePriceGroups)
+                    {
+                        int remainingInGroup = Math.Max(0, group.Quantity);
+                        long normalizedGroupPrice = Math.Max(0L, group.PurchaseUnitPrice);
+                        foreach (CargoEntrySaveData entry in entries.Where(entry =>
+                            Math.Max(0L, entry.item.purchaseUnitPrice) == normalizedGroupPrice).ToList())
+                        {
+                            int removed = Math.Min(remainingInGroup, Math.Max(0, entry.quantity));
+                            entry.quantity -= removed;
+                            remainingInGroup -= removed;
+                            if (entry.quantity <= 0)
+                                targetCaravan.cargo.Remove(entry);
+                            if (remainingInGroup == 0) break;
+                        }
+                        if (remainingInGroup > 0)
+                            throw new InvalidOperationException(ErrorInsufficientCargo);
+                    }
+                    return;
+                }
+
                 int remainingToSell = -delta;
                 foreach (CargoEntrySaveData entry in entries)
                 {

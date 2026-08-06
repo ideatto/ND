@@ -293,7 +293,8 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                 townName = town.DisplayName.Trim();
             }
 
-            return string.IsNullOrEmpty(townName) ? "현재 위치 없음" : townName;
+            if (string.IsNullOrEmpty(townName)) townName = "현재 위치 없음";
+            return $"{townName} · {ND.UI.CaravanJourneyStateLabel.Format(caravan.state)}";
         }
 
 
@@ -312,9 +313,7 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
 
             ND.Framework.CaravanSaveData caravan = FindCaravan(save, SelectedCaravanId);
             if (cargoTitleText != null)
-                cargoTitleText.text = caravan != null
-                    ? "Caravan " + (Math.Max(0, caravan.slotIndex) + 1) + " Cargo"
-                    : "Cargo";
+                cargoTitleText.text = ResolveCargoTitle(caravan);
 
             int cargoSlots = Math.Max(0, caravan?.wagon?.inventorySlotCount ?? 0);
             IReadOnlyList<WarehouseInventorySlotViewData> cargo = WarehouseInventoryViewDataBuilder.BuildSlots(
@@ -845,6 +844,18 @@ private static ND.Framework.CaravanSaveData FindCaravan(
                 if (entry?.item != null && entry.quantity > 0)
                     result += Math.Max(0f, entry.item.weight) * entry.quantity;
             return result;
+        }
+
+        private static string ResolveCargoTitle(ND.Framework.CaravanSaveData caravan)
+        {
+            if (caravan == null)
+                return "Cargo";
+
+            string displayName = caravan.displayName?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(displayName))
+                displayName = "Caravan " + (Math.Max(0, caravan.slotIndex) + 1);
+
+            return displayName + " Cargo";
         }
 
 /// <summary>Preserves the template while detaching generated views before deferred destruction.</summary>

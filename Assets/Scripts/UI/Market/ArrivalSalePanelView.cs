@@ -60,6 +60,12 @@ namespace ND.UI.Market
 
         private void HandleSaleOpened(string caravanId, string tradeId)
         {
+            if (marketPanel != null && marketPanel.UsesExternalArrivalSalePresentation)
+            {
+                panelRoot.SetActive(false);
+                return;
+            }
+
             panelRoot.SetActive(true);
             titleText.text = $"도착 화물 판매  ·  {caravanId}";
             HandleError(string.Empty);
@@ -116,6 +122,12 @@ namespace ND.UI.Market
         {
             if (itemRoot == null)
                 return;
+            if (marketPanel == null || !marketPanel.IsOpen
+                || marketPanel.UsesExternalArrivalSalePresentation)
+            {
+                panelRoot.SetActive(false);
+                return;
+            }
             for (int i = itemRoot.childCount - 1; i >= 0; i--)
                 Destroy(itemRoot.GetChild(i).gameObject);
 

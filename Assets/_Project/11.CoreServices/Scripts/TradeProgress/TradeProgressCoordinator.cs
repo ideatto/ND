@@ -1498,6 +1498,9 @@ namespace ND.Framework
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.SaveFailed, saveResult);
             }
 
+            // Lucky state belongs to the completed trade and is consumed only after the
+            // authoritative framework save succeeds. The store's persistence is best-effort.
+            WeatherLuckyStore.Consume(tradeId);
             economySettlementBridge.ClearPending(caravanId, tradeId);
             if (LastSettlementTradeId == tradeId) ClearSettlementCache();
             FrameworkEvents.RaiseTradingCurrencyChanged(saveData.player.tradingCurrency);

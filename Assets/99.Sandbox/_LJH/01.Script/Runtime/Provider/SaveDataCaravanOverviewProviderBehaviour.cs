@@ -119,7 +119,9 @@ public CaravanOverviewViewData GetOverview()
             caravanId = caravan.caravanId ?? string.Empty,
             arrivalSaleTradeId = arrivalSaleTradeId,
             canOpenArrivalSale = canOpenArrivalSale,
-            displayName = $"Caravan {slotIndex + 1}",
+            displayName = string.IsNullOrWhiteSpace(caravan.displayName)
+                ? $"Caravan {slotIndex + 1}"
+                : caravan.displayName.Trim(),
             state = caravan.state,
             wagonContentId = caravan.wagon != null ? caravan.wagon.wagonName ?? string.Empty : string.Empty,
             animalIcons = CreateAnimalIcons(caravan),

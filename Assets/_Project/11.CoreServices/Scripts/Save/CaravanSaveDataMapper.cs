@@ -52,6 +52,7 @@ namespace ND.Framework
             var caravan = new CaravanData
             {
                 caravanId = saveData.caravanId,
+                displayName = saveData.displayName,
                 currentTownId = saveData.currentTownId,
                 wagon = ToRuntime(saveData.wagon),
                 foodAmount = saveData.foodAmount,
@@ -117,6 +118,13 @@ namespace ND.Framework
             if (!string.IsNullOrEmpty(runtimeData.caravanId))
             {
                 saveData.caravanId = runtimeData.caravanId;
+            }
+
+            // displayName is SaveData-owned user metadata. Journey runtime instances can remain
+            // stale after a rename, so state synchronization must not overwrite a saved name.
+            if (string.IsNullOrWhiteSpace(saveData.displayName))
+            {
+                saveData.displayName = runtimeData.displayName?.Trim() ?? string.Empty;
             }
 
             if (!string.IsNullOrEmpty(runtimeData.currentTownId))

@@ -164,7 +164,7 @@ namespace ND.Framework.Editor
                 caravan, CreateCombatRoute(), "trade-forced-defeat", "combat");
 
             Assert.That(result.Succeeded, Is.True);
-            Assert.That(result.Occurrences, Has.Count.EqualTo(1));
+            Assert.That(result.Occurrences.Count, Is.EqualTo(1));
             Assert.That(result.Occurrences[0].CombatVictory, Is.False);
         }
 
