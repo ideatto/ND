@@ -21,6 +21,21 @@ public sealed class CaravanSettingApplicationServiceTests
     }
 
     [Test]
+    public void GetSetting_MapsOwnedWagonDefinitionForTransportSelection()
+    {
+        CaravanSettingViewData result = CreateService(CreateSave(), new RecordingSaveService(true))
+            .GetSetting("caravan-a");
+
+        Assert.That(result.wagons.Length, Is.EqualTo(1));
+        WagonViewData wagon = result.wagons[0];
+        Assert.That(wagon.wagonInstanceId, Is.EqualTo("wagon-instance"));
+        Assert.That(wagon.wagonType, Is.EqualTo(WagonType.WagonWithAnimals));
+        Assert.That(wagon.isOwned, Is.True);
+        Assert.That(wagon.canSelect, Is.True);
+        Assert.That(wagon.eligibleAnimalTypes, Is.EqualTo(new[] { DraftAnimalType.Horse }));
+    }
+
+    [Test]
     public void ExecuteSetting_ReordersAssignedAnimalsAndPersistsOnce()
     {
         FrameworkSaveData save = CreateSave();
@@ -91,10 +106,8 @@ public sealed class CaravanSettingApplicationServiceTests
     public void ExecuteSetting_ValidationFailureDoesNotMutateOwnedWagonDurability()
     {
         FrameworkSaveData save = CreateSave();
-        save.player.wagonInventory.Add(new OwnedWagonSaveData
-        {
-            instanceId = "wagon-instance", contentId = "wagon-basic", currentDurability = 10
-        });
+        save.player.wagonInventory.Find(wagon => wagon.instanceId == "wagon-instance")
+            .currentDurability = 10;
         var persistence = new RecordingSaveService(true);
         var service = CreateService(save, persistence);
         var draft = new CaravanSettingDraft
@@ -236,8 +249,8 @@ public sealed class CaravanSettingApplicationServiceTests
         Assert.That(result.succeeded, Is.False);
         Assert.That(save.caravans[0].animals.ConvertAll(animal => animal.instanceId),
             Is.EqualTo(new[] { "animal-b", "animal-a" }));
-        Assert.That(save.player.draftAnimalInventory, Has.Count.EqualTo(1));
-        Assert.That(save.player.draftAnimalInventory[0].instanceId, Is.EqualTo("animal-spare"));
+        Assert.That(save.player.draftAnimalInventory.ConvertAll(animal => animal.instanceId),
+            Is.EqualTo(new[] { "animal-b", "animal-a", "animal-spare" }));
     }
 
     [Test]
@@ -310,8 +323,8 @@ public sealed class CaravanSettingApplicationServiceTests
 
         Assert.That(result.succeeded, Is.False);
         Assert.That(save.caravans[0].wagon.instanceId, Is.EqualTo("wagon-instance"));
-        Assert.That(save.player.wagonInventory, Has.Count.EqualTo(1));
-        Assert.That(save.player.wagonInventory[0].instanceId, Is.EqualTo("wagon-spare"));
+        Assert.That(save.player.wagonInventory.ConvertAll(wagon => wagon.instanceId),
+            Is.EqualTo(new[] { "wagon-instance", "wagon-spare" }));
     }
 
     [Test]
@@ -364,12 +377,14 @@ public sealed class CaravanSettingApplicationServiceTests
                 ["wagon-basic"] = new SharedWagonDefinition
                 {
                     Id = "wagon-basic", DisplayName = "Wagon", MaxDurability = 100,
+                    WagonType = "WagonWithAnimals",
                     MaxLoad = 20f, InventorySlotCount = 4, MinRequireAnimals = 1,
                     MaxPullAnimals = 3, EligibleAnimalTypes = new[] { "Horse" }
                 },
                 ["wagon-large"] = new SharedWagonDefinition
                 {
                     Id = "wagon-large", DisplayName = "Large Wagon", MaxDurability = 120,
+                    WagonType = "WagonWithAnimals",
                     MaxLoad = 40f, InventorySlotCount = 8, MinRequireAnimals = 1,
                     MaxPullAnimals = 3, EligibleAnimalTypes = new[] { "Horse" }
                 }
@@ -416,6 +431,18 @@ public sealed class CaravanSettingApplicationServiceTests
             }
         });
         save.selectedCaravanId = "caravan-a";
+        save.player.wagonInventory.Add(new OwnedWagonSaveData
+        {
+            instanceId = "wagon-instance", contentId = "wagon-basic", currentDurability = 90
+        });
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-b", contentId = "horse"
+        });
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-a", contentId = "horse"
+        });
         save.world.marketInventories.Add(new MarketInventorySaveData
         {
             marketId = "market-a",

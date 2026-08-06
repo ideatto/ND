@@ -130,6 +130,37 @@ public sealed class CaravanSelectionOptionServiceTests
     }
 
     [Test]
+    public void MapperCopyToSave_PreservesTransportIdentityWhenJourneyRuntimeOmitsIt()
+    {
+        var runtime = new CaravanData
+        {
+            wagon = new imsiWagonData { wagonName = "Wagon M" },
+            animals = new System.Collections.Generic.List<imsiAnimalData>
+            {
+                new imsiAnimalData { animalName = "Horse" },
+                new imsiAnimalData { animalName = "Horse" }
+            }
+        };
+        var saved = new FrameworkCaravanSaveData
+        {
+            wagon = new WagonSaveData { instanceId = "wagon-instance", contentId = "Wagon_M" },
+            animals = new System.Collections.Generic.List<AnimalSaveData>
+            {
+                new AnimalSaveData { instanceId = "horse-a", contentId = "Horse" },
+                new AnimalSaveData { instanceId = "horse-b", contentId = "Horse" }
+            }
+        };
+
+        CaravanSaveDataMapper.CopyToSave(runtime, saved);
+
+        Assert.That(saved.wagon.instanceId, Is.EqualTo("wagon-instance"));
+        Assert.That(saved.wagon.contentId, Is.EqualTo("Wagon_M"));
+        Assert.That(saved.animals[0].instanceId, Is.EqualTo("horse-a"));
+        Assert.That(saved.animals[0].contentId, Is.EqualTo("Horse"));
+        Assert.That(saved.animals[1].instanceId, Is.EqualTo("horse-b"));
+    }
+
+    [Test]
     public void SaveQuery_UsesSavedNameAndSlotFallback()
     {
         FrameworkSaveData save = CreateSave(
