@@ -155,7 +155,8 @@ namespace ND.Framework.CargoLoading
     /// Owns market refresh and atomic buy/sell transactions.
     /// Consumers must use View for reads so query and mutation responsibilities stay explicit.
     /// Preview and sale commit resolve SellPrice through one contextual calculation contract.
-    /// Commit captures Season, saved route distance, and lucky state once for all transaction lines.
+    /// The session snapshots destination specialty IDs, and commit captures Season, saved route
+    /// distance, and lucky state once for all transaction lines.
     /// </summary>
     public sealed class MarketInventoryMutationSession
     {
@@ -176,6 +177,7 @@ namespace ND.Framework.CargoLoading
         private readonly ISaveService saveService;
         private readonly IGameTimeProvider timeProvider;
         private readonly SellPriceModifierPolicy sellPriceModifierPolicy;
+        private readonly string[] destinationLocalSpecialtyItemIds;
         private readonly Dictionary<string, TradeItemData> catalogById;
         private readonly HashSet<string> stockItemIds;
         private readonly int slotCount;
@@ -200,7 +202,8 @@ namespace ND.Framework.CargoLoading
             int maximumGeneratedStock,
             double refreshIntervalSeconds,
             int worldSeed,
-            SellPriceModifierPolicy sellPriceModifierPolicy)
+            SellPriceModifierPolicy sellPriceModifierPolicy,
+            IReadOnlyList<string> destinationLocalSpecialtyItemIds)
         {
             this.saveData = saveData;
             this.targetCaravan = targetCaravan;
@@ -208,6 +211,9 @@ namespace ND.Framework.CargoLoading
             this.saveService = saveService;
             this.timeProvider = timeProvider;
             this.sellPriceModifierPolicy = sellPriceModifierPolicy;
+            this.destinationLocalSpecialtyItemIds = destinationLocalSpecialtyItemIds == null
+                ? Array.Empty<string>()
+                : destinationLocalSpecialtyItemIds.ToArray();
             MarketId = string.IsNullOrWhiteSpace(marketId) ? "default-market" : marketId;
             this.slotCount = Math.Max(1, slotCount);
             this.minimumGeneratedStock = Math.Max(1, minimumGeneratedStock);
@@ -246,7 +252,8 @@ namespace ND.Framework.CargoLoading
         }
 
         /// <summary>
-        /// Captures the authoritative Season, saved route-distance snapshot, and lucky state once.
+        /// Captures the authoritative Season, saved route-distance snapshot, lucky state, and the
+        /// session-owned destination specialty-ID snapshot.
         /// Missing world or trade state falls back to values that preserve legacy sell pricing.
         /// </summary>
         private SellPriceCalculationContext CaptureSellPriceContext()
@@ -266,7 +273,11 @@ namespace ND.Framework.CargoLoading
                 isLuckyMoneyActive = WeatherLuckyMoneyStateReader.IsActive(progress.activeTradeId);
             }
 
-            return new SellPriceCalculationContext(seasonId, distanceKm, isLuckyMoneyActive);
+            return new SellPriceCalculationContext(
+                seasonId,
+                distanceKm,
+                isLuckyMoneyActive,
+                destinationLocalSpecialtyItemIds);
         }
 
         /// <summary>
@@ -473,7 +484,7 @@ namespace ND.Framework.CargoLoading
             return TryOpen(
                 saveData, caravanId, tradeMode, saveService, timeProvider, marketId,
                 stockCatalog, transactionCatalog, slotCount, minimumGeneratedStock,
-                maximumGeneratedStock, refreshIntervalSeconds, worldSeed, null,
+                maximumGeneratedStock, refreshIntervalSeconds, worldSeed, null, null,
                 out session, out error);
         }
 
@@ -492,6 +503,32 @@ namespace ND.Framework.CargoLoading
             double refreshIntervalSeconds,
             int worldSeed,
             SellPriceModifierPolicy sellPriceModifierPolicy,
+            out MarketInventoryMutationSession session,
+            out string error)
+        {
+            return TryOpen(
+                saveData, caravanId, tradeMode, saveService, timeProvider, marketId,
+                stockCatalog, transactionCatalog, slotCount, minimumGeneratedStock,
+                maximumGeneratedStock, refreshIntervalSeconds, worldSeed,
+                sellPriceModifierPolicy, null, out session, out error);
+        }
+
+        public static bool TryOpen(
+            SaveData saveData,
+            string caravanId,
+            MarketTradeMode tradeMode,
+            ISaveService saveService,
+            IGameTimeProvider timeProvider,
+            string marketId,
+            IEnumerable<TradeItemData> stockCatalog,
+            IEnumerable<TradeItemData> transactionCatalog,
+            int slotCount,
+            int minimumGeneratedStock,
+            int maximumGeneratedStock,
+            double refreshIntervalSeconds,
+            int worldSeed,
+            SellPriceModifierPolicy sellPriceModifierPolicy,
+            IReadOnlyList<string> destinationLocalSpecialtyItemIds,
             out MarketInventoryMutationSession session,
             out string error)
         {
@@ -525,7 +562,8 @@ namespace ND.Framework.CargoLoading
                 maximumGeneratedStock,
                 refreshIntervalSeconds,
                 worldSeed,
-                sellPriceModifierPolicy);
+                sellPriceModifierPolicy,
+                destinationLocalSpecialtyItemIds);
 
             if (created.stockItemIds.Count == 0 || created.catalogById.Count == 0)
             {

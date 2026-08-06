@@ -594,6 +594,15 @@ namespace ND.UI.Market
                     .Select(group => group.First())
                     .ToArray()
                 : catalog;
+            IReadOnlyList<string> destinationLocalSpecialtyItemIds = Array.Empty<string>();
+            if (root.SharedGameData != null
+                && root.SharedGameData.TryGetMarket(
+                    marketData.MarketId,
+                    out SharedMarketDefinition destinationMarket)
+                && destinationMarket?.LocalSpecialtyItemIds != null)
+            {
+                destinationLocalSpecialtyItemIds = destinationMarket.LocalSpecialtyItemIds;
+            }
 
             bool opened = MarketInventoryMutationSession.TryOpen(
                 root.CurrentSaveData,
@@ -610,6 +619,7 @@ namespace ND.UI.Market
                 Mathf.Max(1f, marketData.ItemRenewalCycle),
                 CombineSeed(worldSeed, marketData.MarketId),
                 sellPriceModifierPolicy,
+                destinationLocalSpecialtyItemIds,
                 out MarketInventoryMutationSession commands,
                 out string error);
             if (!opened)
