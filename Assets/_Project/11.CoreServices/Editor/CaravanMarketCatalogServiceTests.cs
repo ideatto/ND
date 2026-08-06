@@ -58,6 +58,33 @@ public sealed class CaravanMarketCatalogServiceTests
     }
 
     [Test]
+    public void Resolve_ExcludesLockedSpecialtyFromCaravanTownCatalog()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.world.unlockedTownSpecialties.Clear();
+        ISharedGameDataProvider data = CreateSharedData();
+        var service = new CaravanMarketCatalogService();
+
+        service.TryResolve(save, data, "caravan-a", out CaravanMarketCatalogSnapshot catalog);
+
+        Assert.That(catalog.TryGetItem("apple", out _), Is.False);
+        Assert.That(catalog.TryGetItem("cloth", out _), Is.True);
+    }
+
+    [Test]
+    public void Resolve_DoesNotUseAnotherTownsSpecialtyUnlock()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.world.unlockedTownSpecialties[0].townId = "player-town";
+        ISharedGameDataProvider data = CreateSharedData();
+        var service = new CaravanMarketCatalogService();
+
+        service.TryResolve(save, data, "caravan-a", out CaravanMarketCatalogSnapshot catalog);
+
+        Assert.That(catalog.TryGetItem("apple", out _), Is.False);
+    }
+
+    [Test]
     public void Resolve_MissingInventoryFailsClosedWithZeroStock()
     {
         FrameworkSaveData save = CreateSave();
@@ -93,6 +120,11 @@ public sealed class CaravanMarketCatalogServiceTests
                 }
             }
         });
+        save.world.unlockedTownSpecialties.Add(new TownSpecialtyUnlockSaveData
+        {
+            townId = "caravan-town",
+            itemId = "apple"
+        });
         return save;
     }
 
@@ -117,7 +149,7 @@ public sealed class CaravanMarketCatalogServiceTests
                 ["caravan-market"] = new SharedMarketDefinition
                 {
                     Id = "caravan-market",
-                    TradeItemIds = new[] { "apple", "cloth" },
+                    TradeItemIds = new[] { "cloth" },
                     LocalSpecialtyItemIds = new[] { "apple" }
                 }
             },

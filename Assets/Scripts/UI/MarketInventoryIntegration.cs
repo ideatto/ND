@@ -336,7 +336,10 @@ namespace ND.Framework.CargoLoading
 
                 foreach (MarketStockSaveData stock in inventory.stocks)
                 {
-                    if (stock == null || !catalogById.TryGetValue(stock.itemId ?? string.Empty, out TradeItemData item))
+                    string itemId = stock?.itemId ?? string.Empty;
+                    if (stock == null
+                        || !stockItemIds.Contains(itemId)
+                        || !catalogById.TryGetValue(itemId, out TradeItemData item))
                     {
                         continue;
                     }
@@ -842,7 +845,23 @@ namespace ND.Framework.CargoLoading
                 && inventory.stocks != null
                 && inventory.stocks.Count > 0)
             {
-                return true;
+                MarketInventorySaveData currentSnapshot = CloneInventory(inventory);
+                try
+                {
+                    if (!ReconcileCurrentCatalog(refreshIndex))
+                        return true;
+
+                    SaveResult reconciled = saveService.Save(saveData);
+                    if (reconciled != null && reconciled.Succeeded)
+                        return true;
+                }
+                catch
+                {
+                    // Restore below so an unsuccessful catalog reconciliation cannot leak.
+                }
+
+                RestoreInventory(inventory, currentSnapshot);
+                return false;
             }
 
             MarketInventorySaveData previousInventory = inventory;
@@ -879,6 +898,49 @@ namespace ND.Framework.CargoLoading
             }
 
             return false;
+        }
+
+        private bool ReconcileCurrentCatalog(long refreshIndex)
+        {
+            inventory.stocks ??= new List<MarketStockSaveData>();
+            var visibleIds = new HashSet<string>(
+                inventory.stocks
+                    .Where(stock => stock != null && stockItemIds.Contains(stock.itemId ?? string.Empty))
+                    .Select(stock => stock.itemId),
+                StringComparer.Ordinal);
+            int expectedVisibleCount = Math.Min(slotCount, stockItemIds.Count);
+            if (visibleIds.Count >= expectedVisibleCount)
+                return false;
+
+            List<string> missingIds = stockItemIds
+                .Where(itemId => !visibleIds.Contains(itemId) && catalogById.ContainsKey(itemId))
+                .OrderBy(itemId => itemId, StringComparer.Ordinal)
+                .ToList();
+            int addCount = Math.Min(
+                expectedVisibleCount - visibleIds.Count,
+                missingIds.Count);
+            for (int index = 0; index < addCount; index++)
+            {
+                string itemId = missingIds[index];
+                TradeItemData item = catalogById[itemId];
+                var random = new Random(StableHash(
+                    worldSeed,
+                    MarketId + "\n" + itemId,
+                    refreshIndex));
+                inventory.stocks.Add(new MarketStockSaveData
+                {
+                    itemId = itemId,
+                    quantity = MarketTransactionCalculator.GetEffectiveMarketStock(
+                        itemId,
+                        random.Next(
+                            Math.Min(minimumGeneratedStock, maximumGeneratedStock),
+                            maximumGeneratedStock + 1)),
+                    unitPrice = ResolveUnitPrices(item).UnitBuyPrice
+                });
+                visibleIds.Add(itemId);
+            }
+
+            return addCount > 0;
         }
 
         private static MarketInventorySaveData CloneInventory(MarketInventorySaveData source)

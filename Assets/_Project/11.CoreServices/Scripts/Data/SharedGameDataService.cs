@@ -920,7 +920,14 @@ namespace ND.Framework
                         break;
                     case QuestRewardType.TradeItem:
                         valid = view.TryGetTradeItem(reward.RewardId, out var tradeItem) &&
-                            tradeItem.LocalSpecialty;
+                            tradeItem.LocalSpecialty &&
+                            view.TryGetTown(quest.SubmissionTownId, out var specialtyTown) &&
+                            specialtyTown != null &&
+                            view.TryGetMarket(specialtyTown.MarketId, out var specialtyMarket) &&
+                            specialtyMarket != null &&
+                            ContainsOrdinal(
+                                specialtyMarket.LocalSpecialtyItemIds,
+                                reward.RewardId);
                         break;
                     case QuestRewardType.RouteBanditEncounterReduction:
                         valid = reward.Value > 0 &&
@@ -934,6 +941,17 @@ namespace ND.Framework
                 if (!valid)
                     errors.Add($"Quest '{quest.Id}' has an invalid {reward.RewardType} reward.");
             }
+        }
+
+        private static bool ContainsOrdinal(IReadOnlyList<string> values, string expected)
+        {
+            if (values == null || string.IsNullOrWhiteSpace(expected))
+                return false;
+
+            for (int index = 0; index < values.Count; index++)
+                if (string.Equals(values[index], expected, StringComparison.Ordinal))
+                    return true;
+            return false;
         }
 
         private delegate bool TryGetDefinition<T>(string id, out T definition);
