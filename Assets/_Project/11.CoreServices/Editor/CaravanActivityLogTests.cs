@@ -116,4 +116,20 @@ public sealed class CaravanActivityLogTests
         Assert.That(saveData.caravanActivityLogs[1].caravanId, Is.EqualTo("caravan-b"));
         Assert.That(saveData.caravanActivityLogs[1].tradeId, Is.EqualTo("trade-b"));
     }
+
+    [Test]
+    public void Add_QuestCompleted_PreservesSubmissionTown()
+    {
+        var saveData = new ND.Framework.SaveData();
+        saveData.caravanActivityLogs.Clear();
+
+        CaravanActivityLogEntrySaveData entry = CaravanActivityLog.Add(
+            saveData,
+            CaravanActivityLogType.QuestCompleted,
+            "caravan-a",
+            townId: "river-town");
+
+        Assert.That(entry.eventType, Is.EqualTo(CaravanActivityLogType.QuestCompleted));
+        Assert.That(entry.townId, Is.EqualTo("river-town"));
+    }
 }

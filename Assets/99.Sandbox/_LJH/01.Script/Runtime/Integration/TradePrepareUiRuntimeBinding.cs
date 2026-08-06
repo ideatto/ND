@@ -66,6 +66,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
             // with no subscriber. Forward departure to RuntimeContext so Draft is validated
             // and Framework can record Traveling before the presenter opens S7.
             uiManager.OnDepart += HandleDepartRequested;
+            uiManager.OnCaravanCompositionConfirmed += HandleCaravanCompositionConfirmed;
         }
 
         if (runtimeContext != null)
@@ -90,6 +91,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         if (cargoPanel != null)
         {
             cargoPanel.LoadChanged += HandleCargoLoadChanged;
+            cargoPanel.CargoConfirmed += HandleCargoConfirmed;
             cargoPanel.TryCommitCargoTransaction = TryCommitCargoTransaction;
             cargoPanel.CanCommitCargoTransaction = CanCommitCargoTransaction;
             cargoPanel.ProjectedCurrencyAfterCargoTransaction = GetProjectedCurrency;
@@ -124,6 +126,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         if (cargoPanel != null)
         {
             cargoPanel.LoadChanged -= HandleCargoLoadChanged;
+            cargoPanel.CargoConfirmed -= HandleCargoConfirmed;
             if (cargoPanel.TryCommitCargoTransaction == TryCommitCargoTransaction)
                 cargoPanel.TryCommitCargoTransaction = null;
             if (cargoPanel.CanCommitCargoTransaction == CanCommitCargoTransaction)
@@ -138,6 +141,7 @@ public sealed class TradePrepareUiRuntimeBinding : MonoBehaviour
         if (uiManager != null)
         {
             uiManager.OnDepart -= HandleDepartRequested;
+            uiManager.OnCaravanCompositionConfirmed -= HandleCaravanCompositionConfirmed;
             if (uiManager.AnimalProvider == BuildAnimalEntries)
                 uiManager.AnimalProvider = null;
             if (uiManager.OwnedWagonProvider == BuildOwnedWagonEntries)
@@ -718,6 +722,38 @@ private static string BuildDepartureWarning(TradePrepareStartResult result)
         // UI Working Draft only. Saved Cargo changes exclusively in TryCommitCargoTransaction.
         cargoPanel?.SetCargoTransactionError(
             model.HasDraft && !model.CanCommit ? model.DraftValidationError : string.Empty);
+    }
+
+    private void HandleCaravanCompositionConfirmed()
+    {
+        RecordActivity(ND.Framework.CaravanActivityLogType.TransportConfirmed);
+    }
+
+    private void HandleCargoConfirmed(string caravanId)
+    {
+        RecordActivity(
+            ND.Framework.CaravanActivityLogType.CargoConfirmed,
+            caravanId);
+    }
+
+    private void RecordActivity(
+        ND.Framework.CaravanActivityLogType eventType,
+        string requestedCaravanId = null)
+    {
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        string caravanId = string.IsNullOrWhiteSpace(requestedCaravanId)
+            ? runtimeContext?.CurrentViewData?.departureCaravanId
+            : requestedCaravanId;
+        if (root == null || string.IsNullOrWhiteSpace(caravanId))
+        {
+            return;
+        }
+
+        ND.Framework.CaravanActivityLog.TryAddAndSave(
+            root.CurrentSaveData,
+            root.SaveService,
+            eventType,
+            caravanId);
     }
 
     private bool CanCommitCargoTransaction()

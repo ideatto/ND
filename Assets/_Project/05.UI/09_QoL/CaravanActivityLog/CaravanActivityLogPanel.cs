@@ -12,6 +12,9 @@ public sealed class CaravanActivityLogPanel : MonoBehaviour
     [SerializeField] private ScrollRect scrollRect;
     [SerializeField] private RectTransform contentRoot;
     [SerializeField] private CaravanActivityLogItemView itemPrefab;
+    [SerializeField] private GameObject listViewport;
+    [SerializeField] private GameObject listScrollbar;
+    [SerializeField] private CaravanActivityLogDetailPanel detailPanel;
 
     [Header("Behavior")]
     [SerializeField, Min(1)] private int maxVisibleEntries = 100;
@@ -42,6 +45,11 @@ public sealed class CaravanActivityLogPanel : MonoBehaviour
 
     private void OnEnable()
     {
+        if (detailPanel != null)
+        {
+            detailPanel.CloseRequested += ShowList;
+        }
+        ShowList();
         lastSequence = long.MinValue;
         lastCount = -1;
         initialScrollPending = true;
@@ -57,6 +65,10 @@ public sealed class CaravanActivityLogPanel : MonoBehaviour
 
     private void OnDisable()
     {
+        if (detailPanel != null)
+        {
+            detailPanel.CloseRequested -= ShowList;
+        }
         if (scrollRect?.verticalScrollbar != null)
         {
             scrollRect.verticalScrollbar.onValueChanged.RemoveListener(
@@ -174,11 +186,42 @@ public sealed class CaravanActivityLogPanel : MonoBehaviour
             item.gameObject.SetActive(true);
             item.Bind(
                 FormatMessage(saveData, entry),
-                ResolveCaravanColor(saveData, entry.caravanId));
+                ResolveCaravanColor(saveData, entry.caravanId),
+                entry);
+            item.Clicked += HandleItemSelected;
             spawnedItems.Add(item);
         }
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(contentRoot);
+    }
+
+    private void HandleItemSelected(CaravanActivityLogEntrySaveData entry)
+    {
+        if (entry == null || detailPanel == null)
+        {
+            return;
+        }
+
+        SetListVisible(false);
+        detailPanel.Open(entry);
+    }
+
+    private void ShowList()
+    {
+        detailPanel?.Hide();
+        SetListVisible(true);
+    }
+
+    private void SetListVisible(bool visible)
+    {
+        if (listViewport != null)
+        {
+            listViewport.SetActive(visible);
+        }
+        if (listScrollbar != null)
+        {
+            listScrollbar.SetActive(visible);
+        }
     }
 
     private void ClearItems()
@@ -276,6 +319,12 @@ public sealed class CaravanActivityLogPanel : MonoBehaviour
                 return string.IsNullOrEmpty(townName)
                     ? $"{caravanName}이(가) 무역 목적지에 도착했습니다."
                     : $"{caravanName}이(가) {townName}에 도착했습니다.";
+            case CaravanActivityLogType.CargoConfirmed:
+                return $"{caravanName}이 물건 적재를 완료했습니다.";
+            case CaravanActivityLogType.TransportConfirmed:
+                return $"{caravanName}이 동물과 마차를 채웠습니다.";
+            case CaravanActivityLogType.QuestCompleted:
+                return $"'{townName}'의 퀘스트를 해결하였습니다.";
             default:
                 return $"{caravanName}의 상태가 변경되었습니다.";
         }

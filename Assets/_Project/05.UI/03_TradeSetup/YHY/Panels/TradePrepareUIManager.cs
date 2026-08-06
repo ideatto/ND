@@ -174,6 +174,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
     /// <summary>Forwards an S3 UI Draft for Framework validation and persistence.</summary>
     public event Action<CaravanSettingDraft> OnCaravanSettingConfirmRequested;
+    public event Action OnCaravanCompositionConfirmed;
 
     // ══ 진행 상태 ═══════════════════════════════════════════════
 
@@ -699,6 +700,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         }
 
         itemsFromSavedSlot = false;
+        OnCaravanCompositionConfirmed?.Invoke();
         GoCargo();
     }
 
