@@ -462,7 +462,9 @@ namespace ND.Framework
                 }
             }
 
-            transportInventoryRepaired = NormalizeTransportInventory(data.player, usedInstanceIds);
+            // Equipped transports remain in the player's ownership inventory. Caravan entries are
+            // assignment snapshots, so sharing their instance IDs with the inventory is intentional.
+            transportInventoryRepaired = NormalizeTransportInventory(data.player);
             assetDataChanged |= transportInventoryRepaired;
 
             CaravanSaveData selected;
@@ -613,9 +615,10 @@ namespace ND.Framework
             return assetDataChanged;
         }
 
-        private static bool NormalizeTransportInventory(PlayerSaveData player, HashSet<string> usedInstanceIds)
+        private static bool NormalizeTransportInventory(PlayerSaveData player)
         {
             bool changed = false;
+            var ownedInstanceIds = new HashSet<string>(StringComparer.Ordinal);
 
             for (var index = 0; index < player.wagonInventory.Count;)
             {
@@ -625,7 +628,7 @@ namespace ND.Framework
                 if (wagon == null
                     || string.IsNullOrEmpty(instanceId)
                     || string.IsNullOrEmpty(contentId)
-                    || !usedInstanceIds.Add(instanceId))
+                    || !ownedInstanceIds.Add(instanceId))
                 {
                     FrameworkLog.Warning(
                         $"Invalid or duplicate Wagon inventory entry was removed. InstanceId: {instanceId}, ContentId: {contentId}");
@@ -655,7 +658,7 @@ namespace ND.Framework
                 if (animal == null
                     || string.IsNullOrEmpty(instanceId)
                     || string.IsNullOrEmpty(contentId)
-                    || !usedInstanceIds.Add(instanceId))
+                    || !ownedInstanceIds.Add(instanceId))
                 {
                     FrameworkLog.Warning(
                         $"Invalid or duplicate DraftAnimal inventory entry was removed. InstanceId: {instanceId}, ContentId: {contentId}");

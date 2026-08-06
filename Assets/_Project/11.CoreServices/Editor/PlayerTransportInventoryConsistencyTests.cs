@@ -18,6 +18,7 @@ public sealed class PlayerTransportInventoryConsistencyTests
         managerObject = new GameObject(nameof(PlayerTransportInventoryConsistencyTests));
         manager = managerObject.AddComponent<PlayerMainManager>();
         manager.SetTransportCatalogForTests(CreateCatalog());
+        SetFallbackSave(SaveWithFarm(TransportInventoryFunction.MaximumLevel));
     }
 
     [TearDown]
@@ -71,6 +72,19 @@ public sealed class PlayerTransportInventoryConsistencyTests
         Assert.That(failure, Is.EqualTo(TransportInventoryValidationFailure.ContentUnavailable));
         Assert.That(manager.TryAddWagon(Wagon("unknown", "Missing_Wagon")), Is.False);
         Assert.That(manager.WagonInventory, Is.Empty);
+    }
+
+    [Test]
+    public void NormalAcquisition_RejectsWhenFarmIsNotBuilt()
+    {
+        SetFallbackSave(new ND.Framework.SaveData());
+
+        Assert.That(manager.CanAddWagon(
+            Wagon("wagon-without-farm", "Wagon_M"), out TransportInventoryValidationFailure wagonFailure), Is.False);
+        Assert.That(wagonFailure, Is.EqualTo(TransportInventoryValidationFailure.FarmUnavailable));
+        Assert.That(manager.CanAddDraftAnimal(
+            Animal("animal-without-farm", "Horse"), out TransportInventoryValidationFailure animalFailure), Is.False);
+        Assert.That(animalFailure, Is.EqualTo(TransportInventoryValidationFailure.FarmUnavailable));
     }
 
     [Test]
@@ -193,8 +207,9 @@ public sealed class PlayerTransportInventoryConsistencyTests
 
         Assert.That(JsonSaveService.NormalizeData(save), Is.True);
 
-        Assert.That(save.player.wagonInventory, Has.Count.EqualTo(1));
-        Assert.That(save.player.wagonInventory[0].instanceId, Is.EqualTo("owned"));
+        Assert.That(save.player.wagonInventory, Has.Count.EqualTo(2));
+        Assert.That(save.player.wagonInventory.Exists(value => value.instanceId == "owned"), Is.True);
+        Assert.That(save.player.wagonInventory.Exists(value => value.instanceId == "equipped"), Is.True);
         Assert.That(save.player.wagonInventory[0].contentId, Is.EqualTo("Wagon_M"));
         Assert.That(save.player.draftAnimalInventory, Has.Count.EqualTo(1));
         Assert.That(save.player.draftAnimalInventory[0].instanceId, Is.EqualTo("animal"));
@@ -215,6 +230,17 @@ public sealed class PlayerTransportInventoryConsistencyTests
             contentId = contentId,
             currentDurability = 100
         };
+    }
+
+    private static ND.Framework.SaveData SaveWithFarm(int level)
+    {
+        var save = new ND.Framework.SaveData();
+        save.player.villageBuildings.Add(new VillageBuildingSaveData
+        {
+            displayName = TransportInventoryFunction.BuildingDisplayName,
+            level = level
+        });
+        return save;
     }
 
     private static OwnedDraftAnimalSaveData Animal(string instanceId, string contentId)

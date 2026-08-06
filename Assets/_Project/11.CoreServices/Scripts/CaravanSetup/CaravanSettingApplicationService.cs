@@ -66,13 +66,19 @@ namespace ND.Framework
             string wagonInstanceId = Normalize(wagon?.instanceId);
             string selectedWagonContentId = ResolveWagonContentId(wagon, shared);
             var wagonViews = new List<WagonViewData>();
-            if (!string.IsNullOrEmpty(wagonInstanceId))
-                wagonViews.Add(CreateWagonView(wagonInstanceId, selectedWagonContentId, caravan.currentDurability, wagon, shared, editable, blocked));
+            bool currentWagonInInventory = false;
             foreach (OwnedWagonSaveData owned in save?.player?.wagonInventory ?? new List<OwnedWagonSaveData>())
             {
                 if (owned == null || string.IsNullOrWhiteSpace(owned.instanceId)) continue;
-                wagonViews.Add(CreateWagonView(Normalize(owned.instanceId), Normalize(owned.contentId), owned.currentDurability, null, shared, editable, blocked));
+                bool selected = string.Equals(Normalize(owned.instanceId), wagonInstanceId, StringComparison.Ordinal);
+                currentWagonInInventory |= selected;
+                wagonViews.Add(CreateWagonView(Normalize(owned.instanceId), Normalize(owned.contentId),
+                    selected ? caravan.currentDurability : owned.currentDurability, selected ? wagon : null,
+                    shared, editable, blocked));
             }
+            // Legacy saves may still keep the equipped instance outside the ownership inventory.
+            if (!string.IsNullOrEmpty(wagonInstanceId) && !currentWagonInInventory)
+                wagonViews.Add(CreateWagonView(wagonInstanceId, selectedWagonContentId, caravan.currentDurability, wagon, shared, editable, blocked));
 
             var animals = caravan.animals ?? new List<AnimalSaveData>();
             var animalIds = new string[animals.Count];
@@ -81,14 +87,18 @@ namespace ND.Framework
             {
                 AnimalSaveData animal = animals[i];
                 animalIds[i] = Normalize(animal?.instanceId);
-                if (animal != null)
-                    animalViews.Add(CreateAnimalView(animalIds[i], ResolveAnimalContentId(animal, shared), animal, shared, selectedWagonContentId, editable, blocked, true));
             }
             foreach (OwnedDraftAnimalSaveData owned in save?.player?.draftAnimalInventory ?? new List<OwnedDraftAnimalSaveData>())
             {
                 if (owned == null || string.IsNullOrWhiteSpace(owned.instanceId)) continue;
-                animalViews.Add(CreateAnimalView(Normalize(owned.instanceId), Normalize(owned.contentId), null, shared, selectedWagonContentId, editable, blocked, false));
+                string id = Normalize(owned.instanceId);
+                AnimalSaveData selectedSave = animals.Find(value => string.Equals(Normalize(value?.instanceId), id, StringComparison.Ordinal));
+                animalViews.Add(CreateAnimalView(id, Normalize(owned.contentId), selectedSave, shared, selectedWagonContentId, editable, blocked, selectedSave != null));
             }
+            // Legacy saves may still keep equipped animals outside the ownership inventory.
+            foreach (AnimalSaveData animal in animals)
+                if (animal != null && !animalViews.Exists(view => string.Equals(view.draftAnimalInstanceId, Normalize(animal.instanceId), StringComparison.Ordinal)))
+                    animalViews.Add(CreateAnimalView(Normalize(animal.instanceId), ResolveAnimalContentId(animal, shared), animal, shared, selectedWagonContentId, editable, blocked, true));
 
             return new CaravanSettingViewData
             {
@@ -350,49 +360,58 @@ namespace ND.Framework
                 }
             }
             string currentWagonId = Normalize(caravan.wagon?.instanceId);
-            if (!string.IsNullOrEmpty(currentWagonId))
-            {
-                string contentId = ResolveWagonContentId(caravan.wagon, shared);
-                if (string.IsNullOrEmpty(contentId) || !wagonCandidates.TryAdd(currentWagonId,
-                        new OwnedWagonSaveData { instanceId = currentWagonId, contentId = contentId, currentDurability = Math.Max(0, caravan.currentDurability) }))
-                {
-                    error = "The assigned wagon has invalid identity or content data.";
-                    return false;
-                }
-            }
             foreach (OwnedWagonSaveData owned in save.player.wagonInventory ?? new List<OwnedWagonSaveData>())
             {
                 string id = Normalize(owned?.instanceId);
                 string contentId = Normalize(owned?.contentId);
-                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId) || usedByOtherCaravan.Contains(id)
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId)
                     || !shared.TryGetWagon(contentId, out _) || !wagonCandidates.TryAdd(id, owned))
                 {
                     error = "Wagon inventory contains invalid or duplicate identity data.";
                     return false;
                 }
             }
-
-            foreach (AnimalSaveData animal in caravan.animals ?? new List<AnimalSaveData>())
+            if (!string.IsNullOrEmpty(currentWagonId))
             {
-                string id = Normalize(animal?.instanceId);
-                string contentId = ResolveAnimalContentId(animal, shared);
-                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId) || !animalCandidates.TryAdd(id,
-                        new OwnedDraftAnimalSaveData { instanceId = id, contentId = contentId }))
+                string contentId = ResolveWagonContentId(caravan.wagon, shared);
+                if (string.IsNullOrEmpty(contentId))
                 {
-                    error = "The assigned draft animals contain invalid or duplicate identity data.";
+                    error = "The assigned wagon has invalid identity or content data.";
                     return false;
                 }
+                if (wagonCandidates.TryGetValue(currentWagonId, out OwnedWagonSaveData currentOwned))
+                    currentOwned.currentDurability = Math.Max(0, caravan.currentDurability);
+                else
+                    wagonCandidates.Add(currentWagonId, new OwnedWagonSaveData
+                    {
+                        instanceId = currentWagonId,
+                        contentId = contentId,
+                        currentDurability = Math.Max(0, caravan.currentDurability)
+                    });
             }
+
             foreach (OwnedDraftAnimalSaveData owned in save.player.draftAnimalInventory ?? new List<OwnedDraftAnimalSaveData>())
             {
                 string id = Normalize(owned?.instanceId);
                 string contentId = Normalize(owned?.contentId);
-                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId) || usedByOtherCaravan.Contains(id)
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId)
                     || !shared.TryGetDraftAnimal(contentId, out _) || !animalCandidates.TryAdd(id, owned))
                 {
                     error = "Draft-animal inventory contains invalid or duplicate identity data.";
                     return false;
                 }
+            }
+            foreach (AnimalSaveData animal in caravan.animals ?? new List<AnimalSaveData>())
+            {
+                string id = Normalize(animal?.instanceId);
+                string contentId = ResolveAnimalContentId(animal, shared);
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId))
+                {
+                    error = "The assigned draft animals contain invalid or duplicate identity data.";
+                    return false;
+                }
+                if (!animalCandidates.ContainsKey(id))
+                    animalCandidates.Add(id, new OwnedDraftAnimalSaveData { instanceId = id, contentId = contentId });
             }
             foreach (string wagonId in wagonCandidates.Keys)
             {
@@ -406,6 +425,7 @@ namespace ND.Framework
             SharedWagonDefinition wagonDefinition = null;
             if (!string.IsNullOrEmpty(selectedWagonId)
                 && (!wagonCandidates.TryGetValue(selectedWagonId, out selectedWagon)
+                    || usedByOtherCaravan.Contains(selectedWagonId)
                     || !shared.TryGetWagon(selectedWagon.contentId, out wagonDefinition)))
             {
                 error = "The selected wagon is not owned or its content no longer exists.";
@@ -419,6 +439,7 @@ namespace ND.Framework
                 string id = Normalize(rawId);
                 if (string.IsNullOrEmpty(selectedWagonId) || !selectedAnimalIds.Add(id)
                     || !animalCandidates.TryGetValue(id, out OwnedDraftAnimalSaveData selected)
+                    || usedByOtherCaravan.Contains(id)
                     || !shared.TryGetDraftAnimal(selected.contentId, out SharedDraftAnimalDefinition animalDefinition)
                     || !IsAnimalEligible(wagonDefinition, animalDefinition))
                 {
@@ -437,12 +458,10 @@ namespace ND.Framework
 
             nextWagons = new List<OwnedWagonSaveData>();
             foreach (OwnedWagonSaveData candidate in wagonCandidates.Values)
-                if (!string.Equals(candidate.instanceId, selectedWagonId, StringComparison.Ordinal))
-                    nextWagons.Add(CopyOwnedWagon(candidate));
+                nextWagons.Add(CopyOwnedWagon(candidate));
             nextOwnedAnimals = new List<OwnedDraftAnimalSaveData>();
             foreach (OwnedDraftAnimalSaveData candidate in animalCandidates.Values)
-                if (!selectedAnimalIds.Contains(candidate.instanceId))
-                    nextOwnedAnimals.Add(CopyOwnedAnimal(candidate));
+                nextOwnedAnimals.Add(CopyOwnedAnimal(candidate));
 
             nextWagon = selectedWagon == null ? new WagonSaveData() : CreateWagonSave(selectedWagon, wagonDefinition);
             nextDurability = selectedWagon == null ? 0 : Math.Min(Math.Max(0, selectedWagon.currentDurability), Math.Max(0, wagonDefinition.MaxDurability));

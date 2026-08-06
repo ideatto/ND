@@ -31,6 +31,8 @@ public enum TransportInventoryValidationFailure
     None,
     InvalidIdentity,
     ContentUnavailable,
+    FarmUnavailable,
+    ItemInUse,
     CapacityExceeded,
     DuplicateInstanceId,
     ItemNotFound
@@ -292,6 +294,8 @@ public class PlayerMainManager : MonoBehaviour
 
     public IReadOnlyList<ND.Framework.OwnedWagonSaveData> WagonInventory => WagonInventoryList;
     public IReadOnlyList<ND.Framework.OwnedDraftAnimalSaveData> DraftAnimalInventory => DraftAnimalInventoryList;
+    public ND.Framework.TransportInventoryState TransportInventoryState =>
+        ND.Framework.TransportInventoryFunction.Evaluate(Save);
 
     public event Action OnWagonInventoryChanged;
     public event Action OnDraftAnimalInventoryChanged;
@@ -306,7 +310,13 @@ public class PlayerMainManager : MonoBehaviour
             failure = TransportInventoryValidationFailure.ContentUnavailable;
             return false;
         }
-        if (WagonInventoryList.Count >= WagonInventoryCapacity)
+        ND.Framework.TransportInventoryState state = TransportInventoryState;
+        if (!state.CanOpen)
+        {
+            failure = TransportInventoryValidationFailure.FarmUnavailable;
+            return false;
+        }
+        if (WagonInventoryList.Count >= state.WagonSlotCount)
         {
             failure = TransportInventoryValidationFailure.CapacityExceeded;
             return false;
@@ -324,7 +334,13 @@ public class PlayerMainManager : MonoBehaviour
             failure = TransportInventoryValidationFailure.ContentUnavailable;
             return false;
         }
-        if (DraftAnimalInventoryList.Count >= DraftAnimalInventoryCapacity)
+        ND.Framework.TransportInventoryState state = TransportInventoryState;
+        if (!state.CanOpen)
+        {
+            failure = TransportInventoryValidationFailure.FarmUnavailable;
+            return false;
+        }
+        if (DraftAnimalInventoryList.Count >= state.DraftAnimalSlotCount)
         {
             failure = TransportInventoryValidationFailure.CapacityExceeded;
             return false;
@@ -409,6 +425,11 @@ public class PlayerMainManager : MonoBehaviour
     public bool CanRemoveWagon(string instanceId, string contentId, out TransportInventoryValidationFailure failure)
     {
         if (!ValidateIdentity(instanceId, contentId, out failure)) return false;
+        if (IsUsedByCaravan(instanceId))
+        {
+            failure = TransportInventoryValidationFailure.ItemInUse;
+            return false;
+        }
         if (FindWagon(instanceId, contentId) != null) return true;
         failure = TransportInventoryValidationFailure.ItemNotFound;
         return false;
@@ -417,6 +438,11 @@ public class PlayerMainManager : MonoBehaviour
     public bool CanRemoveDraftAnimal(string instanceId, string contentId, out TransportInventoryValidationFailure failure)
     {
         if (!ValidateIdentity(instanceId, contentId, out failure)) return false;
+        if (IsUsedByCaravan(instanceId))
+        {
+            failure = TransportInventoryValidationFailure.ItemInUse;
+            return false;
+        }
         if (FindDraftAnimal(instanceId, contentId) != null) return true;
         failure = TransportInventoryValidationFailure.ItemNotFound;
         return false;

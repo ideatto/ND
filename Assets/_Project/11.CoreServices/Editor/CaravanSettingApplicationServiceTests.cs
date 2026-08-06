@@ -62,7 +62,7 @@ public sealed class CaravanSettingApplicationServiceTests
     }
 
     [Test]
-    public void ExecuteSetting_SwapsInventoryAndAssignedTransportAtomically()
+    public void ExecuteSetting_ChangesAssignmentAndRetainsAllOwnedTransportAtomically()
     {
         FrameworkSaveData save = CreateSave();
         save.player.wagonInventory.Add(new OwnedWagonSaveData
@@ -87,7 +87,8 @@ public sealed class CaravanSettingApplicationServiceTests
         Assert.That(save.player.wagonInventory.Exists(x => x.instanceId == "wagon-instance"), Is.True);
         Assert.That(save.player.draftAnimalInventory.Exists(x => x.instanceId == "animal-a"), Is.True);
         Assert.That(save.player.draftAnimalInventory.Exists(x => x.instanceId == "animal-b"), Is.True);
-        Assert.That(save.player.wagonInventory.Exists(x => x.instanceId == "wagon-spare"), Is.False);
+        Assert.That(save.player.wagonInventory.Exists(x => x.instanceId == "wagon-spare"), Is.True);
+        Assert.That(save.player.draftAnimalInventory.Exists(x => x.instanceId == "animal-spare"), Is.True);
     }
 
     [Test]
