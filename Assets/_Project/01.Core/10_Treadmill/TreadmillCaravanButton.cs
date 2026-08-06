@@ -31,8 +31,17 @@ public class TreadmillCaravanButton : MonoBehaviour
 
     private void OnClick()
     {
-        if (panel != null) panel.Open(caravanId);
-        else Debug.LogWarning("[Treadmill] 마차 버튼 눌림(" + caravanId + ")인데 TreadmillPanel을 못 찾음");
+        if (panel == null)
+        {
+            Debug.LogWarning("[Treadmill] 마차 버튼 눌림(" + caravanId + ")인데 TreadmillPanel을 못 찾음");
+            return;
+        }
+
+        // 토글: 이 마차로 이미 열려 있으면 닫고, 아니면(닫힘 or 다른 마차) 이 마차로 연다.
+        if (panel.IsOpen && panel.CurrentCaravanId == caravanId)
+            panel.Close();
+        else
+            panel.Open(caravanId);
     }
 
     /// <summary>버튼바(TreadmillCaravanButtonBar)가 실제 캐러밴을 이 버튼에 매핑한다.</summary>
