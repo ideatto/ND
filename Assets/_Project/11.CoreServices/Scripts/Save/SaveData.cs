@@ -193,7 +193,10 @@ namespace ND.Framework
         CombatEncounter = 1,
         CombatVictory = 2,
         CombatDefeat = 3,
-        Arrival = 4
+        Arrival = 4,
+        CargoConfirmed = 5,
+        TransportConfirmed = 6,
+        QuestCompleted = 7
     }
 
     /// <summary>

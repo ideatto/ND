@@ -112,6 +112,12 @@ namespace ND.Framework
                 var specialtiesBefore = BuildSpecialtyKeySet(
                     saveData.world.unlockedTownSpecialties);
                 ApplyPlan(saveData, caravan, quest, build.Plan, completedUtc);
+                CaravanActivityLog.Add(
+                    saveData,
+                    CaravanActivityLogType.QuestCompleted,
+                    caravanId,
+                    townId: quest.SubmissionTownId,
+                    occurredUtcTicks: completedUtc.Ticks);
                 SaveResult saved = saveService.Save(saveData);
                 if (saved == null || !saved.Succeeded)
                 {
