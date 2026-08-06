@@ -5,6 +5,22 @@ namespace ND.UI.Loading.Tests
     public sealed class LoadingProgressTests
     {
         [TestCase(0f, 0.2f)]
+        [TestCase(0.5f, 0.475f)]
+        [TestCase(1f, 0.75f)]
+        public void MapInGameSceneProgress_MapsToInGameRange(float input, float expected)
+        {
+            Assert.That(LoadingProgress.MapInGameSceneProgress(input), Is.EqualTo(expected).Within(0.0001f));
+        }
+
+        [TestCase(0f, 0.75f)]
+        [TestCase(0.5f, 0.85f)]
+        [TestCase(1f, 0.95f)]
+        public void MapRequiredAdditiveProgress_MapsToAdditiveRange(float input, float expected)
+        {
+            Assert.That(LoadingProgress.MapRequiredAdditiveProgress(input), Is.EqualTo(expected).Within(0.0001f));
+        }
+
+        [TestCase(0f, 0.2f)]
         [TestCase(0.5f, 0.6f)]
         [TestCase(1f, 1f)]
         [TestCase(-1f, 0.2f)]

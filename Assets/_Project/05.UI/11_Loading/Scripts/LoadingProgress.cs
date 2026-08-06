@@ -5,6 +5,17 @@ namespace ND.UI.Loading
     /// <summary>Pure progress mapping shared by the presenter and EditMode tests.</summary>
     public static class LoadingProgress
     {
+        public static float MapInGameSceneProgress(float sceneProgress)
+        {
+            return Mathf.Lerp(0.2f, 0.75f, Sanitize01(sceneProgress));
+        }
+
+        public static float MapRequiredAdditiveProgress(float sceneProgress)
+        {
+            return Mathf.Lerp(0.75f, 0.95f, Sanitize01(sceneProgress));
+        }
+
+        /// <summary>기존 호출부를 위한 전체 scene progress mapping이다.</summary>
         public static float MapSceneProgress(float sceneProgress)
         {
             return Mathf.Lerp(0.2f, 1f, Sanitize01(sceneProgress));
