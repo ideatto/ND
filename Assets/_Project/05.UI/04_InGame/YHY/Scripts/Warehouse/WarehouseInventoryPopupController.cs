@@ -119,6 +119,12 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             return true;
         }
 
+        /// <summary>
+        /// UnityEvent(마을 건물 클릭 라우터 등)에서 인벤토리 패널을 여는 void 래퍼.
+        /// TryOpen()이 bool을 반환해 UnityEvent 연결이 번거로워, 반환값 없는 진입점을 제공한다.
+        /// </summary>
+        public void OpenPanel() => TryOpen();
+
         public static bool IsEligible(ND.Framework.CaravanSaveData caravan, string baseTownId)
         {
             return caravan != null

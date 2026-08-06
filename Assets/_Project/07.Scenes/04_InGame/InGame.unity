@@ -2373,6 +2373,17 @@ MonoBehaviour:
   renderRoot: {fileID: 0}
   hitRadius: 0.8
   treadmillPanel: {fileID: 0}
+--- !u!114 &895111550 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2940986681355684300, guid: 487be5152416ef848a6891c7e265a19f, type: 3}
+  m_PrefabInstance: {fileID: 841212660}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39e7829abc5c27049a622b65bd5dac75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.InGame.Warehouse.WarehouseInventoryPopupController
 --- !u!1001 &906889457
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5855,19 +5866,58 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3942359996107727175, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1874843860}
   m_SourcePrefab: {fileID: 100100000, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
 --- !u!114 &1874843858 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5223289138679479416, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
   m_PrefabInstance: {fileID: 1874843857}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 1874843859}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cc373b26632b83b49b010fc3ef6ea466, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingPlacementController
+--- !u!1 &1874843859 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3942359996107727175, guid: 447a655f7c3d22042a4b86462f2c8ecb, type: 3}
+  m_PrefabInstance: {fileID: 1874843857}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1874843860
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1874843859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c46a7d00f6f64c418ac7212d287f9a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VillageBuildingActionRouter
+  controller: {fileID: 1874843858}
+  actions:
+  - displayName: "\uCC3D\uACE0"
+    onClicked:
+      m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 895111550}
+          m_TargetAssemblyTypeName: ND.UI.InGame.Warehouse.WarehouseInventoryPopupController,
+            Assembly-CSharp
+          m_MethodName: OpenPanel
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
 --- !u!1001 &1988144640
 PrefabInstance:
   m_ObjectHideFlags: 0
