@@ -42,6 +42,205 @@ public sealed class CaravanSettingApplicationServiceTests
     }
 
     [Test]
+    public void ExecuteSetting_ContentQuantityKeepsCurrentInstancesThenFillsFromInventory()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-spare", contentId = "horse"
+        });
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+        draft.SetAnimalQuantity("horse", 3);
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.True);
+        Assert.That(persistence.SaveCount, Is.EqualTo(1));
+        Assert.That(save.caravans[0].animals.ConvertAll(animal => animal.instanceId),
+            Is.EqualTo(new[] { "animal-b", "animal-a", "animal-spare" }));
+    }
+
+    [Test]
+    public void ExecuteSetting_ContentQuantityUnavailableFailsWithoutMutationOrSave()
+    {
+        FrameworkSaveData save = CreateSave();
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+        draft.SetAnimalQuantity("horse", 3);
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(persistence.SaveCount, Is.Zero);
+        Assert.That(save.caravans[0].animals.ConvertAll(animal => animal.instanceId),
+            Is.EqualTo(new[] { "animal-b", "animal-a" }));
+    }
+
+    [Test]
+    public void ExecuteSetting_ValidationFailureDoesNotMutateOwnedWagonDurability()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.wagonInventory.Add(new OwnedWagonSaveData
+        {
+            instanceId = "wagon-instance", contentId = "wagon-basic", currentDurability = 10
+        });
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+        draft.SetAnimalQuantity("horse", 99);
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(persistence.SaveCount, Is.Zero);
+        Assert.That(save.player.wagonInventory[0].currentDurability, Is.EqualTo(10));
+    }
+
+    [Test]
+    public void ExecuteSetting_RejectsOwnedAndAssignedContentIdConflict()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.wagonInventory.Add(new OwnedWagonSaveData
+        {
+            instanceId = "wagon-instance", contentId = "wagon-large", currentDurability = 90
+        });
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(persistence.SaveCount, Is.Zero);
+        Assert.That(save.caravans[0].wagon.contentId, Is.EqualTo("wagon-basic"));
+    }
+
+    [Test]
+    public void ExecuteSetting_RejectsAssignedAnimalContentIdConflict()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-a", contentId = "horse-alt"
+        });
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(persistence.SaveCount, Is.Zero);
+        Assert.That(save.caravans[0].animals[1].contentId, Is.EqualTo("horse"));
+    }
+
+    [Test]
+    public void ExecuteSetting_ContentQuantityDoesNotTakeAnimalAssignedToAnotherCaravan()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-other", contentId = "horse"
+        });
+        save.caravans.Add(new FrameworkCaravanSaveData
+        {
+            caravanId = "caravan-b",
+            animals = new List<AnimalSaveData>
+            {
+                new AnimalSaveData { instanceId = "animal-other", contentId = "horse" }
+            }
+        });
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+        draft.SetAnimalQuantity("horse", 3);
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(persistence.SaveCount, Is.Zero);
+        Assert.That(save.caravans[1].animals[0].instanceId, Is.EqualTo("animal-other"));
+    }
+
+    [Test]
+    public void ExecuteSetting_RejectsWagonThatCannotHoldExistingCargo()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.caravans[0].cargo.Add(new CargoEntrySaveData
+        {
+            item = new TradeItemSaveData { itemId = "ore", weight = 30f },
+            quantity = 1
+        });
+        var persistence = new RecordingSaveService(true);
+        var service = CreateService(save, persistence);
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+        draft.SetAnimalQuantity("horse", 2);
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(result.errorCode, Is.EqualTo(CaravanSettingFailureCodes.CargoCapacityExceeded));
+        Assert.That(persistence.SaveCount, Is.Zero);
+        Assert.That(save.caravans[0].wagon.instanceId, Is.EqualTo("wagon-instance"));
+    }
+
+    [Test]
+    public void ExecuteSetting_ContentQuantitySaveFailureRestoresCompositionAndInventory()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-spare", contentId = "horse"
+        });
+        var service = CreateService(save, new RecordingSaveService(false));
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-instance"
+        };
+        draft.SetAnimalQuantity("horse", 3);
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(save.caravans[0].animals.ConvertAll(animal => animal.instanceId),
+            Is.EqualTo(new[] { "animal-b", "animal-a" }));
+        Assert.That(save.player.draftAnimalInventory, Has.Count.EqualTo(1));
+        Assert.That(save.player.draftAnimalInventory[0].instanceId, Is.EqualTo("animal-spare"));
+    }
+
+    [Test]
     public void ExecuteSetting_SaveFailureRestoresOriginalOrder()
     {
         FrameworkSaveData save = CreateSave();
@@ -166,13 +365,13 @@ public sealed class CaravanSettingApplicationServiceTests
                 {
                     Id = "wagon-basic", DisplayName = "Wagon", MaxDurability = 100,
                     MaxLoad = 20f, InventorySlotCount = 4, MinRequireAnimals = 1,
-                    MaxPullAnimals = 2, EligibleAnimalTypes = new[] { "Horse" }
+                    MaxPullAnimals = 3, EligibleAnimalTypes = new[] { "Horse" }
                 },
                 ["wagon-large"] = new SharedWagonDefinition
                 {
                     Id = "wagon-large", DisplayName = "Large Wagon", MaxDurability = 120,
                     MaxLoad = 40f, InventorySlotCount = 8, MinRequireAnimals = 1,
-                    MaxPullAnimals = 2, EligibleAnimalTypes = new[] { "Horse" }
+                    MaxPullAnimals = 3, EligibleAnimalTypes = new[] { "Horse" }
                 }
             },
             new Dictionary<string, SharedDraftAnimalDefinition>
@@ -180,6 +379,10 @@ public sealed class CaravanSettingApplicationServiceTests
                 ["horse"] = new SharedDraftAnimalDefinition
                 {
                     Id = "horse", DisplayName = "Horse", AnimalType = "Horse", BaseMoveSpeed = 1f
+                },
+                ["horse-alt"] = new SharedDraftAnimalDefinition
+                {
+                    Id = "horse-alt", DisplayName = "Horse Alt", AnimalType = "Horse", BaseMoveSpeed = 1f
                 }
             },
             new Dictionary<string, SharedRouteDefinition>());

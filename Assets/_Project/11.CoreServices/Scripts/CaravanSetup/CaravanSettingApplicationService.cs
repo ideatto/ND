@@ -127,8 +127,9 @@ namespace ND.Framework
             if (!TryBuildComposition(save, caravan, draft, shared, out WagonSaveData nextWagon,
                     out int nextDurability, out List<AnimalSaveData> nextAnimals,
                     out List<OwnedWagonSaveData> nextWagonInventory,
-                    out List<OwnedDraftAnimalSaveData> nextAnimalInventory, out string error))
-                return CaravanSettingCommandResult.Failure(CaravanSettingFailureCodes.InvalidComposition, error);
+                    out List<OwnedDraftAnimalSaveData> nextAnimalInventory,
+                    out string failureCode, out string error))
+                return CaravanSettingCommandResult.Failure(failureCode, error);
 
             bool persisted = Persist(query.Caravan, () =>
             {
@@ -331,6 +332,7 @@ namespace ND.Framework
             out List<AnimalSaveData> nextAnimals,
             out List<OwnedWagonSaveData> nextWagons,
             out List<OwnedDraftAnimalSaveData> nextOwnedAnimals,
+            out string failureCode,
             out string error)
         {
             nextWagon = null;
@@ -338,6 +340,7 @@ namespace ND.Framework
             nextAnimals = null;
             nextWagons = null;
             nextOwnedAnimals = null;
+            failureCode = CaravanSettingFailureCodes.InvalidComposition;
             error = string.Empty;
             if (save?.player == null || caravan == null || shared == null)
             {
@@ -365,7 +368,7 @@ namespace ND.Framework
                 string id = Normalize(owned?.instanceId);
                 string contentId = Normalize(owned?.contentId);
                 if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId)
-                    || !shared.TryGetWagon(contentId, out _) || !wagonCandidates.TryAdd(id, owned))
+                    || !shared.TryGetWagon(contentId, out _) || !wagonCandidates.TryAdd(id, CopyOwnedWagon(owned)))
                 {
                     error = "Wagon inventory contains invalid or duplicate identity data.";
                     return false;
@@ -380,7 +383,14 @@ namespace ND.Framework
                     return false;
                 }
                 if (wagonCandidates.TryGetValue(currentWagonId, out OwnedWagonSaveData currentOwned))
+                {
+                    if (!string.Equals(currentOwned.contentId, contentId, StringComparison.Ordinal))
+                    {
+                        error = "The assigned wagon conflicts with the owned inventory identity data.";
+                        return false;
+                    }
                     currentOwned.currentDurability = Math.Max(0, caravan.currentDurability);
+                }
                 else
                     wagonCandidates.Add(currentWagonId, new OwnedWagonSaveData
                     {
@@ -395,22 +405,31 @@ namespace ND.Framework
                 string id = Normalize(owned?.instanceId);
                 string contentId = Normalize(owned?.contentId);
                 if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId)
-                    || !shared.TryGetDraftAnimal(contentId, out _) || !animalCandidates.TryAdd(id, owned))
+                    || !shared.TryGetDraftAnimal(contentId, out _) || !animalCandidates.TryAdd(id, CopyOwnedAnimal(owned)))
                 {
                     error = "Draft-animal inventory contains invalid or duplicate identity data.";
                     return false;
                 }
             }
+            var assignedAnimalIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (AnimalSaveData animal in caravan.animals ?? new List<AnimalSaveData>())
             {
                 string id = Normalize(animal?.instanceId);
                 string contentId = ResolveAnimalContentId(animal, shared);
-                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId))
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(contentId) || !assignedAnimalIds.Add(id))
                 {
                     error = "The assigned draft animals contain invalid or duplicate identity data.";
                     return false;
                 }
-                if (!animalCandidates.ContainsKey(id))
+                if (animalCandidates.TryGetValue(id, out OwnedDraftAnimalSaveData ownedAnimal))
+                {
+                    if (!string.Equals(ownedAnimal.contentId, contentId, StringComparison.Ordinal))
+                    {
+                        error = "An assigned draft animal conflicts with the owned inventory identity data.";
+                        return false;
+                    }
+                }
+                else
                     animalCandidates.Add(id, new OwnedDraftAnimalSaveData { instanceId = id, contentId = contentId });
             }
             foreach (string wagonId in wagonCandidates.Keys)
@@ -432,27 +451,42 @@ namespace ND.Framework
                 return false;
             }
 
-            var selectedAnimalIds = new HashSet<string>(StringComparer.Ordinal);
             var selectedAnimals = new List<OwnedDraftAnimalSaveData>();
-            foreach (string rawId in draft.SelectedAnimalInstanceIds)
+            if (draft.AnimalRequests.Count > 0)
             {
-                string id = Normalize(rawId);
-                if (string.IsNullOrEmpty(selectedWagonId) || !selectedAnimalIds.Add(id)
-                    || !animalCandidates.TryGetValue(id, out OwnedDraftAnimalSaveData selected)
-                    || usedByOtherCaravan.Contains(id)
-                    || !shared.TryGetDraftAnimal(selected.contentId, out SharedDraftAnimalDefinition animalDefinition)
-                    || !IsAnimalEligible(wagonDefinition, animalDefinition))
-                {
-                    error = "The selected draft-animal composition is invalid, unavailable, or incompatible with the wagon.";
+                if (!TryResolveRequestedAnimals(caravan, draft.AnimalRequests, animalCandidates,
+                        save.player.draftAnimalInventory, usedByOtherCaravan, shared,
+                        wagonDefinition, selectedAnimals, out error))
                     return false;
+            }
+            else
+            {
+                var selectedAnimalIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string rawId in draft.SelectedAnimalInstanceIds)
+                {
+                    string id = Normalize(rawId);
+                    if (string.IsNullOrEmpty(selectedWagonId) || !selectedAnimalIds.Add(id)
+                        || !animalCandidates.TryGetValue(id, out OwnedDraftAnimalSaveData selected)
+                        || usedByOtherCaravan.Contains(id)
+                        || !shared.TryGetDraftAnimal(selected.contentId, out SharedDraftAnimalDefinition animalDefinition)
+                        || !IsAnimalEligible(wagonDefinition, animalDefinition))
+                    {
+                        error = "The selected draft-animal composition is invalid, unavailable, or incompatible with the wagon.";
+                        return false;
+                    }
+                    selectedAnimals.Add(selected);
                 }
-                selectedAnimals.Add(selected);
             }
             if (wagonDefinition != null
                 && (selectedAnimals.Count < Math.Max(0, wagonDefinition.MinRequireAnimals)
                     || selectedAnimals.Count > Math.Max(0, wagonDefinition.MaxPullAnimals)))
             {
                 error = "The selected draft-animal count is outside the wagon's allowed range.";
+                return false;
+            }
+            if (!ValidateExistingCargo(caravan.cargo, wagonDefinition, out error))
+            {
+                failureCode = CaravanSettingFailureCodes.CargoCapacityExceeded;
                 return false;
             }
 
@@ -472,6 +506,103 @@ namespace ND.Framework
                 nextAnimals.Add(CreateAnimalSave(selected, definition));
             }
             return true;
+        }
+
+        private static bool ValidateExistingCargo(
+            IReadOnlyList<CargoEntrySaveData> cargo,
+            SharedWagonDefinition wagon,
+            out string error)
+        {
+            error = string.Empty;
+            int usedSlots = 0;
+            float totalWeight = 0f;
+            foreach (CargoEntrySaveData entry in cargo ?? Array.Empty<CargoEntrySaveData>())
+            {
+                if (entry?.item == null || entry.quantity <= 0 || string.IsNullOrWhiteSpace(entry.item.itemId))
+                {
+                    error = "The existing cargo contains invalid save data.";
+                    return false;
+                }
+                usedSlots++;
+                totalWeight += Math.Max(0f, entry.item.weight) * entry.quantity;
+            }
+
+            if (usedSlots == 0) return true;
+            if (wagon == null
+                || usedSlots > Math.Max(0, wagon.InventorySlotCount)
+                || totalWeight > Math.Max(0f, wagon.MaxLoad))
+            {
+                error = "The existing cargo exceeds the selected wagon capacity.";
+                return false;
+            }
+            return true;
+        }
+
+        private static bool TryResolveRequestedAnimals(
+            CaravanSaveData caravan,
+            IReadOnlyList<CaravanDraftAnimalRequest> requests,
+            IReadOnlyDictionary<string, OwnedDraftAnimalSaveData> candidates,
+            IReadOnlyList<OwnedDraftAnimalSaveData> inventoryOrder,
+            ISet<string> usedByOtherCaravan,
+            ISharedGameDataProvider shared,
+            SharedWagonDefinition wagonDefinition,
+            ICollection<OwnedDraftAnimalSaveData> result,
+            out string error)
+        {
+            error = string.Empty;
+            if (wagonDefinition == null)
+            {
+                error = "Draft animals cannot be assigned without a wagon.";
+                return false;
+            }
+
+            var requestedCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (CaravanDraftAnimalRequest request in requests)
+            {
+                string contentId = Normalize(request?.contentId);
+                if (string.IsNullOrEmpty(contentId) || request.quantity <= 0
+                    || requestedCounts.ContainsKey(contentId)
+                    || !shared.TryGetDraftAnimal(contentId, out SharedDraftAnimalDefinition definition)
+                    || !IsAnimalEligible(wagonDefinition, definition))
+                {
+                    error = "The requested draft-animal composition is invalid or incompatible with the wagon.";
+                    return false;
+                }
+                requestedCounts.Add(contentId, request.quantity);
+            }
+
+            var selectedIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (AnimalSaveData assigned in caravan.animals ?? new List<AnimalSaveData>())
+                TryTakeRequestedAnimal(assigned?.instanceId, candidates, usedByOtherCaravan, requestedCounts, selectedIds, result);
+            foreach (OwnedDraftAnimalSaveData candidate in inventoryOrder ?? Array.Empty<OwnedDraftAnimalSaveData>())
+                TryTakeRequestedAnimal(candidate?.instanceId, candidates, usedByOtherCaravan, requestedCounts, selectedIds, result);
+
+            foreach (int remaining in requestedCounts.Values)
+            {
+                if (remaining == 0) continue;
+                error = "The requested draft-animal quantity is not available.";
+                return false;
+            }
+            return true;
+        }
+
+        private static void TryTakeRequestedAnimal(
+            string rawInstanceId,
+            IReadOnlyDictionary<string, OwnedDraftAnimalSaveData> candidates,
+            ISet<string> usedByOtherCaravan,
+            IDictionary<string, int> requestedCounts,
+            ISet<string> selectedIds,
+            ICollection<OwnedDraftAnimalSaveData> result)
+        {
+            string instanceId = Normalize(rawInstanceId);
+            if (string.IsNullOrEmpty(instanceId) || usedByOtherCaravan.Contains(instanceId)
+                || selectedIds.Contains(instanceId) || !candidates.TryGetValue(instanceId, out OwnedDraftAnimalSaveData candidate)
+                || !requestedCounts.TryGetValue(candidate.contentId, out int remaining) || remaining <= 0)
+                return;
+
+            selectedIds.Add(instanceId);
+            requestedCounts[candidate.contentId] = remaining - 1;
+            result.Add(candidate);
         }
 
         private static WagonViewData CreateWagonView(string instanceId, string contentId, int durability, WagonSaveData saved,
