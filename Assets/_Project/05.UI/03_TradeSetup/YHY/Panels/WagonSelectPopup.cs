@@ -1,28 +1,31 @@
+// =============================================================================
+// WagonSelectPopup — 웨건 선택 팝업 (동물 화면의 Wagon Info [Edit]에서 띄움)
+// =============================================================================
+// [담당] Core Gameplay (윤호영)
+// [역할] 인벤토리에 있는 웨건 목록을 버튼으로 만들고, 하나 고르면 콜백으로 돌려준다.
+//        웨건 정보 타입은 TransportSelectPanel.TransportEntry를 그대로 사용(중복 정의 방지).
+//        순수 UI — 어떤 웨건이 소지됐는지 등은 호출하는 쪽이 목록으로 넘긴다.
+// =============================================================================
+
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>웨건 선택 팝업 — 인벤토리 웨건 목록 + 선택 콜백. [1차 빌드]</summary>
 public class WagonSelectPopup : MonoBehaviour
 {
     [Header("목록")]
-    [SerializeField] private Transform listContainer;
-    [SerializeField] private Button buttonPrefab;
-    [SerializeField] private WagonInstanceRowView instanceRowPrefab;
+    [SerializeField] private Transform listContainer;   // 웨건 버튼이 담기는 부모
+    [SerializeField] private Button buttonPrefab;       // 웨건 버튼 프리팹 (자식 TMP_Text)
 
     [Header("버튼")]
-    [SerializeField] private Button cancelButton;
+    [SerializeField] private Button cancelButton;       // 닫기
 
-    private readonly List<Button> headerPool = new List<Button>();
-    private readonly List<WagonInstanceRowView> rowPool = new List<WagonInstanceRowView>();
-    private IReadOnlyList<TransportSelectPanel.TransportEntry> entries;
+    private readonly List<Button> spawned = new List<Button>();
     private Action<TransportSelectPanel.TransportEntry> onSelect;
     private bool wired;
-    private int usedHeaders;
-    private int usedRows;
-    private string expandedContentId;
 
     private void EnsureWired()
     {
@@ -31,116 +34,64 @@ public class WagonSelectPopup : MonoBehaviour
         if (cancelButton != null) cancelButton.onClick.AddListener(Close);
     }
 
+    /// <summary>팝업을 연다. wagons = 고를 수 있는 웨건 목록, onSelect = 선택 콜백.</summary>
     public void Open(IReadOnlyList<TransportSelectPanel.TransportEntry> wagons,
-        Action<TransportSelectPanel.TransportEntry> selectCallback)
+                     Action<TransportSelectPanel.TransportEntry> onSelect)
     {
         EnsureWired();
-        onSelect = selectCallback;
-        Rebuild(wagons, null);
+        this.onSelect = onSelect;
+        Rebuild(wagons);
         gameObject.SetActive(true);
     }
 
-    private void Rebuild(IReadOnlyList<TransportSelectPanel.TransportEntry> wagons,
-        string expandedContentId)
+    /// <summary>웨건 버튼 목록을 다시 만든다.</summary>
+    private void Rebuild(IReadOnlyList<TransportSelectPanel.TransportEntry> wagons)
     {
-        ResetPools();
-        entries = wagons;
-        this.expandedContentId = expandedContentId;
+        ClearButtons();
         if (listContainer == null || buttonPrefab == null || wagons == null) return;
 
-        foreach (var group in wagons.GroupBy(wagon => wagon.id, StringComparer.Ordinal))
+        foreach (TransportSelectPanel.TransportEntry w in wagons)
         {
-            TransportSelectPanel.TransportEntry first = group.First();
-            Button header = GetHeader($"{first.name}  [{TypeLabel(first.type)}]  x{group.Count()}");
-            string contentId = group.Key;
-            header.onClick.AddListener(() => Expand(contentId));
-
-            if (!string.Equals(contentId, expandedContentId, StringComparison.Ordinal) ||
-                instanceRowPrefab == null)
-                continue;
-
-            int number = 1;
-            foreach (TransportSelectPanel.TransportEntry wagon in group)
-            {
-                WagonInstanceRowView row = GetRow();
-                row.Bind(number++, wagon, Choose);
-            }
+            Button b = Instantiate(buttonPrefab, listContainer);
+            TMP_Text t = b.GetComponentInChildren<TMP_Text>();
+            if (t != null)
+                t.text = $"{w.name}  [{TypeLabel(w.type)}]  칸 {w.slotCount}" +
+                         (w.type == TransportType.Wagon ? $"  동물 {w.minAnimals}~{w.maxAnimals}" : "");
+            TransportSelectPanel.TransportEntry captured = w;   // 캡처 방지
+            b.onClick.AddListener(() => Choose(captured));
+            b.interactable = w.canSelect;
+            spawned.Add(b);
         }
     }
 
-    private void Expand(string contentId)
+    /// <summary>이동수단 타입의 한글 표기.</summary>
+    private static string TypeLabel(TransportType t)
     {
-        Rebuild(entries,
-            string.Equals(expandedContentId, contentId, StringComparison.Ordinal)
-                ? null
-                : contentId);
-    }
-
-    private Button GetHeader(string label)
-    {
-        Button button;
-        if (usedHeaders < headerPool.Count)
-            button = headerPool[usedHeaders];
-        else
-        {
-            button = Instantiate(buttonPrefab, listContainer);
-            headerPool.Add(button);
-        }
-
-        usedHeaders++;
-        button.gameObject.SetActive(true);
-        button.transform.SetAsLastSibling();
-        button.onClick.RemoveAllListeners();
-        TMP_Text text = button.GetComponentInChildren<TMP_Text>();
-        if (text != null) text.text = label;
-        return button;
-    }
-
-    private WagonInstanceRowView GetRow()
-    {
-        WagonInstanceRowView row;
-        if (usedRows < rowPool.Count)
-            row = rowPool[usedRows];
-        else
-        {
-            row = Instantiate(instanceRowPrefab, listContainer);
-            rowPool.Add(row);
-        }
-
-        usedRows++;
-        row.gameObject.SetActive(true);
-        row.transform.SetAsLastSibling();
-        return row;
-    }
-
-    private static string TypeLabel(TransportType type)
-    {
-        if (type == TransportType.Wagon) return "마차";
-        if (type == TransportType.Mount) return "탈것";
+        if (t == TransportType.Wagon) return "마차";
+        if (t == TransportType.Mount) return "탈것";
         return "도보";
     }
 
-    private void Choose(TransportSelectPanel.TransportEntry wagon)
+    /// <summary>웨건 선택 → 콜백 + 닫기.</summary>
+    private void Choose(TransportSelectPanel.TransportEntry w)
     {
-        Action<TransportSelectPanel.TransportEntry> callback = onSelect;
+        Action<TransportSelectPanel.TransportEntry> cb = onSelect;
         onSelect = null;
         gameObject.SetActive(false);
-        callback?.Invoke(wagon);
+        cb?.Invoke(w);
     }
 
+    /// <summary>취소로 닫기.</summary>
     public void Close()
     {
         onSelect = null;
         gameObject.SetActive(false);
     }
 
-    private void ResetPools()
+    private void ClearButtons()
     {
-        usedHeaders = 0;
-        usedRows = 0;
-        foreach (Button header in headerPool)
-            if (header != null) header.gameObject.SetActive(false);
-        foreach (WagonInstanceRowView row in rowPool)
-            if (row != null) row.gameObject.SetActive(false);
+        foreach (Button b in spawned)
+            if (b != null) Destroy(b.gameObject);
+        spawned.Clear();
     }
 }

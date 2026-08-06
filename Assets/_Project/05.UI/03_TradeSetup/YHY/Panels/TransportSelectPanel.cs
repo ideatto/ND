@@ -229,7 +229,6 @@ public class TransportSelectPanel : MonoBehaviour
         public float maxLoad;     // 최대 적재량(무게)
         public int minAnimals;    // 최소 요구 동물 수 (Wagon만 의미)
         public int maxAnimals;    // 최대 요구 동물 수 (Wagon만 의미)
-        public DraftAnimalType[] eligibleAnimalTypes;
         public float baseMoveSpeed; // 마차 기본 이동속도 (Wagon은 0, 동물 화면 속도계산에 사용)
         public int owned;         // 소지 개수(0 = 미소지 빈 슬롯). 도보(None)는 무시하고 항상 사용 가능
         public float overLoad;
@@ -249,7 +248,6 @@ public class TransportSelectPanel : MonoBehaviour
             this.maxLoad = maxLoad;
             this.minAnimals = minAnimals;
             this.maxAnimals = maxAnimals;
-            eligibleAnimalTypes = Array.Empty<DraftAnimalType>();
             this.baseMoveSpeed = baseMoveSpeed;
             this.owned = owned;
             overLoad = 0f;
@@ -270,12 +268,9 @@ public class TransportSelectPanel : MonoBehaviour
             maxLoad = viewData.maxLoad;
             minAnimals = viewData.minRequireAnimals;
             maxAnimals = viewData.maxPullAnimals;
-            eligibleAnimalTypes = viewData.eligibleAnimalTypes ?? Array.Empty<DraftAnimalType>();
             baseMoveSpeed = viewData.baseMoveSpeed;
             // Detached setting options describe one owned instance per entry.
-            owned = viewData.isOwned
-                ? (string.IsNullOrEmpty(viewData.wagonInstanceId) ? viewData.ownedAmount : 1)
-                : 0;
+            owned = string.IsNullOrEmpty(viewData.wagonInstanceId) ? viewData.ownedAmount : 1;
             overLoad = viewData.overLoad;
             currentDurability = viewData.currentDurability;
             maxDurability = viewData.maxDurability;
