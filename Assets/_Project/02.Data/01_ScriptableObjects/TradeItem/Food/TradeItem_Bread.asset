@@ -19,12 +19,12 @@ MonoBehaviour:
     \uC218\uC694\uAC00 \uC788\uB2E4."
   rarity: 1
   category: 0
-  baseBuyPrice: 1
-  baseSellPrice: 5
+  baseBuyPrice: 50
+  baseSellPrice: 50
   canStack: 1
-  maxCount: 50
+  maxCount: 40
   weight: 0.5
   isConsumable: 1
-  affectModify: 0
+  affectModify: 1
   modifiers: []
   localSpecialty: 0

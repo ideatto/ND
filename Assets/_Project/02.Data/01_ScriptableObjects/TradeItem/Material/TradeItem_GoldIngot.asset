@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
+  m_Name: TradeItem_GoldIngot
+  m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
+  itemId: GoldIngot
+  displayName: "\uAE08\uC8FC\uAD34"
+  icon: {fileID: 0}
+  description: "\uAE08\uAD11\uC11D\uC744 \uAD73\uD600 \uB9CC\uB4E0 \uC8FC\uAD34\uC785\uB2C8\uB2E4.
+    \uB9D9\uC18C\uC0AC \uC774\uB7F0\uAC78 \uCDE8\uAE09 \uD558\uB294 \uB2F9\uC2E0\uC740
+    \uC815\uB9D0 \uBD80\uC790\uB85C\uAD70\uC694."
+  rarity: 1
+  category: 1
+  baseBuyPrice: 800
+  baseSellPrice: 800
+  canStack: 1
+  maxCount: 5
+  weight: 5
+  isConsumable: 0
+  affectModify: 1
+  modifiers: []
+  localSpecialty: 0
