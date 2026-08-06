@@ -1,8 +1,12 @@
 using ND.Framework;
 using NUnit.Framework;
+using ND.UI.InGame.TransportInventory;
 using System.Collections.Generic;
 using System.Reflection;
+using TMPro;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 public sealed class PlayerTransportInventoryConsistencyTests
 {
@@ -12,6 +16,7 @@ public sealed class PlayerTransportInventoryConsistencyTests
     [SetUp]
     public void SetUp()
     {
+        RemoveDestroyedTransportInventorySubscribers();
         if (PlayerMainManager.Instance != null)
             Object.DestroyImmediate(PlayerMainManager.Instance.gameObject);
 
@@ -39,6 +44,107 @@ public sealed class PlayerTransportInventoryConsistencyTests
         Assert.That(player.draftAnimalInventory, Is.Empty);
         Assert.That(player.homeInventory, Is.Not.SameAs(player.wagonInventory));
         Assert.That(player.homeInventory, Is.Not.SameAs(player.draftAnimalInventory));
+    }
+
+    [Test]
+    public void CreateTransport_IssuesUniqueInstanceIds_AndInitializesWagonDurability()
+    {
+        Assert.That(manager.TryCreateWagon("Wagon_M", out OwnedWagonSaveData wagon,
+            out TransportInventoryValidationFailure wagonFailure), Is.True);
+        Assert.That(wagonFailure, Is.EqualTo(TransportInventoryValidationFailure.None));
+        Assert.That(wagon.instanceId, Is.Not.Empty);
+        Assert.That(wagon.contentId, Is.EqualTo("Wagon_M"));
+        Assert.That(wagon.currentDurability, Is.EqualTo(137));
+
+        Assert.That(manager.TryCreateDraftAnimal("Horse", out OwnedDraftAnimalSaveData first,
+            out TransportInventoryValidationFailure firstFailure), Is.True);
+        Assert.That(manager.TryCreateDraftAnimal("Horse", out OwnedDraftAnimalSaveData second,
+            out TransportInventoryValidationFailure secondFailure), Is.True);
+        Assert.That(firstFailure, Is.EqualTo(TransportInventoryValidationFailure.None));
+        Assert.That(secondFailure, Is.EqualTo(TransportInventoryValidationFailure.None));
+        Assert.That(first.instanceId, Is.Not.EqualTo(second.instanceId));
+        Assert.That(manager.DraftAnimalInventory, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void RewardDebugButton_DefaultPrefab_GrantsConfiguredTransports()
+    {
+        const string path = "Assets/_Project/08.Prefabs/Debug/TransportInventoryRewardDebugButton.prefab";
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        Assert.That(prefab, Is.Not.Null);
+        GameObject instance = Object.Instantiate(prefab);
+        try
+        {
+            Assert.That(instance.GetComponent<TransportInventoryRewardDebugButton>().TryGrantRewards(manager), Is.True);
+            Assert.That(manager.WagonInventory, Has.Count.EqualTo(2));
+            Assert.That(manager.WagonInventory[0].contentId, Is.EqualTo("Wagon_M"));
+            Assert.That(manager.WagonInventory[1].contentId, Is.EqualTo("Wagon_S"));
+            Assert.That(manager.DraftAnimalInventory, Has.Count.EqualTo(2));
+            Assert.That(manager.DraftAnimalInventory[0].contentId, Is.EqualTo("Horse"));
+            Assert.That(manager.DraftAnimalInventory[0].instanceId,
+                Is.Not.EqualTo(manager.DraftAnimalInventory[1].instanceId));
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
+        }
+    }
+
+    [Test]
+    public void Reward_ToPopup_ShowsGrantedItemsAcrossTabsAndPositionsTooltipInsideBounds()
+    {
+        ND.Framework.SaveData save = SaveWithFarm(1);
+        SetFallbackSave(save);
+        GameObject reward = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/_Project/08.Prefabs/Debug/TransportInventoryRewardDebugButton.prefab"));
+        GameObject popup = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/_Project/08.Prefabs/UI/TransportInventory/TransportInventoryPopup.prefab"));
+        try
+        {
+            TransportInventoryPopupController popupController = popup.GetComponent<TransportInventoryPopupController>();
+            typeof(TransportInventoryPopupController).GetMethod("Awake",
+                    BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(popupController, null);
+            // GrantRewards is the Button listener. EditMode does not execute its PlayMode Awake hookup.
+            Assert.That(reward.GetComponent<TransportInventoryRewardDebugButton>().TryGrantRewards(manager), Is.True,
+                "Configured reward grant should succeed.");
+            Assert.That(save.player.wagonInventory, Has.Count.EqualTo(2));
+            Assert.That(save.player.draftAnimalInventory, Has.Count.EqualTo(2));
+
+            RectTransform popupRect = popup.GetComponent<RectTransform>();
+            popupRect.anchorMin = popupRect.anchorMax = new Vector2(.5f, .5f);
+            popupRect.sizeDelta = new Vector2(1280f, 720f);
+            var provider = new TransportInventoryDataProvider(() => save, CreateCatalog);
+            Assert.That(popupController.Open(provider), Is.True,
+                "Farm level 1 should allow the popup to open.");
+            Canvas.ForceUpdateCanvases();
+
+            TransportInventoryPanelView wagonPanel = FindComponent<TransportInventoryPanelView>(popup, "WagonPanel");
+            TransportInventoryPanelView animalPanel = FindComponent<TransportInventoryPanelView>(popup, "DraftAnimalPanel");
+            TransportInventoryTooltipView tooltip = popup.GetComponentInChildren<TransportInventoryTooltipView>(true);
+            typeof(TransportInventoryTooltipView).GetMethod("Awake",
+                    BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(tooltip, null);
+            wagonPanel.SetTooltip(tooltip);
+            animalPanel.SetTooltip(tooltip);
+            Assert.That(wagonPanel.gameObject.activeSelf, Is.True);
+            Assert.That(animalPanel.gameObject.activeSelf, Is.False);
+
+            TransportInventorySlotView wagonSlot = wagonPanel.GetComponentsInChildren<TransportInventorySlotView>(false)[0];
+            Assert.That(SerializedObjectReference<GameObject>(wagonSlot, "durabilityBadge").activeSelf, Is.True);
+            AssertTooltip(popup, wagonSlot, "Wagon M");
+
+            FindComponent<Button>(popup, "DraftAnimalTab").onClick.Invoke();
+            Assert.That(wagonPanel.gameObject.activeSelf, Is.False);
+            Assert.That(animalPanel.gameObject.activeSelf, Is.True);
+            TransportInventorySlotView animalSlot = animalPanel.GetComponentsInChildren<TransportInventorySlotView>(false)[0];
+            Assert.That(SerializedObjectReference<GameObject>(animalSlot, "durabilityBadge").activeSelf, Is.False);
+            AssertTooltip(popup, animalSlot, "Horse");
+        }
+        finally
+        {
+            popup.GetComponent<TransportInventoryPopupController>()?.Close();
+            Object.DestroyImmediate(popup);
+            Object.DestroyImmediate(reward);
+        }
     }
 
     [Test]
@@ -211,6 +317,13 @@ public sealed class PlayerTransportInventoryConsistencyTests
         field.SetValue(manager, save);
     }
 
+    private static void RemoveDestroyedTransportInventorySubscribers()
+    {
+        FieldInfo field = typeof(FrameworkEvents).GetField("TransportInventoryChanged",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        field?.SetValue(null, null);
+    }
+
     private static OwnedWagonSaveData Wagon(string instanceId, string contentId)
     {
         return new OwnedWagonSaveData
@@ -249,14 +362,44 @@ public sealed class PlayerTransportInventoryConsistencyTests
             new Dictionary<string, SharedTradeItemDefinition>(),
             new Dictionary<string, SharedWagonDefinition>
             {
-                ["Wagon_M"] = new SharedWagonDefinition { Id = "Wagon_M" },
+                ["Wagon_M"] = new SharedWagonDefinition
+                    { Id = "Wagon_M", DisplayName = "Wagon M", Description = "Medium wagon", BaseBuyPrice = 1000, MaxDurability = 137 },
+                ["Wagon_S"] = new SharedWagonDefinition
+                    { Id = "Wagon_S", DisplayName = "Wagon S", Description = "Small wagon", BaseBuyPrice = 700, MaxDurability = 91 },
                 ["Wagon_L"] = new SharedWagonDefinition { Id = "Wagon_L" }
             },
             new Dictionary<string, SharedDraftAnimalDefinition>
             {
-                ["Horse"] = new SharedDraftAnimalDefinition { Id = "Horse" },
+                ["Horse"] = new SharedDraftAnimalDefinition
+                    { Id = "Horse", DisplayName = "Horse", Description = "Draft horse", BaseBuyPrice = 500 },
                 ["Donkey"] = new SharedDraftAnimalDefinition { Id = "Donkey" }
             },
             new Dictionary<string, SharedRouteDefinition>());
+    }
+
+    private static T FindComponent<T>(GameObject root, string objectName) where T : Component
+    {
+        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+            if (child.name == objectName) return child.GetComponent<T>();
+        return null;
+    }
+
+    private static T SerializedObjectReference<T>(Object target, string propertyName) where T : Object
+    {
+        return new SerializedObject(target).FindProperty(propertyName).objectReferenceValue as T;
+    }
+
+    private static void AssertTooltip(GameObject popup, TransportInventorySlotView slot, string expectedName)
+    {
+        TransportInventoryTooltipView tooltip = popup.GetComponentInChildren<TransportInventoryTooltipView>(true);
+        slot.OnPointerEnter(null);
+        Assert.That(tooltip.gameObject.activeSelf, Is.True, "Hover should show the tooltip.");
+        TMP_Text nameText = SerializedObjectReference<TMP_Text>(tooltip, "displayNameText");
+        Assert.That(nameText.text, Is.EqualTo(expectedName));
+
+        RectTransform bounds = SerializedObjectReference<RectTransform>(tooltip, "bounds");
+        RectTransform rect = tooltip.transform as RectTransform;
+        Assert.That(rect.anchoredPosition.x, Is.InRange(bounds.rect.xMin, bounds.rect.xMax - rect.rect.width));
+        Assert.That(rect.anchoredPosition.y, Is.InRange(bounds.rect.yMin + rect.rect.height, bounds.rect.yMax));
     }
 }

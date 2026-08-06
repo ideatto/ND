@@ -348,6 +348,108 @@ public class PlayerMainManager : MonoBehaviour
         return ValidateUniqueInstance(animal.instanceId, out failure);
     }
 
+    public bool CanCreateWagon(string contentId, int quantity, out TransportInventoryValidationFailure failure)
+    {
+        string normalizedId = contentId?.Trim() ?? string.Empty;
+        if (quantity <= 0 || string.IsNullOrEmpty(normalizedId))
+        {
+            failure = TransportInventoryValidationFailure.InvalidIdentity;
+            return false;
+        }
+        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
+        if (catalog == null || !catalog.TryGetWagon(normalizedId, out ND.Framework.SharedWagonDefinition wagon)
+            || wagon == null)
+        {
+            failure = TransportInventoryValidationFailure.ContentUnavailable;
+            return false;
+        }
+        ND.Framework.TransportInventoryState state = TransportInventoryState;
+        if (!state.CanOpen)
+        {
+            failure = TransportInventoryValidationFailure.FarmUnavailable;
+            return false;
+        }
+        if (WagonInventoryList.Count > state.WagonSlotCount - quantity)
+        {
+            failure = TransportInventoryValidationFailure.CapacityExceeded;
+            return false;
+        }
+        failure = TransportInventoryValidationFailure.None;
+        return true;
+    }
+
+    public bool CanCreateDraftAnimal(string contentId, int quantity, out TransportInventoryValidationFailure failure)
+    {
+        string normalizedId = contentId?.Trim() ?? string.Empty;
+        if (quantity <= 0 || string.IsNullOrEmpty(normalizedId))
+        {
+            failure = TransportInventoryValidationFailure.InvalidIdentity;
+            return false;
+        }
+        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
+        if (catalog == null || !catalog.TryGetDraftAnimal(normalizedId, out ND.Framework.SharedDraftAnimalDefinition animal)
+            || animal == null)
+        {
+            failure = TransportInventoryValidationFailure.ContentUnavailable;
+            return false;
+        }
+        ND.Framework.TransportInventoryState state = TransportInventoryState;
+        if (!state.CanOpen)
+        {
+            failure = TransportInventoryValidationFailure.FarmUnavailable;
+            return false;
+        }
+        if (DraftAnimalInventoryList.Count > state.DraftAnimalSlotCount - quantity)
+        {
+            failure = TransportInventoryValidationFailure.CapacityExceeded;
+            return false;
+        }
+        failure = TransportInventoryValidationFailure.None;
+        return true;
+    }
+
+    public bool TryCreateWagon(string contentId, out ND.Framework.OwnedWagonSaveData created,
+        out TransportInventoryValidationFailure failure)
+    {
+        created = null;
+        string normalizedId = contentId?.Trim() ?? string.Empty;
+        if (!CanCreateWagon(normalizedId, 1, out failure)) return false;
+        ResolveTransportCatalog().TryGetWagon(normalizedId, out ND.Framework.SharedWagonDefinition definition);
+        var candidate = new ND.Framework.OwnedWagonSaveData
+        {
+            instanceId = CreateTransportInstanceId(),
+            contentId = normalizedId,
+            currentDurability = Math.Max(0, definition.MaxDurability)
+        };
+        if (!TryAddWagon(candidate))
+        {
+            failure = TransportInventoryValidationFailure.DuplicateInstanceId;
+            return false;
+        }
+        created = Copy(candidate);
+        return true;
+    }
+
+    public bool TryCreateDraftAnimal(string contentId, out ND.Framework.OwnedDraftAnimalSaveData created,
+        out TransportInventoryValidationFailure failure)
+    {
+        created = null;
+        string normalizedId = contentId?.Trim() ?? string.Empty;
+        if (!CanCreateDraftAnimal(normalizedId, 1, out failure)) return false;
+        var candidate = new ND.Framework.OwnedDraftAnimalSaveData
+        {
+            instanceId = CreateTransportInstanceId(),
+            contentId = normalizedId
+        };
+        if (!TryAddDraftAnimal(candidate))
+        {
+            failure = TransportInventoryValidationFailure.DuplicateInstanceId;
+            return false;
+        }
+        created = Copy(candidate);
+        return true;
+    }
+
     /// <summary>일반 획득으로 마차를 추가한다. 정원 50대를 초과할 수 없다.</summary>
     public bool TryAddWagon(ND.Framework.OwnedWagonSaveData wagon)
     {
@@ -357,7 +459,7 @@ public class PlayerMainManager : MonoBehaviour
         ND.Framework.OwnedWagonSaveData stored = Copy(wagon);
         WagonInventoryList.Add(stored);
         wagonsByInstanceId.Add(stored.instanceId, stored);
-        OnWagonInventoryChanged?.Invoke();
+        FrameworkEvents.RaiseTransportInventoryChanged();
         return true;
     }
 
@@ -370,7 +472,7 @@ public class PlayerMainManager : MonoBehaviour
         ND.Framework.OwnedDraftAnimalSaveData stored = Copy(animal);
         DraftAnimalInventoryList.Add(stored);
         draftAnimalsByInstanceId.Add(stored.instanceId, stored);
-        OnDraftAnimalInventoryChanged?.Invoke();
+        FrameworkEvents.RaiseTransportInventoryChanged();
         return true;
     }
 
@@ -381,7 +483,7 @@ public class PlayerMainManager : MonoBehaviour
         ND.Framework.OwnedWagonSaveData wagon = FindWagon(instanceId, contentId);
         WagonInventoryList.Remove(wagon);
         wagonsByInstanceId.Remove(instanceId);
-        OnWagonInventoryChanged?.Invoke();
+        FrameworkEvents.RaiseTransportInventoryChanged();
         return true;
     }
 
@@ -392,7 +494,7 @@ public class PlayerMainManager : MonoBehaviour
         ND.Framework.OwnedDraftAnimalSaveData animal = FindDraftAnimal(instanceId, contentId);
         DraftAnimalInventoryList.Remove(animal);
         draftAnimalsByInstanceId.Remove(instanceId);
-        OnDraftAnimalInventoryChanged?.Invoke();
+        FrameworkEvents.RaiseTransportInventoryChanged();
         return true;
     }
 
@@ -499,6 +601,14 @@ public class PlayerMainManager : MonoBehaviour
         }
         failure = TransportInventoryValidationFailure.None;
         return true;
+    }
+
+    private string CreateTransportInstanceId()
+    {
+        string instanceId;
+        do instanceId = ND.Framework.SaveDataLookup.NewInstanceId();
+        while (ContainsTransportInstance(instanceId));
+        return instanceId;
     }
 
     private static bool ValidateIdentity(string instanceId, string contentId, out TransportInventoryValidationFailure failure)
