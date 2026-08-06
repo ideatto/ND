@@ -25,6 +25,12 @@
 
 `TransportInventoryMainUiEntry.cs`를 제거했다면 먼저 복구해야 한다. 이 컴포넌트가 없으면 목장 행 클릭 이벤트와 팝업을 Inspector 연결만으로 이어줄 수 없다.
 
+파일 경로는 다음으로 고정한다.
+
+`Assets/_Project/05.UI/04_InGame/YHY/Scripts/TransportInventory/TransportInventoryMainUiEntry.cs`
+
+파일이 없는 경우에는 이 문서의 **부록 A**에 있는 전체 소스로 복구한 뒤 Unity 컴파일이 끝날 때까지 기다린다. 컴파일 전에는 Inspector의 Add Component 목록에 나타나지 않는다.
+
 ### Caravan Set 마차 선택
 
 - `Assets/_Project/08.Prefabs/UI/Trade/WagonSelectPopup.prefab`
@@ -146,6 +152,8 @@
 
 런타임 `Find`로 연결하지 않는다.
 
+여기서 `MainUICanvas.prefab` 원본에 Apply하지 않는다. 현재 조립 기준은 `InGame.unity` 안의 `MainUICanvas` 프리팹 인스턴스에 Popup 인스턴스와 Entry 컴포넌트를 추가하는 방식이다. 다른 씬까지 공통 적용하려는 별도 합의가 있을 때만 `MainUICanvas.prefab`에 Apply한다.
+
 `TransportInventoryMainUiEntry`는 다음 역할만 담당한다.
 
 - `BuildingListPanel.BuildingClicked` 이벤트 구독
@@ -197,6 +205,16 @@ InGame
 
 기존 `TestCaravanSettingService`와 RuntimeBridge를 동시에 명령 처리자로 연결하지 않는다. 저장 명령이 두 번 등록될 수 있다.
 
+기존 `TestCaravanSettingService`를 교체할 때는 다음 순서를 지킨다.
+
+1. 기존 `cargoCatalog`의 모든 `TradeItemData` 참조를 기록한다.
+2. 같은 GameObject에 `CaravanSettingRuntimeBridge`를 추가한다.
+3. 기록한 에셋을 순서 그대로 `tradeItemAssets`에 연결한다.
+4. Overview Binding의 네 Provider/Command 필드를 RuntimeBridge로 교체한다.
+5. 네 필드가 모두 교체된 것을 확인한 뒤에만 `TestCaravanSettingService`를 제거한다.
+
+중간에 임시 서비스부터 제거하면 `cargoCatalog` 참조를 잃을 수 있다.
+
 정상 결과:
 
 - Caravan Set 저장 시 선택한 `wagonInstanceId`와 동물 `instanceId`가 SaveData에 유지된다.
@@ -237,6 +255,8 @@ InGame
 9. 필요할 때만 테스트 지급 버튼 배치
 10. Unity Console 오류가 없는지 확인 후 PlayMode 검증
 
+Unity Test Runner가 PlayMode 테스트를 `0 tests`로 반환하면 성공으로 간주하지 않는다. 이 경우 위 체크리스트를 수동 PlayMode로 실행하거나 PlayMode test assembly 설정을 먼저 복구한다.
+
 ## 10. PlayMode 최종 검증 순서
 
 1. 목장을 건설하고 `목장 Lv.1` 행이 생기는지 확인한다.
@@ -249,3 +269,124 @@ InGame
 8. Transport Inventory에서 선택한 마차와 동물에 Caravan 사용 중 표시가 남는지 확인한다.
 9. 무역을 출발시킨 뒤에도 같은 `instanceId`와 사용 중 표시가 유지되는지 확인한다.
 10. 플레이 모드를 종료한 뒤 Missing Reference 및 이벤트 이중 등록 오류가 없는지 확인한다.
+
+## 11. Scene diff에서 재현하지 않아야 하는 변경
+
+수동 조립 과정에서 Scene을 저장하면 작업과 관계없는 월드 오브젝트 좌표, 라인 렌더러 위치 또는 RectTransform override가 함께 기록될 수 있다. 다음 변경은 이 기능의 필수 조립 사항이 아니다.
+
+- 지형, 풀, 바위 등 월드 장식물의 위치 배열 변경
+- Transport Inventory와 무관한 Main UI 앵커 변경
+- 기존 팝업 또는 패널의 의미 없는 빈 직렬화 필드 추가
+- Prefab instance의 이름 외 불필요한 Transform override
+
+재조립 후 `git diff InGame.unity`를 확인하고, 필수 오브젝트 배치·컴포넌트·참조 외 변경은 되돌린다.
+
+## 부록 A. `TransportInventoryMainUiEntry.cs` 전체 소스
+
+```csharp
+using System;
+using ND.Framework;
+using UnityEngine;
+
+namespace ND.UI.InGame.TransportInventory
+{
+    [DisallowMultipleComponent]
+    public sealed class TransportInventoryMainUiEntry : MonoBehaviour
+    {
+        [SerializeField] private BuildingListPanel buildingListPanel;
+        [SerializeField] private TransportInventoryPopupController popup;
+        private bool openWhenReady;
+
+        private void Awake()
+        {
+            if (popup != null) popup.gameObject.SetActive(false);
+        }
+
+        private void OnEnable()
+        {
+            if (buildingListPanel != null)
+                buildingListPanel.BuildingClicked += HandleBuildingClicked;
+            FrameworkEvents.SharedGameDataLoaded += HandleFrameworkReady;
+            FrameworkEvents.LoadCompleted += HandleFrameworkReady;
+        }
+
+        private void OnDisable()
+        {
+            if (buildingListPanel != null)
+                buildingListPanel.BuildingClicked -= HandleBuildingClicked;
+            FrameworkEvents.SharedGameDataLoaded -= HandleFrameworkReady;
+            FrameworkEvents.LoadCompleted -= HandleFrameworkReady;
+            openWhenReady = false;
+        }
+
+        private void HandleBuildingClicked(string buildingName)
+        {
+            if (!string.Equals(buildingName, TransportInventoryFunction.BuildingDisplayName,
+                    StringComparison.Ordinal))
+                return;
+
+            openWhenReady = true;
+            TryOpen();
+        }
+
+        private void HandleFrameworkReady(ISharedGameDataProvider _) => TryOpen();
+        private void HandleFrameworkReady(ND.Framework.SaveData _) => TryOpen();
+
+        private void TryOpen()
+        {
+            FrameworkRoot root = FrameworkRoot.Instance;
+            if (!openWhenReady || root == null || popup == null || root.CurrentSaveData == null
+                || root.SharedGameData == null || !root.SharedGameData.IsLoaded)
+                return;
+
+            openWhenReady = false;
+            popup.Open(new TransportInventoryDataProvider(
+                () => FrameworkRoot.Instance?.CurrentSaveData,
+                () => FrameworkRoot.Instance?.SharedGameData));
+        }
+    }
+}
+```
+
+Unity가 `.meta` 파일을 자동 생성하도록 Project 창 갱신을 기다린다. 기존 `.meta`를 임의로 복사하거나 GUID를 직접 작성하지 않는다.
+
+## 부록 B. 조립 완료 판정 체크리스트
+
+다음 항목이 모두 참이어야 조립 완료다.
+
+- InGame Scene에 `CaravanSettingRuntimeBridge`가 정확히 1개 있다.
+- InGame Scene에 `TestCaravanSettingService`가 남아 있지 않다.
+- Overview Binding의 네 서비스 참조가 모두 같은 RuntimeBridge다.
+- RuntimeBridge의 `tradeItemAssets`가 비어 있지 않고 중복 ItemId가 없다.
+- `TransportInventoryPopupController`가 정확히 1개 있고 시작 시 비활성화다.
+- `TransportInventoryMainUiEntry`가 정확히 1개 있다.
+- Entry의 `buildingListPanel`과 `popup`이 모두 연결되어 있다.
+- 테스트 지급 버튼을 사용한다면 정확히 1개만 배치되어 있다.
+- `TradePrepareUI/S3_Animal`의 `AnimalInventoryPanel.wagonPopup`이 새 중첩 프리팹을 참조한다.
+- `WagonSelectPopup.instanceRowPrefab`이 비어 있지 않다.
+- Console에 Missing Script, Missing Reference, 이벤트 이중 등록 오류가 없다.
+
+## 부록 C. 조립 계약 테스트 갱신 기준
+
+RuntimeBridge 조립을 커밋할 때는 Scene 계약 테스트도 같은 커밋에 포함한다. 기존 테스트가 `TestCaravanSettingService` 1개를 기대하면 정상 조립을 실패로 판정한다.
+
+`CaravanSettingSceneContractTests`의 InGame 계약은 다음을 검사하도록 갱신한다.
+
+- `InGame.unity`: `TestCaravanSettingService` 0개, `CaravanSettingRuntimeBridge` 1개
+- `InGame_Test.unity`: 기존 임시 서비스 구조를 유지한다면 `TestCaravanSettingService` 1개, RuntimeBridge 0개
+- InGame RuntimeBridge의 `tradeItemAssets`가 비어 있지 않고 ItemId 중복이 없음
+- Overview Binding의 네 서비스 필드가 모두 RuntimeBridge를 참조함
+- Transport Inventory Entry, Popup, 테스트 지급 버튼이 각각 1개
+- Entry의 `buildingListPanel`, `popup` 참조가 연결됨
+- Popup의 시작 상태가 비활성화임
+
+`CaravanSettingPlayModeSmokeTests`는 다음 흐름을 추가한다.
+
+1. Fixture에 `목장`, 레벨 1 건물 데이터를 추가한다.
+2. InGame의 서비스 타입을 `CaravanSettingRuntimeBridge`로 검사한다.
+3. 테스트 지급 버튼을 눌러 마차 2개와 동물 2마리가 추가되는지 검사한다.
+4. `BuildingListPanel`에서 `목장`으로 시작하는 버튼을 눌러 Popup이 열리는지 검사한다.
+5. 동물 탭 버튼을 눌러 동물 패널이 활성화되는지 검사한다.
+6. Popup을 닫은 뒤 기존 Caravan Setting smoke flow를 계속 실행한다.
+
+테스트 갱신은 런타임 기능을 만드는 단계가 아니라, 조립 결과가 이후 실수로 끊기지 않게 보호하는 단계다. Scene 조립만 임시 검증하고 버릴 경우에는 테스트 파일을 수정하지 않아도 되지만, 조립 변경을 커밋할 경우에는 반드시 함께 갱신한다.
