@@ -174,6 +174,21 @@ MonoBehaviour:
     typeName: RouteData
     dataId: WindyToBase
     watchRootKind: 0
+  - assetGuid: dccc90017d3b6104e8d31abefd3039ea
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_QuestDummy.asset
+    typeName: QuestData
+    dataId: quest_dummy_basecamp
+    watchRootKind: 0
+  - assetGuid: 6cbf3fe9eef048b4b9c62884b6795a8c
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_RiverTownSupply.asset
+    typeName: QuestData
+    dataId: "\uB354\uBBF8\uC6A9 \uB9AC\uBC84\uD0C0\uC6B4"
+    watchRootKind: 0
+  - assetGuid: d09d3d51c8d0a7a4fa4554c43f0c840f
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_SP_RiverTown.asset
+    typeName: QuestData
+    dataId: rivertownproduct
+    watchRootKind: 0
   - assetGuid: 36370e4bc577148448efe47144bd7cf0
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Bakery.asset
     typeName: BuildData
@@ -249,16 +264,6 @@ MonoBehaviour:
     typeName: RouteData
     dataId: dummyroute
     watchRootKind: 1
-  - assetGuid: dccc90017d3b6104e8d31abefd3039ea
-    assetPath: Assets/99.Sandbox/_LJH/02.SO/QuestSO/Quest_QuestDummy.asset
-    typeName: QuestData
-    dataId: quest_dummy_basecamp
-    watchRootKind: 1
-  - assetGuid: 6cbf3fe9eef048b4b9c62884b6795a8c
-    assetPath: Assets/99.Sandbox/_LJH/02.SO/QuestSO/Quest_RiverTownSupply.asset
-    typeName: QuestData
-    dataId: "\uB354\uBBF8\uC6A9 \uB9AC\uBC84\uD0C0\uC6B4"
-    watchRootKind: 1
   - assetGuid: 8fed33f8956e0bf41bba60cf9ed0d826
     assetPath: Assets/99.Sandbox/_LJH/02.SO/BuildSO/Build_Dummy.asset
     typeName: BuildData
@@ -309,6 +314,7 @@ MonoBehaviour:
   - e84432ee7ce491e4d943cc0c98b0a48b
   - dccc90017d3b6104e8d31abefd3039ea
   - 6cbf3fe9eef048b4b9c62884b6795a8c
+  - d09d3d51c8d0a7a4fa4554c43f0c840f
   - 971038b3f7d63734992d6faffe696ba0
   - 1c25557e3dff25c44a9619db8fd7b6a7
   - b55dc2ae6d125fc4a8cb294bb2e31221

@@ -87,7 +87,11 @@ namespace ND.Framework
             MarketInventorySaveData inventory = FindInventory(saveData, market.Id);
             var itemIds = new List<string>();
             AddUniqueIds(itemIds, market.TradeItemIds);
-            AddUniqueIds(itemIds, market.LocalSpecialtyItemIds);
+            AddUnlockedSpecialtyIds(
+                itemIds,
+                market.LocalSpecialtyItemIds,
+                saveData.world?.unlockedTownSpecialties,
+                caravan.currentTownId);
 
             var items = new List<CaravanMarketCatalogItem>(itemIds.Count);
             for (int index = 0; index < itemIds.Count; index++)
@@ -160,6 +164,35 @@ namespace ND.Framework
                 string itemId = NormalizeId(source[index]);
                 if (!string.IsNullOrEmpty(itemId) && !destination.Contains(itemId))
                     destination.Add(itemId);
+            }
+        }
+
+        private static void AddUnlockedSpecialtyIds(
+            List<string> destination,
+            IReadOnlyList<string> specialtyItemIds,
+            IReadOnlyList<TownSpecialtyUnlockSaveData> unlocks,
+            string townId)
+        {
+            if (specialtyItemIds == null || unlocks == null)
+                return;
+
+            for (int index = 0; index < specialtyItemIds.Count; index++)
+            {
+                string itemId = NormalizeId(specialtyItemIds[index]);
+                if (string.IsNullOrEmpty(itemId) || destination.Contains(itemId))
+                    continue;
+
+                for (int unlockIndex = 0; unlockIndex < unlocks.Count; unlockIndex++)
+                {
+                    TownSpecialtyUnlockSaveData unlock = unlocks[unlockIndex];
+                    if (unlock != null
+                        && string.Equals(unlock.townId, townId, StringComparison.Ordinal)
+                        && string.Equals(unlock.itemId, itemId, StringComparison.Ordinal))
+                    {
+                        destination.Add(itemId);
+                        break;
+                    }
+                }
             }
         }
 

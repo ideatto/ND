@@ -16,8 +16,8 @@ MonoBehaviour:
   questName: "\uB9AC\uBC84\uD0C0\uC6B4 \uB354\uBBF8 \uD018\uC2A4\uD2B8"
   description: "\uB354\uBBF8\uB354\uBBF8 \uD018\uC2A4\uD2B8"
   type: 0
-  repeatPolicy: 1
-  questRegenSeconds: 3600
+  repeatPolicy: 0
+  questRegenSeconds: 0
   paymentPolicy: 0
   submissionTownId: RiverTown
   requiredTradingCurrency: 100
