@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -7,7 +8,9 @@ namespace ND.UI.InGame.TransportInventory
 {
     public sealed class TransportInventoryPanelView : MonoBehaviour
     {
-        [SerializeField] private TransportInventorySlotView[] slots;
+        [SerializeField] private List<TransportInventorySlotView> slots = new List<TransportInventorySlotView>();
+        [SerializeField] private TransportInventorySlotView slotPrefab;
+        [SerializeField] private RectTransform slotContent;
         [SerializeField] private TMP_Text titleText;
         [SerializeField] private TMP_Text capacityText;
         [SerializeField] private TMP_Text requiredLevelText;
@@ -17,6 +20,8 @@ namespace ND.UI.InGame.TransportInventory
 
         public void ConfigureReferences(
             TransportInventorySlotView[] slotViews,
+            TransportInventorySlotView prefab,
+            RectTransform content,
             TMP_Text title,
             TMP_Text capacity,
             TMP_Text requiredLevel,
@@ -24,7 +29,9 @@ namespace ND.UI.InGame.TransportInventory
             GameObject overlay,
             ScrollRect scroll)
         {
-            slots = slotViews ?? System.Array.Empty<TransportInventorySlotView>();
+            slots = new List<TransportInventorySlotView>(slotViews ?? Array.Empty<TransportInventorySlotView>());
+            slotPrefab = prefab;
+            slotContent = content;
             titleText = title;
             capacityText = capacity;
             requiredLevelText = requiredLevel;
@@ -35,12 +42,13 @@ namespace ND.UI.InGame.TransportInventory
 
         private void Awake()
         {
-            SetContentHeight(slots?.Length ?? 0);
+            SetContentHeight(slots.Count);
         }
 
         public void SetTooltip(TransportInventoryTooltipView tooltip)
         {
-            foreach (TransportInventorySlotView slot in slots ?? System.Array.Empty<TransportInventorySlotView>()) slot.SetTooltip(tooltip);
+            this.tooltip = tooltip;
+            foreach (TransportInventorySlotView slot in slots) slot.SetTooltip(tooltip);
         }
 
         public void Render(TransportInventoryPanelViewData data)
@@ -49,9 +57,10 @@ namespace ND.UI.InGame.TransportInventory
             if (titleText != null) titleText.text = data.Title;
             if (capacityText != null) capacityText.text = data.CapacityText;
 
-            int count = Mathf.Min(slots.Length, data.Slots.Count);
+            EnsureSlotCount(data.AvailableSlots);
+            int count = Mathf.Min(slots.Count, data.Slots.Count);
             int visibleCount = Mathf.Min(count, data.AvailableSlots);
-            for (int index = 0; index < slots.Length; index++)
+            for (int index = 0; index < slots.Count; index++)
             {
                 bool visible = index < visibleCount;
                 slots[index].gameObject.SetActive(visible);
@@ -73,6 +82,21 @@ namespace ND.UI.InGame.TransportInventory
         public void ResetScrollPosition()
         {
             if (scrollRect != null) scrollRect.verticalNormalizedPosition = 1f;
+        }
+
+        private TransportInventoryTooltipView tooltip;
+
+        private void EnsureSlotCount(int requiredCount)
+        {
+            if (slotPrefab == null || slotContent == null) return;
+            while (slots.Count < requiredCount)
+            {
+                TransportInventorySlotView slot = Instantiate(slotPrefab, slotContent);
+                slot.name = $"Slot_{slots.Count + 1:00}";
+                slot.SetTooltip(tooltip);
+                slots.Add(slot);
+            }
+            lockedOverlay?.transform.SetAsLastSibling();
         }
 
         private void PositionLockedOverlay(int lockedStartIndex, int totalSlots)

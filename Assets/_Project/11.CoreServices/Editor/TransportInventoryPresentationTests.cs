@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using ND.Framework;
 using ND.UI.InGame.TransportInventory;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 public sealed class TransportInventoryPresentationTests
 {
@@ -63,7 +65,7 @@ public sealed class TransportInventoryPresentationTests
     }
 
     [Test]
-    public void OverflowReturn_RemainsVisible_AndMovesLockBoundaryAfterOwnedItems()
+    public void OverflowOwnedItems_RemainInViewData_ButStayBehindUnlockedBoundary()
     {
         ND.Framework.PlayerSaveData player = PlayerWithFarm(1);
         for (int index = 0; index < 12; index++)
@@ -82,7 +84,49 @@ public sealed class TransportInventoryPresentationTests
         Assert.That(panel.OverflowCount, Is.EqualTo(2));
         Assert.That(panel.Slots[11].IsOccupied, Is.True);
         Assert.That(panel.Slots[11].IsOverflow, Is.True);
-        Assert.That(panel.LockedStartIndex, Is.EqualTo(12));
+        Assert.That(panel.LockedStartIndex, Is.EqualTo(10));
+    }
+
+    [Test]
+    public void PopupSlotPool_GrowsOnlyWhenRequired_AndReusesCreatedSlots()
+    {
+        const string path = "Assets/_Project/08.Prefabs/UI/TransportInventory/TransportInventoryPopup.prefab";
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        Assert.That(prefab, Is.Not.Null);
+        Assert.That(prefab.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(30));
+
+        GameObject instance = Object.Instantiate(prefab);
+        try
+        {
+            TransportInventoryPanelView[] panels =
+                instance.GetComponentsInChildren<TransportInventoryPanelView>(true);
+            TransportInventoryPanelView wagon = System.Array.Find(panels, panel => panel.name == "WagonPanel");
+            TransportInventoryPanelView animal = System.Array.Find(panels, panel => panel.name == "DraftAnimalPanel");
+            Assert.That(wagon, Is.Not.Null);
+            Assert.That(animal, Is.Not.Null);
+
+            wagon.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(2), Catalog()).Wagon);
+            Assert.That(wagon.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(20));
+
+            wagon.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(2), Catalog()).Wagon);
+            Assert.That(wagon.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(20));
+
+            wagon.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(1), Catalog()).Wagon);
+            Assert.That(wagon.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(20));
+            Assert.That(wagon.GetComponentsInChildren<TransportInventorySlotView>(false), Has.Length.EqualTo(10));
+
+            animal.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(2), Catalog()).Animal);
+            Assert.That(animal.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(40));
+            animal.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(2), Catalog()).Animal);
+            Assert.That(animal.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(40));
+            animal.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(1), Catalog()).Animal);
+            Assert.That(animal.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(40));
+            Assert.That(animal.GetComponentsInChildren<TransportInventorySlotView>(false), Has.Length.EqualTo(20));
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
+        }
     }
 
     [Test]

@@ -228,7 +228,7 @@ namespace ND.UI.InGame.TransportInventory.Editor
             int occupied = wagon ? 8 : 14;
             int maximumSlots = wagon ? 50 : 100;
             int unlockedSlots = (wagon ? WagonSlotsPerLevel : AnimalSlotsPerLevel) * MockFarmLevel;
-            for (int i = 0; i < maximumSlots; i++)
+            for (int i = 0; i < unlockedSlots; i++)
             {
                 GameObject slot = (GameObject)PrefabUtility.InstantiatePrefab(templateAsset, content.transform);
                 slot.name = $"Slot_{i + 1:00}";
@@ -279,6 +279,8 @@ namespace ND.UI.InGame.TransportInventory.Editor
             Transform overlay = content.transform.Find("LockedAreaOverlay");
             panelView.ConfigureReferences(
                 content.GetComponentsInChildren<TransportInventorySlotView>(true),
+                templateAsset.GetComponent<TransportInventorySlotView>(),
+                contentRect,
                 title,
                 count,
                 overlay != null ? FindText(overlay, "RequiredLevelText") : null,

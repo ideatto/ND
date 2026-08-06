@@ -173,7 +173,7 @@ namespace ND.UI.InGame.TransportInventory
             int slotsPerLevel,
             List<TransportInventorySlotViewData> slots)
         {
-            int lockedStart = Math.Max(used, available);
+            int lockedStart = available;
             int currentLevel = slotsPerLevel > 0 ? available / slotsPerLevel : 0;
             return new TransportInventoryPanelViewData
             {
