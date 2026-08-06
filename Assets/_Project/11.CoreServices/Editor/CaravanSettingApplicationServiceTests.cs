@@ -62,6 +62,59 @@ public sealed class CaravanSettingApplicationServiceTests
     }
 
     [Test]
+    public void ExecuteSetting_SwapsInventoryAndAssignedTransportAtomically()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.wagonInventory.Add(new OwnedWagonSaveData
+        {
+            instanceId = "wagon-spare", contentId = "wagon-large", currentDurability = 75
+        });
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-spare", contentId = "horse"
+        });
+        var service = CreateService(save, new RecordingSaveService(true));
+        var draft = new CaravanSettingDraft { caravanId = "caravan-a", selectedWagonInstanceId = "wagon-spare" };
+        draft.SelectAnimal("animal-spare");
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.True);
+        Assert.That(save.caravans[0].wagon.instanceId, Is.EqualTo("wagon-spare"));
+        Assert.That(save.caravans[0].wagon.contentId, Is.EqualTo("wagon-large"));
+        Assert.That(save.caravans[0].currentDurability, Is.EqualTo(75));
+        Assert.That(save.caravans[0].animals[0].instanceId, Is.EqualTo("animal-spare"));
+        Assert.That(save.player.wagonInventory.Exists(x => x.instanceId == "wagon-instance"), Is.True);
+        Assert.That(save.player.draftAnimalInventory.Exists(x => x.instanceId == "animal-a"), Is.True);
+        Assert.That(save.player.draftAnimalInventory.Exists(x => x.instanceId == "animal-b"), Is.True);
+        Assert.That(save.player.wagonInventory.Exists(x => x.instanceId == "wagon-spare"), Is.False);
+    }
+
+    [Test]
+    public void ExecuteSetting_SwapSaveFailureRestoresCaravanAndInventories()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.player.wagonInventory.Add(new OwnedWagonSaveData
+        {
+            instanceId = "wagon-spare", contentId = "wagon-large", currentDurability = 75
+        });
+        save.player.draftAnimalInventory.Add(new OwnedDraftAnimalSaveData
+        {
+            instanceId = "animal-spare", contentId = "horse"
+        });
+        var service = CreateService(save, new RecordingSaveService(false));
+        var draft = new CaravanSettingDraft { caravanId = "caravan-a", selectedWagonInstanceId = "wagon-spare" };
+        draft.SelectAnimal("animal-spare");
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.False);
+        Assert.That(save.caravans[0].wagon.instanceId, Is.EqualTo("wagon-instance"));
+        Assert.That(save.player.wagonInventory, Has.Count.EqualTo(1));
+        Assert.That(save.player.wagonInventory[0].instanceId, Is.EqualTo("wagon-spare"));
+    }
+
+    [Test]
     public void ExecuteCargo_WritesAuthoritativeMarketValues()
     {
         FrameworkSaveData save = CreateSave();
@@ -106,8 +159,28 @@ public sealed class CaravanSettingApplicationServiceTests
                     MaxCount = 20
                 }
             },
-            new Dictionary<string, SharedWagonDefinition>(),
-            new Dictionary<string, SharedDraftAnimalDefinition>(),
+            new Dictionary<string, SharedWagonDefinition>
+            {
+                ["wagon-basic"] = new SharedWagonDefinition
+                {
+                    Id = "wagon-basic", DisplayName = "Wagon", MaxDurability = 100,
+                    MaxLoad = 20f, InventorySlotCount = 4, MinRequireAnimals = 1,
+                    MaxPullAnimals = 2, EligibleAnimalTypes = new[] { "Horse" }
+                },
+                ["wagon-large"] = new SharedWagonDefinition
+                {
+                    Id = "wagon-large", DisplayName = "Large Wagon", MaxDurability = 120,
+                    MaxLoad = 40f, InventorySlotCount = 8, MinRequireAnimals = 1,
+                    MaxPullAnimals = 2, EligibleAnimalTypes = new[] { "Horse" }
+                }
+            },
+            new Dictionary<string, SharedDraftAnimalDefinition>
+            {
+                ["horse"] = new SharedDraftAnimalDefinition
+                {
+                    Id = "horse", DisplayName = "Horse", AnimalType = "Horse", BaseMoveSpeed = 1f
+                }
+            },
             new Dictionary<string, SharedRouteDefinition>());
         return new CaravanSettingApplicationService(() => save, saveService, () => shared);
     }
@@ -125,6 +198,7 @@ public sealed class CaravanSettingApplicationServiceTests
             wagon = new WagonSaveData
             {
                 instanceId = "wagon-instance",
+                contentId = "wagon-basic",
                 wagonName = "Wagon",
                 maxLoad = 20f,
                 inventorySlotCount = 4,
@@ -133,8 +207,8 @@ public sealed class CaravanSettingApplicationServiceTests
             },
             animals = new List<AnimalSaveData>
             {
-                new AnimalSaveData { instanceId = "animal-b", animalName = "B" },
-                new AnimalSaveData { instanceId = "animal-a", animalName = "A" }
+                new AnimalSaveData { instanceId = "animal-b", contentId = "horse", animalName = "B" },
+                new AnimalSaveData { instanceId = "animal-a", contentId = "horse", animalName = "A" }
             }
         });
         save.selectedCaravanId = "caravan-a";

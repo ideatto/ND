@@ -26,10 +26,29 @@ using System.Collections.Generic;
 using UnityEngine;
 using ND.Framework;
 
+public enum TransportInventoryValidationFailure
+{
+    None,
+    InvalidIdentity,
+    ContentUnavailable,
+    CapacityExceeded,
+    DuplicateInstanceId,
+    ItemNotFound
+}
+
 /// <summary>플레이어 데이터 메인 매니저. SaveData를 감싸 게임플레이에 노출한다.</summary>
 public class PlayerMainManager : MonoBehaviour
 {
+    public const int WagonInventoryCapacity = 50;
+    public const int DraftAnimalInventoryCapacity = 100;
+
     public static PlayerMainManager Instance { get; private set; }
+
+    private readonly Dictionary<string, ND.Framework.OwnedWagonSaveData> wagonsByInstanceId =
+        new Dictionary<string, ND.Framework.OwnedWagonSaveData>(StringComparer.Ordinal);
+    private readonly Dictionary<string, ND.Framework.OwnedDraftAnimalSaveData> draftAnimalsByInstanceId =
+        new Dictionary<string, ND.Framework.OwnedDraftAnimalSaveData>(StringComparer.Ordinal);
+    private ND.Framework.ISharedGameDataProvider transportCatalogOverride;
 
     /// <summary>FrameworkRoot가 없는 테스트 씬용 임시 SaveData.</summary>
     private ND.Framework.SaveData fallbackSave;
@@ -57,6 +76,26 @@ public class PlayerMainManager : MonoBehaviour
         }
     }
 
+    private List<ND.Framework.OwnedWagonSaveData> WagonInventoryList
+    {
+        get
+        {
+            if (Save.player.wagonInventory == null)
+                Save.player.wagonInventory = new List<ND.Framework.OwnedWagonSaveData>();
+            return Save.player.wagonInventory;
+        }
+    }
+
+    private List<ND.Framework.OwnedDraftAnimalSaveData> DraftAnimalInventoryList
+    {
+        get
+        {
+            if (Save.player.draftAnimalInventory == null)
+                Save.player.draftAnimalInventory = new List<ND.Framework.OwnedDraftAnimalSaveData>();
+            return Save.player.draftAnimalInventory;
+        }
+    }
+
     /// <summary>소지금이 바뀌면 알림(재화 HUD 등이 구독).</summary>
     public event Action<long> OnGoldChanged;
 
@@ -70,16 +109,21 @@ public class PlayerMainManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         SanitizeHomeInventory();   // 로드·폴백 SaveData의 무효 항목(빈 id·count 0) 제거
+        RebuildTransportInventoryIndex();
     }
 
     private void OnEnable()
     {
         FrameworkEvents.SceneChanged += OnSceneChanged;
+        FrameworkEvents.LoadCompleted += OnLoadCompleted;
+        FrameworkEvents.TransportInventoryChanged += OnTransportInventoryChanged;
     }
 
     private void OnDisable()
     {
         FrameworkEvents.SceneChanged -= OnSceneChanged;
+        FrameworkEvents.LoadCompleted -= OnLoadCompleted;
+        FrameworkEvents.TransportInventoryChanged -= OnTransportInventoryChanged;
     }
 
     // FrameworkRoot가 준비된 뒤 구독 UI에 현재 SaveData 값을 맞춘다.
@@ -118,6 +162,8 @@ public class PlayerMainManager : MonoBehaviour
         OnGoldChanged?.Invoke(Gold);
         OnHomeInventoryChanged?.Invoke();
         OnCaravanCargoChanged?.Invoke();
+        OnWagonInventoryChanged?.Invoke();
+        OnDraftAnimalInventoryChanged?.Invoke();
     }
 
     // ── 소지금 (SaveData 참조) ────────────
@@ -197,6 +243,306 @@ public class PlayerMainManager : MonoBehaviour
         foreach (ND.Framework.CargoEntrySaveData e in HomeInventoryList)
             if (e != null && e.item != null && e.item.itemId == itemId) return e;
         return null;
+    }
+
+    private void OnLoadCompleted(ND.Framework.SaveData _)
+    {
+        RebuildTransportInventoryIndex();
+    }
+
+    private void OnTransportInventoryChanged()
+    {
+        RebuildTransportInventoryIndex();
+        OnWagonInventoryChanged?.Invoke();
+        OnDraftAnimalInventoryChanged?.Invoke();
+    }
+
+    private void RebuildTransportInventoryIndex()
+    {
+        wagonsByInstanceId.Clear();
+        draftAnimalsByInstanceId.Clear();
+
+        foreach (ND.Framework.OwnedWagonSaveData wagon in WagonInventoryList)
+        {
+            if (!TryIndex(wagon?.instanceId, wagon, wagonsByInstanceId))
+                Debug.LogWarning($"Wagon inventory index skipped an invalid or duplicate instanceId: '{wagon?.instanceId}'.", this);
+        }
+
+        foreach (ND.Framework.OwnedDraftAnimalSaveData animal in DraftAnimalInventoryList)
+        {
+            if (animal == null
+                || string.IsNullOrWhiteSpace(animal.instanceId)
+                || wagonsByInstanceId.ContainsKey(animal.instanceId)
+                || !draftAnimalsByInstanceId.TryAdd(animal.instanceId, animal))
+            {
+                Debug.LogWarning($"DraftAnimal inventory index skipped an invalid or duplicate instanceId: '{animal?.instanceId}'.", this);
+            }
+        }
+    }
+
+    private static bool TryIndex<T>(string instanceId, T value, Dictionary<string, T> index)
+        where T : class
+    {
+        return value != null
+            && !string.IsNullOrWhiteSpace(instanceId)
+            && index.TryAdd(instanceId, value);
+    }
+
+    // ── 운송수단 전용 인벤토리 (미장착 Wagon / DraftAnimal) ──────
+
+    public IReadOnlyList<ND.Framework.OwnedWagonSaveData> WagonInventory => WagonInventoryList;
+    public IReadOnlyList<ND.Framework.OwnedDraftAnimalSaveData> DraftAnimalInventory => DraftAnimalInventoryList;
+
+    public event Action OnWagonInventoryChanged;
+    public event Action OnDraftAnimalInventoryChanged;
+
+    /// <summary>Checks a normal wagon acquisition without changing SaveData.</summary>
+    public bool CanAddWagon(ND.Framework.OwnedWagonSaveData wagon, out TransportInventoryValidationFailure failure)
+    {
+        if (!ValidateIdentity(wagon?.instanceId, wagon?.contentId, out failure)) return false;
+        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
+        if (catalog == null || !catalog.TryGetWagon(wagon.contentId, out _))
+        {
+            failure = TransportInventoryValidationFailure.ContentUnavailable;
+            return false;
+        }
+        if (WagonInventoryList.Count >= WagonInventoryCapacity)
+        {
+            failure = TransportInventoryValidationFailure.CapacityExceeded;
+            return false;
+        }
+        return ValidateUniqueInstance(wagon.instanceId, out failure);
+    }
+
+    /// <summary>Checks a normal draft-animal acquisition without changing SaveData.</summary>
+    public bool CanAddDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal, out TransportInventoryValidationFailure failure)
+    {
+        if (!ValidateIdentity(animal?.instanceId, animal?.contentId, out failure)) return false;
+        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
+        if (catalog == null || !catalog.TryGetDraftAnimal(animal.contentId, out _))
+        {
+            failure = TransportInventoryValidationFailure.ContentUnavailable;
+            return false;
+        }
+        if (DraftAnimalInventoryList.Count >= DraftAnimalInventoryCapacity)
+        {
+            failure = TransportInventoryValidationFailure.CapacityExceeded;
+            return false;
+        }
+        return ValidateUniqueInstance(animal.instanceId, out failure);
+    }
+
+    /// <summary>일반 획득으로 마차를 추가한다. 정원 50대를 초과할 수 없다.</summary>
+    public bool TryAddWagon(ND.Framework.OwnedWagonSaveData wagon)
+    {
+        if (!CanAddWagon(wagon, out _))
+            return false;
+
+        ND.Framework.OwnedWagonSaveData stored = Copy(wagon);
+        WagonInventoryList.Add(stored);
+        wagonsByInstanceId.Add(stored.instanceId, stored);
+        OnWagonInventoryChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>Caravan에서 반환된 마차를 추가한다. 반환은 정원을 초과할 수 있다.</summary>
+    public bool ReturnWagon(ND.Framework.OwnedWagonSaveData wagon)
+    {
+        if (!CanReturnWagon(wagon, out _))
+            return false;
+
+        ND.Framework.OwnedWagonSaveData stored = Copy(wagon);
+        WagonInventoryList.Add(stored);
+        wagonsByInstanceId.Add(stored.instanceId, stored);
+        OnWagonInventoryChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>일반 획득으로 역축을 추가한다. 정원 100마리를 초과할 수 없다.</summary>
+    public bool TryAddDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal)
+    {
+        if (!CanAddDraftAnimal(animal, out _))
+            return false;
+
+        ND.Framework.OwnedDraftAnimalSaveData stored = Copy(animal);
+        DraftAnimalInventoryList.Add(stored);
+        draftAnimalsByInstanceId.Add(stored.instanceId, stored);
+        OnDraftAnimalInventoryChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>Caravan에서 반환된 역축을 추가한다. 반환은 정원을 초과할 수 있다.</summary>
+    public bool ReturnDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal)
+    {
+        if (!CanReturnDraftAnimal(animal, out _))
+            return false;
+
+        ND.Framework.OwnedDraftAnimalSaveData stored = Copy(animal);
+        DraftAnimalInventoryList.Add(stored);
+        draftAnimalsByInstanceId.Add(stored.instanceId, stored);
+        OnDraftAnimalInventoryChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>instanceId와 contentId가 모두 일치하는 마차만 제거한다.</summary>
+    public bool RemoveWagon(string instanceId, string contentId)
+    {
+        if (!CanRemoveWagon(instanceId, contentId, out _)) return false;
+        ND.Framework.OwnedWagonSaveData wagon = FindWagon(instanceId, contentId);
+        WagonInventoryList.Remove(wagon);
+        wagonsByInstanceId.Remove(instanceId);
+        OnWagonInventoryChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>instanceId와 contentId가 모두 일치하는 역축만 제거한다.</summary>
+    public bool RemoveDraftAnimal(string instanceId, string contentId)
+    {
+        if (!CanRemoveDraftAnimal(instanceId, contentId, out _)) return false;
+        ND.Framework.OwnedDraftAnimalSaveData animal = FindDraftAnimal(instanceId, contentId);
+        DraftAnimalInventoryList.Remove(animal);
+        draftAnimalsByInstanceId.Remove(instanceId);
+        OnDraftAnimalInventoryChanged?.Invoke();
+        return true;
+    }
+
+    public bool CanRemoveWagon(string instanceId, string contentId, out TransportInventoryValidationFailure failure)
+    {
+        if (!ValidateIdentity(instanceId, contentId, out failure)) return false;
+        if (FindWagon(instanceId, contentId) != null) return true;
+        failure = TransportInventoryValidationFailure.ItemNotFound;
+        return false;
+    }
+
+    public bool CanRemoveDraftAnimal(string instanceId, string contentId, out TransportInventoryValidationFailure failure)
+    {
+        if (!ValidateIdentity(instanceId, contentId, out failure)) return false;
+        if (FindDraftAnimal(instanceId, contentId) != null) return true;
+        failure = TransportInventoryValidationFailure.ItemNotFound;
+        return false;
+    }
+
+    public ND.Framework.OwnedWagonSaveData FindWagon(string instanceId, string contentId)
+    {
+        return wagonsByInstanceId.TryGetValue(instanceId ?? string.Empty, out ND.Framework.OwnedWagonSaveData wagon)
+            && string.Equals(wagon.contentId, contentId, StringComparison.Ordinal)
+                ? wagon
+                : null;
+    }
+
+    public ND.Framework.OwnedDraftAnimalSaveData FindDraftAnimal(string instanceId, string contentId)
+    {
+        return draftAnimalsByInstanceId.TryGetValue(instanceId ?? string.Empty, out ND.Framework.OwnedDraftAnimalSaveData animal)
+            && string.Equals(animal.contentId, contentId, StringComparison.Ordinal)
+                ? animal
+                : null;
+    }
+
+    private bool ContainsTransportInstance(string instanceId)
+    {
+        return !string.IsNullOrEmpty(instanceId)
+            && (wagonsByInstanceId.ContainsKey(instanceId)
+                || draftAnimalsByInstanceId.ContainsKey(instanceId)
+                || IsUsedByCaravan(instanceId));
+    }
+
+    private bool IsUsedByCaravan(string instanceId)
+    {
+        if (Save.caravans == null) return false;
+
+        foreach (ND.Framework.CaravanSaveData caravan in Save.caravans)
+        {
+            if (caravan == null) continue;
+            if (caravan.wagon != null
+                && string.Equals(caravan.wagon.instanceId, instanceId, StringComparison.Ordinal))
+                return true;
+
+            if (caravan.animals != null)
+                foreach (ND.Framework.AnimalSaveData animal in caravan.animals)
+                    if (animal != null && string.Equals(animal.instanceId, instanceId, StringComparison.Ordinal))
+                        return true;
+
+            if (caravan.mercenaries != null)
+                foreach (ND.Framework.MercenarySaveData mercenary in caravan.mercenaries)
+                    if (mercenary != null && string.Equals(mercenary.instanceId, instanceId, StringComparison.Ordinal))
+                        return true;
+        }
+
+        return false;
+    }
+
+    private static ND.Framework.OwnedWagonSaveData Copy(ND.Framework.OwnedWagonSaveData source)
+    {
+        return new ND.Framework.OwnedWagonSaveData
+        {
+            instanceId = source.instanceId.Trim(),
+            contentId = source.contentId.Trim(),
+            currentDurability = Math.Max(0, source.currentDurability)
+        };
+    }
+
+    private static ND.Framework.OwnedDraftAnimalSaveData Copy(ND.Framework.OwnedDraftAnimalSaveData source)
+    {
+        return new ND.Framework.OwnedDraftAnimalSaveData
+        {
+            instanceId = source.instanceId.Trim(),
+            contentId = source.contentId.Trim()
+        };
+    }
+
+    private bool CanReturnWagon(ND.Framework.OwnedWagonSaveData wagon, out TransportInventoryValidationFailure failure)
+    {
+        if (!ValidateIdentity(wagon?.instanceId, wagon?.contentId, out failure)) return false;
+        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
+        if (catalog == null || !catalog.TryGetWagon(wagon.contentId, out _))
+        {
+            failure = TransportInventoryValidationFailure.ContentUnavailable;
+            return false;
+        }
+        return ValidateUniqueInstance(wagon.instanceId, out failure);
+    }
+
+    private bool CanReturnDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal, out TransportInventoryValidationFailure failure)
+    {
+        if (!ValidateIdentity(animal?.instanceId, animal?.contentId, out failure)) return false;
+        ND.Framework.ISharedGameDataProvider catalog = ResolveTransportCatalog();
+        if (catalog == null || !catalog.TryGetDraftAnimal(animal.contentId, out _))
+        {
+            failure = TransportInventoryValidationFailure.ContentUnavailable;
+            return false;
+        }
+        return ValidateUniqueInstance(animal.instanceId, out failure);
+    }
+
+    private bool ValidateUniqueInstance(string instanceId, out TransportInventoryValidationFailure failure)
+    {
+        if (ContainsTransportInstance(instanceId))
+        {
+            failure = TransportInventoryValidationFailure.DuplicateInstanceId;
+            return false;
+        }
+        failure = TransportInventoryValidationFailure.None;
+        return true;
+    }
+
+    private static bool ValidateIdentity(string instanceId, string contentId, out TransportInventoryValidationFailure failure)
+    {
+        bool valid = !string.IsNullOrWhiteSpace(instanceId)
+            && !string.IsNullOrWhiteSpace(contentId)
+            && string.Equals(instanceId, instanceId.Trim(), StringComparison.Ordinal)
+            && string.Equals(contentId, contentId.Trim(), StringComparison.Ordinal);
+        failure = valid ? TransportInventoryValidationFailure.None : TransportInventoryValidationFailure.InvalidIdentity;
+        return valid;
+    }
+
+    private ND.Framework.ISharedGameDataProvider ResolveTransportCatalog()
+    {
+        return transportCatalogOverride ?? FrameworkRoot.Instance?.SharedGameData;
+    }
+
+    internal void SetTransportCatalogForTests(ND.Framework.ISharedGameDataProvider catalog)
+    {
+        transportCatalogOverride = catalog;
     }
 
     // ── 마차 인벤토리 (SaveData 참조) ──────

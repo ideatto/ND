@@ -249,6 +249,12 @@ namespace ND.Framework
         /// </summary>
         public List<CargoEntrySaveData> homeInventory = new List<CargoEntrySaveData>();
 
+        /// <summary>현재 Caravan에 장착되지 않고 거점에 보관 중인 마차 목록이다.</summary>
+        public List<OwnedWagonSaveData> wagonInventory = new List<OwnedWagonSaveData>();
+
+        /// <summary>현재 Caravan에 장착되지 않고 거점에 보관 중인 역축 목록이다.</summary>
+        public List<OwnedDraftAnimalSaveData> draftAnimalInventory = new List<OwnedDraftAnimalSaveData>();
+
         /// <summary>
         /// 거점 마을에 보유한 건물 진행 목록이다. 키는 displayName이며 level 1 이상이 보유 상태이다.
         /// </summary>
@@ -259,6 +265,31 @@ namespace ND.Framework
         /// 건물과 달리 종류당 여러 개가 가능하고 레벨이 없으며, 인스턴스마다 고유 ID로 구분한다.
         /// </summary>
         public List<VillageEnvironmentSaveData> villageEnvironments = new List<VillageEnvironmentSaveData>();
+    }
+
+    /// <summary>플레이어가 보유한 미장착 마차 한 대의 저장 데이터이다.</summary>
+    [Serializable]
+    public sealed class OwnedWagonSaveData
+    {
+        /// <summary>같은 종류의 다른 마차와 구분하는 전역 고유 ID이다.</summary>
+        public string instanceId = string.Empty;
+
+        /// <summary>마차 종류 키이며 WagonData.WagonId와 일치한다.</summary>
+        public string contentId = string.Empty;
+
+        /// <summary>현재 내구도이다. 장착 시 Caravan의 currentDurability로 전달한다.</summary>
+        public int currentDurability;
+    }
+
+    /// <summary>플레이어가 보유한 미장착 역축 한 마리의 저장 데이터이다.</summary>
+    [Serializable]
+    public sealed class OwnedDraftAnimalSaveData
+    {
+        /// <summary>같은 종류의 다른 역축과 구분하는 전역 고유 ID이다.</summary>
+        public string instanceId = string.Empty;
+
+        /// <summary>역축 종류 키이며 DraftAnimalData.DraftAnimalId와 일치한다.</summary>
+        public string contentId = string.Empty;
     }
 
     /// <summary>
@@ -520,6 +551,8 @@ namespace ND.Framework
     {
         /// <summary>마차 종류와 별개로 플레이어가 보유한 한 대를 식별하는 안정 ID이다.</summary>
         public string instanceId = string.Empty;
+        /// <summary>WagonData.WagonId. wagonName is display-only legacy data.</summary>
+        public string contentId = string.Empty;
         public string wagonName = string.Empty;
         public float overLoad;
         public float maxLoad;
@@ -538,6 +571,8 @@ namespace ND.Framework
     {
         /// <summary>동물 종류와 별개로 플레이어가 보유한 한 개체를 식별하는 안정 ID이다.</summary>
         public string instanceId = string.Empty;
+        /// <summary>DraftAnimalData.DraftAnimalId. animalName is display-only legacy data.</summary>
+        public string contentId = string.Empty;
         public string animalName = string.Empty;
         public float speed = 1f;
         public float foodPerKm;

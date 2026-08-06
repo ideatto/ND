@@ -136,6 +136,9 @@ namespace ND.Framework
         /// <summary>Raised only after persisted home inventory changes; subscribers re-read SaveData.</summary>
         public static event Action HomeInventoryChanged;
 
+        /// <summary>Raised after persisted wagon or draft-animal ownership/assignment changes.</summary>
+        public static event Action TransportInventoryChanged;
+
         /// <summary>
         /// Raised after one Caravan's persisted cargo changes successfully.
         /// Subscribers must re-read SaveData instead of treating the event payload as inventory data.
@@ -375,6 +378,12 @@ namespace ND.Framework
         {
             FrameworkLog.Info("HomeInventoryChanged event raised.");
             HomeInventoryChanged?.Invoke();
+        }
+
+        public static void RaiseTransportInventoryChanged()
+        {
+            FrameworkLog.Info("TransportInventoryChanged event raised.");
+            TransportInventoryChanged?.Invoke();
         }
 
         public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)
