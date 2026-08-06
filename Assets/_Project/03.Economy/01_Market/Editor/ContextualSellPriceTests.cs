@@ -117,13 +117,18 @@ namespace ND.Economy.Editor.Tests
                     1d,
                     1,
                     policy,
+                    new[] { "contextual-item" },
                     out MarketInventoryMutationSession session,
                     out string error), Is.True, error);
 
                 var model = new MarketTradePanelModel(session, 100f);
                 long expectedUnitSellPrice = ContextualSellPriceCalculator.CalculateUnitPrices(
                     item,
-                    new SellPriceCalculationContext(GameCalendarDate.WinterId, 350f, true),
+                    new SellPriceCalculationContext(
+                        GameCalendarDate.WinterId,
+                        350f,
+                        true,
+                        new[] { "contextual-item" }),
                     policy).UnitSellPrice;
                 Assert.That(model.Items[0].SellUnitPrice, Is.EqualTo(expectedUnitSellPrice));
 
@@ -214,6 +219,148 @@ namespace ND.Economy.Editor.Tests
         }
 
         [Test]
+        public void DestinationLocalSpecialty_ExcludesSeasonAndDistanceButKeepsLuckyMoney()
+        {
+            SetItemModifiers(
+                Season(GameCalendarDate.WinterId, 0.1f),
+                ItemModifier(ModifierType.AffectToTown, "town-effect", 0.1f));
+            SetPolicyRules(
+                new[] { CategoryRule("winter-food", TradeItemCategory.Food, GameCalendarDate.WinterId, 0.2f) },
+                LuckyRule(true, 0.5f),
+                new[] { DistanceRule("distance-600", 600f, false, 0f, 0.15f) });
+
+            PriceCalculationResult result = Calculate(
+                GameCalendarDate.WinterId,
+                600f,
+                true,
+                new[] { "contextual-item" });
+
+            Assert.That(result.UnitBuyPrice, Is.EqualTo(100L));
+            Assert.That(result.UnitSellPrice, Is.EqualTo(330L));
+        }
+
+        [Test]
+        public void DestinationLocalSpecialty_WithoutLuckyMoneyUsesBaseSellPrice()
+        {
+            SetItemModifiers(Season(GameCalendarDate.WinterId, 0.1f));
+            SetPolicyRules(
+                new[] { CategoryRule("winter-food", TradeItemCategory.Food, GameCalendarDate.WinterId, 0.2f) },
+                LuckyRule(true, 0.5f),
+                new[] { DistanceRule("distance-600", 600f, false, 0f, 0.15f) });
+
+            Assert.That(
+                Calculate(
+                    GameCalendarDate.WinterId,
+                    600f,
+                    false,
+                    new[] { "contextual-item" }).UnitSellPrice,
+                Is.EqualTo(200L));
+        }
+
+        [TestCaseSource(nameof(NonMatchingSpecialtyLists))]
+        public void NonMatchingOrEmptySpecialtyList_PreservesExistingComposition(string[] specialtyItemIds)
+        {
+            SetItemModifiers(Season(GameCalendarDate.WinterId, 0.1f));
+            SetPolicyRules(
+                new[] { CategoryRule("winter-food", TradeItemCategory.Food, GameCalendarDate.WinterId, 0.2f) },
+                LuckyRule(true, 0.5f),
+                new[] { DistanceRule("distance-600", 600f, false, 0f, 0.15f) });
+
+            Assert.That(
+                Calculate(GameCalendarDate.WinterId, 600f, true, specialtyItemIds).UnitSellPrice,
+                Is.EqualTo(455L));
+        }
+
+        [Test]
+        public void Context_CopiesDestinationLocalSpecialtyItemIds()
+        {
+            var source = new[] { "contextual-item" };
+            var context = new SellPriceCalculationContext(string.Empty, 0f, false, source);
+
+            source[0] = "changed-item";
+
+            Assert.That(context.DestinationLocalSpecialtyItemIds, Is.EqualTo(new[] { "contextual-item" }));
+        }
+
+        [TestCase(false, 455L)]
+        [TestCase(true, 300L)]
+        public void ItemMissingFromDestinationTradeItems_RemainsSellable(
+            bool isDestinationLocalSpecialty,
+            long expectedUnitSellPrice)
+        {
+            string tradeId = "missing-trade-item-" + Guid.NewGuid().ToString("N");
+            TradeItemData stockItem = CreateItem();
+            SetField(stockItem, "itemId", "stock-only-item");
+            SetItemModifiers(Season(GameCalendarDate.WinterId, 0.1f));
+            SetPolicyRules(
+                new[] { CategoryRule("winter-food", TradeItemCategory.Food, GameCalendarDate.WinterId, 0.2f) },
+                LuckyRule(true, 0.5f),
+                new[] { DistanceRule("distance-600", 600f, false, 0f, 0.15f) });
+
+            var saveData = new FrameworkSaveData();
+            saveData.world.currentSeasonId = GameCalendarDate.WinterId;
+            saveData.caravan.currentDistanceKm = 600f;
+            saveData.tradeProgress = new ND.Framework.TradeProgressSaveData
+            {
+                caravanId = saveData.selectedCaravanId,
+                activeTradeId = tradeId,
+                state = ND.Framework.TradeProgressState.Selling
+            };
+            saveData.caravan.cargo.Add(new CargoEntrySaveData
+            {
+                quantity = 1,
+                item = new TradeItemSaveData
+                {
+                    itemId = "contextual-item",
+                    basePrice = 200L,
+                    weight = 1f,
+                    maxCount = 10
+                }
+            });
+
+            WeatherLuckyStore.Add(tradeId);
+            try
+            {
+                Assert.That(MarketInventoryMutationSession.TryOpen(
+                    saveData,
+                    saveData.selectedCaravanId,
+                    MarketTradeMode.BuyAndSell,
+                    new MemorySaveService(),
+                    new FixedTimeProvider(),
+                    "missing-trade-item-market",
+                    new[] { stockItem },
+                    new[] { stockItem, item },
+                    1,
+                    1,
+                    1,
+                    1d,
+                    1,
+                    policy,
+                    isDestinationLocalSpecialty
+                        ? new[] { "contextual-item" }
+                        : Array.Empty<string>(),
+                    out MarketInventoryMutationSession session,
+                    out string error), Is.True, error);
+
+                Assert.That(
+                    session.ResolvePreviewUnitPrices(item).UnitSellPrice,
+                    Is.EqualTo(expectedUnitSellPrice));
+                ND.Framework.CargoLoading.MarketTransactionResult committed =
+                    MarketTransactionCommand.Execute(
+                    session,
+                    new[] { new MarketTransactionLine { ItemId = "contextual-item", SellQuantity = 1 } },
+                    100f);
+                Assert.That(committed.Success, Is.True, committed.ErrorCode);
+                Assert.That(committed.SaleRevenue, Is.EqualTo(expectedUnitSellPrice));
+            }
+            finally
+            {
+                WeatherLuckyStore.Consume(tradeId);
+                UnityEngine.Object.DestroyImmediate(stockItem);
+            }
+        }
+
+        [Test]
         public void DuplicateSourceIdentity_IsAppliedOnce()
         {
             SetPolicyRules(
@@ -243,11 +390,26 @@ namespace ND.Economy.Editor.Tests
             Assert.That(Calculate(string.Empty, 200f, false).UnitSellPrice, Is.EqualTo(220L));
         }
 
-        private PriceCalculationResult Calculate(string seasonId, float distanceKm, bool lucky)
+        private static IEnumerable<string[]> NonMatchingSpecialtyLists()
+        {
+            yield return null;
+            yield return Array.Empty<string>();
+            yield return new[] { "other-item" };
+        }
+
+        private PriceCalculationResult Calculate(
+            string seasonId,
+            float distanceKm,
+            bool lucky,
+            IReadOnlyList<string> destinationLocalSpecialtyItemIds = null)
         {
             return ContextualSellPriceCalculator.CalculateUnitPrices(
                 item,
-                new SellPriceCalculationContext(seasonId, distanceKm, lucky),
+                new SellPriceCalculationContext(
+                    seasonId,
+                    distanceKm,
+                    lucky,
+                    destinationLocalSpecialtyItemIds),
                 policy);
         }
 
@@ -280,10 +442,15 @@ namespace ND.Economy.Editor.Tests
 
         private static ModifierInput Season(string seasonId, float value)
         {
+            return ItemModifier(ModifierType.Season, seasonId, value);
+        }
+
+        private static ModifierInput ItemModifier(ModifierType modifierType, string sourceId, float value)
+        {
             return new ModifierInput
             {
-                modifierType = ModifierType.Season,
-                sourceId = seasonId,
+                modifierType = modifierType,
+                sourceId = sourceId,
                 modifierBundles = new[]
                 {
                     new ModifierBundle
