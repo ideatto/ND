@@ -11641,6 +11641,8 @@ MonoBehaviour:
   warningReturn: {fileID: 4690294008387530365}
   warningConfirm: {fileID: 7468638373552382408}
   progressDemoSeconds: 20
+  settlementPanel: {fileID: 0}
+  paymentPanel: {fileID: 0}
   caravanSlotCount: 4
   saveToggle: {fileID: 5753742599996694719}
   slotNext: {fileID: 463917065723172135}
@@ -14301,6 +14303,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WagonSelectPopup
   listContainer: {fileID: 1279237414976824508}
   buttonPrefab: {fileID: 1438971010726082282}
+  instanceRowPrefab: {fileID: 3334901695345298056, guid: f3f8e3ffcab20dd478f9d61b28e9b644, type: 3}
   cancelButton: {fileID: 1050488122054676710}
 --- !u!1 &7977306570861907868
 GameObject:
