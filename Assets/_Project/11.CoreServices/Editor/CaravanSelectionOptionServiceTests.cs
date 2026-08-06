@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Collections.Generic;
 using ND.Framework;
 using ND.UI.Market;
 using ND.UI.InGame.Warehouse;
@@ -129,6 +130,37 @@ public sealed class CaravanSelectionOptionServiceTests
     }
 
     [Test]
+    public void MapperCopyToSave_PreservesTransportIdentityWhenJourneyRuntimeOmitsIt()
+    {
+        var runtime = new CaravanData
+        {
+            wagon = new imsiWagonData { wagonName = "Wagon M" },
+            animals = new System.Collections.Generic.List<imsiAnimalData>
+            {
+                new imsiAnimalData { animalName = "Horse" },
+                new imsiAnimalData { animalName = "Horse" }
+            }
+        };
+        var saved = new FrameworkCaravanSaveData
+        {
+            wagon = new WagonSaveData { instanceId = "wagon-instance", contentId = "Wagon_M" },
+            animals = new System.Collections.Generic.List<AnimalSaveData>
+            {
+                new AnimalSaveData { instanceId = "horse-a", contentId = "Horse" },
+                new AnimalSaveData { instanceId = "horse-b", contentId = "Horse" }
+            }
+        };
+
+        CaravanSaveDataMapper.CopyToSave(runtime, saved);
+
+        Assert.That(saved.wagon.instanceId, Is.EqualTo("wagon-instance"));
+        Assert.That(saved.wagon.contentId, Is.EqualTo("Wagon_M"));
+        Assert.That(saved.animals[0].instanceId, Is.EqualTo("horse-a"));
+        Assert.That(saved.animals[0].contentId, Is.EqualTo("Horse"));
+        Assert.That(saved.animals[1].instanceId, Is.EqualTo("horse-b"));
+    }
+
+    [Test]
     public void SaveQuery_UsesSavedNameAndSlotFallback()
     {
         FrameworkSaveData save = CreateSave(
@@ -192,6 +224,43 @@ public sealed class CaravanSelectionOptionServiceTests
             var provider = go.AddComponent<SaveDataCaravanOverviewProviderBehaviour>();
             provider.SetSaveDataForTests(save);
             Assert.That(provider.GetOverview().caravans[0].displayName, Is.EqualTo("남부 교역대"));
+        }
+        finally
+        {
+            Object.DestroyImmediate(go);
+        }
+    }
+
+    [Test]
+    public void OverviewProvider_UsesContentIdsForTransportIconsAndAnimalGrouping()
+    {
+        FrameworkSaveData save = CreateSave(new FrameworkCaravanSaveData
+        {
+            caravanId = "caravan-a",
+            slotIndex = 0,
+            wagon = new WagonSaveData
+            {
+                contentId = "wagon-basic",
+                wagonName = "Localized Wagon Name"
+            },
+            animals = new List<AnimalSaveData>
+            {
+                new AnimalSaveData { contentId = "horse", animalName = "Brown Horse" },
+                new AnimalSaveData { contentId = "horse", animalName = "White Horse" }
+            }
+        });
+        var go = new GameObject("provider-test");
+        try
+        {
+            var provider = go.AddComponent<SaveDataCaravanOverviewProviderBehaviour>();
+            provider.SetSaveDataForTests(save);
+
+            CaravanBlockViewData result = provider.GetOverview().caravans[0];
+
+            Assert.That(result.wagonContentId, Is.EqualTo("wagon-basic"));
+            Assert.That(result.animalIcons, Has.Length.EqualTo(1));
+            Assert.That(result.animalIcons[0].animalContentId, Is.EqualTo("horse"));
+            Assert.That(result.animalIcons[0].quantity, Is.EqualTo(2));
         }
         finally
         {

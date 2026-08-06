@@ -123,7 +123,7 @@ public CaravanOverviewViewData GetOverview()
                 ? $"Caravan {slotIndex + 1}"
                 : caravan.displayName.Trim(),
             state = caravan.state,
-            wagonContentId = caravan.wagon != null ? caravan.wagon.wagonName ?? string.Empty : string.Empty,
+            wagonContentId = caravan.wagon != null ? caravan.wagon.contentId ?? string.Empty : string.Empty,
             animalIcons = CreateAnimalIcons(caravan),
             cargoIcons = CreateCargoIcons(caravan)
         };
@@ -166,7 +166,7 @@ public CaravanOverviewViewData GetOverview()
             for (int index = 0; index < caravan.animals.Count; index++)
             {
                 AnimalSaveData animal = caravan.animals[index];
-                string contentId = animal?.animalName?.Trim() ?? string.Empty;
+                string contentId = animal?.contentId?.Trim() ?? string.Empty;
                 if (string.IsNullOrEmpty(contentId))
                     continue;
 

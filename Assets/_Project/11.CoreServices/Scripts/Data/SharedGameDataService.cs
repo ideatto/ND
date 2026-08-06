@@ -522,6 +522,8 @@ namespace ND.Framework
                 {
                     Id = id,
                     DisplayName = item.DisplayName,
+                    Description = item.Description,
+                    Icon = item.Icon,
                     WagonType = item.WagonType.ToString(),
                     MaxDurability = item.MaxDurability,
                     BaseEfficientLoad = item.Overload,
@@ -573,6 +575,8 @@ namespace ND.Framework
                 {
                     Id = id,
                     DisplayName = item.DisplayName,
+                    Description = item.Description,
+                    Icon = item.Icon,
                     AnimalType = item.AnimalType.ToString(),
                     FoodConsumptionPerSecond = item.FeedConsumption,
                     BaseMoveSpeed = item.BaseMoveSpeed,

@@ -26,8 +26,10 @@ public sealed class CaravanSettingRuntimeBridge : MonoBehaviour,
     private void Awake()
     {
         RebuildAssetIndex();
-        Service?.ConfigureTradeItemAssetResolver(ResolveTradeItem);
+        ConfigureService();
     }
+
+    private void Start() => ConfigureService();
 
     public CaravanSettingViewData GetSetting(string caravanId) => Service?.GetSetting(caravanId);
 
@@ -65,6 +67,8 @@ public sealed class CaravanSettingRuntimeBridge : MonoBehaviour,
             if (!string.IsNullOrEmpty(id)) tradeItemsById[id] = item;
         }
     }
+
+    private void ConfigureService() => Service?.ConfigureTradeItemAssetResolver(ResolveTradeItem);
 
     private static string Normalize(string value) => value?.Trim() ?? string.Empty;
 }

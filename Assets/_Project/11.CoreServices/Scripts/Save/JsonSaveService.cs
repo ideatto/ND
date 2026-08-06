@@ -50,8 +50,10 @@ namespace ND.Framework
     public sealed class JsonSaveService : ISaveService
     {
         private const string FileName = "save_data.json";
+        private const string TransportRepairBackupFileName = "save_data.pre_transport_repair.json";
 
         private readonly string savePath;
+        private readonly string transportRepairBackupPath;
 
         /// <summary>
         /// 기본 저장 경로를 계산해 JSON 저장 서비스를 생성한다.
@@ -59,6 +61,7 @@ namespace ND.Framework
         public JsonSaveService()
         {
             savePath = Path.Combine(Application.persistentDataPath, FileName);
+            transportRepairBackupPath = Path.Combine(Application.persistentDataPath, TransportRepairBackupFileName);
         }
 
         /// <summary>
@@ -139,9 +142,25 @@ namespace ND.Framework
                     return CreateNewGameData();
                 }
 
-                var normalized = NormalizeData(data);
+                bool transportInventoryRepaired;
+                var normalized = NormalizeData(data, out transportInventoryRepaired);
                 if (normalized)
                 {
+                    if (transportInventoryRepaired)
+                    {
+                        try
+                        {
+                            File.Copy(savePath, transportRepairBackupPath, true);
+                            FrameworkLog.Warning($"Transport inventory conflicts were repaired. Original save backed up: {transportRepairBackupPath}");
+                        }
+                        catch (Exception backupException)
+                        {
+                            FrameworkLog.Error(
+                                $"Transport inventory repair backup failed; normalized data was not written. {backupException.Message}");
+                            return data;
+                        }
+                    }
+
                     var normalizationSaveResult = Save(data);
                     if (!normalizationSaveResult.Succeeded)
                     {
@@ -255,7 +274,14 @@ namespace ND.Framework
         /// <returns>저장 컨테이너, Caravan 슬롯/선택/ID 또는 자산 ID가 변경되었으면 true.</returns>
         public static bool NormalizeData(SaveData data)
         {
+            bool ignored;
+            return NormalizeData(data, out ignored);
+        }
+
+        private static bool NormalizeData(SaveData data, out bool transportInventoryRepaired)
+        {
             var assetDataChanged = false;
+            transportInventoryRepaired = false;
             // 저장 파일이 구버전이거나 일부 하위 객체가 누락된 경우 runtime 서비스가 null을 직접 다루지 않게 보정한다.
             if (data.player == null)
             {
@@ -271,6 +297,18 @@ namespace ND.Framework
             if (data.player.homeInventory == null)
             {
                 data.player.homeInventory = new System.Collections.Generic.List<CargoEntrySaveData>();
+            }
+
+            if (data.player.wagonInventory == null)
+            {
+                data.player.wagonInventory = new List<OwnedWagonSaveData>();
+                assetDataChanged = true;
+            }
+
+            if (data.player.draftAnimalInventory == null)
+            {
+                data.player.draftAnimalInventory = new List<OwnedDraftAnimalSaveData>();
+                assetDataChanged = true;
             }
 
             if (data.player.villageBuildings == null)
@@ -424,6 +462,11 @@ namespace ND.Framework
                 }
             }
 
+            // Equipped transports remain in the player's ownership inventory. Caravan entries are
+            // assignment snapshots, so sharing their instance IDs with the inventory is intentional.
+            transportInventoryRepaired = NormalizeTransportInventory(data.player);
+            assetDataChanged |= transportInventoryRepaired;
+
             CaravanSaveData selected;
             if (!SaveDataLookup.TryGetCaravan(data, data.selectedCaravanId, out selected))
             {
@@ -571,6 +614,73 @@ namespace ND.Framework
 
             return assetDataChanged;
         }
+
+        private static bool NormalizeTransportInventory(PlayerSaveData player)
+        {
+            bool changed = false;
+            var ownedInstanceIds = new HashSet<string>(StringComparer.Ordinal);
+
+            for (var index = 0; index < player.wagonInventory.Count;)
+            {
+                OwnedWagonSaveData wagon = player.wagonInventory[index];
+                string instanceId = wagon?.instanceId?.Trim() ?? string.Empty;
+                string contentId = wagon?.contentId?.Trim() ?? string.Empty;
+                if (wagon == null
+                    || string.IsNullOrEmpty(instanceId)
+                    || string.IsNullOrEmpty(contentId)
+                    || !ownedInstanceIds.Add(instanceId))
+                {
+                    FrameworkLog.Warning(
+                        $"Invalid or duplicate Wagon inventory entry was removed. InstanceId: {instanceId}, ContentId: {contentId}");
+                    player.wagonInventory.RemoveAt(index);
+                    changed = true;
+                    continue;
+                }
+
+                if (!string.Equals(wagon.instanceId, instanceId, StringComparison.Ordinal)
+                    || !string.Equals(wagon.contentId, contentId, StringComparison.Ordinal)
+                    || wagon.currentDurability < 0)
+                {
+                    wagon.instanceId = instanceId;
+                    wagon.contentId = contentId;
+                    wagon.currentDurability = Math.Max(0, wagon.currentDurability);
+                    changed = true;
+                }
+
+                index++;
+            }
+
+            for (var index = 0; index < player.draftAnimalInventory.Count;)
+            {
+                OwnedDraftAnimalSaveData animal = player.draftAnimalInventory[index];
+                string instanceId = animal?.instanceId?.Trim() ?? string.Empty;
+                string contentId = animal?.contentId?.Trim() ?? string.Empty;
+                if (animal == null
+                    || string.IsNullOrEmpty(instanceId)
+                    || string.IsNullOrEmpty(contentId)
+                    || !ownedInstanceIds.Add(instanceId))
+                {
+                    FrameworkLog.Warning(
+                        $"Invalid or duplicate DraftAnimal inventory entry was removed. InstanceId: {instanceId}, ContentId: {contentId}");
+                    player.draftAnimalInventory.RemoveAt(index);
+                    changed = true;
+                    continue;
+                }
+
+                if (!string.Equals(animal.instanceId, instanceId, StringComparison.Ordinal)
+                    || !string.Equals(animal.contentId, contentId, StringComparison.Ordinal))
+                {
+                    animal.instanceId = instanceId;
+                    animal.contentId = contentId;
+                    changed = true;
+                }
+
+                index++;
+            }
+
+            return changed;
+        }
+
 
 
         private static bool EnsureUniqueInstanceId(

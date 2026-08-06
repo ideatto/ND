@@ -26,6 +26,11 @@ namespace ND.UI.CargoSell
         private TMP_Text selectedQuantityText;
         private TMP_Text titleText;
         private TMP_Text cargoTitleText;
+        [SerializeField] private TMP_Text loadText;
+        [SerializeField] private GameObject itemTooltip;
+        [SerializeField] private TMP_Text tooltipNameText;
+        [SerializeField] private TMP_Text tooltipPriceText;
+        [SerializeField] private TMP_Text tooltipDescriptionText;
         private TMP_Text messageText;
         private TMP_Text confirmSaleButtonText;
         private Button closeButton;
@@ -106,6 +111,8 @@ namespace ND.UI.CargoSell
                 messageText.text = string.IsNullOrWhiteSpace(submissionMessage)
                     ? source.message ?? string.Empty
                     : submissionMessage;
+            if (loadText != null)
+                loadText.text = $"적재량 {FormatLoad(source.currentLoad)} / {FormatLoad(source.maximumLoad)}";
 
             CargoSellCargoItemViewData[] cargo = source.cargoItems
                 ?? Array.Empty<CargoSellCargoItemViewData>();
@@ -113,7 +120,7 @@ namespace ND.UI.CargoSell
             for (int index = 0; index < slots.Count; index++)
             {
                 CargoSellCargoItemViewData item = index < cargo.Length ? cargo[index] : null;
-                slots[index].Bind(item, OpenQuantity);
+                slots[index].Bind(item, OpenQuantity, ShowTooltip, HideTooltip);
             }
 
             pendingList?.Render(draft.Snapshot());
@@ -125,6 +132,57 @@ namespace ND.UI.CargoSell
                 clearButton.interactable = !submitting && !draft.IsEmpty;
             if (closeButton != null) closeButton.interactable = !submitting;
             if (backdropButton != null) backdropButton.interactable = !submitting;
+        }
+
+        private static string FormatLoad(float value) =>
+            float.IsPositiveInfinity(value) ? "∞" : Math.Max(0f, value).ToString("0.##");
+
+        private void ShowTooltip(CargoSellCargoSlotView slot, CargoSellCargoItemViewData item)
+        {
+            if (itemTooltip == null || item == null) return;
+            if (tooltipNameText != null) tooltipNameText.text = item.displayName;
+            if (tooltipPriceText != null) tooltipPriceText.text = $"구매 단가 {Math.Max(0L, item.purchaseUnitPrice)}G";
+            if (tooltipDescriptionText != null) tooltipDescriptionText.text = item.description;
+            itemTooltip.SetActive(true);
+            Canvas.ForceUpdateCanvases();
+            PositionTooltipBesideSlot(slot.transform as RectTransform);
+        }
+
+        private void PositionTooltipBesideSlot(RectTransform slot)
+        {
+            RectTransform tooltipRect = itemTooltip != null ? itemTooltip.transform as RectTransform : null;
+            RectTransform bounds = tooltipRect != null ? tooltipRect.parent as RectTransform : null;
+            if (slot == null || tooltipRect == null || bounds == null) return;
+
+            Canvas canvas = GetComponentInParent<Canvas>();
+            Camera eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? canvas.worldCamera
+                : null;
+            var corners = new Vector3[4];
+            slot.GetWorldCorners(corners);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                bounds, RectTransformUtility.WorldToScreenPoint(eventCamera, corners[0]), eventCamera,
+                out Vector2 bottomLeft);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                bounds, RectTransformUtility.WorldToScreenPoint(eventCamera, corners[2]), eventCamera,
+                out Vector2 topRight);
+
+            const float gap = 16f;
+            float width = tooltipRect.rect.width;
+            float height = tooltipRect.rect.height;
+            bool placeRight = topRight.x + gap + width <= bounds.rect.xMax;
+            tooltipRect.anchorMin = tooltipRect.anchorMax = new Vector2(.5f, .5f);
+            tooltipRect.pivot = new Vector2(placeRight ? 0f : 1f, .5f);
+            float x = placeRight ? topRight.x + gap : bottomLeft.x - gap;
+            float y = Mathf.Clamp((bottomLeft.y + topRight.y) * .5f,
+                bounds.rect.yMin + height * .5f,
+                bounds.rect.yMax - height * .5f);
+            tooltipRect.anchoredPosition = new Vector2(x, y);
+        }
+
+        private void HideTooltip()
+        {
+            if (itemTooltip != null) itemTooltip.SetActive(false);
         }
 
         private void OpenQuantity(CargoSellCargoItemViewData item)
