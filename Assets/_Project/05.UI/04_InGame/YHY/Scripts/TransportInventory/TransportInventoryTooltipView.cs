@@ -49,18 +49,28 @@ namespace ND.UI.InGame.TransportInventory
 
         private void PositionNextTo(RectTransform anchor)
         {
-            if (rect == null || bounds == null) return;
-            Vector3[] corners = new Vector3[4];
-            anchor.GetWorldCorners(corners);
-            Vector2 screen = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(bounds, screen, null, out Vector2 local)) return;
+            RectTransform parent = rect != null ? rect.parent as RectTransform : null;
+            if (parent == null || bounds == null) return;
 
-            Vector2 position = local + new Vector2(18f, -12f);
-            Rect area = bounds.rect;
+            Vector3[] anchorCorners = new Vector3[4];
+            Vector3[] boundCorners = new Vector3[4];
+            anchor.GetWorldCorners(anchorCorners);
+            bounds.GetWorldCorners(boundCorners);
+            Vector2 anchorTopLeft = parent.InverseTransformPoint(anchorCorners[1]);
+            Vector2 anchorTopRight = parent.InverseTransformPoint(anchorCorners[2]);
+            Vector2 boundsBottomLeft = parent.InverseTransformPoint(boundCorners[0]);
+            Vector2 boundsTopRight = parent.InverseTransformPoint(boundCorners[2]);
             Vector2 size = rect.rect.size;
-            position.x = Mathf.Clamp(position.x, area.xMin, area.xMax - size.x);
-            position.y = Mathf.Clamp(position.y, area.yMin + size.y, area.yMax);
-            rect.anchoredPosition = position;
+            const float gap = 12f;
+            bool placeRight = anchorTopRight.x + gap + size.x <= boundsTopRight.x;
+            rect.pivot = placeRight ? new Vector2(0f, 1f) : new Vector2(1f, 1f);
+
+            float x = placeRight ? anchorTopRight.x + gap : anchorTopLeft.x - gap;
+            float minX = placeRight ? boundsBottomLeft.x : boundsBottomLeft.x + size.x;
+            float maxX = placeRight ? boundsTopRight.x - size.x : boundsTopRight.x;
+            x = Mathf.Clamp(x, minX, maxX);
+            float y = Mathf.Clamp(anchorTopRight.y, boundsBottomLeft.y + size.y, boundsTopRight.y);
+            rect.localPosition = new Vector3(x, y, rect.localPosition.z);
         }
 
     }

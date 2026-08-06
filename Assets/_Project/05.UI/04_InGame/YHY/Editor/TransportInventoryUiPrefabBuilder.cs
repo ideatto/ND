@@ -68,6 +68,14 @@ namespace ND.UI.InGame.TransportInventory.Editor
             WarehouseInventorySlotView warehouseView = root.GetComponent<WarehouseInventorySlotView>();
             if (warehouseView != null) Object.DestroyImmediate(warehouseView);
             TransportInventorySlotView slotView = root.AddComponent<TransportInventorySlotView>();
+            Image slotBackground = root.GetComponent<Image>();
+            slotBackground.color = new Color32(246, 243, 234, 255);
+            Outline slotOutline = root.GetComponent<Outline>();
+            if (slotOutline != null)
+            {
+                slotOutline.effectColor = new Color32(105, 91, 70, 220);
+                slotOutline.effectDistance = new Vector2(1.5f, -1.5f);
+            }
 
             Transform quantityBadge = root.transform.Find("QuantityBadge");
             if (quantityBadge != null) quantityBadge.gameObject.SetActive(false);
@@ -120,7 +128,7 @@ namespace ND.UI.InGame.TransportInventory.Editor
 
             GameObject header = PanelNode("Header", card.transform, Header);
             Anchor(header.GetComponent<RectTransform>(), new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -82), Vector2.zero);
-            TMP_Text title = TextNode("Title", header.transform, "紐⑹옣", 32, TextAlignmentOptions.Center).GetComponent<TMP_Text>();
+            TMP_Text title = TextNode("Title", header.transform, "목장", 32, TextAlignmentOptions.Center).GetComponent<TMP_Text>();
             title.fontStyle = FontStyles.Bold;
             Anchor(title.rectTransform, Vector2.zero, Vector2.one, new Vector2(80, 0), new Vector2(-80, 0));
             GameObject close = PanelNode("CloseButton", header.transform, new Color32(173, 69, 64, 224));

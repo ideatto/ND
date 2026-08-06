@@ -34,7 +34,7 @@ namespace ND.UI.InGame.TransportInventory
         public string AssignedCaravanId = string.Empty;
         public string AssignedCaravanName = string.Empty;
         public string AssignmentText => IsAssigned
-            ? $"{(string.IsNullOrWhiteSpace(AssignedCaravanName) ? AssignedCaravanId : AssignedCaravanName)} 장착 중"
+            ? $"{AssignedCaravanName} 장착 중"
             : string.Empty;
     }
 
@@ -248,7 +248,7 @@ namespace ND.UI.InGame.TransportInventory
                 var assignment = new Assignment
                 {
                     CaravanId = caravan.caravanId?.Trim() ?? string.Empty,
-                    CaravanName = caravan.displayName?.Trim() ?? string.Empty
+                    CaravanName = ResolveCaravanName(caravan)
                 };
                 string wagonId = caravan.wagon?.instanceId?.Trim() ?? string.Empty;
                 if (!string.IsNullOrEmpty(wagonId))
@@ -285,5 +285,15 @@ namespace ND.UI.InGame.TransportInventory
                     : 0;
             }
         }
-    }
+    
+        private static string ResolveCaravanName(ND.Framework.CaravanSaveData caravan)
+        {
+            string displayName = caravan?.displayName?.Trim() ?? string.Empty;
+            string caravanId = caravan?.caravanId?.Trim() ?? string.Empty;
+            return !string.IsNullOrEmpty(displayName)
+                && !string.Equals(displayName, caravanId, StringComparison.Ordinal)
+                    ? displayName
+                    : $"Caravan {Math.Max(0, caravan?.slotIndex ?? 0) + 1}";
+        }
+}
 }
