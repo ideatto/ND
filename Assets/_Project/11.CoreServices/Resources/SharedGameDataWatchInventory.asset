@@ -43,6 +43,11 @@ MonoBehaviour:
     typeName: MarketData
     dataId: MountTownMarket
     watchRootKind: 0
+  - assetGuid: 4d98318228db09a4c9eaade1455cb1e4
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Markets/Market_Ore.asset
+    typeName: MarketData
+    dataId: OreTwon
+    watchRootKind: 0
   - assetGuid: 24facdcdcd1273e4a901c56ee267a402
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Markets/Market_RiverTown.asset
     typeName: MarketData
@@ -54,44 +59,214 @@ MonoBehaviour:
     dataId: WindyTownMarket
     watchRootKind: 0
   - assetGuid: 516cb545e2dec9f49ac10b83ac381bcd
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Apple.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Apple.asset
     typeName: TradeItemData
     dataId: Apple
     watchRootKind: 0
+  - assetGuid: 328b25621d177644bb0a7fee80f81a9f
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Barley.asset
+    typeName: TradeItemData
+    dataId: Barley
+    watchRootKind: 0
   - assetGuid: 94ed95203aade1d4f9f3fb54372c2fd2
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Bread.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Bread.asset
     typeName: TradeItemData
     dataId: Bread
     watchRootKind: 0
-  - assetGuid: 6d583a4b588878f4590e2f778fadebcf
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Cloth.asset
+  - assetGuid: 89c9192e4852b8147980f6bbf1086f48
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Cabbage.asset
     typeName: TradeItemData
-    dataId: Cloth
+    dataId: Cabbage
+    watchRootKind: 0
+  - assetGuid: 8a1267903408c2647a74bc5d6e11ca95
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Cheese.asset
+    typeName: TradeItemData
+    dataId: Cheese
+    watchRootKind: 0
+  - assetGuid: dba5d6b18b9926b4b93cbcd5719d7487
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Egg.asset
+    typeName: TradeItemData
+    dataId: Egg
     watchRootKind: 0
   - assetGuid: d3e0661c62971554698aecafac846371
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Fish.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Fish.asset
     typeName: TradeItemData
     dataId: Fish
     watchRootKind: 0
+  - assetGuid: 6b012380b56db1d45b6fbfb4cd5c8b54
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Grape.asset
+    typeName: TradeItemData
+    dataId: Grape
+    watchRootKind: 0
+  - assetGuid: d071837c5d0ac0c46ba797b11b7db2ae
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Herbs.asset
+    typeName: TradeItemData
+    dataId: Herbs
+    watchRootKind: 0
+  - assetGuid: b8b2c064ff3c22f4cbb81a74afdb0a6a
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Honey.asset
+    typeName: TradeItemData
+    dataId: Honey
+    watchRootKind: 0
+  - assetGuid: 2de067a680a1c0b4dbf373e59f51a837
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Milk.asset
+    typeName: TradeItemData
+    dataId: Milk
+    watchRootKind: 0
+  - assetGuid: b533a3fd418899a40ba185aecb14973e
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Potato.asset
+    typeName: TradeItemData
+    dataId: Potato
+    watchRootKind: 0
+  - assetGuid: c37db638052aa5f4a9399c2fb7783c08
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Rice.asset
+    typeName: TradeItemData
+    dataId: Rice
+    watchRootKind: 0
+  - assetGuid: 0d426ac1820959540a74bd660a406757
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_SmokedMeat.asset
+    typeName: TradeItemData
+    dataId: 'SmokedMeat '
+    watchRootKind: 0
+  - assetGuid: f546f2032fa12be49bb841ec17ba64c8
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Wheat.asset
+    typeName: TradeItemData
+    dataId: Wheat
+    watchRootKind: 0
+  - assetGuid: fd8dd0e1b72f0d14eb6b101817947160
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Wine.asset
+    typeName: TradeItemData
+    dataId: Wine
+    watchRootKind: 0
+  - assetGuid: ce919b21df2947d4ca0d1ed9f1d18025
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/LuxuryGoods/TradeItem_Carpet.asset
+    typeName: TradeItemData
+    dataId: Carpet
+    watchRootKind: 0
+  - assetGuid: 6b23a68138f1171419c11886792cd5a0
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/LuxuryGoods/TradeItem_Ornament.asset
+    typeName: TradeItemData
+    dataId: Ornament
+    watchRootKind: 0
+  - assetGuid: 092cce287cbb8dd46b0d72e3b5dc05ad
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/LuxuryGoods/TradeItem_Statue.asset
+    typeName: TradeItemData
+    dataId: Statue
+    watchRootKind: 0
+  - assetGuid: 0b7c39398a0ec4d44b377f492875ae77
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Charcoal.asset
+    typeName: TradeItemData
+    dataId: Charcoal
+    watchRootKind: 0
+  - assetGuid: 6d583a4b588878f4590e2f778fadebcf
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Cloth.asset
+    typeName: TradeItemData
+    dataId: Cloth
+    watchRootKind: 0
+  - assetGuid: c1a05f3531f608345afd45d567b5ba6a
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_CopperOre.asset
+    typeName: TradeItemData
+    dataId: CopperOre
+    watchRootKind: 0
+  - assetGuid: a47c8cc48a682cf4182b8a6bdc81737e
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Fur.asset
+    typeName: TradeItemData
+    dataId: Fur
+    watchRootKind: 0
+  - assetGuid: c2124ebe8c63dce42bd29a4343fd958c
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Gem.asset
+    typeName: TradeItemData
+    dataId: Gem
+    watchRootKind: 0
+  - assetGuid: 3e14187fa72b01d458ec2ab21159480f
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_GoldIngot.asset
+    typeName: TradeItemData
+    dataId: GoldIngot
+    watchRootKind: 0
+  - assetGuid: e97afc45c11cc144cba3e7e06edcc891
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_GoldOre.asset
+    typeName: TradeItemData
+    dataId: GoldOre
+    watchRootKind: 0
+  - assetGuid: e446969750d0bff4caee2327d41620b5
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_IronIngot.asset
+    typeName: TradeItemData
+    dataId: IronIngot
+    watchRootKind: 0
+  - assetGuid: 62714ff7c0675654e961b595acb45855
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_IronOre.asset
+    typeName: TradeItemData
+    dataId: IronOre
+    watchRootKind: 0
+  - assetGuid: 9f2c731ddbd58ed47a5dab7476752b9c
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Leather.asset
+    typeName: TradeItemData
+    dataId: Leather
+    watchRootKind: 0
+  - assetGuid: 3a786fc2757d8764c9afbc50804f47eb
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Linen.asset
+    typeName: TradeItemData
+    dataId: Linen
+    watchRootKind: 0
   - assetGuid: e70021528395dfa4ebac5f411e79ec65
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Logs.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Logs.asset
     typeName: TradeItemData
     dataId: Logs
     watchRootKind: 0
+  - assetGuid: e34abdbd1baadac49b0183dffdd987b4
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Silk.asset
+    typeName: TradeItemData
+    dataId: Silk
+    watchRootKind: 0
+  - assetGuid: 24f6cd3c0286afb4fb6a9c981b95b937
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_SilverIngo.asset
+    typeName: TradeItemData
+    dataId: SilverIngo
+    watchRootKind: 0
+  - assetGuid: 9d11720739f479345b1f2ba1c370b358
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_SilverOre.asset
+    typeName: TradeItemData
+    dataId: SilverOre
+    watchRootKind: 0
+  - assetGuid: a2a0117c501c137498f6554fc2180f72
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_SolidWood.asset
+    typeName: TradeItemData
+    dataId: SolidWood
+    watchRootKind: 0
+  - assetGuid: e34b6e6c96298fc439baa4277774e6b5
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_SteelIngot.asset
+    typeName: TradeItemData
+    dataId: SteelIngot
+    watchRootKind: 0
   - assetGuid: 63af5decbf34d1747ab76c42cf4e8942
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Stone.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Stone.asset
     typeName: TradeItemData
     dataId: Stone
+    watchRootKind: 0
+  - assetGuid: 06137b2355f47374cbaa8422591ae19e
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_SyntheticWood.asset
+    typeName: TradeItemData
+    dataId: SyntheticWood
     watchRootKind: 0
   - assetGuid: d81e172ffdc16d948b37a48d1a89a98a
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Stover.asset
     typeName: TradeItemData
     dataId: Stover
     watchRootKind: 0
-  - assetGuid: f546f2032fa12be49bb841ec17ba64c8
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Wheat.asset
+  - assetGuid: 49934d17370b75b43a073a9e06ab5f87
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Valuable/TradeItem_DragonScale.asset
     typeName: TradeItemData
-    dataId: Wheat
+    dataId: DragonScale
+    watchRootKind: 0
+  - assetGuid: 065a39023e692244ca81d3c63909b6b8
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Valuable/TradeItem_MagicStone.asset
+    typeName: TradeItemData
+    dataId: MagicStone
+    watchRootKind: 0
+  - assetGuid: 03095264444ffec43b4c82545a062001
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Valuable/TradeItem_PlateArmor.asset
+    typeName: TradeItemData
+    dataId: PlateArmor
     watchRootKind: 0
   - assetGuid: d1f29cbc4f6fb5d489d1ac675ed655df
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Wagons/Wagon_WagonM.asset
@@ -108,11 +283,6 @@ MonoBehaviour:
     typeName: WagonData
     dataId: Walk
     watchRootKind: 0
-  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_Donkey.asset
-    typeName: DraftAnimalData
-    dataId: Donkey
-    watchRootKind: 0
   - assetGuid: 1620c314f295d5544b75c867b5272ba1
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_Dragon.asset
     typeName: DraftAnimalData
@@ -127,6 +297,11 @@ MonoBehaviour:
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_Tyrannosaurus.asset
     typeName: DraftAnimalData
     dataId: Tyrannosaurus
+    watchRootKind: 0
+  - assetGuid: 3b376bfea70875947a7bbaaebbd7d735
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/DraftAnimals/DraftAnimal_donkey.asset
+    typeName: DraftAnimalData
+    dataId: Donkey
     watchRootKind: 0
   - assetGuid: 65c62a9e92134ab4bb1aae8077ca2b8e
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToRiver.asset
@@ -224,6 +399,61 @@ MonoBehaviour:
     typeName: BuildData
     dataId: Windmill
     watchRootKind: 0
+  - assetGuid: 59eeada54a53ce843b0e1840c330e4b7
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_OakTree.asset
+    typeName: BuildData
+    dataId: OakTree
+    watchRootKind: 0
+  - assetGuid: 9d90dac8b7f026e46a099fccca78ce5f
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_StoneDwarfStatue.asset
+    typeName: BuildData
+    dataId: StoneDwarfStatue
+    watchRootKind: 0
+  - assetGuid: 63761369cb9c66945b7806398968e14b
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_StoneFountain.asset
+    typeName: BuildData
+    dataId: StoneFountain
+    watchRootKind: 0
+  - assetGuid: 0d99578c466e6de4ab20985bfa7b68a6
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_StoneTombstone.asset
+    typeName: BuildData
+    dataId: StoneTombstone
+    watchRootKind: 0
+  - assetGuid: 0c29cbc6033b54449a49395038729f53
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_StreetLamp.asset
+    typeName: BuildData
+    dataId: StreetLamp
+    watchRootKind: 0
+  - assetGuid: 3878a87a8eb7e9e48887f2c00d00d928
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_StylizedTree.asset
+    typeName: BuildData
+    dataId: StylizedTree
+    watchRootKind: 0
+  - assetGuid: 32363044bb9b3f24bbe93af591d4b132
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_WoodenBench.asset
+    typeName: BuildData
+    dataId: WoodenBench
+    watchRootKind: 0
+  - assetGuid: b7e2520d52b8a564999fc2fd6e8ac219
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_WoodenCrates.asset
+    typeName: BuildData
+    dataId: WoodenCrates
+    watchRootKind: 0
+  - assetGuid: 41b18299e39f6fd4aa7b92710a41324a
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_WoodenFence.asset
+    typeName: BuildData
+    dataId: WoodenFence
+    watchRootKind: 0
+  - assetGuid: 68c9a81f94ce36946a014d1a705c5d39
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_WoodenPlanterBox.asset
+    typeName: BuildData
+    dataId: WoodenPlanterBox
+    watchRootKind: 0
+  - assetGuid: 302faa1f84ddd79438fa58ce8d1ea0bc
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Environment/Build_Env_WoodenSignpost.asset
+    typeName: BuildData
+    dataId: WoodenSignpost
+    watchRootKind: 0
   - assetGuid: 2b94a9733de040b4383c1bcfc427585f
     assetPath: Assets/99.Sandbox/_LJH/02.SO/TownSO/TownData_Dummy.asset
     typeName: TownData
@@ -281,7 +511,7 @@ MonoBehaviour:
   - 24facdcdcd1273e4a901c56ee267a402
   - 3f9e7b158e821a448ac5b0531b807095
   - 339c690cf763c7344b2b1e65b2277910
-  - 926d44c3a7bd40c799ad6397028e5076
+  - 4d98318228db09a4c9eaade1455cb1e4
   - 516cb545e2dec9f49ac10b83ac381bcd
   - 94ed95203aade1d4f9f3fb54372c2fd2
   - 6d583a4b588878f4590e2f778fadebcf
@@ -291,6 +521,40 @@ MonoBehaviour:
   - d81e172ffdc16d948b37a48d1a89a98a
   - 63af5decbf34d1747ab76c42cf4e8942
   - e70021528395dfa4ebac5f411e79ec65
+  - 328b25621d177644bb0a7fee80f81a9f
+  - 89c9192e4852b8147980f6bbf1086f48
+  - 8a1267903408c2647a74bc5d6e11ca95
+  - dba5d6b18b9926b4b93cbcd5719d7487
+  - 6b012380b56db1d45b6fbfb4cd5c8b54
+  - d071837c5d0ac0c46ba797b11b7db2ae
+  - b8b2c064ff3c22f4cbb81a74afdb0a6a
+  - 2de067a680a1c0b4dbf373e59f51a837
+  - b533a3fd418899a40ba185aecb14973e
+  - c37db638052aa5f4a9399c2fb7783c08
+  - 0d426ac1820959540a74bd660a406757
+  - fd8dd0e1b72f0d14eb6b101817947160
+  - ce919b21df2947d4ca0d1ed9f1d18025
+  - 6b23a68138f1171419c11886792cd5a0
+  - 092cce287cbb8dd46b0d72e3b5dc05ad
+  - 0b7c39398a0ec4d44b377f492875ae77
+  - c1a05f3531f608345afd45d567b5ba6a
+  - a47c8cc48a682cf4182b8a6bdc81737e
+  - c2124ebe8c63dce42bd29a4343fd958c
+  - 3e14187fa72b01d458ec2ab21159480f
+  - e97afc45c11cc144cba3e7e06edcc891
+  - e446969750d0bff4caee2327d41620b5
+  - 62714ff7c0675654e961b595acb45855
+  - 9f2c731ddbd58ed47a5dab7476752b9c
+  - 3a786fc2757d8764c9afbc50804f47eb
+  - e34abdbd1baadac49b0183dffdd987b4
+  - 24f6cd3c0286afb4fb6a9c981b95b937
+  - 9d11720739f479345b1f2ba1c370b358
+  - a2a0117c501c137498f6554fc2180f72
+  - e34b6e6c96298fc439baa4277774e6b5
+  - 06137b2355f47374cbaa8422591ae19e
+  - 49934d17370b75b43a073a9e06ab5f87
+  - 065a39023e692244ca81d3c63909b6b8
+  - 03095264444ffec43b4c82545a062001
   - 7de4fcc3bc668084682ba80497b8f8d9
   - 1f1ec2f7f5822c84a9af199bcccf3565
   - d1f29cbc4f6fb5d489d1ac675ed655df
@@ -301,7 +565,6 @@ MonoBehaviour:
   - 76f8d2c8354dee44ba423e15d4531cf5
   - 1620c314f295d5544b75c867b5272ba1
   - e1a2a9d1f7eaab2458020c8af6bcb51f
-  - b7417bcdbc25463a819af2e3d0bc6496
   - 65c62a9e92134ab4bb1aae8077ca2b8e
   - a3fd1e2028afb94498ff4141e2c92419
   - f5d1adf3a0a21c84b805c7c69189b3a3
@@ -323,3 +586,14 @@ MonoBehaviour:
   - 4b064345be86a5c4bbd3b3d42072321f
   - 36370e4bc577148448efe47144bd7cf0
   - 8fed33f8956e0bf41bba60cf9ed0d826
+  - 59eeada54a53ce843b0e1840c330e4b7
+  - 9d90dac8b7f026e46a099fccca78ce5f
+  - 63761369cb9c66945b7806398968e14b
+  - 0d99578c466e6de4ab20985bfa7b68a6
+  - 0c29cbc6033b54449a49395038729f53
+  - 3878a87a8eb7e9e48887f2c00d00d928
+  - 32363044bb9b3f24bbe93af591d4b132
+  - b7e2520d52b8a564999fc2fd6e8ac219
+  - 41b18299e39f6fd4aa7b92710a41324a
+  - 68c9a81f94ce36946a014d1a705c5d39
+  - 302faa1f84ddd79438fa58ce8d1ea0bc
