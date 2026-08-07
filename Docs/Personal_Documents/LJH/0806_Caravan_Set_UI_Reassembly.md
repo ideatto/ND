@@ -1,5 +1,7 @@
 # Caravan Set UI 외형 교체 후 기능 재조립
 
+> 전체 InGame UI 재조립 순서와 완료 판정은 `0807_InGame_UI_Reassembly_Master_Checklist.md`에서 관리한다. 이 문서는 Caravan Set, Wagon 개체 선택, Animal 선택의 상세 계약으로 사용한다.
+
 ## 1. 목적
 
 다른 작업자가 Caravan Set UI 외형과 계층을 교체하더라도 다음 기능을 잃지 않도록 하기 위한 문서다.
@@ -15,14 +17,14 @@
 
 기능 구현 기준 커밋은 `515b3985` (`feat: add pooled wagon instance selection popup`)이다.
 
-현재 브랜치에서는 외형 교체 작업과의 충돌을 피하기 위해 아래 네 파일의 해당 기능 변경을 의도적으로 제거했다.
+현재 브랜치에는 아래 세 기능 스크립트와 `TradePrepareUI.prefab`의 재조립 변경이 존재할 수 있다. 조립 전에 `git status`와 실제 Inspector를 확인하고, 문서에 적힌 과거 상태를 근거로 파일이 제거됐다고 가정하지 않는다.
 
 - `AnimalInventoryPanel.cs`
 - `TransportSelectPanel.cs`
 - `WagonSelectPopup.cs`
-- `Assets/_Project/08.Prefabs/UI_TradePrepare.prefab`
+- `Assets/_Project/08.Prefabs/UI/Maps/TradePrepareUI.prefab`
 
-따라서 외형 교체가 끝난 뒤 이 문서에 따라 기능 코드를 복원하고 새 계층에 참조를 다시 연결해야 한다. 독립 기능 자산인 `WagonInstanceRowView.cs`, `WagonInstanceRow.prefab`, `WagonSelectPopup.prefab`은 재조립 재료로 현재 브랜치에 유지한다.
+외형 교체나 프리팹 덮어쓰기로 참조가 사라졌다면 이 문서에 따라 기능 코드를 확인하고 새 계층에 참조를 다시 연결한다. 독립 기능 자산인 `WagonInstanceRowView.cs`, `WagonInstanceRow.prefab`, `WagonSelectPopup.prefab`은 재조립 재료로 유지한다.
 
 ## 2. 파일 소유권과 충돌 처리 원칙
 
@@ -34,6 +36,8 @@
 - `Assets/_Project/05.UI/03_TradeSetup/YHY/Panels/WagonInstanceRowView.cs`
 
 외형 작업자는 위 스크립트를 수정하지 않는 것을 원칙으로 한다. 파일이 누락되거나 이전 버전으로 돌아갔다면 다음 명령으로 기능 버전을 복구할 수 있다.
+
+프리팹 연결보다 스크립트 복원과 Unity 컴파일을 먼저 수행한다. `WagonSelectPopup` 컴파일 타입에 `instanceRowPrefab` 필드가 존재하지 않으면 Inspector 조립을 계속하지 않고 기능 스크립트 버전부터 바로잡는다.
 
 ```powershell
 git restore --source=515b3985 -- `
@@ -77,6 +81,8 @@ git restore --source=515b3985 -- `
 | `buttonPrefab` | 그룹 제목 Button 템플릿 |
 | `instanceRowPrefab` | `WagonInstanceRow.prefab`의 `WagonInstanceRowView` |
 | `cancelButton` | 팝업 취소 버튼 |
+
+현재 `WagonSelectPopup.prefab` 원본의 `buttonPrefab`은 외형 프리팹에서 공급받는 슬롯이므로 비어 있다. `TradePrepareUI.prefab`에 중첩한 인스턴스의 override에서 `TradePrepareUI/Templates/TownBtn`을 연결한다. 원본 프리팹의 빈 참조를 그대로 둔 채 중첩 인스턴스에도 연결하지 않으면, 소유 마차 ViewData와 `AnimalInventoryPanel.wagonInventory`가 정상이어도 `WagonSelectPopup.Rebuild`가 즉시 반환하여 그룹 버튼이 하나도 나타나지 않는다.
 
 ## 4. `TransportSelectPanel.cs` 기능 계약
 
@@ -154,15 +160,17 @@ git restore --source=515b3985 -- `
 외형 작업이 끝난 프리팹을 기준으로 다음 순서로 연결한다.
 
 1. `AnimalInventoryPanel`이 붙은 오브젝트를 컴포넌트 기준으로 찾는다. `S3_Animal`이라는 이름에 의존하지 않는다.
-2. 외형 프리팹 안에 기존 `WagonPopup`이 직접 작성되어 있으면 제거하거나 비활성화한다.
-3. `WagonSelectPopup.prefab`을 동일 Canvas 아래에 한 번 배치한다.
+2. 기존 내장 `WagonPopup`을 유지할지 독립 `WagonSelectPopup.prefab`으로 교체할지 한 방식을 선택한다.
+3. 내장 방식을 선택하면 기존 Popup에 필요한 참조만 연결한다. 독립 방식을 선택하면 기존 Popup을 제거하거나 비활성화한 뒤 동일 Canvas 아래에 프리팹을 한 번 배치한다.
 4. 외형에 맞는 앵커, 크기, 형제 순서와 Sorting 순서를 적용한다.
 5. Popup 루트의 기본 상태를 비활성화한다.
 6. `AnimalInventoryPanel.wagonPopup`에 배치한 `WagonSelectPopup`을 연결한다.
-7. Popup의 `instanceRowPrefab`이 `WagonInstanceRow.prefab`을 참조하는지 확인한다.
-8. Backdrop과 다른 전체 화면 Popup보다 앞에 보이며 입력을 정상 차단하는지 확인한다.
+7. Popup의 `buttonPrefab`에 외형 프리팹의 그룹 버튼 템플릿을 연결한다. 현재 `TradePrepareUI.prefab` 기준 대상은 `TradePrepareUI/Templates/TownBtn`의 `Button`이다.
+8. Popup의 `instanceRowPrefab`이 `WagonInstanceRow.prefab`을 참조하는지 확인한다.
+9. Backdrop과 다른 전체 화면 Popup보다 앞에 보이며 입력을 정상 차단하는지 확인한다.
+10. Prefab Mode를 닫았다 다시 열고 `wagonPopup`, `buttonPrefab`, `instanceRowPrefab` 참조가 저장됐는지 재확인한다.
 
-`UI_TradePrepare.prefab`을 계속 사용하는 경우 기존 내장 `WagonSelectPopup`의 `instanceRowPrefab` 필드만 연결해도 된다. 하지만 `TradePrepareUI.prefab`처럼 별도 중첩 Popup을 사용하는 구조와 동시에 두 Popup을 활성화하면 안 된다.
+현재 `TradePrepareUI.prefab` 조립 결과는 기존 내장 `WagonPopup` 유지 방식이다. `AnimalInventoryPanel.wagonPopup`, `buttonPrefab`, `instanceRowPrefab` 세 참조를 내장 Popup에 연결한다. 독립 중첩 방식으로 전환할 때는 기존 Popup과 새 Popup을 동시에 활성화하지 않는다.
 
 `settlementPanel`, `paymentPanel`, `tradeScreenPresenter` 등 Caravan Set 외 다른 기능의 빈 직렬화 필드는 이 작업의 재조립 대상이 아니다.
 
@@ -185,6 +193,7 @@ git restore --source=515b3985 -- `
 - Wagon이 허용하지 않는 동물을 선택함
 - 동물이 개체별 `×1` 버튼으로 반복 표시됨
 - 그룹 클릭 후 개체 행이 안 나옴
+- 소유 마차 데이터는 존재하지만 `buttonPrefab`이 비어 있어 그룹 버튼이 하나도 생성되지 않음
 - 동일 그룹 재클릭 시 접히지 않음
 - 갱신할 때마다 `Instantiate/Destroy`가 반복됨
 - 외형 프리팹과 기능 프리팹의 Popup 두 개가 동시에 존재함
@@ -204,6 +213,7 @@ git restore --source=515b3985 -- `
 ## 11. 최소 자동 확인 항목
 
 - `WagonSelectPopup.instanceRowPrefab != null`
+- `WagonSelectPopup.buttonPrefab != null`
 - `AnimalInventoryPanel.wagonPopup != null`
 - `WagonInstanceRowView.button != null`
 - `WagonInstanceRowView.label != null`

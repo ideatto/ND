@@ -1,5 +1,25 @@
 # Caravan Overview 트레드밀 연결 요청
 
+> 2026-08-07 현재 Rename 버튼, Journey 아이콘, Horse 애니메이션까지 포함한 최신 재조립 절차는 `0807_Caravan_Overview_Current_Reassembly.md`를 우선 사용한다. 이 문서는 Treadmill 연결의 배경과 기존 계약을 확인하는 참고 문서로 유지한다.
+
+## 2026-08-07 Rename 버튼 분리 변경
+
+- Caravan 이름 영역을 짧게 클릭하면 해당 Caravan의 Treadmill UI를 연다.
+- 이름 영역을 길게 눌러 Rename 팝업을 열던 동작은 제거한다.
+- 이름 영역과 Set 버튼 사이에 Set 버튼과 같은 크기의 `RenameButton`을 둔다.
+- `RenameButton`을 클릭하면 기존 `CaravanRenamePopupController`를 통해 이름 변경 UI를 연다.
+- Rename 버튼은 Occupied 슬롯에서만 표시하며, Empty/Locked/Unknown 슬롯에서는 숨긴다.
+- `MainUICanvas.prefab`의 4개 `CaravanSlotView.renameButton` 참조가 모두 연결되어 있어야 한다.
+
+## 2026-08-07 적용 상태
+
+- InGame Scene의 `CaravanOverviewPresenter.treadmillPanel`을 `MainUICanvas/TreadmillPanel` 컴포넌트에 연결 완료
+- 프리팹 원본에 Apply하지 않고 `InGame.unity` Scene override로 저장
+- Scene 계약 테스트에 Presenter와 TreadmillPanel의 개수 및 직렬화 참조 검사 추가
+- Scene 계약 테스트 통과
+
+현재 `TreadmillPanel is not connected` 경고는 정상 결과가 아니다.
+
 ## 목적
 
 Caravan Slot의 이름 영역을 짧게 클릭하면 해당 Caravan ID의 트레드밀을 열고, 1초 이상 누르면 기존 이름 변경 팝업을 연다.
@@ -16,10 +36,9 @@ Caravan Slot의 이름 영역을 짧게 클릭하면 해당 Caravan ID의 트레
 - Presenter가 ViewData를 다시 생성할 때 열린 패널의 `CurrentCaravanId`와 같은 Caravan만 `RefreshDisplayName`으로 라벨을 갱신한다.
 - 이름 갱신은 Lane, JourneyState, SaveData를 변경하지 않으며 다른 Caravan의 라벨에는 영향을 주지 않는다.
 
-## MainUI 조립 요청
+## MainUI 조립 절차
 
-현재 두 컴포넌트는 서로 다른 프리팹 인스턴스에 있으므로 `MainUICanvas.prefab` 단독 편집만으로는 런타임 인스턴스를 연결할 수 없다.
-InGame Scene 수정이 허용된 뒤 다음 항목을 연결한다.
+두 컴포넌트는 서로 다른 프리팹 인스턴스에 있으므로 `MainUICanvas.prefab` 단독 편집만으로는 런타임 인스턴스를 연결할 수 없다. 다음 연결은 `InGame.unity` Scene override로 유지한다.
 
 1. `Assets/_Project/07.Scenes/04_InGame/InGame.unity`를 연다.
 2. Scene에 배치된 `MainUICanvas` 프리팹 인스턴스를 펼친 뒤 `InfoPanel/CaravanPanel/CaravanScrollView`를 선택한다. 이름 검색으로 찾기 어렵다면 Hierarchy 검색창에 `t:CaravanOverviewPresenter`를 입력하면 현재 Presenter가 붙은 `CaravanScrollView` 하나를 찾을 수 있다.
@@ -77,5 +96,5 @@ InGame.unity
 - 다른 Caravan의 이름 변경 성공: 현재 열린 트레드밀의 ID와 라벨은 유지된다.
 - 1초 이상 누름: 이름 변경 팝업만 열리고 트레드밀은 열리지 않는다.
 - Empty, Locked, Unknown Slot에서는 두 요청 모두 발생하지 않는다.
-- MainUI 연결 전에는 Presenter의 `treadmillPanel`이 비어 있으므로 기존 이름 변경 기능 외에 트레드밀 열기 동작은 발생하지 않는다.
+- Presenter의 `treadmillPanel`은 비어 있으면 안 된다. 비어 있으면 Scene 계약 테스트 실패로 처리한다.
 - Play Mode 종료 후 `InGame.unity` diff에 의도한 `treadmillPanel` 참조 외의 레이아웃·오브젝트 변경이 섞이지 않았는지 확인한다.

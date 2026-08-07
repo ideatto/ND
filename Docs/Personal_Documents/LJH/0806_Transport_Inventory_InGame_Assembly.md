@@ -1,5 +1,7 @@
 # Transport Inventory · Caravan Set InGame 조립 문서
 
+> 전체 InGame UI 재조립 순서와 완료 판정은 `0807_InGame_UI_Reassembly_Master_Checklist.md`에서 관리한다. 이 문서는 목장 진입, Transport Inventory, RuntimeBridge, 테스트 지급 기능의 상세 조립 절차로 사용한다.
+
 ## 1. 목적과 범위
 
 이 문서는 `InGame.unity`와 `TradePrepareUI.prefab`의 조립 변경을 제거한 뒤에도 다음 상태를 다시 만들기 위한 문서다.
@@ -90,6 +92,8 @@
 
 팝업 루트는 기본적으로 비활성화 상태여야 한다. 열고 닫을 때 새 팝업을 생성·삭제하지 않고 기존 인스턴스의 활성 상태만 변경한다.
 
+현재 독립 `WagonSelectPopup.prefab` 원본에는 `buttonPrefab`이 내장되어 있지 않다. `TradePrepareUI.prefab`에 중첩한 뒤 해당 인스턴스의 `buttonPrefab` override를 `TradePrepareUI/Templates/TownBtn`에 연결해야 한다. 이 연결은 `instanceRowPrefab`과 별개이며 둘 중 하나라도 비면 완전한 선택 목록을 만들 수 없다.
+
 그룹 버튼과 개체 행 풀의 기본 생성 수량은 모두 `0`이다. 처음 필요한 만큼만 만들며, 이후 목록 갱신에서는 기존 객체를 재사용한다.
 
 ## 5. `TradePrepareUI.prefab`에 마차 선택 팝업 연결
@@ -108,7 +112,9 @@
 6. `WagonPopup`을 비활성화한다.
 7. `TradePrepareUI/S3_Animal` 오브젝트의 `AnimalInventoryPanel`을 선택한다.
 8. `AnimalInventoryPanel.wagonPopup`에 새 `WagonPopup`의 `WagonSelectPopup` 컴포넌트를 연결한다.
-9. Prefab을 저장한다.
+9. `WagonSelectPopup.buttonPrefab`에 `TradePrepareUI/Templates/TownBtn`의 `Button`을 연결한다. 이 참조가 비면 소유 마차 데이터가 전달되어도 그룹 버튼이 생성되지 않는다.
+10. `WagonSelectPopup.instanceRowPrefab`에 `WagonInstanceRow.prefab`의 `WagonInstanceRowView`가 연결되어 있는지 확인한다.
+11. Prefab을 저장한다.
 
 정상 결과:
 
@@ -128,7 +134,7 @@
 - 다른 Caravan에서 사용 중인 마차를 선택할 수 있음
 - 동일 `contentId`의 다른 소유 개체로 자동 재연결함
 
-개체 행이 나오지 않으면 가장 먼저 `WagonSelectPopup.instanceRowPrefab`과 `AnimalInventoryPanel.wagonPopup`이 `None`인지 확인한다.
+마차 그룹이 하나도 나오지 않으면 `WagonSelectPopup.buttonPrefab`을, 개체 행만 나오지 않으면 `instanceRowPrefab`을 먼저 확인한다. 또한 `AnimalInventoryPanel.wagonPopup`이 `None`인지 확인한다.
 
 ## 6. InGame에 Transport Inventory 배치
 
@@ -142,7 +148,7 @@
 2. 이름은 `TransportInventoryPopup`으로 유지한다.
 3. 화면 전체 Stretch 앵커를 사용한다.
 4. 시작 상태는 비활성화한다.
-5. Main UI의 `BuildingListPanel`이 붙은 오브젝트에 `TransportInventoryMainUiEntry`를 추가한다.
+5. 항상 활성화되는 Scene 조립 오브젝트에 `TransportInventoryMainUiEntry`를 추가한다. 현재 기준 위치는 `CaravanSettingUiConnector`다.
 6. 다음 직렬화 참조를 직접 연결한다.
 
 | `TransportInventoryMainUiEntry` 필드 | 연결 대상 |
@@ -152,7 +158,9 @@
 
 런타임 `Find`로 연결하지 않는다.
 
-여기서 `MainUICanvas.prefab` 원본에 Apply하지 않는다. 현재 조립 기준은 `InGame.unity` 안의 `MainUICanvas` 프리팹 인스턴스에 Popup 인스턴스와 Entry 컴포넌트를 추가하는 방식이다. 다른 씬까지 공통 적용하려는 별도 합의가 있을 때만 `MainUICanvas.prefab`에 Apply한다.
+Popup은 이름만 보고 첫 Canvas를 선택하지 않는다. 실제 `BuildingListPanel`과 함께 활성화되는 `MainUICanvas` 아래에 배치하고, 비활성 레거시 `InGameCanvas` 아래에는 배치하지 않는다. 닫힌 상태는 Popup 자신의 `activeSelf == false`여야 하며 비활성 부모에 의존하지 않는다.
+
+여기서 `MainUICanvas.prefab` 원본에 Apply하지 않는다. 현재 조립 기준은 `InGame.unity` 안의 `MainUICanvas` 프리팹 인스턴스에 Popup 인스턴스를 추가하고, Scene 조립 오브젝트에 Entry 컴포넌트를 추가하는 방식이다. 다른 씬까지 공통 적용하려는 별도 합의가 있을 때만 `MainUICanvas.prefab`에 Apply한다.
 
 `TransportInventoryMainUiEntry`는 다음 역할만 담당한다.
 
@@ -201,7 +209,20 @@ InGame
 - `loadSettingProviderBehaviour`
 - `loadSettingCommandBehaviour`
 
-기존 임시 서비스의 `cargoCatalog`에 연결되어 있던 `TradeItemData` 에셋은 `CaravanSettingRuntimeBridge.tradeItemAssets`에 그대로 연결한다. 이 배열이 비면 Transport Inventory가 아니라 Caravan Cargo UI의 상품 이름, 아이콘과 표시 정보가 누락될 수 있다.
+기존 임시 서비스의 `cargoCatalog`에 연결되어 있던 `TradeItemData` 에셋은 `CaravanSettingRuntimeBridge.tradeItemAssets`에 옮긴다. 단, 기존 배열만 그대로 복사하는 것으로 완료 처리하지 않는다. RuntimeBridge는 상점 목록뿐 아니라 Caravan Cargo에 이미 적재된 품목도 표시하므로, 현재 저장 데이터와 SharedGameData에서 Cargo로 들어올 수 있는 모든 `itemId`의 표시 에셋이 필요하다.
+
+현재 시연 데이터 기준 최소 확인 대상은 다음 여섯 개다.
+
+| itemId | TradeItemData 에셋 |
+| --- | --- |
+| `Apple` | 프로젝트의 Apple `TradeItemData` |
+| `Wheat` | 프로젝트의 Wheat `TradeItemData` |
+| `Cloth` | 프로젝트의 Cloth `TradeItemData` |
+| `Stover` | 프로젝트의 Stover `TradeItemData` |
+| `Logs` | `Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Logs.asset` |
+| `Stone` | `Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/TradeItem_Stone.asset` |
+
+배열 순서는 식별 기준이 아니다. 각 `TradeItemData.itemId`로 조회되므로 `itemId` 중복과 누락이 없어야 한다. `Logs` 또는 `Stone`이 빠지면 저장 데이터의 수량과 중량은 남아 있어도 적재 슬롯 아이콘이 비어 보인다.
 
 기존 `TestCaravanSettingService`와 RuntimeBridge를 동시에 명령 처리자로 연결하지 않는다. 저장 명령이 두 번 등록될 수 있다.
 
@@ -209,9 +230,10 @@ InGame
 
 1. 기존 `cargoCatalog`의 모든 `TradeItemData` 참조를 기록한다.
 2. 같은 GameObject에 `CaravanSettingRuntimeBridge`를 추가한다.
-3. 기록한 에셋을 순서 그대로 `tradeItemAssets`에 연결한다.
+3. 기록한 에셋과 현재 Cargo에 들어올 수 있는 추가 품목(`Logs`, `Stone` 포함)을 `tradeItemAssets`에 연결한다.
 4. Overview Binding의 네 Provider/Command 필드를 RuntimeBridge로 교체한다.
-5. 네 필드가 모두 교체된 것을 확인한 뒤에만 `TestCaravanSettingService`를 제거한다.
+5. `tradeItemAssets`의 각 에셋이 고유한 `itemId`를 가지며 누락이 없는지 확인한다.
+6. 네 필드가 모두 교체된 것을 확인한 뒤에만 `TestCaravanSettingService`를 제거한다.
 
 중간에 임시 서비스부터 제거하면 `cargoCatalog` 참조를 잃을 수 있다.
 
@@ -230,30 +252,32 @@ InGame
 - 내구도 0으로 삭제된 개체가 선택 상태에 남음
 - 같은 동물이 두 Caravan에 동시에 배정됨
 
-## 8. 개발 검증 버튼 — 선택 사항
+## 8. 개발 검증 버튼 — 현재 개발 씬 필수
 
-상점과 보상 지급 경로가 아직 없을 때만 `TransportInventoryRewardDebugButton.prefab`을 Main UI 아래에 한 번 배치한다.
+상점과 보상 지급 경로가 아직 완성되지 않은 현재 개발 씬에서는 `TransportInventoryRewardDebugButton.prefab`을 활성 `MainUICanvas` 좌하단에 정확히 한 번 배치한다. 운영 빌드 전환 시 제거 또는 비활성화 여부를 별도로 결정한다.
 
 기본 지급 예시:
 
-- `Wagon_Wagon_M` 1개
-- `Wagon_Wagon_S` 1개
-- `DraftAnimal_Horse` 2마리
+- `Wagon_M` 1개
+- `Wagon_S` 1개
+- `Horse` 2마리
 
 버튼은 `contentId`와 수량만 전달해야 한다. `PlayerMainManager`가 각 개체의 고유 `instanceId`를 발급한다. 운영 빌드의 정상 획득 경로로 사용하지 않는다.
 
 ## 9. 권장 조립 순서
 
-1. `WagonInstanceRow.prefab` 내부 참조 확인
-2. `WagonSelectPopup.prefab` 내부 참조 확인
-3. `TradePrepareUI.prefab`에 `WagonSelectPopup.prefab` 배치
-4. `AnimalInventoryPanel.wagonPopup` 연결
-5. InGame에 `TransportInventoryPopup.prefab` 배치
-6. `TransportInventoryMainUiEntry` 추가 및 두 필드 연결
-7. `CaravanSettingRuntimeBridge`와 Overview Binding 연결
-8. `tradeItemAssets` 이전
-9. 필요할 때만 테스트 지급 버튼 배치
-10. Unity Console 오류가 없는지 확인 후 PlayMode 검증
+1. 기능 스크립트 버전을 확인하고 누락 또는 롤백된 파일을 복구한다.
+2. Unity 컴파일 완료와 Console 오류 0건을 확인한다.
+3. `WagonInstanceRow.prefab`과 `WagonSelectPopup` 내부 참조를 확인한다.
+4. 기존 내장 Popup 유지 또는 독립 Popup 중첩 중 한 방식을 선택하고 `AnimalInventoryPanel.wagonPopup`을 연결한다.
+5. `TransportInventoryMainUiEntry.cs` 존재 여부를 확인하고 다시 컴파일한다.
+6. 활성 `MainUICanvas`에 `TransportInventoryPopup.prefab`을 배치하고 시작 상태를 비활성화한다.
+7. 활성 Scene 조립 오브젝트에 `TransportInventoryMainUiEntry`를 추가하고 두 필드를 연결한다.
+8. 임시 서비스의 카탈로그를 보존한 채 `CaravanSettingRuntimeBridge`와 Overview Binding을 먼저 연결한다.
+9. `Logs`, `Stone`을 포함한 `tradeItemAssets`를 확인한 뒤에만 `TestCaravanSettingService`를 제거한다.
+10. 활성 `MainUICanvas` 좌하단에 테스트 지급 버튼을 한 번 배치한다.
+11. Scene과 Prefab을 저장 후 다시 열어 직렬화 참조를 확인한다.
+12. 조립 계약 테스트와 PlayMode Smoke Test를 갱신하고 실행한다.
 
 Unity Test Runner가 PlayMode 테스트를 `0 tests`로 반환하면 성공으로 간주하지 않는다. 이 경우 위 체크리스트를 수동 PlayMode로 실행하거나 PlayMode test assembly 설정을 먼저 복구한다.
 
@@ -358,12 +382,15 @@ Unity가 `.meta` 파일을 자동 생성하도록 Project 창 갱신을 기다�
 - InGame Scene에 `TestCaravanSettingService`가 남아 있지 않다.
 - Overview Binding의 네 서비스 참조가 모두 같은 RuntimeBridge다.
 - RuntimeBridge의 `tradeItemAssets`가 비어 있지 않고 중복 ItemId가 없다.
+- RuntimeBridge의 `tradeItemAssets`에 현재 Cargo 표시 대상인 `Logs`와 `Stone`이 포함되어 있다.
 - `TransportInventoryPopupController`가 정확히 1개 있고 시작 시 비활성화다.
 - `TransportInventoryMainUiEntry`가 정확히 1개 있다.
 - Entry의 `buildingListPanel`과 `popup`이 모두 연결되어 있다.
-- 테스트 지급 버튼을 사용한다면 정확히 1개만 배치되어 있다.
+- 현재 개발 씬에는 테스트 지급 버튼이 정확히 1개 배치되어 있다.
+- Popup의 부모 Canvas는 활성 `MainUICanvas`이며 비활성 `InGameCanvas`가 아니다.
 - `TradePrepareUI/S3_Animal`의 `AnimalInventoryPanel.wagonPopup`이 새 중첩 프리팹을 참조한다.
 - `WagonSelectPopup.instanceRowPrefab`이 비어 있지 않다.
+- `WagonSelectPopup.buttonPrefab`이 비어 있지 않다.
 - Console에 Missing Script, Missing Reference, 이벤트 이중 등록 오류가 없다.
 
 ## 부록 C. 조립 계약 테스트 갱신 기준
