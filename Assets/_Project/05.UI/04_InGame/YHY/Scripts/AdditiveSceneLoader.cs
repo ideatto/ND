@@ -5,6 +5,8 @@
 //
 // [역할] 지정 씬을 additive로 한 번만 비동기 로드하고, 활성화 직후 초기화가 끝난 다음
 //        프레임부터 외부 Loading flow가 조회할 수 있는 Ready 상태를 제공한다.
+//        Disable Domain Reload에서 Play Stop으로 끊긴 static orphan 상태는
+//        SubsystemRegistration 초기화와 Operation 검증으로 복구한다.
 // =============================================================================
 
 using System;
@@ -39,6 +41,13 @@ public sealed class AdditiveSceneLoader : MonoBehaviour
     /// <summary>Unity의 0~0.9 로드 진행률을 0~1로 정규화해 반환한다.</summary>
     public float Progress01 => GetProgress01(sceneName);
 
+    // Disable Domain Reload에서도 이전 Play의 static States가 남지 않도록 런타임 세션 시작 시 비운다.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        States.Clear();
+    }
+
     private void Start()
     {
         StartCoroutine(LoadRequiredSceneAsync());
@@ -56,7 +65,11 @@ public sealed class AdditiveSceneLoader : MonoBehaviour
     /// <summary>
     /// 지정 Additive 씬의 기존 작업에 합류하거나 새 비동기 로드를 시작한다.
     /// </summary>
-    /// <remarks>Ready는 씬 활성화 콜백과 동기 OnEnable/Start 초기화 다음 프레임에 설정된다.</remarks>
+    /// <remarks>
+    /// Ready는 씬 활성화 콜백과 동기 OnEnable/Start 초기화 다음 프레임에 설정된다.
+    /// IsLoading이지만 Operation이 없고 씬도 로드되지 않은 orphan 상태는 대기하지 않고 새 로드를 시작한다.
+    /// Operation이 있는 진행 중 로드에는 기존과 같이 join한다.
+    /// </remarks>
     public static IEnumerator LoadRequiredSceneAsync(string requiredSceneName)
     {
         if (string.IsNullOrWhiteSpace(requiredSceneName))
@@ -65,25 +78,32 @@ public sealed class AdditiveSceneLoader : MonoBehaviour
             yield break;
         }
 
-        var loadedScene = SceneManager.GetSceneByName(requiredSceneName);
         var state = GetOrCreateState(requiredSceneName);
-        if (loadedScene.isLoaded)
+        if (TryNormalizeAlreadyLoadedState(requiredSceneName, state))
         {
-            state.Operation = null;
-            state.IsLoading = false;
-            state.IsReady = true;
-            state.Error = null;
             yield break;
         }
 
         if (state.IsLoading)
         {
-            while (state.IsLoading)
+            // 정상 concurrent join: 실제 AsyncOperation이 있을 때만 기존 로드를 기다린다.
+            if (state.Operation != null)
             {
-                yield return null;
+                while (state.IsLoading)
+                {
+                    yield return null;
+                }
+
+                yield break;
             }
 
-            yield break;
+            // Operation이 없는 orphan IsLoading은 무한 join 대상이 아니므로 초기화 후 신규 로드로 진행한다.
+            Debug.LogWarning(
+                $"Additive scene loader recovered stale loading state. Scene={requiredSceneName}");
+            state.Operation = null;
+            state.IsLoading = false;
+            state.IsReady = false;
+            state.Error = null;
         }
 
         state.Operation = null;
@@ -108,7 +128,6 @@ public sealed class AdditiveSceneLoader : MonoBehaviour
         }
 
         yield return state.Operation;
-        state.Operation = null;
 
         if (!SceneManager.GetSceneByName(requiredSceneName).isLoaded)
         {
@@ -117,21 +136,51 @@ public sealed class AdditiveSceneLoader : MonoBehaviour
         }
 
         // Awake, OnEnable, sceneLoaded callbacks, and synchronous Rebuild calls have returned here.
+        // Operation은 Ready 확정 직전까지 유지해 join 대기와 진행률 조회가 orphan으로 오판되지 않게 한다.
         yield return null;
+        state.Operation = null;
         state.IsLoading = false;
         state.IsReady = true;
     }
 
     /// <summary>지정 씬의 로드 작업 진행 여부를 조회한다.</summary>
+    /// <remarks>
+    /// IsLoading이지만 Operation이 없고 씬이 이미 로드된 stale 상태는 Ready로 정규화한 뒤 false를 반환한다.
+    /// Loading flow의 Ready gate가 영구 대기하지 않도록 조회 시점에 복구한다.
+    /// </remarks>
     public static bool GetIsLoading(string requiredSceneName)
     {
-        return TryGetState(requiredSceneName, out var state) && state.IsLoading;
+        if (!TryGetState(requiredSceneName, out var state) || !state.IsLoading)
+        {
+            return false;
+        }
+
+        if (TryNormalizeAlreadyLoadedState(requiredSceneName, state))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>지정 씬이 현재 로드되어 있고 초기화 Ready 상태인지 조회한다.</summary>
+    /// <remarks>
+    /// 씬이 이미 로드되었는데 Ready flag만 비어 있으면 terminal Ready로 정규화한다.
+    /// Ready=true인데 씬이 unload된 경우에는 false로 되돌린다.
+    /// </remarks>
     public static bool GetIsReady(string requiredSceneName)
     {
-        if (!TryGetState(requiredSceneName, out var state) || !state.IsReady)
+        if (!TryGetState(requiredSceneName, out var state))
+        {
+            return false;
+        }
+
+        if (TryNormalizeAlreadyLoadedState(requiredSceneName, state))
+        {
+            return true;
+        }
+
+        if (!state.IsReady)
         {
             return false;
         }
@@ -187,6 +236,27 @@ public sealed class AdditiveSceneLoader : MonoBehaviour
         }
 
         return States.TryGetValue(requiredSceneName, out state);
+    }
+
+    /// <summary>
+    /// Operation이 없고 씬이 이미 로드된 상태를 terminal Ready로 정규화한다.
+    /// </summary>
+    /// <returns>
+    /// 씬이 로드되어 있고 Operation이 없어 정규화를 적용하면 true를 반환한다.
+    /// Operation이 남아 있거나 씬이 아직 로드되지 않았으면 false를 반환하며 상태는 바꾸지 않는다.
+    /// </returns>
+    private static bool TryNormalizeAlreadyLoadedState(string requiredSceneName, SceneLoadState state)
+    {
+        if (state.Operation != null || !SceneManager.GetSceneByName(requiredSceneName).isLoaded)
+        {
+            return false;
+        }
+
+        state.Operation = null;
+        state.IsLoading = false;
+        state.IsReady = true;
+        state.Error = null;
+        return true;
     }
 
     private static void Fail(string requiredSceneName, SceneLoadState state, string detail)
