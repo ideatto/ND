@@ -10,20 +10,21 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7df7a3265402c9043839408fb7059f03, type: 3}
-  m_Name: Market_BaseCamp
+  m_Name: Market_Ore
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
-  marketId: BaseCampMarket
+  marketId: OreTwon
   itemMinimumQuantity: 150
   itemMaxQuantity: 300
   itemRenewalCycle: 3600
   tradeItems:
-  - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
-  - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
-  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
-  - {fileID: 11400000, guid: 328b25621d177644bb0a7fee80f81a9f, type: 2}
+  - {fileID: 11400000, guid: e97afc45c11cc144cba3e7e06edcc891, type: 2}
+  - {fileID: 11400000, guid: c1a05f3531f608345afd45d567b5ba6a, type: 2}
+  - {fileID: 11400000, guid: 62714ff7c0675654e961b595acb45855, type: 2}
+  - {fileID: 11400000, guid: 9d11720739f479345b1f2ba1c370b358, type: 2}
+  - {fileID: 11400000, guid: 63af5decbf34d1747ab76c42cf4e8942, type: 2}
+  - {fileID: 11400000, guid: e446969750d0bff4caee2327d41620b5, type: 2}
+  - {fileID: 11400000, guid: e34b6e6c96298fc439baa4277774e6b5, type: 2}
   draftAnimalItems: []
-  wagonItems:
-  - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
-  localSpecialtyItems:
-  - {fileID: 11400000, guid: 516cb545e2dec9f49ac10b83ac381bcd, type: 2}
+  wagonItems: []
+  localSpecialtyItems: []
