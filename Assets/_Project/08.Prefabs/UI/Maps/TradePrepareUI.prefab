@@ -7155,6 +7155,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WagonSelectPopup
   listContainer: {fileID: 3497241900484304321}
   buttonPrefab: {fileID: 307645470522611213}
+  instanceRowPrefab: {fileID: 3334901695345298056, guid: f3f8e3ffcab20dd478f9d61b28e9b644, type: 3}
   cancelButton: {fileID: 2738813024528780979}
 --- !u!1 &2691193020088295531
 GameObject:
