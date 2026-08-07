@@ -35,12 +35,14 @@ namespace ND.Framework
     {
         [SerializeField] private MonoBehaviour settlementViewBehaviour;
         [SerializeField] private bool refreshOnEnable = true;
+        [SerializeField] private ReusableMessagePopup failureLossPopup;
 
         private ISettlementView settlementView;
         private SettlementUiBridge subscribedBridge;
         private string displayedCaravanId = string.Empty;
         private string displayedTradeId = string.Empty;
         private bool isClaimProcessing;
+        private bool isWaitingForFailureConfirmation;
 
         /// <summary>
         /// 현재 표시된 Caravan·trade identity의 settlement claim 버튼 클릭을 처리한다.
@@ -85,31 +87,66 @@ namespace ND.Framework
             SetClaimInteractable(false);
 
             // 실제 claim과 저장 데이터 갱신은 bridge/coordinator가 수행한다.
-            var claimResult = bridge.ClaimSettlement(displayedCaravanId, displayedTradeId);
+            string claimedCaravanId = displayedCaravanId;
+            string claimedTradeId = displayedTradeId;
+            bool hadEquippedWagon = false;
+            int equippedAnimalCount = 0;
+            if (SaveDataLookup.TryGetCaravan(
+                    FrameworkRoot.Instance?.CurrentSaveData,
+                    claimedCaravanId,
+                    out CaravanSaveData claimedCaravan))
+            {
+                hadEquippedWagon = !string.IsNullOrWhiteSpace(claimedCaravan.wagon?.instanceId);
+                equippedAnimalCount = claimedCaravan.animals?.Count ?? 0;
+            }
+            string pendingCaravanId;
+            string pendingTradeId;
+            JourneyResultData claimedResult;
+            if (!bridge.TryGetPendingSettlement(
+                    out pendingCaravanId, out pendingTradeId, out claimedResult)
+                || !string.Equals(pendingCaravanId, claimedCaravanId, System.StringComparison.Ordinal)
+                || !string.Equals(pendingTradeId, claimedTradeId, System.StringComparison.Ordinal)
+                || claimedResult == null)
+            {
+                isClaimProcessing = false;
+                SetClaimInteractable(true);
+                FrameworkLog.Warning(
+                    $"Adapter Claim failed. CaravanId: {claimedCaravanId}, TradeId: {claimedTradeId}, Reason: displayed result could not be captured.");
+                return;
+            }
+
+            var claimResult = bridge.ClaimSettlement(
+                claimedCaravanId,
+                claimedTradeId,
+                presentNextPendingSettlement: false);
             if (!claimResult.Succeeded)
             {
                 isClaimProcessing = false;
                 SetClaimInteractable(true);
                 FrameworkLog.Warning(
-                    $"Adapter Claim failed. CaravanId: {displayedCaravanId}, TradeId: {displayedTradeId}, Reason: {claimResult.FailureReason}.");
+                    $"Adapter Claim failed. CaravanId: {claimedCaravanId}, TradeId: {claimedTradeId}, Reason: {claimResult.FailureReason}.");
                 return;
             }
 
-            // Claim can synchronously advance the bridge to another failed settlement.
-            // Re-read that cursor instead of clearing the identity written by SettlementReady.
-            string nextCaravanId;
-            string nextTradeId;
-            JourneyResultData nextResult;
-            if (bridge.TryGetPendingSettlement(out nextCaravanId, out nextTradeId, out nextResult))
+            displayedCaravanId = string.Empty;
+            displayedTradeId = string.Empty;
+            if (claimedResult.grade == JourneyResultGrade.Failed)
             {
-                RefreshSettlementView();
+                isWaitingForFailureConfirmation = true;
+                if (failureLossPopup != null)
+                {
+                    failureLossPopup.Show(
+                        CreateFailureLossMessage(hadEquippedWagon, equippedAnimalCount),
+                        "확인",
+                        ContinueAfterClaimPresentation);
+                    return;
+                }
+
+                FrameworkLog.Warning(
+                    "Failed-trade loss Popup is not wired. Continuing without acknowledgement.");
             }
-            else
-            {
-                displayedCaravanId = string.Empty;
-                displayedTradeId = string.Empty;
-            }
-            ClearClaimProcessing();
+
+            ContinueAfterClaimPresentation();
         }
 
         private void OnEnable()
@@ -138,6 +175,11 @@ namespace ND.Framework
 
         private void HandleScreenChanged(InGameScreenState screenState)
         {
+            if (isWaitingForFailureConfirmation)
+            {
+                return;
+            }
+
             // settlement 화면으로 전환될 때 bridge cache를 읽어 표시 데이터를 갱신한다.
             if (screenState == InGameScreenState.Settlement)
             {
@@ -154,7 +196,47 @@ namespace ND.Framework
 
         private void HandleSettlementReady(string tradeId, JourneyResultData result)
         {
+            if (isWaitingForFailureConfirmation)
+            {
+                return;
+            }
+
             RefreshSettlementView();
+        }
+
+        private void ContinueAfterClaimPresentation()
+        {
+            isWaitingForFailureConfirmation = false;
+            ClearClaimProcessing();
+
+            var bridge = GetBridge();
+            if (bridge == null || !bridge.ContinuePendingSettlementPresentation())
+            {
+                displayedCaravanId = string.Empty;
+                displayedTradeId = string.Empty;
+            }
+        }
+
+        internal static string CreateFailureLossMessage(
+            bool hadEquippedWagon,
+            int equippedAnimalCount)
+        {
+            if (hadEquippedWagon && equippedAnimalCount > 0)
+            {
+                return "무역에 실패하여 마차와 동물, 적재 물품을 모두 잃었습니다.";
+            }
+
+            if (hadEquippedWagon)
+            {
+                return "무역에 실패하여 마차와 적재 물품을 모두 잃었습니다.";
+            }
+
+            if (equippedAnimalCount > 0)
+            {
+                return "무역에 실패하여 동물과 적재 물품을 모두 잃었습니다.";
+            }
+
+            return "무역에 실패하여 적재 물품을 모두 잃었습니다.";
         }
 
         private void RefreshSettlementView()

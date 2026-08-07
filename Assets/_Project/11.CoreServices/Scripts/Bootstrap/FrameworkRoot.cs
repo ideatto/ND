@@ -552,7 +552,16 @@ namespace ND.Framework
             // 기존 SettlementPending 재진입 시에만 세션 cache를 복구한다.
             if (restorePending)
             {
-                TradeProgressCoordinator?.RestorePendingSettlements(CurrentSaveData);
+                bool restoredSettlements =
+                    TradeProgressCoordinator?.RestorePendingSettlements(CurrentSaveData) == true;
+                if (restoredSettlements)
+                {
+                    // Multi-Caravan restore rebuilds Coordinator state but intentionally does
+                    // not replay TradeSettlementReady. Rebuild the Bridge's exact failed cursor
+                    // once here so a loaded failure opens S8 without polling in Update.
+                    // Successful pending entries remain owned by the Selling flow and are skipped.
+                    SettlementUiBridge?.ContinuePendingSettlementPresentation();
+                }
             }
 
             // scene 전환 전에 화면 router와 load event를 갱신해 UI가 현재 trade state를 기준으로 초기화되게 한다.
@@ -980,7 +989,10 @@ namespace ND.Framework
         /// The coordinator outcome. Success clears only matching runtime presentation and notification state;
         /// failure preserves the displayed identity and unrelated pending settlements.
         /// </returns>
-        public ClaimSettlementResult ClaimSettlement(string caravanId, string tradeId)
+        public ClaimSettlementResult ClaimSettlement(
+            string caravanId,
+            string tradeId,
+            bool presentNextPendingSettlement = true)
         {
             if (isClaimProcessing)
             {
@@ -1015,7 +1027,10 @@ namespace ND.Framework
                     // SaveData.pendingSettlements remains the durable source of truth. After
                     // claiming the exact displayed identity, advance the presentation cursor
                     // to the next unclaimed entry instead of maintaining a second memory queue.
-                    TryPresentNextPendingSettlement();
+                    if (presentNextPendingSettlement)
+                    {
+                        TryPresentNextPendingSettlement();
+                    }
                 }
                 else
                 {
@@ -1078,6 +1093,11 @@ namespace ND.Framework
         /// Invalid entries are skipped without mutating SaveData so validation and repair remain
         /// Framework/Core responsibilities.
         /// </remarks>
+        public bool ContinuePendingSettlementPresentation()
+        {
+            return TryPresentNextPendingSettlement();
+        }
+
         private bool TryPresentNextPendingSettlement()
         {
             SaveData saveData = GetSaveData();

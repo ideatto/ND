@@ -23,14 +23,15 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
     private void OnEnable()
     {
         view = viewBehaviour as ITradeScreenView;
+        // SettlementUiBridge owns TradeSettlementReady validation and only requests the
+        // Settlement screen after its exact Caravan/trade cursor is ready. Listening to the
+        // raw settlement event here would create a second, order-dependent UI owner.
         FrameworkEvents.InGameScreenChanged += HandleScreenChanged;
-        FrameworkEvents.TradeSettlementReady += HandleTradeSettlementReady;
     }
 
     private void OnDisable()
     {
         FrameworkEvents.InGameScreenChanged -= HandleScreenChanged;
-        FrameworkEvents.TradeSettlementReady -= HandleTradeSettlementReady;
         view = null;
     }
 
@@ -205,37 +206,6 @@ public sealed class FrameworkTradeScreenPresenter : MonoBehaviour
                 view.ShowPreparation();
                 break;
         }
-    }
-
-    private void HandleTradeSettlementReady(
-        string caravanId,
-        string tradeId,
-        JourneyResultData result)
-    {
-        if (result == null)
-            return;
-
-        if (result.grade == JourneyResultGrade.Failed)
-        {
-            // Failure has no destination sale step and belongs to the event Caravan, not the
-            // globally focused Caravan. Open S8 directly even when another Caravan is selected.
-            OpenSettlementScreen();
-            return;
-        }
-
-        FrameworkRoot root = FrameworkRoot.Instance;
-        if (root?.CurrentSaveData == null
-            || !string.Equals(
-                root.CurrentSaveData.selectedCaravanId,
-                caravanId,
-                System.StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        // SettlementPending is already stored by Framework. Closing this presentation leaves
-        // the caravan status UI responsible only for rendering its sale-waiting action.
-        CloseTradeScreen();
     }
 
     private void RefreshTravelingView()
