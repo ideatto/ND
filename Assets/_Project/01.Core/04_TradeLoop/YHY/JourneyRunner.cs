@@ -372,23 +372,9 @@ public static class JourneyRunner
     /// </summary>
     private static void DestroyWagon(CaravanData caravan)
     {
-        // 화물 전량 소실 (수량을 0으로 만들고 잃은 개수를 누적)
-        if (caravan.cargo != null)
-        {
-            int lost = 0;
-            foreach (CargoEntry entry in caravan.cargo)
-            {
-                if (entry == null || entry.quantity <= 0) continue;
-                lost += entry.quantity;
-                entry.quantity = 0;
-            }
-            caravan.runCargoLost += lost;
-        }
-
-        // 남은 식량 전량 소실 (소모가 아니라 "잃은" 것이므로 runFoodLost에 누적)
-        float remainingFood = CaravanCalculator.GetRemainingFood(caravan);
-        if (remainingFood > 0f) caravan.runFoodLost += remainingFood;
-
+        // 파괴 시점에는 실패 사실만 확정한다. 남은 화물·식량은 Settle 결과에
+        // 전손 snapshot으로 포함하고, 실제 데이터 제거는 저장 롤백이 가능한
+        // Framework S9 Claim transaction에서 수행한다.
         caravan.runWagonDestroyed = true;
         MarkFatal(caravan, JourneyFailureReason.WagonBroken);
     }
@@ -417,7 +403,10 @@ public static class JourneyRunner
         {
             result.grade = JourneyResultGrade.Failed;
             result.failureReason = caravan.runFatalReason;
-            result.cargoLost = caravan.runCargoLost;
+            // 실패 Claim은 남은 적재 화물도 전부 제거한다. S8 정산 결과 역시 실제
+            // Claim 결과와 일치하도록, 이미 잃은 수량과 현재 잔량을 합친 전손
+            // snapshot을 최초 정산 결과에만 기록한다. 여기서는 cargo를 변경하지 않는다.
+            result.cargoLost = CalculateFailedCargoLoss(caravan);
         }
         else if (caravan.runCargoLost > 0)
         {
@@ -437,7 +426,6 @@ public static class JourneyRunner
         result.wagonDestroyed = caravan.runWagonDestroyed;
         result.destroyedWagonInstanceId =
             (caravan.runWagonDestroyed && caravan.wagon != null) ? caravan.wagon.instanceId : string.Empty;
-        result.foodLost = caravan.runFoodLost;
         result.eventsOccurred = caravan.runEventsOccurred;
         result.battlesFought = caravan.runBattlesFought;
         result.lostMercenaryInstanceIds.AddRange(caravan.runLostMercenaryInstanceIds);
@@ -447,6 +435,9 @@ public static class JourneyRunner
         int departureFoodAmount   = caravan.foodAmount;
         float remainingFood       = CaravanCalculator.GetRemainingFood(caravan);
         if (remainingFood < 0f) remainingFood = 0f;                                    // 음수 방어
+        // 실패 Claim은 남은 식량도 제거하므로 실패 결과에는 누적 손실 + 현재 잔량을
+        // 표시한다. 실제 제거는 저장 롤백이 가능한 Framework Claim 단계가 담당한다.
+        result.foodLost          = fatal ? caravan.runFoodLost + remainingFood : caravan.runFoodLost;
         // 정산 결과만 기록하고 foodAmount를 출발값으로 남겨 두면, 도착 마켓에서
         // 남은 먹이를 Cargo로 되돌릴 때 출발 시 적재한 먹이가 전부 복원된다.
         // Cargo 수량은 정수이므로 사용할 수 있는 완전한 단위만 잔량으로 확정한다.
@@ -465,6 +456,27 @@ public static class JourneyRunner
             : JourneyState.Selling;
 
         return result;
+    }
+
+    /// <summary>
+    /// 실패 정산 화면에 표시할 화물 전손 수량을 계산한다.
+    /// 운행 중 이미 제거된 수량(runCargoLost)과 아직 cargo에 남은 수량을 합하되,
+    /// 실제 cargo 및 런타임 누적값은 변경하지 않는다.
+    /// </summary>
+    private static int CalculateFailedCargoLoss(CaravanData caravan)
+    {
+        long total = caravan.runCargoLost > 0 ? caravan.runCargoLost : 0;
+        if (caravan.cargo != null)
+        {
+            foreach (CargoEntry entry in caravan.cargo)
+            {
+                if (entry == null || entry.quantity <= 0) continue;
+                total += entry.quantity;
+                if (total >= int.MaxValue) return int.MaxValue;
+            }
+        }
+
+        return (int)total;
     }
 
     ///// <summary>

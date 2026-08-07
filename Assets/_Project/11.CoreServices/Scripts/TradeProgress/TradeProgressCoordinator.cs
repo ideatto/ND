@@ -1451,6 +1451,21 @@ namespace ND.Framework
 
             var saveDataSnapshot = JsonUtility.ToJson(saveData);
             var runtimeCaravanSnapshot = JsonUtility.ToJson(caravan);
+            // Runtime 매핑 데이터에 개체 ID가 누락될 수 있으므로, 손실 대상은 Claim이
+            // SaveData를 변경하기 전에 authoritative 저장 구성에서 확정해 둔다.
+            var failedWagonInstanceId = caravanSave.wagon?.instanceId ?? string.Empty;
+            var failedAnimalInstanceIds = new List<string>();
+            if (caravanSave.animals != null)
+            {
+                for (var index = 0; index < caravanSave.animals.Count; index++)
+                {
+                    var instanceId = caravanSave.animals[index]?.instanceId;
+                    if (!string.IsNullOrWhiteSpace(instanceId))
+                    {
+                        failedAnimalInstanceIds.Add(instanceId);
+                    }
+                }
+            }
             var selectedCaravanIdBeforeClaim = saveData.selectedCaravanId;
             saveData.selectedCaravanId = caravanId;
             if (!JourneyRunner.ClaimSettlement(caravan))
@@ -1476,6 +1491,18 @@ namespace ND.Framework
             {
                 RestoreClaimSnapshot(saveData, caravan, saveDataSnapshot, runtimeCaravanSnapshot);
                 return ClaimSettlementResult.Failure(ClaimSettlementFailureReason.CoreClaimRejected);
+            }
+
+            // A failed trade consumes the complete transport composition. This remains inside
+            // the Claim snapshot transaction so a failed persistence attempt restores both the
+            // owned inventories and the runtime Caravan without leaving a partial loss behind.
+            if (settlementResult.grade == JourneyResultGrade.Failed)
+            {
+                FailedTradeTransportLoss.Apply(
+                    saveData,
+                    caravan,
+                    failedWagonInstanceId,
+                    failedAnimalInstanceIds);
             }
 
             // A failed journey returns the claimed Caravan to its saved origin.
