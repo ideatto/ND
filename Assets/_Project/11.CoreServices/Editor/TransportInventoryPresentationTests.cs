@@ -4,6 +4,7 @@ using ND.UI.InGame.TransportInventory;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 public sealed class TransportInventoryPresentationTests
 {
@@ -122,6 +123,14 @@ public sealed class TransportInventoryPresentationTests
             animal.Render(TransportInventoryViewDataBuilder.Build(PlayerWithFarm(1), Catalog()).Animal);
             Assert.That(animal.GetComponentsInChildren<TransportInventorySlotView>(true), Has.Length.EqualTo(40));
             Assert.That(animal.GetComponentsInChildren<TransportInventorySlotView>(false), Has.Length.EqualTo(20));
+
+            ScrollRect animalScroll = animal.GetComponentInChildren<ScrollRect>(true);
+            Assert.That(animalScroll, Is.Not.Null);
+            Assert.That(animalScroll.content.rect.height, Is.GreaterThan(2600f));
+            Assert.That(animalScroll.content.rect.height, Is.GreaterThan(animalScroll.viewport.rect.height));
+            animalScroll.verticalNormalizedPosition = 0f;
+            Canvas.ForceUpdateCanvases();
+            Assert.That(animalScroll.verticalNormalizedPosition, Is.EqualTo(0f).Within(0.001f));
         }
         finally
         {
