@@ -2,7 +2,7 @@
 
 ## 1. 목적과 적용 범위
 
-이 문서는 `MainUICanvas.prefab`과 `InGame.unity`의 현재 변경을 폐기한 뒤에도 Caravan Overview를 현재 형태로 다시 조립하기 위한 기준 문서다.
+이 문서는 `MainUICanvas.prefab`과 `InGame.unity`의 현재 변경을 폐기한 뒤에도 Caravan Overview를 현재 형태로 다시 조립하기 위한 기준 문서다. 최신 dev2의 실패 Claim 전손, 손실 Popup과 순차 정산은 `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md`를 함께 따른다.
 
 포함 기능은 다음과 같다.
 
@@ -15,6 +15,8 @@
 - Empty/Locked/Unknown 슬롯에서는 Occupied 전용 버튼과 상태 표시 숨김
 
 UI 오브젝트는 Prefab Mode에서 미리 배치한다. 슬롯처럼 공통적으로 반복되는 데이터 행을 제외하고 조립용 UI를 런타임에 생성하지 않는다.
+
+실패 손실 Popup은 Overview 원본 Prefab의 구성 요소가 아니다. `InGame.unity`의 활성 MainUICanvas instance 아래에 별도 Prefab instance로 배치하고 `MainUICanvas.prefab`에는 Apply하지 않는다.
 
 ## 2. 폐기 전에 반드시 보존할 파일
 
@@ -96,7 +98,7 @@ MainUICanvas
 - Rename 버튼 `LayoutElement.Preferred Width`: 72
 - Rename 버튼 높이: 44
 - Rename 버튼 Image 색상: `RGB(212, 170, 93)`에 가까운 황갈색
-- Rename 버튼 Label은 비활성화하거나 빈 문자열 유지
+- Rename 버튼에는 비활성 `Label` TMP 자식을 유지하고 문자열은 비워 둔다. 현재 Prefab 계약 테스트가 이 구조를 검사한다.
 - Rename 버튼 자식 `Icon` Image에 Rename 스프라이트 지정
 - Rename Icon의 `Raycast Target`: Off
 
@@ -161,6 +163,8 @@ Animator Controller 조립:
 6. 각 슬롯의 상태 `Icon` GameObject에 Animator를 미리 부착하고 Controller를 연결한다.
 
 `CaravanSlotView`는 Traveling일 때만 Animator를 활성화하고 정적 상태에서는 비활성화한다. 따라서 Selling/Settling/Completed 아이콘이 Animator의 빈 Sprite에 덮이지 않는다.
+
+실패 S9 Claim 저장 성공 뒤 해당 Caravan은 Prepare로 돌아오고 기존 장착 Wagon/Animal은 비워진다. Overview Slot 자체를 삭제하거나 잠금 슬롯으로 바꾸지 않는다. Setting을 다시 열면 남아 있는 예비 운송 자산으로 새 구성을 저장할 수 있어야 한다.
 
 현재 에셋 계약 확인값:
 

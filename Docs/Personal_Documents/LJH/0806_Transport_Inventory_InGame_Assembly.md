@@ -1,6 +1,6 @@
 # Transport Inventory · Caravan Set InGame 조립 문서
 
-> 전체 InGame UI 재조립 순서와 완료 판정은 `0807_InGame_UI_Reassembly_Master_Checklist.md`에서 관리한다. 이 문서는 목장 진입, Transport Inventory, RuntimeBridge, 테스트 지급 기능의 상세 조립 절차로 사용한다.
+> 전체 InGame UI 재조립 순서와 완료 판정은 `0807_InGame_UI_Reassembly_Master_Checklist.md`에서 관리한다. 최신 dev2의 실패 Claim 전손과 손실 Popup 조립은 `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md`를 따른다. 이 문서는 목장 진입, Transport Inventory, RuntimeBridge, 테스트 지급 기능의 상세 조립 절차로 사용한다.
 
 ## 1. 목적과 범위
 
@@ -12,7 +12,7 @@
 - Caravan에 배정된 마차와 동물은 Transport Inventory에 남아 있으며 `어느 Caravan에서 사용 중인지` 표시된다.
 - 무역 저장 과정에서도 선택한 마차와 동물의 `instanceId`가 유지된다.
 
-이 문서는 조립 전용이다. 구매 재화 차감, 퀘스트 보상 지급, 무역 실패 정산 삭제는 각 기능 담당 영역이다.
+이 문서는 조립 전용이다. 구매 재화 차감, 퀘스트 보상 지급, 무역 실패 정산 삭제는 각 기능 담당 영역이다. 실패 Claim 이후 Transport Inventory에는 제거가 저장된 뒤의 소유 자산만 표시되어야 하며, 삭제 자체를 이 UI가 수행해서는 안 된다.
 
 ## 2. 조립 전에 존재해야 하는 에셋과 스크립트
 
@@ -162,6 +162,10 @@ Popup은 이름만 보고 첫 Canvas를 선택하지 않는다. 실제 `Building
 
 여기서 `MainUICanvas.prefab` 원본에 Apply하지 않는다. 현재 조립 기준은 `InGame.unity` 안의 `MainUICanvas` 프리팹 인스턴스에 Popup 인스턴스를 추가하고, Scene 조립 오브젝트에 Entry 컴포넌트를 추가하는 방식이다. 다른 씬까지 공통 적용하려는 별도 합의가 있을 때만 `MainUICanvas.prefab`에 Apply한다.
 
+같은 원칙으로 실패 손실 Popup도 `InGame.unity`의 활성 MainUICanvas 아래에 Scene prefab instance로 배치한다. Transport Inventory Popup과 실패 손실 Popup은 서로 다른 컴포넌트와 책임을 가지며 한 Popup으로 합치지 않는다. 실패 Popup의 상세 sibling 순서와 `SettlementUiDataAdapter.failureLossPopup` 연결은 최신 dev2 실패 전손 문서를 따른다.
+
+실패 Claim 저장 성공 후 Transport Inventory를 다시 열었을 때 파괴된 장착 Wagon/Animal은 목록에서 사라지고 예비 자산만 남아야 한다. 저장 실패 후에는 기존 자산이 그대로 보여야 한다. UI가 빈 `instanceId`를 보고 임의의 동일 콘텐츠 개체를 삭제하거나 대체하면 안 된다.
+
 `TransportInventoryMainUiEntry`는 다음 역할만 담당한다.
 
 - `BuildingListPanel.BuildingClicked` 이벤트 구독
@@ -256,6 +260,14 @@ InGame
 
 상점과 보상 지급 경로가 아직 완성되지 않은 현재 개발 씬에서는 `TransportInventoryRewardDebugButton.prefab`을 활성 `MainUICanvas` 좌하단에 정확히 한 번 배치한다. 운영 빌드 전환 시 제거 또는 비활성화 여부를 별도로 결정한다.
 
+배치 계약:
+
+- 부모: InGame Scene의 활성 `MainUICanvas` 인스턴스
+- Hierarchy: `InfoPanel` 바로 다음 sibling에 둔다. 현재 기준 sibling index는 `3`이다.
+- 렌더 순서: `TransportInventoryPopup`, `CaravanActivityLogPanel`, `MenuPopup`, `NoticeUI`보다 반드시 앞 sibling이어야 한다. Canvas의 마지막 자식으로 넣으면 모든 팝업 위를 덮으므로 금지한다.
+- RectTransform: Anchor Min/Max `(0, 0)`, Pivot `(0, 0)`, Anchored Position `(20, 20)`, Size Delta `(260, 56)`
+- 이 버튼은 Scene에 미리 배치한 prefab instance이며 런타임 생성 대상이 아니다.
+
 기본 지급 예시:
 
 - `Wagon_M` 1개
@@ -263,6 +275,21 @@ InGame
 - `Horse` 2마리
 
 버튼은 `contentId`와 수량만 전달해야 한다. `PlayerMainManager`가 각 개체의 고유 `instanceId`를 발급한다. 운영 빌드의 정상 획득 경로로 사용하지 않는다.
+
+### 8.1 무역 실패 손실 안내 Popup
+
+- 에셋: `Assets/_Project/08.Prefabs/UI/Trade/TradeFailureLossPopup.prefab`
+- 구성: 전체 화면 입력 차단 배경, 중앙 `Panel`, `MessageText`, `ConfirmButton/Label`
+- 공용 View: `ReusableMessagePopup` (`Assets/_Project/05.UI/04_InGame/YHY/Scripts/Common/ReusableMessagePopup.cs`)
+- 문구는 Claim 직전 실제 장착 구성에 따라 마차+동물, 마차만, 동물만, 적재물만 네 경우로 선택한다.
+- prefab root는 기본 비활성 상태로 유지한다.
+- 런타임 생성하지 않고 활성 `MainUICanvas`에 prefab instance로 미리 배치한다.
+- 실제 손실 데이터 저장이 성공한 뒤 활성화하고, `ConfirmButton`으로 닫도록 연결한다.
+- 재사용 시 `Show(message, buttonText, confirmed)`로 메시지, 버튼 문구, 일회성 확인 콜백을 전달한다. 표시 중 문구만 바꿀 때는 `SetContent(message, buttonText)`를 사용한다.
+- InGame Scene에서는 `MainUICanvas`의 일반 Popup과 활동 로그보다 뒤, `NoticeUI` 바로 앞 sibling에 둔다. 현재 조립 기준 index는 `22`이며 `NoticeUI`는 `23`이다.
+- `SettlementUiDataAdapter.failureLossPopup`에 이 Scene instance를 연결한다. 현재 실제 S8/S9 Adapter인 `UIManager`와 호환용 `TradeTestPannel` 양쪽 참조가 연결되어 있다.
+- S9 Claim은 다음 Pending 표시를 보류한 채 저장한다. 실패 결과면 Popup 확인 콜백에서 `ContinuePendingSettlementPresentation()`을 호출하고, 성공/부분 성공이면 Popup 없이 즉시 호출한다.
+- 다음 실패 Pending이 있으면 컬렉션 순서대로 S8을 표시하고, 없으면 Claim이 전환한 Town 화면을 유지한다.
 
 ## 9. 권장 조립 순서
 

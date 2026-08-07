@@ -16,10 +16,29 @@
 - 동물 패널 Content 높이 계산을 `data.Slots.Count` 기준으로 적용 완료
 - 높이 변경 직후 레이아웃과 Canvas를 강제 갱신하여 ScrollRect 입력 경계 캐시도 같은 프레임에 갱신
 - `TransportInventoryPopup`을 활성 `MainUICanvas` 아래로 이동하고 시작 상태를 비활성화함
-- 좌하단에 `TransportInventoryRewardDebugButton`을 배치함
+- 좌하단에 `TransportInventoryRewardDebugButton`을 배치함. `MainUICanvas/InfoPanel` 바로 다음 sibling, Anchor/Pivot `(0,0)`, Position `(20,20)`으로 두어 팝업과 알림보다 아래에서 렌더링한다.
 - 지급 ID는 실제 콘텐츠 ID인 `Wagon_M`, `Wagon_S`, `Horse`를 사용함
 - 목장 행 클릭, Popup 활성화, 마차 2개와 말 2마리 지급을 PlayMode Smoke Test에 포함함
 - Scene 계약 테스트 2건 통과, PlayMode Smoke Test 실행 성공
+
+---
+
+## 확인된 잔존 문제 — 파괴 마차 정리
+
+- 내구도 0이 된 마차의 `instanceId`가 `player.wagonInventory`와 `caravan.wagon` 양쪽에 남아 장착 중으로 표시될 수 있다.
+- 파괴 처리에서 화물 수량만 0으로 만들고 `caravan.cargo`의 항목 자체를 제거하지 않아, 화면에는 빈 적재함으로 보여도 구성 변경 검증은 이를 잘못된 기존 화물로 판단한다.
+- 그 결과 다른 마차로 교체할 때 `CargoCapacityExceeded`가 반환되고 “현재 적재 화물을 수용할 수 없다”는 오해 소지가 있는 안내가 표시된다.
+- 기대 계약: 파괴 결과가 정산·저장된 시점에 해당 마차를 소유 인벤토리에서 제거하고 `caravan.wagon` 장착을 해제하며, 수량 0 화물 항목을 제거한다. 재시도·롤백 안정성을 위해 Journey 도중이 아니라 파괴 결과의 영속 반영 지점에서 원자적으로 처리한다.
+
+### 2026-08-07 적용
+
+- 실패 정산 Claim의 저장 snapshot 범위 안에서 `FailedTradeTransportLoss.Apply()`를 실행한다.
+- 해당 Caravan의 장착 마차와 동물을 각 소유 인벤토리에서 제거한다.
+- runtime `wagon` 참조와 `animals`, `cargo`, 식량, 현재 내구도를 비운 뒤 SaveData에 복사한다.
+- 저장 실패 시 기존 Claim snapshot 복구 경로가 소유 인벤토리와 Caravan 구성을 함께 되돌린다.
+- 성공 무역에는 적용하지 않으며, 반복 적용에도 다른 소유 개체가 삭제되지 않도록 검증한다.
+- 손실 적용 후 `runFatalReason`과 `runWagonDestroyed`를 소비하여 새로 장착한 운송 수단이 구버전 보정에 다시 삭제되지 않게 한다.
+- S9 Claim 성공 시 다음 실패 Pending 표시를 보류한다. 실패 Popup 확인 후에만 다음 Caravan S8로 진행하며, 마지막이면 Town 화면을 유지한다.
 
 ---
 

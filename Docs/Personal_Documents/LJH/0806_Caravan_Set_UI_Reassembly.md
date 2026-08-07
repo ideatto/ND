@@ -1,6 +1,6 @@
 # Caravan Set UI 외형 교체 후 기능 재조립
 
-> 전체 InGame UI 재조립 순서와 완료 판정은 `0807_InGame_UI_Reassembly_Master_Checklist.md`에서 관리한다. 이 문서는 Caravan Set, Wagon 개체 선택, Animal 선택의 상세 계약으로 사용한다.
+> 전체 InGame UI 재조립 순서와 완료 판정은 `0807_InGame_UI_Reassembly_Master_Checklist.md`에서 관리한다. 최신 dev2의 실패 Claim 이후 Wagon/Animal 제거와 재장착 경계는 `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md`를 따른다. 이 문서는 Caravan Set, Wagon 개체 선택, Animal 선택의 상세 계약으로 사용한다.
 
 ## 1. 목적
 
@@ -173,6 +173,15 @@ git restore --source=515b3985 -- `
 현재 `TradePrepareUI.prefab` 조립 결과는 기존 내장 `WagonPopup` 유지 방식이다. `AnimalInventoryPanel.wagonPopup`, `buttonPrefab`, `instanceRowPrefab` 세 참조를 내장 Popup에 연결한다. 독립 중첩 방식으로 전환할 때는 기존 Popup과 새 Popup을 동시에 활성화하지 않는다.
 
 `settlementPanel`, `paymentPanel`, `tradeScreenPresenter` 등 Caravan Set 외 다른 기능의 빈 직렬화 필드는 이 작업의 재조립 대상이 아니다.
+
+### 실패 Claim 이후 재진입 계약
+
+- 실패 Claim 저장이 성공하면 해당 Caravan의 기존 Wagon과 Animal은 선택 상태뿐 아니라 소유 인벤토리에서도 제거된다.
+- 기존 `instanceId`가 사라졌다고 동일 `contentId`의 예비 개체를 자동 장착하지 않는다.
+- Caravan은 Prepare로 돌아오며 사용자가 남아 있는 예비 Wagon/Animal을 명시적으로 다시 선택해야 한다.
+- 실패 Claim 저장이 실패했다면 기존 선택 상태와 소유 인벤토리가 그대로 복구되어야 한다.
+- 실패 Popup 확인 여부는 Caravan Set draft를 변경하지 않는다.
+- 새 구성을 저장한 뒤 이전 실패 플래그 때문에 다시 삭제되면 안 된다.
 
 ## 8. 정상 결과
 
