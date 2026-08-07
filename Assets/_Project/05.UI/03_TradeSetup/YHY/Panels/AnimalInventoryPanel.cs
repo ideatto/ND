@@ -38,6 +38,10 @@ public class AnimalInventoryPanel : MonoBehaviour
     [SerializeField] private WagonSelectPopup wagonPopup;    // 웨건 선택 팝업
     [SerializeField] private Button removeWagonButton;       // 웨건 있을 때 하단 표시(클릭→웨건 빼기)
 
+    [Header("Slot Pool")]
+    [SerializeField, Min(0)] private int initialInventoryButtonPoolSize = 4;
+    [SerializeField, Min(0)] private int initialWagonSlotPoolSize = 5;
+
     [Header("마우스오버 툴팁")]
     [SerializeField] private AnimalTooltip tooltip;          // 동물 정보 툴팁
 
@@ -61,6 +65,12 @@ public class AnimalInventoryPanel : MonoBehaviour
     private TransportSelectPanel.TransportEntry currentWagon;
     private bool allowEditing = true;
     private bool wired;
+
+    private void Awake()
+    {
+        EnsureInventoryButtonPool(initialInventoryButtonPoolSize);
+        EnsureWagonSlotPool(initialWagonSlotPoolSize);
+    }
 
     private void EnsureWired()
     {
@@ -94,7 +104,9 @@ public class AnimalInventoryPanel : MonoBehaviour
         allowEditing = true;
         EnsureWired();
         ApplyInventoryStartPadding();
-        if (ownedWagons != null) wagonInventory.AddRange(ownedWagons);
+        if (ownedWagons != null)
+            foreach (TransportSelectPanel.TransportEntry wagon in ownedWagons)
+                if (wagon.owned > 0) wagonInventory.Add(wagon);
 
         // 웨건 미선택 상태로 시작
         hasWagon = false; minReq = 0; maxReq = 0; wagonBaseSpeed = 0f; wagonName = "";
@@ -117,15 +129,24 @@ public class AnimalInventoryPanel : MonoBehaviour
 
                 if (inventoryContainer != null && inventoryButtonPrefab != null)
                 {
-                    Button b = Instantiate(inventoryButtonPrefab, inventoryContainer);
+                    int buttonIndex = invButtons.FindIndex(button => button != null && !button.gameObject.activeSelf);
+                    if (buttonIndex < 0)
+                    {
+                        EnsureInventoryButtonPool(invButtons.Count + 1);
+                        buttonIndex = invButtons.Count - 1;
+                    }
+
+                    Button b = invButtons[buttonIndex];
+                    b.gameObject.SetActive(true);
+                    b.onClick.RemoveAllListeners();
                     AnimalEntry captured = a;
                     b.onClick.AddListener(() => OnInventoryClick(captured));   // 클릭 → 바로 1마리 슬롯에
                     // 마우스오버 툴팁 부착
-                    AnimalTooltipTrigger trig = b.gameObject.AddComponent<AnimalTooltipTrigger>();
+                    AnimalTooltipTrigger trig = b.GetComponent<AnimalTooltipTrigger>();
+                    if (trig == null) trig = b.gameObject.AddComponent<AnimalTooltipTrigger>();
                     trig.Init(tooltip,
                         $"{a.name}\n이동속도 {a.moveSpeed:0.#}\n초당 먹이 {a.feedConsumption:0.#}\n" +
                         $"적재+ 평균 {a.incOverLoad:0.#} / 최대 {a.incMaxLoad:0.#}");
-                    invButtons.Add(b);
                 }
             }
         }
@@ -175,10 +196,7 @@ public class AnimalInventoryPanel : MonoBehaviour
         var wagonEntries = new List<TransportSelectPanel.TransportEntry>();
 
         if (viewData.draftAnimals != null)
-        {
-            foreach (DraftAnimalViewData animal in viewData.draftAnimals)
-                if (animal != null) animalEntries.Add(new AnimalEntry(animal));
-        }
+            AddAggregatedAnimals(viewData.draftAnimals, animalEntries);
 
         if (viewData.wagons != null)
         {
@@ -231,9 +249,9 @@ public class AnimalInventoryPanel : MonoBehaviour
                     continue;
                 }
 
-                int animalIndex = animals.FindIndex(animal =>
-                    string.Equals(animal.instanceId, normalizedId, StringComparison.Ordinal));
-                if (animalIndex < 0)
+                DraftAnimalViewData selected = Array.Find(viewData.draftAnimals, animal =>
+                    animal != null && string.Equals(animal.draftAnimalInstanceId, normalizedId, StringComparison.Ordinal));
+                if (selected == null)
                 {
                     Debug.LogError(
                         $"Caravan {viewData.caravanId} references missing animal instance {normalizedId}.",
@@ -242,8 +260,13 @@ public class AnimalInventoryPanel : MonoBehaviour
                     continue;
                 }
 
-                string selectionKey = SelectionKey(animals[animalIndex]);
-                counts[selectionKey] = 1;
+                string selectionKey = selected.draftAnimalId ?? string.Empty;
+                if (!counts.ContainsKey(selectionKey))
+                {
+                    snapshotValid = false;
+                    continue;
+                }
+                counts[selectionKey]++;
             }
         }
 
@@ -257,6 +280,29 @@ public class AnimalInventoryPanel : MonoBehaviour
         FillSlots();
         ApplyInteractionState();
         return snapshotValid;
+    }
+
+    private static void AddAggregatedAnimals(
+        IReadOnlyList<DraftAnimalViewData> source,
+        ICollection<AnimalEntry> target)
+    {
+        var byContentId = new Dictionary<string, AnimalEntry>(StringComparer.Ordinal);
+        foreach (DraftAnimalViewData viewData in source)
+        {
+            if (viewData == null || string.IsNullOrWhiteSpace(viewData.draftAnimalId)) continue;
+            string contentId = viewData.draftAnimalId.Trim();
+            if (!byContentId.TryGetValue(contentId, out AnimalEntry entry))
+            {
+                entry = new AnimalEntry(viewData);
+                entry.instanceId = string.Empty;
+                entry.ownedCount = 0;
+                entry.canSelect = false;
+            }
+            if (viewData.canSelect) entry.ownedCount++;
+            entry.canSelect |= viewData.canSelect;
+            byContentId[contentId] = entry;
+        }
+        foreach (AnimalEntry entry in byContentId.Values) target.Add(entry);
     }
     /// <summary>
     /// Refreshes runtime-owned quantity and wagon eligibility without rebuilding the wagon slots.
@@ -365,7 +411,7 @@ public class AnimalInventoryPanel : MonoBehaviour
         if (TotalSelected() >= maxReq) return;          // 슬롯 꽉 참
         // 첫 선택의 콘텐츠 종류가 이 편성에서 허용할 동물 종류를 결정한다.
         // 인스턴스 ID가 달라도 같은 SO 콘텐츠 ID라면 함께 편성할 수 있다.
-        if (!CanSelectAnimalType(a.id)) return;
+        if (!CanSelectAnimal(a)) return;
         counts[selectionKey] = placed + 1;
         FillSlots();                                    // 슬롯 채움 + 인벤토리 잔량 갱신
         OnSelectionChanged?.Invoke(BuildPicks(), IsValid());
@@ -388,7 +434,7 @@ public class AnimalInventoryPanel : MonoBehaviour
                     && a.canSelect
                     && remain > 0
                     && !full
-                    && CanSelectAnimalType(a.id);
+                    && CanSelectAnimal(a);
         }
     }
 
@@ -401,6 +447,14 @@ public class AnimalInventoryPanel : MonoBehaviour
         string selectedContentId = GetSelectedAnimalContentId();
         return string.IsNullOrEmpty(selectedContentId)
             || string.Equals(selectedContentId, candidateContentId, StringComparison.Ordinal);
+    }
+
+    private bool CanSelectAnimal(AnimalEntry candidate)
+    {
+        if (!CanSelectAnimalType(candidate.id)) return false;
+        DraftAnimalType[] eligible = currentWagon.eligibleAnimalTypes;
+        return eligible == null || eligible.Length == 0
+            || Array.IndexOf(eligible, candidate.animalType) >= 0;
     }
 
     private string GetSelectedAnimalContentId()
@@ -428,15 +482,17 @@ public class AnimalInventoryPanel : MonoBehaviour
     {
         ClearWagonSlots();
         if (slotContainer == null || slotButtonPrefab == null) return;
+        EnsureWagonSlotPool(n);
         for (int i = 0; i < n; i++)
         {
-            Button slot = Instantiate(slotButtonPrefab, slotContainer);
+            Button slot = wagonSlots[i];
+            slot.gameObject.SetActive(true);
+            slot.onClick.RemoveAllListeners();
             TMP_Text st = slot.GetComponentInChildren<TMP_Text>();
             if (st != null) st.fontSize = 20;   // 작은 칸용 폰트
             int idx = i;   // 캡처 방지
             slot.onClick.AddListener(() => RemoveAtSlot(idx));   // 슬롯 클릭 → 그 칸 동물 1마리 빼기
             slot.interactable = allowEditing;
-            wagonSlots.Add(slot);
             slotAssign.Add("");
         }
         FillSlots();
@@ -453,7 +509,7 @@ public class AnimalInventoryPanel : MonoBehaviour
             int c = counts.TryGetValue(selectionKey, out int v) ? v : 0;
             for (int k = 0; k < c; k++) flat.Add(selectionKey);
         }
-        for (int i = 0; i < wagonSlots.Count; i++)
+        for (int i = 0; i < slotAssign.Count; i++)
         {
             string id = i < flat.Count ? flat[i] : "";
             slotAssign[i] = id;
@@ -502,9 +558,37 @@ public class AnimalInventoryPanel : MonoBehaviour
     /// <summary>고정 슬롯을 모두 제거한다(즉시 파괴 — 재구성 시 한 프레임 중복 방지).</summary>
     private void ClearWagonSlots()
     {
-        foreach (Button b in wagonSlots) if (b != null) DestroyImmediate(b.gameObject);
-        wagonSlots.Clear();
+        foreach (Button b in wagonSlots)
+        {
+            if (b == null) continue;
+            b.onClick.RemoveAllListeners();
+            b.gameObject.SetActive(false);
+        }
         slotAssign.Clear();
+    }
+
+    private void EnsureInventoryButtonPool(int requiredCount)
+    {
+        if (inventoryContainer == null || inventoryButtonPrefab == null) return;
+        while (invButtons.Count < requiredCount)
+        {
+            Button button = Instantiate(inventoryButtonPrefab, inventoryContainer);
+            button.name = $"AnimalInventoryButton_{invButtons.Count}";
+            button.gameObject.SetActive(false);
+            invButtons.Add(button);
+        }
+    }
+
+    private void EnsureWagonSlotPool(int requiredCount)
+    {
+        if (slotContainer == null || slotButtonPrefab == null) return;
+        while (wagonSlots.Count < requiredCount)
+        {
+            Button slot = Instantiate(slotButtonPrefab, slotContainer);
+            slot.name = $"WagonAnimalSlot_{wagonSlots.Count}";
+            slot.gameObject.SetActive(false);
+            wagonSlots.Add(slot);
+        }
     }
 
     private string NameOf(string id)
@@ -564,7 +648,7 @@ public class AnimalInventoryPanel : MonoBehaviour
             selectedWagonInstanceId = hasWagon ? currentWagon.instanceId ?? string.Empty : string.Empty
         };
 
-        // Detached edits must use stable instance IDs; aggregate legacy selections cannot be committed here.
+        // Wagon selection remains instance-based; the command resolves animal quantities to free instances.
         if (hasWagon && string.IsNullOrWhiteSpace(result.selectedWagonInstanceId))
             return false;
 
@@ -572,9 +656,9 @@ public class AnimalInventoryPanel : MonoBehaviour
         {
             if (pick.count <= 0)
                 continue;
-            if (string.IsNullOrWhiteSpace(pick.animalInstanceId) || pick.count != 1)
-                return false;
-            if (!result.SelectAnimal(pick.animalInstanceId))
+            if (string.IsNullOrWhiteSpace(pick.animalInstanceId))
+                result.SetAnimalQuantity(pick.animalId, pick.count);
+            else if (pick.count != 1 || !result.SelectAnimal(pick.animalInstanceId))
                 return false;
         }
 
@@ -585,8 +669,12 @@ public class AnimalInventoryPanel : MonoBehaviour
     /// <summary>전체(인벤토리 버튼·슬롯·상태) 비우기.</summary>
     public void ClearAll()
     {
-        foreach (Button b in invButtons) if (b != null) Destroy(b.gameObject);
-        invButtons.Clear();
+        foreach (Button b in invButtons)
+        {
+            if (b == null) continue;
+            b.onClick.RemoveAllListeners();
+            b.gameObject.SetActive(false);
+        }
         ClearWagonSlots();
         animals.Clear();
         counts.Clear();
@@ -617,6 +705,7 @@ public class AnimalInventoryPanel : MonoBehaviour
         public float incOverLoad;    // 평균(적정) 적재량 증가치
         public float incMaxLoad;     // 최대 적재량 증가치
         public float feedConsumption; // 초당 음식 소모량(툴팁 표시용)
+        public DraftAnimalType animalType;
         public bool canSelect;
         public string disabledReason;
 
@@ -631,6 +720,7 @@ public class AnimalInventoryPanel : MonoBehaviour
             this.incOverLoad = incOverLoad;
             this.incMaxLoad = incMaxLoad;
             this.feedConsumption = feedConsumption;
+            animalType = DraftAnimalType.None;
             canSelect = true;
             disabledReason = "";
         }
@@ -646,7 +736,8 @@ public class AnimalInventoryPanel : MonoBehaviour
             incOverLoad = viewData.increaseOverLoad;
             incMaxLoad = viewData.increaseMaxLoad;
             feedConsumption = viewData.feedConsumption;
-            canSelect = viewData.canSelect && viewData.isEligibleForSelectedWagon;
+            animalType = viewData.animalType;
+            canSelect = viewData.canSelect;
             disabledReason = viewData.disabledReason;
         }
     }

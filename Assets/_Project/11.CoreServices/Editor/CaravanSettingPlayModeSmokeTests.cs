@@ -11,6 +11,8 @@ using UnityEngine.UI;
 using FrameworkCaravanSaveData = ND.Framework.CaravanSaveData;
 using FrameworkSaveData = ND.Framework.SaveData;
 using FrameworkTradeProgressSaveData = ND.Framework.TradeProgressSaveData;
+using ND.UI.InGame.TransportInventory;
+using TMPro;
 
 public sealed class CaravanSettingPlayModeSmokeTests
 {
@@ -64,6 +66,14 @@ public sealed class CaravanSettingPlayModeSmokeTests
         fixture.player.currentTownId = ND.Framework.CaravanManagementService.InitialCaravanTownId;
         fixture.world.unlockedCaravanSlotIndices.Clear();
         fixture.world.unlockedCaravanSlotIndices.Add(0);
+        fixture.player.villageBuildings.Clear();
+        fixture.player.villageBuildings.Add(new ND.Framework.VillageBuildingSaveData
+        {
+            displayName = ND.Framework.TransportInventoryFunction.BuildingDisplayName,
+            level = 1
+        });
+        fixture.player.wagonInventory.Clear();
+        fixture.player.draftAnimalInventory.Clear();
 
         const string caravanId = "caravan-setting-ui-smoke";
         fixture.caravans.Add(new FrameworkCaravanSaveData
@@ -122,26 +132,57 @@ public sealed class CaravanSettingPlayModeSmokeTests
         Scene inGame = SceneManager.GetSceneByName(InGameSceneName);
         Assert.That(inGame.IsValid(), Is.True);
         Assert.That(inGame.isLoaded, Is.True);
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        Assert.That(root, Is.Not.Null);
 
-        List<TestCaravanSettingService> services =
+        List<TestCaravanSettingService> temporaryServices =
             FindComponentsInScene<TestCaravanSettingService>(inGame);
+        List<CaravanSettingRuntimeBridge> bridges =
+            FindComponentsInScene<CaravanSettingRuntimeBridge>(inGame);
         List<CaravanOverviewEditBinding> bindings =
             FindComponentsInScene<CaravanOverviewEditBinding>(inGame);
         List<TradePrepareUIManager> tradePrepareManagers =
             FindComponentsInScene<TradePrepareUIManager>(inGame);
         List<CaravanSlotView> slotViews = FindComponentsInScene<CaravanSlotView>(inGame);
+        List<TransportInventoryMainUiEntry> inventoryEntries =
+            FindComponentsInScene<TransportInventoryMainUiEntry>(inGame);
+        List<TransportInventoryPopupController> inventoryPopups =
+            FindComponentsInScene<TransportInventoryPopupController>(inGame);
+        List<TransportInventoryRewardDebugButton> rewardButtons =
+            FindComponentsInScene<TransportInventoryRewardDebugButton>(inGame);
 
-        Assert.That(services.Count, Is.EqualTo(1));
+        Assert.That(temporaryServices, Is.Empty);
+        Assert.That(bridges.Count, Is.EqualTo(1));
         Assert.That(bindings.Count, Is.EqualTo(1));
         Assert.That(tradePrepareManagers.Count, Is.EqualTo(1));
-        Assert.That(services[0].isActiveAndEnabled, Is.True);
+        Assert.That(inventoryEntries.Count, Is.EqualTo(1));
+        Assert.That(inventoryPopups.Count, Is.EqualTo(1));
+        Assert.That(rewardButtons.Count, Is.EqualTo(1));
+        Assert.That(bridges[0].isActiveAndEnabled, Is.True);
         Assert.That(bindings[0].isActiveAndEnabled, Is.True);
-        Assert.That(services[0].GetOptions(), Is.Not.Null);
+        Assert.That(bridges[0].GetOptions(), Is.Not.Null);
+        Assert.That(inventoryPopups[0].gameObject.activeSelf, Is.False);
+
+        Assert.That(rewardButtons[0].TryGrantRewards(PlayerMainManager.Instance), Is.True);
+        Assert.That(root.CurrentSaveData.player.wagonInventory.Count, Is.EqualTo(2));
+        Assert.That(root.CurrentSaveData.player.draftAnimalInventory.Count, Is.EqualTo(2));
+
+        BuildingListPanel buildingList = FindComponentsInScene<BuildingListPanel>(inGame)[0];
+        buildingList.Rebuild();
+        yield return null;
+        Button farmButton = FindButtonByPrefix(
+            buildingList,
+            ND.Framework.TransportInventoryFunction.BuildingDisplayName);
+        Assert.That(farmButton, Is.Not.Null, "Farm building row was not created.");
+        farmButton.onClick.Invoke();
+        yield return null;
+        Assert.That(inventoryPopups[0].gameObject.activeInHierarchy, Is.True);
+        inventoryPopups[0].Close();
 
         var settingCommand = new RecordingSettingCommand();
         var cargoCommand = new RecordingCargoCommand();
-        bindings[0].SetSettingServices(services[0], settingCommand);
-        bindings[0].SetLoadSettingServices(services[0], cargoCommand);
+        bindings[0].SetSettingServices(bridges[0], settingCommand);
+        bindings[0].SetLoadSettingServices(bridges[0], cargoCommand);
 
         CaravanSlotView editableSlot = FindEditableSlot(slotViews);
         Assert.That(editableSlot, Is.Not.Null, "No occupied Caravan slot exposes Setting and Cargo actions.");
@@ -205,6 +246,18 @@ public sealed class CaravanSettingPlayModeSmokeTests
         Assert.That(bindings[0].CurrentEditCaravanId, Is.Empty);
         Assert.That(bindings[0].CurrentEditTarget, Is.EqualTo(CaravanOverviewEditTarget.None));
         Assert.That(tradePrepareManagers[0].IsDetachedCaravanEditOpen, Is.False);
+    }
+
+    private static Button FindButtonByPrefix(Component root, string prefix)
+    {
+        foreach (Button button in root.GetComponentsInChildren<Button>(true))
+        {
+            TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null && label.text.StartsWith(prefix))
+                return button;
+        }
+
+        return null;
     }
 
     private static List<T> FindComponentsInScene<T>(Scene scene) where T : Component

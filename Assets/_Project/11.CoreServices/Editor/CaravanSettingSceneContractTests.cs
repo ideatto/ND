@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using ND.UI.InGame.TransportInventory;
 
 public sealed class CaravanSettingSceneContractTests
 {
@@ -26,17 +27,14 @@ public sealed class CaravanSettingSceneContractTests
             Assert.That(scene.isLoaded, Is.True);
             Assert.That(scene.isDirty, Is.False, "Opening the scene must not mutate it.");
 
-            List<TestCaravanSettingService> services =
-                FindComponentsInScene<TestCaravanSettingService>(scene);
             List<CaravanOverviewEditBinding> bindings =
                 FindComponentsInScene<CaravanOverviewEditBinding>(scene);
-
-            Assert.That(services.Count, Is.EqualTo(1));
             Assert.That(bindings.Count, Is.EqualTo(1));
-            Assert.That(services[0].gameObject, Is.EqualTo(bindings[0].gameObject));
 
-            AssertBindingReferences(bindings[0], services[0]);
-            AssertCatalogReferences(services[0]);
+            if (scenePath == InGameScenePath)
+                AssertProductionContract(scene, bindings[0]);
+            else
+                AssertTestContract(scene, bindings[0]);
             AssertNoMissingScripts(scene);
             Assert.That(scene.isDirty, Is.False, "Contract inspection must not dirty the scene.");
         }
@@ -47,9 +45,60 @@ public sealed class CaravanSettingSceneContractTests
         }
     }
 
+    private static void AssertProductionContract(Scene scene, CaravanOverviewEditBinding binding)
+    {
+        List<TestCaravanSettingService> temporaryServices =
+            FindComponentsInScene<TestCaravanSettingService>(scene);
+        List<CaravanSettingRuntimeBridge> bridges =
+            FindComponentsInScene<CaravanSettingRuntimeBridge>(scene);
+        List<TransportInventoryPopupController> popups =
+            FindComponentsInScene<TransportInventoryPopupController>(scene);
+        List<TransportInventoryMainUiEntry> entries =
+            FindComponentsInScene<TransportInventoryMainUiEntry>(scene);
+        List<TransportInventoryRewardDebugButton> rewardButtons =
+            FindComponentsInScene<TransportInventoryRewardDebugButton>(scene);
+
+        Assert.That(temporaryServices, Is.Empty);
+        Assert.That(bridges.Count, Is.EqualTo(1));
+        Assert.That(popups.Count, Is.EqualTo(1));
+        Assert.That(entries.Count, Is.EqualTo(1));
+        Assert.That(rewardButtons.Count, Is.EqualTo(1));
+        Assert.That(bridges[0].gameObject, Is.EqualTo(binding.gameObject));
+        AssertBindingReferences(binding, bridges[0]);
+        AssertCatalogReferences(new SerializedObject(bridges[0]), "tradeItemAssets", true);
+
+        Assert.That(popups[0].gameObject.activeSelf, Is.False, "Popup must start closed.");
+        Assert.That(popups[0].GetComponentInParent<Canvas>(true), Is.Not.Null);
+        Assert.That(popups[0].GetComponentInParent<Canvas>(true).name, Is.EqualTo("MainUICanvas"));
+
+        List<CaravanOverviewPresenter> presenters =
+            FindComponentsInScene<CaravanOverviewPresenter>(scene);
+        List<TreadmillPanel> treadmillPanels = FindComponentsInScene<TreadmillPanel>(scene);
+        Assert.That(presenters.Count, Is.EqualTo(1));
+        Assert.That(treadmillPanels.Count, Is.EqualTo(1));
+        AssertObjectReference(
+            new SerializedObject(presenters[0]),
+            "treadmillPanel",
+            treadmillPanels[0]);
+
+        var entry = new SerializedObject(entries[0]);
+        AssertObjectReference(entry, "buildingListPanel");
+        AssertObjectReference(entry, "popup", popups[0]);
+    }
+
+    private static void AssertTestContract(Scene scene, CaravanOverviewEditBinding binding)
+    {
+        List<TestCaravanSettingService> services =
+            FindComponentsInScene<TestCaravanSettingService>(scene);
+        Assert.That(services.Count, Is.EqualTo(1));
+        Assert.That(services[0].gameObject, Is.EqualTo(binding.gameObject));
+        AssertBindingReferences(binding, services[0]);
+        AssertCatalogReferences(new SerializedObject(services[0]), "cargoCatalog", false);
+    }
+
     private static void AssertBindingReferences(
         CaravanOverviewEditBinding binding,
-        TestCaravanSettingService service)
+        Object service)
     {
         var serializedBinding = new SerializedObject(binding);
         AssertObjectReference(serializedBinding, "overviewPresenter");
@@ -61,10 +110,12 @@ public sealed class CaravanSettingSceneContractTests
         AssertObjectReference(serializedBinding, "loadSettingCommandBehaviour", service);
     }
 
-    private static void AssertCatalogReferences(TestCaravanSettingService service)
+    private static void AssertCatalogReferences(
+        SerializedObject serializedService,
+        string propertyName,
+        bool requireTransportInventoryItems)
     {
-        var serializedService = new SerializedObject(service);
-        SerializedProperty catalog = serializedService.FindProperty("cargoCatalog");
+        SerializedProperty catalog = serializedService.FindProperty(propertyName);
         Assert.That(catalog, Is.Not.Null);
         Assert.That(catalog.isArray, Is.True);
         Assert.That(catalog.arraySize, Is.GreaterThan(0));
@@ -80,6 +131,12 @@ public sealed class CaravanSettingSceneContractTests
                 itemIds.Add(item.ItemId),
                 Is.True,
                 $"cargoCatalog contains duplicate item ID '{item.ItemId}'.");
+        }
+
+        if (requireTransportInventoryItems)
+        {
+            Assert.That(itemIds, Does.Contain("Logs"));
+            Assert.That(itemIds, Does.Contain("Stone"));
         }
     }
 

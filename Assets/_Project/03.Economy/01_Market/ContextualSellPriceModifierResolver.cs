@@ -21,18 +21,70 @@ namespace ND.Economy
             List<PriceModifierInput> itemModifiers = item.AffectModify
                 ? LjhEconomyM1InputAdapter.ToPriceModifierInputs(item.Modifiers)
                 : new List<PriceModifierInput>();
-            List<PriceModifierInput> resolved = SeasonalSellPriceModifierSelector.SelectForSellPrice(
-                itemModifiers,
-                context.SeasonId);
+            bool isLocalSpecialtyAtDestination = ContainsCanonicalItemId(
+                context.DestinationLocalSpecialtyItemIds,
+                item.ItemId);
+            List<PriceModifierInput> resolved = isLocalSpecialtyAtDestination
+                ? SelectWithoutSeasonalSellPriceModifiers(itemModifiers)
+                : SeasonalSellPriceModifierSelector.SelectForSellPrice(
+                    itemModifiers,
+                    context.SeasonId);
 
             if (policy != null)
             {
-                AddCategorySeasonalModifier(resolved, item.Category, context.SeasonId, policy);
+                if (!isLocalSpecialtyAtDestination)
+                {
+                    AddCategorySeasonalModifier(resolved, item.Category, context.SeasonId, policy);
+                }
+
                 AddLuckyMoneyModifier(resolved, context.IsLuckyMoneyActive, policy.LuckyMoneyRule);
-                AddDistanceModifier(resolved, context.RouteDistanceKm, policy.DistanceRules);
+                if (!isLocalSpecialtyAtDestination)
+                {
+                    AddDistanceModifier(resolved, context.RouteDistanceKm, policy.DistanceRules);
+                }
             }
 
             return Deduplicate(resolved);
+        }
+
+        private static List<PriceModifierInput> SelectWithoutSeasonalSellPriceModifiers(
+            IEnumerable<PriceModifierInput> modifiers)
+        {
+            var selected = new List<PriceModifierInput>();
+            if (modifiers == null)
+                return selected;
+
+            foreach (PriceModifierInput modifier in modifiers)
+            {
+                if (modifier == null)
+                    continue;
+
+                bool targetsSellPrice = modifier.Target == PriceModifierTarget.SellPrice
+                    || modifier.Target == PriceModifierTarget.Both;
+                if (modifier.ModifierType != PriceModifierType.Season || !targetsSellPrice)
+                {
+                    selected.Add(modifier);
+                }
+            }
+
+            return selected;
+        }
+
+        private static bool ContainsCanonicalItemId(IReadOnlyList<string> itemIds, string targetItemId)
+        {
+            if (itemIds == null || string.IsNullOrWhiteSpace(targetItemId))
+                return false;
+
+            for (int i = 0; i < itemIds.Count; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(itemIds[i])
+                    && string.Equals(itemIds[i], targetItemId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void AddCategorySeasonalModifier(

@@ -53,6 +53,38 @@ namespace ND.Framework
                 && saveData.caravanActivityLogs.Remove(entry);
         }
 
+        public static bool TryAddAndSave(
+            SaveData saveData,
+            ISaveService saveService,
+            CaravanActivityLogType eventType,
+            string caravanId,
+            string townId = null)
+        {
+            if (saveData == null || saveService == null)
+            {
+                return false;
+            }
+
+            var previousEntries = saveData.caravanActivityLogs != null
+                ? new List<CaravanActivityLogEntrySaveData>(saveData.caravanActivityLogs)
+                : null;
+            var entry = Add(saveData, eventType, caravanId, townId: townId);
+            if (entry == null)
+            {
+                return false;
+            }
+
+            SaveResult result = saveService.Save(saveData);
+            if (result != null && result.Succeeded)
+            {
+                return true;
+            }
+
+            saveData.caravanActivityLogs = previousEntries
+                ?? new List<CaravanActivityLogEntrySaveData>();
+            return false;
+        }
+
         public static void TrimToLimit(SaveData saveData, int maxEntries = DefaultMaxEntries)
         {
             if (saveData?.caravanActivityLogs == null)

@@ -73,6 +73,7 @@ public static class MarketInventoryIntegrationProbe
             TradeItemData[] catalog = CreateCatalog();
             VerifyDeterministicRefresh(catalog, checks);
             VerifyInventoryRefreshSaveFailureRollsBack(catalog, checks);
+            VerifySamePeriodCatalogExpansion(catalog, checks);
             VerifyDeltaTransactionAndRollback(catalog, checks);
             VerifySuccessfulTransactionsRaiseFrameworkEvents(catalog, checks);
             VerifyOtherCaravanDraftReservesMarketStock(checks);
@@ -185,6 +186,60 @@ public static class MarketInventoryIntegrationProbe
         Assert(newSave.world.marketInventories.Count == 0,
             "A failed initial inventory save must remove the unsaved generated inventory.");
         checks.Add("inventory_refresh_save_failure_rolls_back");
+    }
+
+    private static void VerifySamePeriodCatalogExpansion(
+        TradeItemData[] catalog,
+        List<string> checks)
+    {
+        DateTime time = new DateTime(2026, 8, 5, 9, 0, 0, DateTimeKind.Utc);
+        TradeItemData[] initialCatalog = catalog.Take(3).ToArray();
+        TradeItemData unlockedSpecialty = catalog[3];
+        TradeItemData[] expandedCatalog = initialCatalog
+            .Concat(new[] { unlockedSpecialty })
+            .ToArray();
+        FrameworkSaveData save = NewSave(1000L);
+        var service = new MemorySaveService(save);
+
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save, service, new FixedTimeProvider(time), "town-specialty-unlock",
+            initialCatalog, 4, 10, 3600d, 801,
+            out MarketInventoryMutationSession initial, out string initialError), initialError);
+        var existing = initial.View.Stocks.ToDictionary(
+            stock => stock.Item.ItemId,
+            stock => stock.Item.ItemId + ":" + stock.Quantity + ":" + stock.UnitPrice,
+            StringComparer.Ordinal);
+
+        Assert(MarketInventoryMutationSession.TryOpen(
+            save, service, new FixedTimeProvider(time), "town-specialty-unlock",
+            expandedCatalog, 4, 10, 3600d, 801,
+            out MarketInventoryMutationSession expanded, out string expandedError), expandedError);
+        Assert(expanded.View.Stocks.Any(stock =>
+                string.Equals(stock.Item.ItemId, unlockedSpecialty.ItemId, StringComparison.Ordinal)),
+            "A specialty unlocked during the current refresh period must be added immediately.");
+        foreach (MarketStockView stock in expanded.View.Stocks.Where(stock => existing.ContainsKey(stock.Item.ItemId)))
+        {
+            string current = stock.Item.ItemId + ":" + stock.Quantity + ":" + stock.UnitPrice;
+            Assert(existing[stock.Item.ItemId] == current,
+                "Catalog expansion must preserve existing stock quantities and prices.");
+        }
+
+        FrameworkSaveData failingSave = NewSave(1000L);
+        var failingService = new MemorySaveService(failingSave);
+        Assert(MarketInventoryMutationSession.TryOpen(
+            failingSave, failingService, new FixedTimeProvider(time), "town-specialty-rollback",
+            initialCatalog, 4, 10, 3600d, 802, out _, out string setupError), setupError);
+        string beforeFailure = JsonUtility.ToJson(failingSave.world.marketInventories[0]);
+        failingService.FailSaves = true;
+        Assert(!MarketInventoryMutationSession.TryOpen(
+                failingSave, failingService, new FixedTimeProvider(time), "town-specialty-rollback",
+                expandedCatalog, 4, 10, 3600d, 802, out _, out string failureError)
+            && failureError == MarketInventoryMutationSession.ErrorSaveFailed,
+            "A failed specialty reconciliation save must reject market opening.");
+        Assert(JsonUtility.ToJson(failingSave.world.marketInventories[0]) == beforeFailure,
+            "A failed specialty reconciliation save must restore the previous inventory.");
+        checks.Add("same_period_specialty_unlock_reconciles_without_reroll");
+        checks.Add("specialty_reconciliation_save_failure_rolls_back");
     }
 
     private static FrameworkSaveData NewSave(long currency)

@@ -1249,6 +1249,21 @@ namespace ND.Framework.Editor
                 }
 
                 bridge.ClearPendingSettlement();
+                if (!bridge.ContinuePendingSettlementPresentation()
+                    || !bridge.TryGetPendingSettlement(
+                        out presentedCaravanId,
+                        out presentedTradeId,
+                        out presentedResult)
+                    || presentedCaravanId != caravanB
+                    || presentedTradeId != tradeB
+                    || presentedResult == null
+                    || presentedResult.grade != JourneyResultGrade.Failed)
+                {
+                    throw new InvalidOperationException(
+                        "Deferred settlement continuation did not present the next failed Caravan.");
+                }
+
+                bridge.ClearPendingSettlement();
                 if (bridge.ClaimSettlementAndReset()
                     || !SaveDataLookup.TryGetPendingSettlement(saveData, caravanA, tradeA, out _)
                     || !SaveDataLookup.TryGetPendingSettlement(saveData, caravanB, tradeB, out _))

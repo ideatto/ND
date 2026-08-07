@@ -571,8 +571,15 @@ namespace ND.UI.Market
             model = null;
             activeTradeId = requestedTradeId;
 
+            TradeItemData[] unlockedSpecialties = tradeMode == MarketTradeMode.SellOnly
+                ? Array.Empty<TradeItemData>()
+                : ResolveUnlockedSpecialties(
+                    root.CurrentSaveData,
+                    root.SharedGameData,
+                    activeCaravanId,
+                    marketData);
             TradeItemData[] catalog = marketData.TradeItems
-                .Concat(marketData.LocalSpecialtyItems)
+                .Concat(unlockedSpecialties)
                 .Where(item => item != null)
                 .GroupBy(item => item.ItemId, StringComparer.Ordinal)
                 .Select(group => group.First())
@@ -587,6 +594,15 @@ namespace ND.UI.Market
                     .Select(group => group.First())
                     .ToArray()
                 : catalog;
+            IReadOnlyList<string> destinationLocalSpecialtyItemIds = Array.Empty<string>();
+            if (root.SharedGameData != null
+                && root.SharedGameData.TryGetMarket(
+                    marketData.MarketId,
+                    out SharedMarketDefinition destinationMarket)
+                && destinationMarket?.LocalSpecialtyItemIds != null)
+            {
+                destinationLocalSpecialtyItemIds = destinationMarket.LocalSpecialtyItemIds;
+            }
 
             bool opened = MarketInventoryMutationSession.TryOpen(
                 root.CurrentSaveData,
@@ -603,6 +619,7 @@ namespace ND.UI.Market
                 Mathf.Max(1f, marketData.ItemRenewalCycle),
                 CombineSeed(worldSeed, marketData.MarketId),
                 sellPriceModifierPolicy,
+                destinationLocalSpecialtyItemIds,
                 out MarketInventoryMutationSession commands,
                 out string error);
             if (!opened)
@@ -619,6 +636,54 @@ namespace ND.UI.Market
             SetError(string.Empty);
             RaiseStateChanged();
             return true;
+        }
+
+        private static TradeItemData[] ResolveUnlockedSpecialties(
+            ND.Framework.SaveData saveData,
+            ISharedGameDataProvider sharedGameData,
+            string caravanId,
+            MarketData market)
+        {
+            if (saveData?.world?.unlockedTownSpecialties == null ||
+                sharedGameData == null || !sharedGameData.IsLoaded || market == null)
+                return Array.Empty<TradeItemData>();
+
+            string townId = ResolveCatalogTownId(
+                saveData, sharedGameData, caravanId, market.MarketId);
+            if (string.IsNullOrEmpty(townId))
+                return Array.Empty<TradeItemData>();
+
+            var unlockedIds = new HashSet<string>(
+                saveData.world.unlockedTownSpecialties
+                    .Where(entry => entry != null &&
+                        string.Equals(entry.townId, townId, StringComparison.Ordinal))
+                    .Select(entry => entry.itemId),
+                StringComparer.Ordinal);
+            return market.LocalSpecialtyItems
+                .Where(item => item != null && unlockedIds.Contains(item.ItemId))
+                .ToArray();
+        }
+
+        private static string ResolveCatalogTownId(
+            ND.Framework.SaveData saveData,
+            ISharedGameDataProvider sharedGameData,
+            string caravanId,
+            string marketId)
+        {
+            if (SaveDataLookup.TryGetCaravan(
+                    saveData, caravanId, out ND.Framework.CaravanSaveData caravan) &&
+                sharedGameData.TryGetTown(
+                    caravan.currentTownId, out SharedTownDefinition caravanTown) &&
+                string.Equals(caravanTown.MarketId, marketId, StringComparison.Ordinal))
+                return caravanTown.Id;
+
+            string playerTownId = saveData?.player?.currentTownId;
+            if (sharedGameData.TryGetTown(
+                    playerTownId, out SharedTownDefinition playerTown) &&
+                string.Equals(playerTown.MarketId, marketId, StringComparison.Ordinal))
+                return playerTown.Id;
+
+            return string.Empty;
         }
 
         public bool SetBuyDraft(string itemId, int quantity)

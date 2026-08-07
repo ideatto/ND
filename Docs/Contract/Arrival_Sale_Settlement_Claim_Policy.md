@@ -84,6 +84,10 @@ Sale-panel display alignment, Seasonal `BuyPrice`, the distance multiplier, ligh
 
 `SettlementUiBridge.PresentSettlement(caravanId, tradeId)` presents the pending result after the arrival-sale gate. `TradeProgressCoordinator.ClaimSettlement(caravanId, tradeId)` is the canonical product Claim using explicit `caravanId` and full `tradeId`. Claim applies travel settlement economy, removes the matching pending result, completes the lifecycle, and resets the caravan to Prepare. Legacy selected-caravan helpers are compatibility paths only.
 
+For `JourneyResultGrade.Failed`, Claim additionally consumes the claimed Caravan's complete equipped transport composition and remaining load. The equipped wagon and draft animals are removed from their owned inventories; wagon, animals, cargo, food, durability, and failure references are cleared on the Caravan. This mutation belongs to the same snapshot, Save, and rollback transaction as Claim. It never applies to successful or partial-success settlement.
+
+After a failed Claim Save succeeds, UI may show the placed `TradeFailureLossPopup` acknowledgement. The next failed pending settlement is not presented until that Popup is confirmed. If no failed pending remains, Town stays active. The Popup is presentation only and must not be instantiated by runtime code.
+
 `TradeSettlementReady` and `SettlementReady`, where present, concern result readiness or presentation; they do not authorize sale calculation or payout. No `EnterSelling`, `SalesConfirmed`, `CargoSold`, or `SaleRestored` API is part of the current contract.
 
 ## Persistence and restore

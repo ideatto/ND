@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
+  m_Name: TradeItem_IronOre
+  m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
+  itemId: IronOre
+  displayName: "\uCCA0\uAD11\uC11D"
+  icon: {fileID: 0}
+  description: "\uAD11\uC0B0\uC5D0\uC11C \uD754\uD558\uAC8C \uBC1C\uACAC\uB418\uB294
+    \uAD11\uBB3C\uC785\uB2C8\uB2E4. \uAC74\uCD95\uC5D0 \uD544\uC218\uC801\uC73C\uB85C
+    \uC4F0\uC5EC\uC694"
+  rarity: 1
+  category: 1
+  baseBuyPrice: 90
+  baseSellPrice: 90
+  canStack: 1
+  maxCount: 5
+  weight: 5
+  isConsumable: 0
+  affectModify: 0
+  modifiers:
+  - modifierType: 1
+    sourceId: 
+    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: -0.05
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: -0.05
+  - modifierType: 1
+    sourceId: 
+    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: 0.1
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: 0.1
+  localSpecialty: 0

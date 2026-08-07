@@ -18,7 +18,13 @@ MonoBehaviour:
   itemRenewalCycle: 3600
   tradeItems:
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
-  - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
+  - {fileID: 11400000, guid: 2de067a680a1c0b4dbf373e59f51a837, type: 2}
+  - {fileID: 11400000, guid: 8a1267903408c2647a74bc5d6e11ca95, type: 2}
+  - {fileID: 11400000, guid: c37db638052aa5f4a9399c2fb7783c08, type: 2}
+  - {fileID: 11400000, guid: d071837c5d0ac0c46ba797b11b7db2ae, type: 2}
+  - {fileID: 11400000, guid: 0d426ac1820959540a74bd660a406757, type: 2}
+  - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
+  - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
   draftAnimalItems: []
   wagonItems: []
   localSpecialtyItems: []

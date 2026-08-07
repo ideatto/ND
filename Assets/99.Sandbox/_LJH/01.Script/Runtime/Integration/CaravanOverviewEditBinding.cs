@@ -318,6 +318,13 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
             return;
         }
 
+        ND.Framework.FrameworkRoot root = ND.Framework.FrameworkRoot.Instance;
+        ND.Framework.CaravanActivityLog.TryAddAndSave(
+            root?.CurrentSaveData,
+            root?.SaveService,
+            ND.Framework.CaravanActivityLogType.TransportConfirmed,
+            draft?.caravanId);
+
         // Only a successful Command may close S3 and refresh the Overview from authoritative data.
         TreadmillLaneManager.Instance?.RefreshCaravan(draft.caravanId);
         tradePrepareUi?.CloseCaravanEdit();

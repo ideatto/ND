@@ -167,7 +167,7 @@ namespace ND.UI.Market
                     savedCaravan.cargo,
                     marketPanel.Model.Items,
                     Array.Empty<CargoSellPendingSaleRowViewData>(),
-                    marketPanel.Model.MaximumCargoWeight);
+                    ResolveMaximumLoad(savedCaravan));
                 if (!cargoSellPopup.Open(popupData))
                 {
                     marketPanel.Close();
@@ -409,6 +409,15 @@ namespace ND.UI.Market
             return string.IsNullOrEmpty(displayName)
                 ? $"Caravan {(caravan != null ? caravan.slotIndex + 1 : 1)}"
                 : displayName;
+        }
+
+        private static float ResolveMaximumLoad(ND.Framework.CaravanSaveData caravan)
+        {
+            if (caravan?.wagon == null) return 0f;
+            double maximum = Math.Max(0f, caravan.wagon.maxLoad);
+            foreach (AnimalSaveData animal in caravan.animals ?? new System.Collections.Generic.List<AnimalSaveData>())
+                maximum += Math.Max(0f, animal?.increaseMaxLoad ?? 0f);
+            return maximum >= float.MaxValue ? float.MaxValue : (float)maximum;
         }
 
         private void SetError(string error)

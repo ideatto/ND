@@ -7,7 +7,8 @@ using System.Collections.Generic;
 /// <remarks>
 /// This UI-owned Draft never mutates SaveData. Framework receives a snapshot only when the
 /// user confirms the edit and remains responsible for validation, persistence, and rollback.
-/// Owned assets use instance IDs because two assets may share the same content definition.
+/// Wagons use instance IDs. Draft animals may be requested by content ID and quantity;
+/// Framework resolves the concrete owned instances when the edit is confirmed.
 /// </remarks>
 [Serializable]
 public sealed class CaravanSettingDraft
@@ -21,7 +22,31 @@ public sealed class CaravanSettingDraft
     // Keeps individual owned animal IDs so Framework asset-lock validation remains possible.
     private readonly List<string> selectedAnimalInstanceIds = new List<string>();
 
+    private readonly List<CaravanDraftAnimalRequest> animalRequests = new List<CaravanDraftAnimalRequest>();
+
     public IReadOnlyList<string> SelectedAnimalInstanceIds => selectedAnimalInstanceIds;
+    public IReadOnlyList<CaravanDraftAnimalRequest> AnimalRequests => animalRequests;
+
+    public bool SetAnimalQuantity(string animalContentId, int quantity)
+    {
+        string normalizedId = NormalizeId(animalContentId);
+        if (string.IsNullOrEmpty(normalizedId) || quantity < 0)
+        {
+            return false;
+        }
+
+        selectedAnimalInstanceIds.Clear();
+        int index = animalRequests.FindIndex(request => request.contentId == normalizedId);
+        if (quantity == 0)
+        {
+            if (index >= 0) animalRequests.RemoveAt(index);
+            return true;
+        }
+
+        if (index >= 0) animalRequests[index].quantity = quantity;
+        else animalRequests.Add(new CaravanDraftAnimalRequest { contentId = normalizedId, quantity = quantity });
+        return true;
+    }
 
     public bool SelectAnimal(string animalInstanceId)
     {
@@ -31,6 +56,7 @@ public sealed class CaravanSettingDraft
             return false;
         }
 
+        animalRequests.Clear();
         selectedAnimalInstanceIds.Add(normalizedId);
         return true;
     }
@@ -44,6 +70,7 @@ public sealed class CaravanSettingDraft
     public void ClearAnimals()
     {
         selectedAnimalInstanceIds.Clear();
+        animalRequests.Clear();
     }
 
     // Returns a deep copy so panel code cannot mutate the Store's authoritative edit session.
@@ -60,6 +87,12 @@ public sealed class CaravanSettingDraft
             snapshot.SelectAnimal(selectedAnimalInstanceIds[index]);
         }
 
+        for (var index = 0; index < animalRequests.Count; index++)
+        {
+            CaravanDraftAnimalRequest request = animalRequests[index];
+            snapshot.SetAnimalQuantity(request.contentId, request.quantity);
+        }
+
         return snapshot;
     }
 
@@ -67,6 +100,13 @@ public sealed class CaravanSettingDraft
     {
         return string.IsNullOrWhiteSpace(id) ? string.Empty : id.Trim();
     }
+}
+
+[Serializable]
+public sealed class CaravanDraftAnimalRequest
+{
+    public string contentId = string.Empty;
+    public int quantity;
 }
 
 /// <summary>Stores one detached S4 cargo plan without mutating saved Caravan cargo.</summary>

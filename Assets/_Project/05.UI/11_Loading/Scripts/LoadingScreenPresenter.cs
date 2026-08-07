@@ -2,6 +2,7 @@ using System.Collections;
 using ND.Framework;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ND.UI.Loading
@@ -9,6 +10,7 @@ namespace ND.UI.Loading
     /// <summary>Coordinates framework preparation, deferred scene loading, and optional loading UI.</summary>
     public sealed class LoadingScreenPresenter : MonoBehaviour
     {
+        private const string RequiredAdditiveSceneName = "Treadmill_Preview";
         private const string UserErrorMessage =
             "게임 데이터를 불러오지 못했습니다.\n타이틀로 돌아가 다시 시도해 주세요.";
 
@@ -48,11 +50,25 @@ namespace ND.UI.Loading
         private bool loadingStarted;
         private bool activationRequested;
         private bool hasFailed;
+        private bool loadingInputDisabled;
         private float displayedProgress;
         private float targetProgress;
+        private EventSystem loadingEventSystem;
+        private BaseInputModule loadingInputModule;
 
         private void Awake()
         {
+            // InGame의 Single scene 활성화 뒤에도 입력 차단 Canvas와 이 코루틴을 유지한다.
+            DontDestroyOnLoad(gameObject);
+            var loadingCanvas = GetComponent<Canvas>();
+            if (loadingCanvas != null)
+            {
+                loadingCanvas.overrideSorting = true;
+                loadingCanvas.sortingOrder = short.MaxValue;
+            }
+
+            CacheLoadingInputSystem();
+
             frameworkRoot = FrameworkRoot.Instance;
             tipSelector = new LoadingTipSelector(
                 tipDatabase != null ? tipDatabase.Tips : null,
@@ -121,6 +137,7 @@ namespace ND.UI.Loading
         public void ReturnToTitle()
         {
             var root = FrameworkRoot.Instance;
+            Destroy(gameObject);
             root?.SceneFlow?.GoToTitle();
         }
 
@@ -163,7 +180,7 @@ namespace ND.UI.Loading
 
             while (!hasFailed && !sceneLoadOperation.IsReadyForActivation)
             {
-                targetProgress = LoadingProgress.MapSceneProgress(sceneLoadOperation.Progress01);
+                targetProgress = LoadingProgress.MapInGameSceneProgress(sceneLoadOperation.Progress01);
                 AdvanceProgress();
                 yield return null;
             }
@@ -174,8 +191,8 @@ namespace ND.UI.Loading
                 yield break;
             }
 
-            targetProgress = 1f;
-            while (displayedProgress < 1f)
+            targetProgress = 0.75f;
+            while (displayedProgress < targetProgress)
             {
                 AdvanceProgress();
                 yield return null;
@@ -195,8 +212,79 @@ namespace ND.UI.Loading
             if (!hasFailed && !activationRequested)
             {
                 activationRequested = true;
+                DisableLoadingEventSystem();
                 sceneLoadOperation.AllowActivation();
             }
+
+            while (!hasFailed && !sceneLoadOperation.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (hasFailed)
+            {
+                yield break;
+            }
+
+            StartCoroutine(AdditiveSceneLoader.LoadRequiredSceneAsync(RequiredAdditiveSceneName));
+            do
+            {
+                targetProgress = LoadingProgress.MapRequiredAdditiveProgress(
+                    AdditiveSceneLoader.GetProgress01(RequiredAdditiveSceneName));
+                AdvanceProgress();
+                yield return null;
+            }
+            while (AdditiveSceneLoader.GetIsLoading(RequiredAdditiveSceneName));
+
+            if (!AdditiveSceneLoader.GetIsReady(RequiredAdditiveSceneName))
+            {
+                Fail($"Required additive scene is not ready: {RequiredAdditiveSceneName}. "
+                    + AdditiveSceneLoader.GetError(RequiredAdditiveSceneName));
+                yield break;
+            }
+
+            targetProgress = 1f;
+            while (displayedProgress < 1f)
+            {
+                AdvanceProgress();
+                yield return null;
+            }
+
+            Destroy(gameObject);
+        }
+
+        private void CacheLoadingInputSystem()
+        {
+            loadingEventSystem = GetComponentInChildren<EventSystem>(true);
+            if (loadingEventSystem != null)
+            {
+                loadingInputModule = loadingEventSystem.GetComponent<BaseInputModule>();
+            }
+        }
+
+        /// <summary>
+        /// Disables the persistent loading input system immediately before InGame activation.
+        /// Repeated calls have no effect; the overlay Canvas remains active to block InGame raycasts.
+        /// </summary>
+        private void DisableLoadingEventSystem()
+        {
+            if (loadingInputDisabled)
+            {
+                return;
+            }
+
+            loadingInputDisabled = true;
+            if (loadingInputModule != null)
+            {
+                loadingInputModule.enabled = false;
+            }
+
+            if (loadingEventSystem != null)
+            {
+                loadingEventSystem.enabled = false;
+            }
+
+            Debug.Log("[Framework] Loading EventSystem disabled before InGame activation.", this);
         }
 
         private void AdvanceProgress()

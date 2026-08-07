@@ -318,6 +318,7 @@ namespace ND.Framework
             if (runtimeData == null)
             {
                 saveData.instanceId = string.Empty;
+                saveData.contentId = string.Empty;
                 saveData.wagonName = string.Empty;
                 saveData.overLoad = 0f;
                 saveData.maxLoad = 0f;
@@ -329,7 +330,8 @@ namespace ND.Framework
                 return;
             }
 
-            saveData.instanceId = runtimeData.instanceId ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(runtimeData.instanceId))
+                saveData.instanceId = runtimeData.instanceId;
             saveData.wagonName = runtimeData.wagonName ?? string.Empty;
             saveData.overLoad = runtimeData.overLoad;
             saveData.maxLoad = runtimeData.maxLoad;
@@ -370,22 +372,35 @@ namespace ND.Framework
 
         private static void CopyAnimals(List<imsiAnimalData> source, List<AnimalSaveData> target)
         {
+            var existing = new List<AnimalSaveData>(target);
+            bool sameCount = source != null && source.Count == existing.Count;
             target.Clear();
             if (source == null)
             {
                 return;
             }
 
-            foreach (var animal in source)
+            for (int index = 0; index < source.Count; index++)
             {
+                imsiAnimalData animal = source[index];
                 if (animal == null)
                 {
                     continue;
                 }
 
+                AnimalSaveData matched = null;
+                if (!string.IsNullOrWhiteSpace(animal.instanceId))
+                    matched = existing.Find(value => value != null
+                        && string.Equals(value.instanceId, animal.instanceId, System.StringComparison.Ordinal));
+                else if (sameCount)
+                    matched = existing[index];
+
                 target.Add(new AnimalSaveData
                 {
-                    instanceId = animal.instanceId ?? string.Empty,
+                    instanceId = string.IsNullOrWhiteSpace(animal.instanceId)
+                        ? matched?.instanceId ?? string.Empty
+                        : animal.instanceId,
+                    contentId = matched?.contentId ?? string.Empty,
                     animalName = animal.animalName ?? string.Empty,
                     speed = animal.speed,
                     foodPerKm = animal.foodPerKm,

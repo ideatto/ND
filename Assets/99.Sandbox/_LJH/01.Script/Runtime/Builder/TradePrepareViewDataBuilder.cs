@@ -147,7 +147,9 @@ public sealed class TradePrepareViewDataBuilder
             maxInventorySlotCount = maxSlots,
             currentTradingCurrency = currentTradingCurrency,
             totalPurchaseCost = totalPurchaseCost,
-            totalPreparationCost = totalPreparationCost,
+            // Cargo purchase is already committed before S6 summary/departure validation.
+            // Only costs that remain payable at departure may block the trade here.
+            totalPreparationCost = mercenaryCost,
             currentLoad = currentLoad,
             overloadLimit = overloadLimit,
             maxLoad = maxLoad,

@@ -9,6 +9,7 @@
 
 - 마켓·일반 Modifier 설정: [`Market_And_Route_Event_Data_Setup_Guide.md`](./Market_And_Route_Event_Data_Setup_Guide.md)
 - 계절 ID·달력 API: [`Framework_Game_Calendar_and_Seasons_API_Guide.md`](./Framework_Game_Calendar_and_Seasons_API_Guide.md)
+- contextual 판매가·지역 특산품 예외: [`../Personal_Documents/CSU/0805_contextual_sell_price_modifier_logic.md`](../Personal_Documents/CSU/0805_contextual_sell_price_modifier_logic.md)
 - 도착 판매·Claim 정책: [`../Contract/Arrival_Sale_Settlement_Claim_Policy.md`](../Contract/Arrival_Sale_Settlement_Claim_Policy.md)
 
 ## 한 줄 요약
@@ -25,12 +26,16 @@ Affect Modify 켜기
 판매가 변동은 **판매 확정(commit) 시점**의 `world.currentSeasonId`와 `Source Id`가 **정확히 일치**할 때만 적용된다.  
 출발 계절·Claim 시점 계절은 판매가에 쓰이지 않는다.
 
+**도착 시장 지역 특산품**은 Season SellPrice(및 policy의 계절·거리 규칙)가 적용되지 않는다.  
+판매 대상 `ItemId`가 해당 시장 `LocalSpecialtyItemIds`에 포함되면 기본 판매가 + 비계절 item modifier + Lucky Money만 남는다.
+
 ## 적용 범위 (현재 제품)
 
 | 항목 | 현재 |
 |------|------|
 | Seasonal **SellPrice** | 지원 — 시장 판매 commit에 적용 |
 | Seasonal **BuyPrice** | 미지원 — SO에 넣어도 이번 계절 판매 경로에서 판매가를 바꾸지 않음 |
+| **도착 시장 지역 특산품** | Season SellPrice·policy 계절·policy 거리 규칙 **제외**. Lucky Money·비계절 item modifier는 유지 |
 | 적용 시점 | durable market sale transaction (도착 판매 확정 포함) |
 | Claim | 이미 commit된 판매 수익을 재사용. Claim에서 재판매가하지 않음 |
 | SaveData | 별도 필드·버전 변경 없음. 기존 `currentSeasonId` 사용 |
@@ -137,6 +142,48 @@ Value = -0.1
 
 여러 Season SellPrice가 **같은 계절 Source Id**로 매칭되면, Economy `PriceCalculator`의 Modifier Type 정렬 규칙으로 순서대로 적용된다.
 
+## 도착 시장 지역 특산품 예외
+
+판매 commit·preview 모두 `ContextualSellPriceModifierResolver`가 **판매 대상 시장의 지역 특산품 여부**를 먼저 판단한다.
+
+### 판별 기준
+
+| 입력 | 출처 |
+|------|------|
+| 판매 대상 `ItemId` | `TradeItemData.ItemId` |
+| 도착 시장 특산품 ID 목록 | `SharedMarketDefinition.LocalSpecialtyItemIds` |
+| 스냅샷 시점 | `MarketInventoryMutationSession.TryOpen` — 세션 생성 시 1회 복사 |
+
+`ItemId`가 목록에 **Ordinal 일치**로 포함되면 **도착 시장 지역 특산품**으로 취급한다.  
+목록이 비어 있거나, `ItemId`가 목록에 없거나, `SharedGameData`에서 시장을 찾지 못하면 기존 계절·policy 규칙이 그대로 적용된다.
+
+### 적용되지 않는 Modifier
+
+| 종류 | 예외 시 동작 |
+|------|----------------|
+| TradeItem `Modifier Type = Season`, Target = `SellPrice` / `Both` | 제외 |
+| Policy `CategorySeasonalSellPriceRule` | 추가하지 않음 |
+| Policy `DistanceSellPriceRule` | 추가하지 않음 |
+
+### 계속 적용되는 Modifier
+
+| 종류 | 예외 시 동작 |
+|------|----------------|
+| TradeItem 비계절 modifier (`Disaster`, `AffectToTown` 등) | 기존처럼 통과 |
+| Policy `LuckyMoneySellPriceRule` | `WeatherLuckyStore` 활성 시 적용 |
+
+### 예시 (Base Sell 200, item Season + policy 계절·거리·Lucky 모두 설정)
+
+| 조건 | commit 단가 | 설명 |
+|------|-------------|------|
+| 일반 상품 | 455 | item Season + policy 계절 + Lucky + 거리 모두 적용 |
+| 도착 시장 지역 특산품 + Lucky | 300 | Season·policy 계절·거리 제외, Lucky(+50%)만 → 200×1.5 |
+| 도착 시장 지역 특산품 + Lucky + 비계절 item modifier | 330 | 예: AffectToTown +10% 유지 후 Lucky → 200×1.1×1.5 |
+| 도착 시장 지역 특산품, Lucky 없음 | 200 | Base Sell Price만 |
+
+시장 카탈로그(재고 슬롯)에 없어도 Cargo에 있으면 판매 가능하다.  
+`transactionCatalog`에 포함되고 `LocalSpecialtyItemIds`에 등록되어 있으면 동일 예외가 적용된다.
+
 ## 작성 예시
 
 ### 예시 A — 여름에만 판매가 +20%
@@ -200,17 +247,24 @@ Affect Modify = false       ← Modifier 전체 무시
 ## 런타임에서 가격이 정해지는 위치
 
 ```text
-판매 확정
-→ saveData.world.currentSeasonId 캡처
-→ TradeItem AffectModify / Modifiers 변환
-→ Season + SellPrice 항목만 Source Id 매칭으로 남김
+MarketTradePanelController.OpenResolved
+→ SharedMarketDefinition.LocalSpecialtyItemIds 스냅샷
+→ MarketInventoryMutationSession.TryOpen(..., destinationLocalSpecialtyItemIds)
+
+판매 preview / 확정
+→ CaptureSellPriceContext()  (Season, 거리, Lucky, 특산품 ID 스냅샷)
+→ ItemId ∈ destinationLocalSpecialtyItemIds ?
+     예 → Season SellPrice·policy 계절·policy 거리 제외
+     아니오 → SeasonalSellPriceModifierSelector + policy 계절·거리 적용
+→ Lucky·비계절 item modifier는 항상 Resolver 후보
 → PriceCalculator로 단가 계산
 → Cargo / 시장 재고 / tradingCurrency 변이 후 Save
 ```
 
 - 계절 권위: Framework 달력 → `SaveData.world.currentSeasonId`
-- 자격 필터: `SeasonalSellPriceModifierSelector`
-- 산술: `PriceCalculator` (달력을 직접 조회하지 않음)
+- 지역 특산품 ID: `SharedGameData.TryGetMarket(marketId).LocalSpecialtyItemIds` → 세션 스냅샷
+- 자격 필터: `ContextualSellPriceModifierResolver` → `SeasonalSellPriceModifierSelector`(비특산품만)
+- 산술: `PriceCalculator` (달력·시장 데이터를 직접 조회하지 않음)
 
 현재 계절을 플레이 중 확인·전진하는 방법:  
 [`Framework_Game_Calendar_and_Seasons_API_Guide.md`](./Framework_Game_Calendar_and_Seasons_API_Guide.md)
@@ -227,10 +281,13 @@ Affect Modify = false       ← Modifier 전체 무시
 6. 해당 계절에서 판매 확정 시 화폐 증가액이 `단가 × 수량`과 같은가.
 7. 다른 계절로 바꾼 뒤 같은 상품을 팔면 base(또는 그 계절용 항목) 단가로 바뀌는가.
 8. `Affect Modify`를 끄면 기본 판매가로 돌아오는가.
+9. 도착 시장 `LocalSpecialtyItemIds`에 등록된 상품을 팔 때 Season SellPrice·policy 계절·policy 거리가 빠지는가.
+10. 같은 상품을 다른 시장(특산품 목록에 없음)에서 팔면 Season SellPrice가 다시 적용되는가.
 
 ## Risk 및 주의사항
 
 - `Source Id` 오타는 크래시 없이 **조용히 무시**된다. 밸런스가 “안 먹히는” 것처럼 보이면 Source Id를 먼저 본다.
-- Seasonal BuyPrice·판매 패널 표시 정렬·거리 배율·번개 잭팟은 이 가이드 범위 밖이다.
-- 일반 Modifier(Town 등)와 Season SellPrice를 함께 둘 수 있다. Season SellPrice만 계절 필터를 받고, 나머지는 기존처럼 통과한다.
+- **지역 특산품 예외**는 `LocalSpecialtyItemIds`와 `ItemId` Ordinal 매칭에 의존한다. SharedGameData에 특산품 ID가 빠져 있으면 Season SellPrice가 그대로 적용된다.
+- Seasonal BuyPrice·판매 패널 표시 정렬·Lucky Money·거리 배율 상세는 contextual 가이드 범위다. Season SellPrice만 이 문서의 핵심 대상이다.
+- 일반 Modifier(Town 등)와 Season SellPrice를 함께 둘 수 있다. Season SellPrice만 계절·특산품 필터를 받고, 비계절 item modifier는 특산품에서도 통과한다.
 - 운영 SO와 Sandbox SO를 동시에 열어 값을 복사할 때 `Source Id`가 한글·Display Name으로 바뀌지 않았는지 확인한다.

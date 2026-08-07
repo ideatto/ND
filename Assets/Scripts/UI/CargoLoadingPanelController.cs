@@ -37,6 +37,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     /// the UI can also be cleared from Runtime Draft by assigning quantity zero.
     /// </summary>
     public event Action<CargoChangeSnapshot> LoadChanged;
+    public event Action<string> CargoConfirmed;
 
     /// <summary>
     /// Optional integration boundary invoked before S4 advances to the mercenary step.
@@ -604,7 +605,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         if (TryCommitDetachedCargoPlan != null)
         {
-            TryCommitDetachedCargoPlan.Invoke();
+            if (TryCommitDetachedCargoPlan.Invoke())
+            {
+                CargoConfirmed?.Invoke(marketDraftCaravanId);
+            }
             return;
         }
 
@@ -614,6 +618,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         // The Cargo purchase UI is independent. Commit first, then close this panel only.
         if (TryCommitCargoTransaction != null && !TryCommitCargoTransaction())
             return;
+
+        CargoConfirmed?.Invoke(marketDraftCaravanId);
 
         ClosePurchasePopupImmediate();
         HidePanel(null);
