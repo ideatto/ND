@@ -128,6 +128,9 @@ namespace ND.Framework
                 return;
             }
 
+            EconomyM1SettlementViewAdapter.RemoveArrivalSaleLines(
+                claimedCaravanId,
+                claimedTradeId);
             displayedCaravanId = string.Empty;
             displayedTradeId = string.Empty;
             if (claimedResult.grade == JourneyResultGrade.Failed)
@@ -300,6 +303,8 @@ namespace ND.Framework
                     caravanId, tradeId, out EconomyM1LoopResult economyResult))
             {
                 economySettlement = EconomyM1SettlementViewAdapter.Create(economyResult);
+                economySettlement.SaleLines =
+                    EconomyM1SettlementViewAdapter.GetArrivalSaleLines(caravanId, tradeId);
             }
             if (SaveDataLookup.TryGetPendingSettlement(
                     FrameworkRoot.Instance?.CurrentSaveData,
@@ -418,7 +423,8 @@ namespace ND.Framework
                 PriceResult = source?.PriceResult,
                 Settlement = breakdown,
                 GrowthPurchase = source?.GrowthPurchase,
-                RuntimeStats = source?.RuntimeStats
+                RuntimeStats = source?.RuntimeStats,
+                SaleLines = source?.SaleLines ?? new System.Collections.Generic.List<SettlementSaleLineViewData>()
             };
         }
 

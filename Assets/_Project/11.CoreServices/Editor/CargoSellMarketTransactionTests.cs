@@ -1,10 +1,13 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using ND.Economy;
 using ND.Framework.CargoLoading;
 using ND.UI.Market;
 using NUnit.Framework;
 using UnityEngine;
+
+using CargoMarketTransactionResult = ND.Framework.CargoLoading.MarketTransactionResult;
 
 namespace ND.Framework.Editor
 {
@@ -34,7 +37,7 @@ namespace ND.Framework.Editor
                     out MarketInventoryMutationSession session,
                     out string error), Is.True, error);
 
-                MarketTransactionResult result = MarketTransactionCommand.Execute(
+                CargoMarketTransactionResult result = MarketTransactionCommand.Execute(
                     session,
                     new[]
                     {
@@ -51,6 +54,9 @@ namespace ND.Framework.Editor
                     100f);
 
                 Assert.That(result.Success, Is.True, result.ErrorCode);
+                Assert.That(result.Items, Has.Count.EqualTo(1));
+                Assert.That(result.Items[0].BaseSellPrice, Is.EqualTo(7));
+                Assert.That(result.Items[0].FinalUnitSellPrice, Is.EqualTo(7));
                 Assert.That(GroupQuantity(save, 10), Is.EqualTo(3));
                 Assert.That(GroupQuantity(save, 20), Is.EqualTo(2));
             }
@@ -58,6 +64,63 @@ namespace ND.Framework.Editor
             {
                 UnityEngine.Object.DestroyImmediate(item);
             }
+        }
+
+        [Test]
+        public void ArrivalSaleLines_ClassifyModifiersAndKeepItemsIsolated()
+        {
+            string caravanId = "caravan-modifier-test";
+            string tradeId = "trade-modifier-test";
+            try
+            {
+                EconomyM1SettlementViewAdapter.StoreArrivalSaleLines(
+                    caravanId,
+                    tradeId,
+                    new[]
+                    {
+                        Summary("grain", "distance:120", PriceModifierType.RouteEvent),
+                        Summary("iron", "lucky-money:weather", PriceModifierType.RouteEvent)
+                    });
+
+                var lines = EconomyM1SettlementViewAdapter.GetArrivalSaleLines(caravanId, tradeId);
+
+                Assert.That(lines, Has.Count.EqualTo(2));
+                Assert.That(lines[0].ItemId, Is.EqualTo("grain"));
+                Assert.That(lines[0].Modifiers.Single().PresentationKind,
+                    Is.EqualTo(SettlementModifierPresentationKind.Distance));
+                Assert.That(lines[1].ItemId, Is.EqualTo("iron"));
+                Assert.That(lines[1].Modifiers.Single().PresentationKind,
+                    Is.EqualTo(SettlementModifierPresentationKind.Lucky));
+            }
+            finally
+            {
+                EconomyM1SettlementViewAdapter.RemoveArrivalSaleLines(caravanId, tradeId);
+            }
+        }
+
+        private static MarketTransactionItemSummary Summary(
+            string itemId,
+            string sourceId,
+            PriceModifierType modifierType)
+        {
+            return new MarketTransactionItemSummary
+            {
+                ItemId = itemId,
+                SellQuantity = 1,
+                BaseSellPrice = 100,
+                FinalUnitSellPrice = 120,
+                SaleRevenue = 120,
+                SaleModifiers =
+                {
+                    new MarketSaleModifierSnapshot
+                    {
+                        ModifierType = modifierType,
+                        SourceId = sourceId,
+                        Operation = PriceModifierOperation.Percent,
+                        Value = 0.2f
+                    }
+                }
+            };
         }
 
         [Test]
@@ -77,7 +140,7 @@ namespace ND.Framework.Editor
                     out MarketInventoryMutationSession session, out string error), Is.True, error);
                 int saveCallsBeforeCommit = saveService.SaveCalls;
 
-                MarketTransactionResult result = MarketTransactionCommand.Execute(
+                CargoMarketTransactionResult result = MarketTransactionCommand.Execute(
                     session,
                     new[]
                     {
