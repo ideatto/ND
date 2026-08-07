@@ -27,7 +27,9 @@ Normal data permits at most one unresolved pending settlement per Caravan. Exact
 3. Sets any legacy settlement `LoanRepayment` input to zero and does not mutate rescue-loan principal.
 4. Saves the staged aggregate immediately.
 5. On save failure reports failure and leaves the externally visible durable state uncommitted.
-6. On success publishes `SettlementClaimed(caravanId, tradeId)` once for that claimed entry and clears prepared goods/food while preserving fixed setup.
+6. On success publishes `SettlementClaimed(caravanId, tradeId)` once for that claimed entry and clears prepared goods/food. Success and partial success preserve fixed transport setup. A failed settlement is the explicit exception: its Claim atomically removes the Caravan's equipped wagon and draft animals from owned inventories and clears its wagon, animals, cargo, food, durability, and failure references.
+
+Failed-settlement transport loss is staged inside the same SaveData snapshot and rollback boundary as Claim. Save failure restores the Caravan, owned transport inventories, matching pending settlement, and preparation commit. Save success may then show a non-durable acknowledgement Popup; that Popup does not define the commit boundary.
 
 Claim applies travel settlement economy only. Cargo-sale proceeds were already credited by successful sale-confirm Save and are excluded from `JourneyResultData`, preventing duplicate payout.
 

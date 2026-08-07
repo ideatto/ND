@@ -5,6 +5,7 @@ using System.Reflection;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 public sealed class CaravanRenamePopupPrefabTests
 {
@@ -89,6 +90,46 @@ public sealed class CaravanRenamePopupPrefabTests
                 Is.SameAs(presenter));
             Assert.That(serialized.FindProperty("popup").objectReferenceValue,
                 Is.SameAs(popup));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(mainUi);
+        }
+    }
+
+    [Test]
+    public void MainUi_SlotsExposeDedicatedRenameButtons()
+    {
+        GameObject mainUi = PrefabUtility.LoadPrefabContents(MainUiPath);
+        try
+        {
+            CaravanSlotView[] slots =
+                mainUi.GetComponentsInChildren<CaravanSlotView>(true);
+            Assert.That(slots, Has.Length.EqualTo(4));
+
+            foreach (CaravanSlotView slot in slots)
+            {
+                var serialized = new SerializedObject(slot);
+                Button renameButton = serialized.FindProperty("renameButton")
+                    .objectReferenceValue as Button;
+
+                Assert.That(renameButton, Is.Not.Null, slot.name);
+                Assert.That(renameButton.name, Is.EqualTo("RenameButton"), slot.name);
+                Assert.That(renameButton.transform.GetSiblingIndex(), Is.EqualTo(1), slot.name);
+                TMP_Text label = renameButton.GetComponentInChildren<TMP_Text>(true);
+                Assert.That(label.text, Is.Empty, slot.name);
+                Assert.That(label.gameObject.activeSelf, Is.False, slot.name);
+
+                Transform icon = renameButton.transform.Find("Icon");
+                Assert.That(icon, Is.Not.Null, slot.name);
+                Assert.That(icon.gameObject.activeSelf, Is.True, slot.name);
+                Assert.That(icon.GetComponent<Image>().enabled, Is.True, slot.name);
+
+                Image background = renameButton.targetGraphic as Image;
+                Assert.That(background, Is.Not.Null, slot.name);
+                Assert.That(background.color,
+                    Is.EqualTo((Color)new Color32(212, 170, 93, 255)), slot.name);
+            }
         }
         finally
         {

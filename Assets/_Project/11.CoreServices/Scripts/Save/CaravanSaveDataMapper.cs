@@ -318,6 +318,7 @@ namespace ND.Framework
             if (runtimeData == null)
             {
                 saveData.instanceId = string.Empty;
+                saveData.contentId = string.Empty;
                 saveData.wagonName = string.Empty;
                 saveData.overLoad = 0f;
                 saveData.maxLoad = 0f;

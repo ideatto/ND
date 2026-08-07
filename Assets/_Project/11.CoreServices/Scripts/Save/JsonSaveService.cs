@@ -407,6 +407,36 @@ namespace ND.Framework
                 }
 
                 CaravanSaveDataMapper.Normalize(caravan);
+
+                // Older saves could finish a failed settlement while retaining the destroyed
+                // transport composition. Repair only already-claimed failures; an in-progress
+                // failure must remain untouched until its Claim transaction is committed.
+                if (caravan.settlementClaimed
+                    && caravan.runFatalReason != JourneyFailureReason.None
+                    && (!string.IsNullOrWhiteSpace(caravan.wagon?.instanceId)
+                        || caravan.animals.Count > 0
+                        || caravan.cargo.Count > 0
+                        || caravan.foodAmount > 0))
+                {
+                    CaravanData legacyFailedCaravan = CaravanSaveDataMapper.ToRuntime(caravan);
+                    var failedAnimalInstanceIds = new List<string>();
+                    for (var animalIndex = 0; animalIndex < caravan.animals.Count; animalIndex++)
+                    {
+                        var instanceId = caravan.animals[animalIndex]?.instanceId;
+                        if (!string.IsNullOrWhiteSpace(instanceId))
+                        {
+                            failedAnimalInstanceIds.Add(instanceId);
+                        }
+                    }
+                    FailedTradeTransportLoss.Apply(
+                        data,
+                        legacyFailedCaravan,
+                        caravan.wagon?.instanceId,
+                        failedAnimalInstanceIds);
+                    CaravanSaveDataMapper.CopyToSave(legacyFailedCaravan, caravan);
+                    assetDataChanged = true;
+                }
+
                 if (string.IsNullOrWhiteSpace(caravan.currentTownId))
                 {
                     // Version 6 and earlier saves only tracked the selected player's town.

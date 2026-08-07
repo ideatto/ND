@@ -1,7 +1,6 @@
 using System;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -16,6 +15,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     [Header("Main Content")]
     [SerializeField] private TMP_Text displayNameText;
+    [SerializeField] private Button renameButton;
     [SerializeField] private Button settingButton;
     [SerializeField] private Button cargoButton;
     [Tooltip("Displays JourneyState without acting as a button. Travel progress interaction belongs to the World Map UI.")]
@@ -27,6 +27,7 @@ public sealed class CaravanSlotView : MonoBehaviour
     [SerializeField] private Image journeyStateIconImage;
     [SerializeField] private Sprite prepareStateIcon;
     [SerializeField] private Sprite travelingStateIcon;
+    [SerializeField] private Sprite sellingStateIcon;
     [SerializeField] private Sprite settlingStateIcon;
     [SerializeField] private Sprite completedStateIcon;
     [Tooltip("Optional Animator on the state icon. Its controller should expose the configured bool parameter.")]
@@ -90,7 +91,7 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void OnEnable()
     {
-        EnsureDisplayNameLongPress();
+        EnsureDisplayNameButton();
         // Re-register after prefab/scene activation so newly assigned button references are never skipped.
         RegisterButtonListeners();
     }
@@ -302,6 +303,16 @@ public sealed class CaravanSlotView : MonoBehaviour
 
         Sprite stateIcon = ResolveJourneyStateIcon(state);
         bool canShowIcon = journeyStateIconImage != null && stateIcon != null;
+        bool isTraveling = canShowIcon && state == JourneyState.Traveling;
+
+        // TravelingHorse animates Image.m_Sprite, so an enabled Animator keeps ownership
+        // of this Image even while the controller is in Idle. Disable it before assigning
+        // a static Prepare/Settling/Completed icon; otherwise Animator evaluation restores
+        // the controller's default null Sprite after this method assigns stateIcon.
+        if (!isTraveling)
+        {
+            SetTravelingAnimation(false);
+        }
 
         if (journeyStateIconImage != null)
         {
@@ -315,7 +326,10 @@ public sealed class CaravanSlotView : MonoBehaviour
             journeyStateText.gameObject.SetActive(!canShowIcon);
         }
 
-        SetTravelingAnimation(canShowIcon && state == JourneyState.Traveling);
+        if (isTraveling)
+        {
+            SetTravelingAnimation(true);
+        }
     }
 
     private Sprite ResolveJourneyStateIcon(JourneyState state)
@@ -326,6 +340,8 @@ public sealed class CaravanSlotView : MonoBehaviour
                 return prepareStateIcon;
             case JourneyState.Traveling:
                 return travelingStateIcon;
+            case JourneyState.Selling:
+                return sellingStateIcon;
             case JourneyState.Settling:
                 return settlingStateIcon;
             case JourneyState.Completed:
@@ -354,10 +370,23 @@ public sealed class CaravanSlotView : MonoBehaviour
     private void SetTravelingAnimation(bool isTraveling)
     {
         if (journeyStateIconAnimator == null
-            || !journeyStateIconAnimator.isActiveAndEnabled
-            || !journeyStateIconAnimator.gameObject.activeInHierarchy
             || journeyStateIconAnimator.runtimeAnimatorController == null
             || string.IsNullOrWhiteSpace(travelingAnimatorParameter))
+        {
+            return;
+        }
+
+        if (!isTraveling)
+        {
+            // Static journey states are rendered directly by journeyStateIconImage.
+            // No UI object or component is created at runtime; only the prefab Animator is paused.
+            journeyStateIconAnimator.enabled = false;
+            return;
+        }
+
+        // Re-enable the prefab-owned Animator only for the sprite-sheet animation.
+        journeyStateIconAnimator.enabled = true;
+        if (!journeyStateIconAnimator.gameObject.activeInHierarchy)
         {
             return;
         }
@@ -404,8 +433,13 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void SetOccupiedControlsVisible(bool visible)
     {
-        // Setting/Cargo remain actions, while JourneyState is display-only and never receives a click listener.
-        // All three describe an existing Caravan and must not consume layout width for Empty slots.
+        // Rename/Setting/Cargo remain actions, while JourneyState is display-only and never receives a click listener.
+        // All four describe an existing Caravan and must not consume layout width for Empty slots.
+        if (renameButton != null)
+        {
+            renameButton.gameObject.SetActive(visible);
+        }
+
         if (settingButton != null)
         {
             settingButton.gameObject.SetActive(visible);
@@ -460,6 +494,8 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void RegisterButtonListeners()
     {
+        displayNameButton?.onClick.AddListener(HandleDisplayNameClicked);
+        renameButton?.onClick.AddListener(HandleRenameClicked);
         settingButton?.onClick.AddListener(HandleSettingClicked);
         cargoButton?.onClick.AddListener(HandleCargoClicked);
         createButton?.onClick.AddListener(HandleCreateClicked);
@@ -468,6 +504,8 @@ public sealed class CaravanSlotView : MonoBehaviour
 
     private void UnregisterButtonListeners()
     {
+        displayNameButton?.onClick.RemoveListener(HandleDisplayNameClicked);
+        renameButton?.onClick.RemoveListener(HandleRenameClicked);
         settingButton?.onClick.RemoveListener(HandleSettingClicked);
         cargoButton?.onClick.RemoveListener(HandleCargoClicked);
         createButton?.onClick.RemoveListener(HandleCreateClicked);
@@ -523,7 +561,25 @@ public sealed class CaravanSlotView : MonoBehaviour
         }
     }
 
-    private void EnsureDisplayNameLongPress()
+    private void HandleDisplayNameClicked()
+    {
+        if (currentState == CaravanSlotState.Occupied
+            && !string.IsNullOrWhiteSpace(currentCaravanId))
+        {
+            TreadmillRequested?.Invoke(currentCaravanId, currentDisplayName);
+        }
+    }
+
+    private void HandleRenameClicked()
+    {
+        if (currentState == CaravanSlotState.Occupied
+            && !string.IsNullOrWhiteSpace(currentCaravanId))
+        {
+            RenameRequested?.Invoke(currentCaravanId);
+        }
+    }
+
+    private void EnsureDisplayNameButton()
     {
         if (displayNameText == null) return;
         displayNameText.raycastTarget = false;
@@ -543,27 +599,12 @@ public sealed class CaravanSlotView : MonoBehaviour
         colors.colorMultiplier = 1f;
         colors.fadeDuration = 0.08f;
         displayNameButton.colors = colors;
-        CaravanDisplayNameLongPressTrigger trigger =
-            target.GetComponent<CaravanDisplayNameLongPressTrigger>()
-            ?? target.AddComponent<CaravanDisplayNameLongPressTrigger>();
-        trigger.Bind(
-            () =>
-            {
-                if (currentState == CaravanSlotState.Occupied
-                    && !string.IsNullOrWhiteSpace(currentCaravanId))
-                    TreadmillRequested?.Invoke(currentCaravanId, currentDisplayName);
-            },
-            () =>
-            {
-                if (currentState == CaravanSlotState.Occupied
-                    && !string.IsNullOrWhiteSpace(currentCaravanId))
-                    RenameRequested?.Invoke(currentCaravanId);
-            });
     }
 
     private void SetDisplayNameInteractable(bool interactable)
     {
         if (displayNameButton != null) displayNameButton.interactable = interactable;
+        if (renameButton != null) renameButton.interactable = interactable;
     }
 
 #if UNITY_EDITOR
@@ -577,60 +618,4 @@ public sealed class CaravanSlotView : MonoBehaviour
         }
     }
 #endif
-}
-
-[DisallowMultipleComponent]
-public sealed class CaravanDisplayNameLongPressTrigger : MonoBehaviour,
-    IPointerDownHandler,
-    IPointerUpHandler,
-    IPointerExitHandler
-{
-    private const float HoldSeconds = 1f;
-    private Action tapped;
-    private Action held;
-    private Coroutine holdRoutine;
-    private bool isPointerDown;
-    private bool didHold;
-
-    public void Bind(Action onTapped, Action onHeld)
-    {
-        tapped = onTapped;
-        held = onHeld;
-    }
-
-    public void OnPointerDown(PointerEventData eventData)
-    {
-        Cancel();
-        isPointerDown = true;
-        didHold = false;
-        holdRoutine = StartCoroutine(WaitForHold());
-    }
-
-    public void OnPointerUp(PointerEventData eventData)
-    {
-        bool invokeTap = isPointerDown && !didHold;
-        Cancel();
-        if (invokeTap) tapped?.Invoke();
-    }
-    public void OnPointerExit(PointerEventData eventData) => Cancel();
-
-    private System.Collections.IEnumerator WaitForHold()
-    {
-        yield return new WaitForSecondsRealtime(HoldSeconds);
-        holdRoutine = null;
-        didHold = true;
-        held?.Invoke();
-    }
-
-    private void OnDisable() => Cancel();
-
-    private void Cancel()
-    {
-        isPointerDown = false;
-        if (holdRoutine != null)
-        {
-            StopCoroutine(holdRoutine);
-            holdRoutine = null;
-        }
-    }
 }

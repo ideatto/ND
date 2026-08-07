@@ -130,7 +130,16 @@ namespace ND.UI.InGame.TransportInventory
             int rows = Mathf.CeilToInt(Mathf.Max(0, totalSlots) / (float)columns);
             float height = grid.padding.vertical + rows * grid.cellSize.y
                 + Mathf.Max(0, rows - 1) * grid.spacing.y;
-            content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+            Vector2 size = content.sizeDelta;
+            size.y = height;
+            content.sizeDelta = size;
+
+            // ScrollRect caches its content/view bounds during layout. When the panel first wakes with
+            // only the unlocked slot objects, that cache can retain the shorter height even after the
+            // full locked-slot ViewData is rendered. Rebuild immediately so dragging and wheel input
+            // use the same full height that is visible in the inspector.
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            Canvas.ForceUpdateCanvases();
         }
 
     }

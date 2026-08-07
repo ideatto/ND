@@ -38,6 +38,66 @@ namespace ND.Framework.Editor
         }
 
         [Test]
+        public void FailedArrival_ResultIncludesPreviouslyLostAndRemainingCargoAndFood()
+        {
+            CaravanData caravan = CreateArrivedCaravan();
+            caravan.runFatalReason = JourneyFailureReason.FoodDepleted;
+            caravan.runCargoLost = 3;
+            caravan.cargo.Add(new CargoEntry { quantity = 4 });
+            caravan.cargo.Add(new CargoEntry { quantity = 6 });
+            caravan.cargo.Add(new CargoEntry { quantity = 0 });
+            caravan.foodAmount = 7;
+            caravan.runFoodLost = 2f;
+
+            JourneyResultData result = JourneyRunner.Settle(caravan);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.cargoLost, Is.EqualTo(13));
+            Assert.That(result.foodLost, Is.EqualTo(7f));
+            Assert.That(caravan.runCargoLost, Is.EqualTo(3), "S8 snapshot must not mutate accumulated loss.");
+            Assert.That(caravan.runFoodLost, Is.EqualTo(2f), "S8 snapshot must not mutate accumulated loss.");
+            Assert.That(caravan.cargo[0].quantity, Is.EqualTo(4), "Cargo is removed only after S9 Claim succeeds.");
+            Assert.That(caravan.cargo[1].quantity, Is.EqualTo(6), "Cargo is removed only after S9 Claim succeeds.");
+        }
+
+        [Test]
+        public void FailedArrival_CargoLossSnapshotClampsAtIntMaxValue()
+        {
+            CaravanData caravan = CreateArrivedCaravan();
+            caravan.runFatalReason = JourneyFailureReason.FoodDepleted;
+            caravan.runCargoLost = int.MaxValue;
+            caravan.cargo.Add(new CargoEntry { quantity = 1 });
+
+            JourneyResultData result = JourneyRunner.Settle(caravan);
+
+            Assert.That(result.cargoLost, Is.EqualTo(int.MaxValue));
+            Assert.That(caravan.cargo[0].quantity, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void WagonBroken_FailureKeepsCargoAndFoodUntilClaimTransaction()
+        {
+            CaravanData caravan = CreateArrivedCaravan();
+            caravan.cargo.Add(new CargoEntry { quantity = 5 });
+            caravan.foodAmount = 75;
+            caravan.currentDurability = 1;
+            caravan.wagon = new imsiWagonData { maxDurability = 100 };
+            caravan.lossLimitRate = 1f;
+
+            JourneyRunner.ApplyDurabilityLoss(caravan, 1);
+
+            JourneyResultData result = JourneyRunner.Settle(caravan);
+
+            Assert.That(caravan.runWagonDestroyed, Is.True);
+            Assert.That(result.failureReason, Is.EqualTo(JourneyFailureReason.WagonBroken));
+            Assert.That(result.grade, Is.EqualTo(JourneyResultGrade.Failed));
+            Assert.That(result.cargoLost, Is.EqualTo(5));
+            Assert.That(result.foodLost, Is.EqualTo(75f));
+            Assert.That(caravan.cargo[0].quantity, Is.EqualTo(5));
+            Assert.That(caravan.foodAmount, Is.EqualTo(75));
+        }
+
+        [Test]
         public void ArrivalSaleSaveSuccess_ChangesOnlyTargetAndPublishesAfterSave()
         {
             LifecycleContext context = LifecycleContext.Create(saveSucceeds: true);
