@@ -116,6 +116,34 @@ DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateD
 - Settling/Completed: 체크
 - RenameButton과 상태 Icon은 네 Slot에 미리 배치하며 런타임 생성하지 않음
 
+현재 MainUICanvas 외형 재현값:
+
+| 대상 | 설정 |
+| --- | --- |
+| DisplayName LayoutElement | Min Width `173`, Preferred Width `173` |
+| DisplayName TMP | Auto Size On, Font Size `14~20`, Overflow Ellipsis, 좌우 Margin `6` |
+| RenameButton LayoutElement | Min/Preferred Width `72`, Height `44` |
+| RenameButton 배경 | `RGB(212,170,93)` 황갈색 |
+| RenameButton Label | 빈 문자열, GameObject 비활성 |
+| RenameButton Icon | Rename Sprite, GameObject/Image 활성, Raycast Target Off |
+
+각 `CaravanSlotView`의 필수 직렬화 필드:
+
+- `displayNameText`
+- `renameButton`
+- `settingButton`
+- `cargoButton`
+- `journeyStateDisplay`
+- `journeyStateText`
+- `journeyStateIconImage`
+- `prepareStateIcon`
+- `travelingStateIcon`
+- `sellingStateIcon`
+- `settlingStateIcon`
+- `completedStateIcon`
+- `journeyStateIconAnimator`
+- `travelingAnimatorParameter = IsTraveling`
+
 ### D. InGame Scene 조립
 
 - [ ] `CaravanSettingUiConnector` 또는 별도 명확한 Scene 조립 루트 사용
