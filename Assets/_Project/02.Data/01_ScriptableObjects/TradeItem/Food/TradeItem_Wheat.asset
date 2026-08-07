@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
+  m_Name: TradeItem_Wheat
+  m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
+  itemId: Wheat
+  displayName: "\uBC00"
+  icon: {fileID: 21300000, guid: afbc89dc6ce2aff459ee31cf5fcb0ee0, type: 3}
+  description: "\uC0AC\uB78C\uB4E4\uC774 \uC8FC\uC2DD\uC73C\uB85C \uBA39\uB294 \uBE75\uC744
+    \uB9CC\uB4E4\uAE30 \uC704\uD55C \uACE1\uBB3C\uC785\uB2C8\uB2E4. \uBD04\uACFC
+    \uAC00\uC744\uC5D0 \uC218\uD655\uD560 \uC218 \uC788\uC5B4\uC694. \uACA8\uC6B8\uC5D0\uB294
+    \uC218\uC694\uAC00 \uC99D\uAC00\uD574\uC694. "
+  rarity: 1
+  category: 0
+  baseBuyPrice: 30
+  baseSellPrice: 30
+  canStack: 1
+  maxCount: 40
+  weight: 0.5
+  isConsumable: 0
+  affectModify: 1
+  modifiers:
+  - modifierType: 1
+    sourceId: autumn
+    displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: 0.1
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: 0.1
+  - modifierType: 1
+    sourceId: summer
+    displayName: "\uAC00\uC744\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: -0.25
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: -0.25
+  - modifierType: 1
+    sourceId: 
+    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: 0.25
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: 0.25
+  localSpecialty: 0

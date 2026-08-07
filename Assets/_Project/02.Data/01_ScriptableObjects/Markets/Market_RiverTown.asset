@@ -19,6 +19,12 @@ MonoBehaviour:
   tradeItems:
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  - {fileID: 11400000, guid: 63af5decbf34d1747ab76c42cf4e8942, type: 2}
+  - {fileID: 11400000, guid: e70021528395dfa4ebac5f411e79ec65, type: 2}
+  - {fileID: 11400000, guid: ce919b21df2947d4ca0d1ed9f1d18025, type: 2}
+  - {fileID: 11400000, guid: dba5d6b18b9926b4b93cbcd5719d7487, type: 2}
+  - {fileID: 11400000, guid: 89c9192e4852b8147980f6bbf1086f48, type: 2}
+  - {fileID: 11400000, guid: b533a3fd418899a40ba185aecb14973e, type: 2}
   draftAnimalItems:
   - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
   - {fileID: 11400000, guid: 76f8d2c8354dee44ba423e15d4531cf5, type: 2}

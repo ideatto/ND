@@ -10,20 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6297b5bef7549c3419d1005ce3cc6e6a, type: 3}
-  m_Name: EconomyM1_Apple
+  m_Name: TradeItem_PlateArmor
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
-  itemId: economy_m1_apple
-  displayName: M1 Apple
+  itemId: PlateArmor
+  displayName: "\uB9C8\uC11D"
   icon: {fileID: 0}
-  description: Economy M1 baseline trade item.
-  rarity: 0
-  category: 1
-  baseBuyPrice: 100
-  baseSellPrice: 140
+  description: "\uC774\uB984\uB09C \uB300\uC7A5\uC7A5\uC774\uAC00 \uB9CC\uB4E0 \uD654\uB824\uD55C
+    \uC804\uC2E0\uAC11\uC637\uC785\uB2C8\uB2E4.  \uC2E4\uC81C\uB85C \uC785\uC73C\uB824
+    \uC0AC\uB294 \uC0AC\uB78C\uC740 \uC624\uD788\uB824 \uB4DC\uBB3C\uACA0\uC9C0\uC694."
+  rarity: 1
+  category: 2
+  baseBuyPrice: 1950
+  baseSellPrice: 1950
   canStack: 1
-  maxCount: 10
-  weight: 0.1
+  maxCount: 2
+  weight: 1
   isConsumable: 0
-  affectModify: 0
+  affectModify: 1
   modifiers: []
   localSpecialty: 0
