@@ -52,6 +52,8 @@
 
 대상은 `TradePrepareUI/S3_Animal`이 사용하는 `WagonSelectPopup`이다.
 
+이 코드/문서 브랜치는 기존 `TradePrepareUI.prefab` 조립 결과를 포함하지 않는다. 최신 dev2에서 아래 참조를 직접 연결하고 Prefab 담당자가 저장하는 것이 정상 절차다.
+
 | 필드 | 연결 |
 | --- | --- |
 | `listContainer` | Wagon 그룹/개체 행이 들어갈 기존 Content |

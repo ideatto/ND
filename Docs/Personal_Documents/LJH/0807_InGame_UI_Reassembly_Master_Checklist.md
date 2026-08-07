@@ -73,6 +73,8 @@ Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. �
 
 ### B. TradePrepareUI Prefab 조립
 
+> 코드/문서 전달 브랜치는 기존 `TradePrepareUI.prefab`의 조립 결과를 커밋하지 않는다. 따라서 최신 dev2에 반영한 직후 `instanceRowPrefab`이 비어 있는 것은 예상 상태이며, 아래 절차로 연결한 뒤 Scene/Prefab 담당자가 저장한다.
+
 - [ ] `WagonSelectPopup.buttonPrefab` 연결
 - [ ] `WagonSelectPopup.instanceRowPrefab`에 `WagonInstanceRow.prefab` 연결
 - [ ] `AnimalInventoryPanel.wagonPopup` 연결
@@ -89,6 +91,12 @@ Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. �
 | `cancelButton` | 기존 취소 Button |
 
 현재 조립은 기존 내장 `WagonPopup` 유지 방식이다. 별도 Popup을 추가해 기존 Popup과 중복 활성화하지 않는다. `tradeScreenPresenter: null` 같은 기본값 기록은 Caravan Set 기능 연결이 아니지만 `instanceRowPrefab`까지 함께 제거하면 안 된다.
+
+저장 후 Prefab Mode를 닫았다 다시 열고 다음 세 참조가 모두 유지되는지 확인한다.
+
+- `AnimalInventoryPanel.wagonPopup`
+- `WagonSelectPopup.buttonPrefab`
+- `WagonSelectPopup.instanceRowPrefab`
 
 ### C. MainUICanvas Prefab 조립
 
