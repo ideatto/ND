@@ -124,6 +124,22 @@ namespace ND.Framework.CargoLoading
         public int SellQuantity;
         public long PurchaseCost;
         public long SaleRevenue;
+        public long BaseSellPrice;
+        public long FinalUnitSellPrice;
+        public List<MarketSaleModifierSnapshot> SaleModifiers = new List<MarketSaleModifierSnapshot>();
+    }
+
+    /// <summary>
+    /// One commit-time sell modifier copied for receipt presentation.
+    /// The transaction owns this snapshot; callers do not receive calculator collections.
+    /// </summary>
+    public sealed class MarketSaleModifierSnapshot
+    {
+        public PriceModifierType ModifierType;
+        public string SourceId = string.Empty;
+        public string DisplayNameKey = string.Empty;
+        public PriceModifierOperation Operation;
+        public float Value;
     }
 
     /// <summary>
@@ -726,10 +742,16 @@ namespace ND.Framework.CargoLoading
             };
             // Capture once so every line shares one authoritative pricing snapshot.
             SellPriceCalculationContext transactionContext = CaptureSellPriceContext();
+            var sellPriceResults = new Dictionary<string, PriceCalculationResult>(StringComparer.Ordinal);
             foreach (MarketTransactionLine line in normalized.Values)
             {
                 TradeItemData item = catalogById[line.ItemId];
                 MarketStockSaveData stock = FindStock(line.ItemId);
+                PriceCalculationResult sellPriceResult = ResolveUnitPrices(
+                    item,
+                    transactionContext,
+                    sellPriceModifierPolicy);
+                sellPriceResults[line.ItemId] = sellPriceResult;
                 calculationInput.Items.Add(new ND.Economy.MarketTransactionItemInput
                 {
                     ItemId = line.ItemId,
@@ -738,10 +760,7 @@ namespace ND.Framework.CargoLoading
                     BuyQuantity = line.BuyQuantity,
                     SellQuantity = line.SellQuantity,
                     BuyUnitPrice = Math.Max(0L, stock?.unitPrice ?? 0L),
-                    SellUnitPrice = ResolveUnitPrices(
-                        item,
-                        transactionContext,
-                        sellPriceModifierPolicy).UnitSellPrice,
+                    SellUnitPrice = sellPriceResult.UnitSellPrice,
                     UnitWeight = Math.Max(0f, item.Weight),
                     MaxStackQuantity = Math.Max(1, item.MaxCount)
                 });
@@ -790,14 +809,7 @@ namespace ND.Framework.CargoLoading
                     SaleRevenue = calculation.TotalSaleRevenue,
                     Items = calculation.Items
                         .Where(item => item != null)
-                        .Select(item => new MarketTransactionItemSummary
-                        {
-                            ItemId = item.ItemId ?? string.Empty,
-                            BuyQuantity = item.BuyQuantity,
-                            SellQuantity = item.SellQuantity,
-                            PurchaseCost = item.PurchaseCost,
-                            SaleRevenue = item.SaleRevenue
-                        })
+                        .Select(item => CreateItemSummary(item, sellPriceResults, catalogById))
                         .ToList()
                 };
                 if (stageBeforeSave != null && !stageBeforeSave(successfulResult))
@@ -830,6 +842,45 @@ namespace ND.Framework.CargoLoading
                 CaravanCargoChangeSource.MarketTransaction);
             FrameworkEvents.RaiseTradingCurrencyChanged(calculation.TradingCurrencyAfter);
             return successfulResult;
+        }
+
+        private static MarketTransactionItemSummary CreateItemSummary(
+            ND.Economy.MarketTransactionItemResult item,
+            IReadOnlyDictionary<string, PriceCalculationResult> sellPriceResults,
+            IReadOnlyDictionary<string, TradeItemData> catalog)
+        {
+            string itemId = item.ItemId ?? string.Empty;
+            sellPriceResults.TryGetValue(itemId, out PriceCalculationResult priceResult);
+            catalog.TryGetValue(itemId, out TradeItemData tradeItem);
+            var summary = new MarketTransactionItemSummary
+            {
+                ItemId = itemId,
+                BuyQuantity = item.BuyQuantity,
+                SellQuantity = item.SellQuantity,
+                PurchaseCost = item.PurchaseCost,
+                SaleRevenue = item.SaleRevenue,
+                BaseSellPrice = Math.Max(0L, tradeItem?.BaseSellPrice ?? 0L),
+                FinalUnitSellPrice = Math.Max(0L, priceResult?.UnitSellPrice ?? 0L)
+            };
+            if (priceResult?.Modifiers == null)
+                return summary;
+
+            foreach (PriceModifierBreakdown modifier in priceResult.Modifiers)
+            {
+                if (modifier == null
+                    || (modifier.Target != PriceModifierTarget.SellPrice
+                        && modifier.Target != PriceModifierTarget.Both))
+                    continue;
+                summary.SaleModifiers.Add(new MarketSaleModifierSnapshot
+                {
+                    ModifierType = modifier.ModifierType,
+                    SourceId = modifier.SourceId ?? string.Empty,
+                    DisplayNameKey = modifier.DisplayNameKey ?? string.Empty,
+                    Operation = modifier.Operation,
+                    Value = modifier.Value
+                });
+            }
+            return summary;
         }
 
         internal IReadOnlyList<CargoInventoryView> ReadSavedCargo()

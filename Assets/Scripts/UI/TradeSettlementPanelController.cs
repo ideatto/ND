@@ -129,6 +129,7 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         currentRoute = route;
         currentElapsedSeconds = Mathf.Max(0f, elapsedSeconds);
         completeReceipt = BuildReceipt(currentViewData);
+        PrepareReceiptLayout(completeReceipt);
 
         routeText.text = currentRouteTitle;
         elapsedText.text = $"소요 시간  {FormatElapsed(currentElapsedSeconds)}";
@@ -270,7 +271,10 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         SettlementBreakdown settlement = viewData.Settlement;
         StringBuilder builder = new StringBuilder(512);
         AppendTradeItems(builder, viewData, SettlementEntryType.ItemPurchaseCost, "구매 상품", false);
-        AppendTradeItems(builder, viewData, SettlementEntryType.ItemSaleRevenue, "판매 상품", true);
+        if (viewData.SaleLines != null && viewData.SaleLines.Count > 0)
+            AppendSaleDetails(builder, viewData.SaleLines);
+        else
+            AppendTradeItems(builder, viewData, SettlementEntryType.ItemSaleRevenue, "판매 상품", true);
         AppendEntries(builder, settlement.Entries, SettlementEntryType.EventProfit, "주요 이벤트 수익");
         AppendEntries(builder, settlement.Entries, SettlementEntryType.EventLoss, "주요 이벤트 손실");
 
@@ -285,6 +289,63 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         builder.AppendLine($"순이익        {Signed(settlement.NetProfit)} G");
         builder.AppendLine($"성장 포인트   +{settlement.DevelopmentCurrencyReward:N0}");
         return builder.ToString().TrimEnd();
+    }
+
+    private void PrepareReceiptLayout(string receipt)
+    {
+        if (receiptText == null)
+            return;
+        receiptText.text = receipt ?? string.Empty;
+        receiptText.ForceMeshUpdate();
+        RectTransform textRect = receiptText.rectTransform;
+        float height = Mathf.Max(textRect.rect.height, receiptText.preferredHeight);
+        textRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+        if (textRect.parent is RectTransform content)
+            content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Max(content.rect.height, height));
+    }
+
+    private static void AppendSaleDetails(
+        StringBuilder builder,
+        IEnumerable<SettlementSaleLineViewData> saleLines)
+    {
+        builder.AppendLine("판매 상품");
+        foreach (SettlementSaleLineViewData line in saleLines.Where(line => line != null))
+        {
+            builder.AppendLine($"  {DisplaySource(line.ItemId)} x{line.Quantity:N0}");
+            builder.AppendLine($"    기본 판매가: {line.BaseUnitPrice:N0} G");
+            foreach (SettlementModifierLineViewData modifier in line.Modifiers
+                ?? new List<SettlementModifierLineViewData>())
+            {
+                builder.AppendLine($"    {ModifierLabel(modifier)}: {FormatModifierValue(modifier)}");
+            }
+            builder.AppendLine($"    최종 단가: {line.FinalUnitPrice:N0} G");
+            builder.AppendLine($"    판매 금액: {line.TotalAmount:N0} G");
+            builder.AppendLine();
+        }
+    }
+
+    private static string ModifierLabel(SettlementModifierLineViewData modifier)
+    {
+        switch (modifier.PresentationKind)
+        {
+            case SettlementModifierPresentationKind.Season:
+                return "계절 효과";
+            case SettlementModifierPresentationKind.Distance:
+                return "거리 효과";
+            case SettlementModifierPresentationKind.Lucky:
+                return "행운 효과";
+            default:
+                return string.IsNullOrWhiteSpace(modifier.DisplayNameKey)
+                    ? "기타 효과"
+                    : modifier.DisplayNameKey;
+        }
+    }
+
+    private static string FormatModifierValue(SettlementModifierLineViewData modifier)
+    {
+        if (modifier.Operation == PriceModifierOperation.Percent)
+            return $"{(modifier.Value >= 0f ? "+" : string.Empty)}{modifier.Value * 100f:0.#}%";
+        return $"{modifier.Operation} {(modifier.Value >= 0f ? "+" : string.Empty)}{modifier.Value:0.###}";
     }
 
     private static void AppendEntries(
