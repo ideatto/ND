@@ -28,6 +28,13 @@ UI 패널과 행은 런타임에 생성하지 않는다. `BaseCampOverviewPopup.
 - `TradeItem_Logs.asset` 및 `.meta`
 - BaseCamp 관련 EditMode 테스트 및 `.meta`
 
+대상 브랜치의 시작 상태는 다음과 같아야 한다.
+
+- 최신 `dev2`를 반영한 뒤의 `MainUICanvas.prefab`, `InGame.unity`를 사용한다.
+- 현재 기능 개발 브랜치의 두 파일을 checkout, cherry-pick, 파일 복사로 덮어쓰지 않는다.
+- 대상 브랜치에서 두 파일에 이미 존재하는 다른 기능의 UI, Scene 연결, Prefab override를 보존한다.
+- 조립 전 두 파일의 기존 변경 여부를 확인하고 BaseCamp와 무관한 변경을 Revert하거나 덮어쓰지 않는다.
+
 재조립 순서는 반드시 다음과 같다.
 
 ```text
@@ -105,6 +112,33 @@ BaseCamp 자체 건설·증축은 자기 레벨 제한에서 제외한다. 제�
 | `popup` | 정적 `BaseCampOverviewPopup`의 Controller |
 | `noticeUI` | 같은 MainUICanvas의 기존 `NoticeUI` |
 
+### 권장 자동 조립
+
+1. 최신 dev2의 `MainUICanvas.prefab`이 로컬에 반영됐는지 확인한다.
+2. Unity 컴파일 오류가 없는 상태에서 메뉴 `ND > UI > Install BaseCamp Overview Into Main UI`를 실행한다.
+3. 설치 도구는 문자열 경로가 아니라 `BuildingListPanel`, `NoticeUI`, `BaseCampOverviewPopupController` 컴포넌트로 대상을 찾는다.
+4. 기존 Popup/Entry가 있으면 재사용하고 없을 때만 추가하므로 반복 실행해도 중복 생성하지 않는다.
+5. 저장 후 Prefab Mode에서 아래 수동 조립 결과와 동일한지 확인한다.
+
+### 수동 조립 위치와 연결
+
+```text
+MainUICanvas (Prefab root)
+├─ ...최신 dev2 기존 자식 유지
+├─ BuildingPanel 또는 BuildingListPanel 컴포넌트를 가진 기존 오브젝트
+│  └─ BaseCampMainUiEntry 컴포넌트 추가
+└─ BaseCampOverviewPopup (BaseCampOverviewPopup.prefab instance, 기본 비활성)
+```
+
+- `BaseCampOverviewPopup.prefab`은 MainUICanvas root의 직접 자식으로 배치한다. `InfoPanel`, `BuildingPanel`, 다른 Popup 내부에 넣지 않는다.
+- Popup Prefab을 Unpack하지 않고 Prefab 인스턴스 연결을 유지한다.
+- `BaseCampMainUiEntry`는 Hierarchy 이름이 아니라 `BuildingListPanel` 컴포넌트가 붙은 기존 GameObject에 추가한다.
+- `buildingListPanel`: Entry와 같은 GameObject의 기존 `BuildingListPanel` 컴포넌트
+- `popup`: root 직접 자식으로 배치한 `BaseCampOverviewPopup`의 `BaseCampOverviewPopupController`
+- `noticeUI`: 같은 MainUICanvas 안의 기존 `NoticeUI` 컴포넌트
+- Popup root는 비활성화하고 Entry와 `BuildingListPanel`은 기존 활성 상태를 유지한다.
+- 완료 후 `MainUICanvas.prefab`에 Apply/Save한다. 대상 브랜치에서는 이 변경을 정상 조립 결과로 커밋한다.
+
 Popup Controller의 필수 참조:
 
 - `baseCampLevelText`
@@ -143,6 +177,8 @@ MainUICanvas Prefab 조립 후 InGame에서 Entry 또는 Popup이 보이지 않�
 3. 필요하면 해당 BaseCamp 제거 override만 Revert한다.
 4. Entry 1개, Popup 1개가 상속된 뒤에만 통나무 버튼을 별도로 배치한다.
 
+BaseCamp 런타임 기능을 위해 `BuildingConstructionRuntimeHandler`에 새 Inspector 참조를 연결할 필요는 없다. 레벨 정책은 기존 Handler 코드 경로에서 SaveData를 직접 검증한다. InGame에서 BaseCamp 전용으로 새로 만드는 Scene 오브젝트는 아래 테스트 버튼뿐이다.
+
 ### InGame 테스트 버튼 조립
 
 이 버튼은 BaseCamp 기능 자체의 필수 런타임 UI가 아니라 건설·증축 검증용 Editor/Development 전용 도구다. 런타임 코드로 생성하지 않고 Scene에 Prefab 인스턴스로 배치한다.
@@ -153,6 +189,24 @@ MainUICanvas Prefab 조립 후 InGame에서 Entry 또는 Popup이 보이지 않�
 4. RectTransform을 좌하단 anchor/pivot `(0,0)`, anchored position `(300,20)`, size `(260,56)`으로 둔다. 기존 운송 수단 지급 버튼 `(20,20)`의 오른쪽이며 두 버튼 사이 간격은 20px다.
 5. Inspector 값을 다음 표와 맞춘다.
 6. 이 Scene 인스턴스 변경은 `MainUICanvas.prefab` 원본에 Apply하지 않고 대상 브랜치의 `InGame.unity`에 저장·커밋한다.
+
+Hierarchy 기준:
+
+```text
+InGame.unity
+└─ 기존 MainUICanvas.prefab instance
+   ├─ BackgroundWall
+   ├─ ...최신 dev2 기존 UI 유지
+   ├─ InfoPanel
+   ├─ TransportInventoryRewardDebugButton (존재할 경우, 20,20)
+   ├─ BuildingLogsDebugButton (새 Scene Prefab instance, 300,20)
+   └─ ...Popup / NoticeUI
+```
+
+- `BaseCampOverviewPopup`과 `BaseCampMainUiEntry`를 InGame에서 별도로 추가하지 않는다. 둘은 MainUICanvas Prefab 상속으로 들어와야 한다.
+- `BuildingLogsDebugButton`만 Scene override이며 원본 MainUICanvas Prefab에 Apply하지 않는다.
+- 최신 dev2에 운송 수단 지급 버튼이 없더라도 통나무 버튼 위치는 `(300,20)`을 유지한다.
+- Scene 저장 후 MainUICanvas Prefab override 목록에 통나무 버튼 추가 외의 BaseCamp 관련 제거·변경 override가 생기지 않았는지 확인한다.
 
 | 항목 | 값 |
 | --- | --- |

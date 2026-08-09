@@ -122,6 +122,8 @@
 
 > 이 단계는 대상 브랜치의 최신 `MainUICanvas.prefab`에서 시작한다. 현재 기능 개발 브랜치의 조립된 Entry/Popup을 파일째 덮어쓰거나 Apply하는 절차가 아니라, 보존된 `BaseCampOverviewPopup.prefab`과 스크립트를 사용해 대상 브랜치에서 새로 연결하고 커밋하는 절차다.
 
+BaseCamp 조립은 메뉴 `ND > UI > Install BaseCamp Overview Into Main UI` 사용을 권장한다. 수동 조립 시 `BuildingListPanel` 컴포넌트가 있는 기존 오브젝트에 `BaseCampMainUiEntry`를 추가하고 MainUICanvas root 직접 자식으로 Popup Prefab을 배치한다. Entry의 `buildingListPanel`, `popup`, `noticeUI`는 같은 MainUICanvas 내부 컴포넌트로 연결하며 현재 기능 개발 브랜치의 MainUI 파일을 대상 브랜치에 덮어쓰지 않는다.
+
 - [ ] 네 Caravan Slot의 기존 직렬화 참조 유지
 - [ ] Display Name 폭 축소와 Auto Size/Ellipsis 설정
 - [ ] 네 슬롯에 RenameButton을 Prefab 오브젝트로 배치
@@ -181,6 +183,8 @@ DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateD
 ### D. InGame Scene 조립
 
 > 이 단계는 대상 브랜치의 최신 `InGame.unity`에서 시작한다. 먼저 C 단계의 `MainUICanvas.prefab` 조립을 저장하고 Prefab Mode를 닫은 뒤 Scene을 연다. BaseCamp Popup/Entry는 Prefab 상속으로 받아야 하며 Scene에 다시 중복 생성하지 않는다. 대상 브랜치에서 완성된 Scene 변경은 정상 조립 결과이므로 저장·커밋한다.
+
+BaseCamp 조립에서는 기존 `BuildingConstructionRuntimeHandler`에 추가 Inspector 연결이 없다. InGame에는 MainUICanvas 상속 상태를 확인한 뒤 `BuildingLogsDebugButton` Prefab instance만 Scene 전용으로 추가한다. 다른 최신 dev2 Scene 오브젝트와 override는 유지한다.
 
 - [ ] `CaravanSettingUiConnector` 또는 별도 명확한 Scene 조립 루트 사용
 - [ ] `TestCaravanSettingService` 제거
