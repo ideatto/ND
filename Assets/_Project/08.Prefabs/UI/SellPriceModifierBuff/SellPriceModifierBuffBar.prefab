@@ -822,12 +822,12 @@ MonoBehaviour:
   distanceBuff: {fileID: 8591623315053444401}
   luckyMoneyBuff: {fileID: 4552908929573851099}
   tooltip: {fileID: 4086123123128871631}
-  springSprite: {fileID: 21300000, guid: 3715185ae81052a48b04637a51faa2fc, type: 3}
-  summerSprite: {fileID: 21300000, guid: 9c638e162d85f5d4cb96edac7af2bf6f, type: 3}
-  autumnSprite: {fileID: 21300000, guid: d8136edb3b27f7b4baa7dd9209e26ad4, type: 3}
-  winterSprite: {fileID: 21300000, guid: c31db3a99ad0ba34cba90689a59b6df8, type: 3}
-  distanceSprite: {fileID: 21300000, guid: 168286464bf936b44a18a93156dcd012, type: 3}
-  luckyMoneySprite: {fileID: 21300000, guid: 9214554c6ecefa744a7789ccd305b013, type: 3}
+  springSprite: {fileID: -1176938676, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  summerSprite: {fileID: 1083271812, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  autumnSprite: {fileID: -476731003, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  winterSprite: {fileID: -1193401510, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  distanceSprite: {fileID: 21300000, guid: 135f12141276027448537909c59024f6, type: 3}
+  luckyMoneySprite: {fileID: 21300000, guid: 3a304cae7bdbf0241b54558b6f4396c7, type: 3}
 --- !u!1 &7612553241588487307
 GameObject:
   m_ObjectHideFlags: 0
