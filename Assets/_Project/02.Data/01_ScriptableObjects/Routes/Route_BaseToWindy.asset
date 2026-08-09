@@ -17,8 +17,8 @@ MonoBehaviour:
   toTown: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
   displayName: "\uC624\uC194\uAE38"
   unlockedByDefault: 1
-  distance: 700
-  defaultElapsedTime: 70
+  distance: 600
+  defaultElapsedTime: 60
   baseFoodCost: 0
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 3
@@ -42,5 +42,5 @@ MonoBehaviour:
       minQuantity: 0
       maxQuantity: 0
     banditCombatPower: 3
-    cargoLootRate: 0.1
-    fodderLootRate: 0.1
+    cargoLootRate: 0.05
+    fodderLootRate: 0.05

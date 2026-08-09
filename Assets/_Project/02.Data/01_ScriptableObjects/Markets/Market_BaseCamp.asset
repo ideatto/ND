@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Market_BaseCamp
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
   marketId: BaseCampMarket
-  itemMinimumQuantity: 150
-  itemMaxQuantity: 300
+  itemMinimumQuantity: 50
+  itemMaxQuantity: 100
   itemRenewalCycle: 3600
   tradeItems:
   - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}

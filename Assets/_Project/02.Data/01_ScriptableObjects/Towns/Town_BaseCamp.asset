@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Town_BaseCamp
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: BaseCamp
-  displayName: BaseCamp
+  displayName: "\uAC70\uC810\uB9C8\uC744"
   icon: {fileID: 21300000, guid: 439ee30e3800e05418f0a76cf2c8f705, type: 3}
   unlockedByDefault: 1
   description: "\uBCA0\uC774\uC2A4 \uCEA0\uD504, \uC6B0\uB9AC \uC0C1\uB2E8\uC758
@@ -22,5 +22,8 @@ MonoBehaviour:
   availableRoutes:
   - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
   - {fileID: 11400000, guid: f5d1adf3a0a21c84b805c7c69189b3a3, type: 2}
+  - {fileID: 11400000, guid: 2db21dd9787ad8a489632e1f4a2cd2ed, type: 2}
+  - {fileID: 11400000, guid: 0c69b8203cd02ed4da013f8c64aa0dd2, type: 2}
+  - {fileID: 11400000, guid: 74f1c23a9f61ab4488373a9b858555a2, type: 2}
   canContribute: 0
   maximumContributionLimit: 0

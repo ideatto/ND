@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Market_RiverTown
   m_EditorClassIdentifier: Assembly-CSharp::MarketData
   marketId: RiverTownMarket
-  itemMinimumQuantity: 150
-  itemMaxQuantity: 300
+  itemMinimumQuantity: 30
+  itemMaxQuantity: 150
   itemRenewalCycle: 3600
   tradeItems:
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}

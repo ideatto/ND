@@ -15,7 +15,8 @@ MonoBehaviour:
   itemId: Potato
   displayName: "\uAC10\uC790"
   icon: {fileID: 0}
-  description: 
+  description: "\uAC10\uC790\uC785\uB2C8\uB2E4. \uC5EC\uB984\uC5D0 \uACF5\uAE09\uC774
+    \uC99D\uAC00\uD569\uB2C8\uB2E4."
   rarity: 1
   category: 0
   baseBuyPrice: 25
@@ -27,33 +28,23 @@ MonoBehaviour:
   affectModify: 1
   modifiers:
   - modifierType: 1
-    sourceId: 
+    sourceId: spring
     displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1
       modifierOperation: 3
-      value: 0.05
+      value: 0.1
     - modifierTarget: 2
       modifierOperation: 3
-      value: 0.05
-  - modifierType: 0
-    sourceId: 
-    displayName: "\uAC00\uC744\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.2
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.2
+      value: 0.1
   - modifierType: 1
-    sourceId: 
-    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    sourceId: summer
+    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1
       modifierOperation: 3
-      value: 0.15
+      value: -0.2
     - modifierTarget: 2
       modifierOperation: 3
-      value: 0.15
+      value: -0.2
   localSpecialty: 0

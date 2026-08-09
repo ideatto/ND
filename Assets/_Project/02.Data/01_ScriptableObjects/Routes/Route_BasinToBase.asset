@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6ca5c35337d5bd4594d2809d4a7c844, type: 3}
+  m_Name: Route_BasinToBase
+  m_EditorClassIdentifier: Assembly-CSharp::RouteData
+  routeId: BasinToBase
+  fromTown: {fileID: 11400000, guid: 925a328195779074aa29b2ccafef3e2a, type: 2}
+  toTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
+  displayName: "\uB2E4\uB9AC\uAC74\uB108 \uC544\uB7AB\uAE38"
+  unlockedByDefault: 0
+  distance: 1600
+  defaultElapsedTime: 160
+  baseFoodCost: 0
+  baseMercenaryCost: 0
+  baseRequiredFoodQuantity: 5
+  baseRequiredMercenaryPower: 10
+  baseRiskLevel: 0.1
+  maxEventCount: 3
+  routeEvents:
+  - eventType: 0
+    routeEventId: BasinToBase_Bandit
+    displayName: "\uC0B0\uC801 \uCD9C\uBAB0"
+    description: "\uC6D0\uD589\uAE38 \uC911 \uC0B0\uC801\uC744 \uB9C8\uC8FC\uCCE4\uB2E4."
+    eventValue: 4
+    defaultEvasionPer: 80
+    lossCount: 0
+    eventRewardType: 0
+    eventRewardCurrency:
+      minAmount: 0
+      maxAmount: 0
+    eventRewardItem:
+      itemId: 
+      minQuantity: 0
+      maxQuantity: 0
+    banditCombatPower: 4
+    cargoLootRate: 0.05
+    fodderLootRate: 0.05

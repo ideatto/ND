@@ -42,5 +42,5 @@ MonoBehaviour:
       minQuantity: 0
       maxQuantity: 0
     banditCombatPower: 6
-    cargoLootRate: 0.2
-    fodderLootRate: 0.2
+    cargoLootRate: 0.05
+    fodderLootRate: 0.05
