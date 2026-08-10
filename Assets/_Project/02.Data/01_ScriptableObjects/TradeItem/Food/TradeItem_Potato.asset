@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Potato
   displayName: "\uAC10\uC790"
-  icon: {fileID: 0}
+  icon: {fileID: 24305591, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
   description: 
   rarity: 1
   category: 0

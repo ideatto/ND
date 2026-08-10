@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Leather
   displayName: "\uAC00\uC8FD"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 286f3e4de74ebb447b2db279d5e4321e, type: 3}
   description: "\uB3D9\uBB3C\uC758 \uAC00\uC8FD\uC785\uB2C8\uB2E4. \uB530\uB4EF\uD558\uACA0\uB124\uC694."
   rarity: 1
   category: 1

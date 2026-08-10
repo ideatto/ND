@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Herbs
   displayName: "\uC57D\uCD08"
-  icon: {fileID: 0}
+  icon: {fileID: -676199843, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
   description: "\uC8FC\uBBFC\uB4E4\uC758 \uAC74\uAC15\uC744 \uCC45\uC784\uC9C0\uB294
     \uC57D\uCD08\uC785\uB2C8\uB2E4. \uBD04\uC5D0 \uD750\uB4DC\uB7EC\uC9C0\uAC8C \uD53C\uC5B4\uB098\uC11C
     \uBCD1\uCDA9\uD574\uC5D0\uB3C4 \uC798\uBC84\uD2F0\uACE0 \uACA8\uC6B8\uC5D0\uB3C4

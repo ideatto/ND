@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Carpet
   displayName: "\uC591\uD0C4\uC790"
-  icon: {fileID: 0}
+  icon: {fileID: 194236739, guid: 362430b4dcf2ba14fa69aa84d6e94b37, type: 3}
   description: "\uB9C8\uBC95\uC774 \uAE43\uB4E4\uC5B4 \uC0AC\uB78C\uC744 \uB744\uC6B8
     \uC218 \uC788\uB2E4\uB294  \uC591\uD0C4\uC790\uC785\uB2C8\uB2E4. \uBB3C\uB860
     \uADF8\uB7F0 \uC704\uD5D8\uD55C \uC9D3\uC744 \uC990\uAE30\uB294 \uC0AC\uB78C\uC740
