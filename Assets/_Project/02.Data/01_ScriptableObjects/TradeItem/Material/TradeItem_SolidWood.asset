@@ -29,37 +29,7 @@ MonoBehaviour:
   affectModify: 0
   modifiers:
   - modifierType: 1
-    sourceId: 
-    displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.1
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.05
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.05
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uAC00\uC744\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.1
-  - modifierType: 1
-    sourceId: 
+    sourceId: winter
     displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1

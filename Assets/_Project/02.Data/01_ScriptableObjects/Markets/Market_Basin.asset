@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7df7a3265402c9043839408fb7059f03, type: 3}
+  m_Name: Market_Basin
+  m_EditorClassIdentifier: Assembly-CSharp::MarketData
+  marketId: BasinTownMarket
+  itemMinimumQuantity: 70
+  itemMaxQuantity: 200
+  itemRenewalCycle: 3600
+  tradeItems:
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  - {fileID: 11400000, guid: c2124ebe8c63dce42bd29a4343fd958c, type: 2}
+  - {fileID: 11400000, guid: 3e14187fa72b01d458ec2ab21159480f, type: 2}
+  - {fileID: 11400000, guid: e97afc45c11cc144cba3e7e06edcc891, type: 2}
+  - {fileID: 11400000, guid: 63af5decbf34d1747ab76c42cf4e8942, type: 2}
+  draftAnimalItems: []
+  wagonItems: []
+  localSpecialtyItems:
+  - {fileID: 11400000, guid: 03095264444ffec43b4c82545a062001, type: 2}

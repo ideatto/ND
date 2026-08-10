@@ -15,7 +15,8 @@ MonoBehaviour:
   itemId: Egg
   displayName: "\uB2EC\uAC40"
   icon: {fileID: 0}
-  description: 
+  description: "\uB2EC\uAC40\uC785\uB2C8\uB2E4. \uC77C\uC815\uD55C \uACF5\uAE09\uB7C9\uC744
+    \uAC00\uC9C0\uC9C0\uB9CC \uC5EC\uB984\uC5D0 \uBCF4\uAD00\uC774 \uC5B4\uB835\uC2B5\uB2C8\uB2E4."
   rarity: 1
   category: 0
   baseBuyPrice: 40
@@ -27,28 +28,8 @@ MonoBehaviour:
   affectModify: 1
   modifiers:
   - modifierType: 1
-    sourceId: 
-    displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.2
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.2
-  - modifierType: 1
-    sourceId: 
+    sourceId: summer
     displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.1
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1
       modifierOperation: 3

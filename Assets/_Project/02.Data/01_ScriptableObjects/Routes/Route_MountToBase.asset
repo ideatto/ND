@@ -22,8 +22,8 @@ MonoBehaviour:
   baseFoodCost: 1
   baseMercenaryCost: 0
   baseRequiredFoodQuantity: 4
-  baseRequiredMercenaryPower: 0
-  baseRiskLevel: 0.4
+  baseRequiredMercenaryPower: 10
+  baseRiskLevel: 0.1
   maxEventCount: 3
   routeEvents:
   - eventType: 0
@@ -31,7 +31,7 @@ MonoBehaviour:
     displayName: "\uC0B0\uC801 \uCD9C\uBAB0"
     description: "\uD130\uB110\uC744 \uC9C0\uB098\uB2E4 \uC0B0\uC801\uC744 \uB9C8\uC8FC\uCCE4\uB2E4."
     eventValue: 0
-    defaultEvasionPer: 60
+    defaultEvasionPer: 80
     lossCount: 0
     eventRewardType: 0
     eventRewardCurrency:
@@ -42,5 +42,5 @@ MonoBehaviour:
       minQuantity: 0
       maxQuantity: 0
     banditCombatPower: 10
-    cargoLootRate: 0.1
-    fodderLootRate: 0.1
+    cargoLootRate: 0.05
+    fodderLootRate: 0.05

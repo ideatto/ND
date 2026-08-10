@@ -17,8 +17,8 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 50911d80b5967574b831f6a43e65e4cb, type: 3}
   description: 
   rarity: 0
-  baseBuyPrice: 980
-  combatCapability: 100
+  baseBuyPrice: 400
+  combatCapability: 40
   unlockedByDefault: 0
   affectModify: 0
   modifiers: []
