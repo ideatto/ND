@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: BasinTown
   displayName: "\uBD84\uC9C0\uB9C8\uC744"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: adbbe34224cc5174d84ef879bffd22b0, type: 3}
   unlockedByDefault: 0
   description: "\uBD84\uC9C0\uB9C8\uC744, \uC8FC\uBC88\uC774 \uC0B0\uC73C\uB85C \uB458\uB7EC\uC313\uC5EC
     \uC788\uC2B5\uB2C8\uB2E4."

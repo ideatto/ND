@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Cabbage
   displayName: "\uC591\uBC30\uCD94"
-  icon: {fileID: 0}
+  icon: {fileID: 1203980084, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
   description: "\uC591\uBC30\uCD94\uC785\uB2C8\uB2E4. \uBD04\uC5D0 \uACF5\uAE09\uC774
     \uC99D\uAC00\uD569\uB2C8\uB2E4. "
   rarity: 1

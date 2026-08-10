@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Rice
   displayName: "\uC300"
-  icon: {fileID: 0}
+  icon: {fileID: -1432764087, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
   description: "\uC300\uC785\uB2C8\uB2E4. \uAC00\uC744\uC5D0 \uACF5\uAE09\uC774 \uC99D\uAC00\uD558\uACE0.
     \uC624\uB798 \uBCF4\uAD00\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4."
   rarity: 1

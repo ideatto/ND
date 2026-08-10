@@ -822,10 +822,10 @@ MonoBehaviour:
   distanceBuff: {fileID: 8591623315053444401}
   luckyMoneyBuff: {fileID: 4552908929573851099}
   tooltip: {fileID: 4086123123128871631}
-  springSprite: {fileID: -1176938676, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
-  summerSprite: {fileID: 1083271812, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
-  autumnSprite: {fileID: -476731003, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
-  winterSprite: {fileID: -1193401510, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  springSprite: {fileID: -1020834243, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  summerSprite: {fileID: -53724689, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  autumnSprite: {fileID: 18883556, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
+  winterSprite: {fileID: 1421479765, guid: cec0daf5522398c4b839c887c5b1635d, type: 3}
   distanceSprite: {fileID: 21300000, guid: 135f12141276027448537909c59024f6, type: 3}
   luckyMoneySprite: {fileID: 21300000, guid: 3a304cae7bdbf0241b54558b6f4396c7, type: 3}
 --- !u!1 &7612553241588487307

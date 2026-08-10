@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Grape
   displayName: "\uD3EC\uB3C4"
-  icon: {fileID: 0}
+  icon: {fileID: 1340063927, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
   description: "\uD3EC\uB3C4\uC785\uB2C8\uB2E4. \uAC00\uC744\uC5D0 \uACF5\uAE09\uC774
     \uC99D\uAC00\uD569\uB2C8\uB2E4. "
   rarity: 1
