@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: EastRiverTown
   displayName: "\uB3D9\uCABD\uAC15\uAC00\uB9C8\uC744"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 61698a94f5c6aae4882db943838ee6de, type: 3}
   unlockedByDefault: 0
   description: "\uAC15 \uB3D9\uCABD\uC5D0 \uC704\uCE58\uD55C \uB9C8\uC744, \uC911\uC559
     \uAC15 \uB3D9\uCABD\uC5D0 \uC788\uB294 \uAC15\uAC00\uB9C8\uC744\uC785\uB2C8\uB2E4."

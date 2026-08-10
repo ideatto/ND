@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Herbs
   displayName: "\uC57D\uCD08"
-  icon: {fileID: 0}
+  icon: {fileID: -676199843, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
   description: "\uC57D\uCD08\uC785\uB2C8\uB2E4. \uBD04,\uC5EC\uB984\uC5D0 \uACF5\uAE09\uC774
     \uC99D\uAC00\uD569\uB2C8\uB2E4. "
   rarity: 1

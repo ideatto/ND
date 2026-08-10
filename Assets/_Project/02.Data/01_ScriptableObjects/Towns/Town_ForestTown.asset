@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: ForestTown
   displayName: "\uC232\uC18D\uB9C8\uC744"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: a919a0e2ab5dfed4fb490c85ddea73f5, type: 3}
   unlockedByDefault: 0
   description: "\uC232 \uC18D\uC5D0 \uC788\uB294 \uB9C8\uC744, "
   market: {fileID: 11400000, guid: 797081c929888224f8f6b1019052f3db, type: 2}
