@@ -229,6 +229,7 @@ namespace ND.UI.Market
             TradeProgressCoordinator.ArrivalSaleTransitionSnapshot
                 transitionSnapshot = null;
             bool completionAlreadyPublished = false;
+            MarketTransactionResult committedTransaction = null;
 
             bool hasDraft = explicitLines != null
                 ? explicitLines.Count > 0
@@ -290,6 +291,7 @@ namespace ND.UI.Market
                         ?? MarketInventoryMutationSession
                             .ErrorInvalidTransaction);
                 }
+                committedTransaction = transaction;
             }
             else
             {
@@ -311,6 +313,14 @@ namespace ND.UI.Market
             {
                 coordinator.PublishArrivalSaleCompletion(
                     transitionSnapshot);
+            }
+
+            if (committedTransaction != null)
+            {
+                ND.Economy.EconomyM1SettlementViewAdapter.StoreArrivalSaleLines(
+                    activeCaravanId,
+                    activeTradeId,
+                    committedTransaction.Items);
             }
 
             if (!string.Equals(activeCaravanId, marketPanel.ActiveCaravanId, StringComparison.Ordinal)

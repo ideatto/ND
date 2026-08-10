@@ -138,6 +138,7 @@ namespace ND.Framework
 
         /// <summary>Raised after persisted wagon or draft-animal ownership/assignment changes.</summary>
         public static event Action TransportInventoryChanged;
+        public static event Action CottageProductionChanged;
 
         /// <summary>
         /// Raised after one Caravan's persisted cargo changes successfully.
@@ -384,6 +385,12 @@ namespace ND.Framework
         {
             FrameworkLog.Info("TransportInventoryChanged event raised.");
             TransportInventoryChanged?.Invoke();
+        }
+
+        public static void RaiseCottageProductionChanged()
+        {
+            FrameworkLog.Info("CottageProductionChanged event raised.");
+            CottageProductionChanged?.Invoke();
         }
 
         public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)

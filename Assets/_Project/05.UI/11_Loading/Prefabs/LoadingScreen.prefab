@@ -824,6 +824,7 @@ GameObject:
   - component: {fileID: 7731345722841673435}
   - component: {fileID: 3562772926875965368}
   - component: {fileID: 8117680035699581506}
+  - component: {fileID: 3615369223271151600}
   m_Layer: 0
   m_Name: TipButton
   m_TagString: Untagged
@@ -933,6 +934,19 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &3615369223271151600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097645911070333387}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &4995873128516769875
 GameObject:
   m_ObjectHideFlags: 0

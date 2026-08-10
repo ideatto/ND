@@ -95,6 +95,19 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                 return;
             }
 
+            int targetLevel = currentLevel + 1;
+            if (!BaseCampBuildingLevelPolicy.CanAdvance(
+                    buildId,
+                    targetLevel,
+                    saveData.player.villageBuildings,
+                    out int baseCampLevel))
+            {
+                ShowFailure(
+                    $"베이스 캠프 Lv.{targetLevel}이 필요합니다. 현재 Lv.{baseCampLevel}입니다.",
+                    $"Building level gate blocked '{buildId}' Lv.{targetLevel}; BaseCamp Lv.{baseCampLevel}.");
+                return;
+            }
+
             PlayerMainManager player = PlayerMainManager.Instance;
 
             if(player == null)
@@ -156,7 +169,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             if(result == null || !result.Succeeded)
             {
                 ShowFailure(
-                    "건설 처리 중 오류가 발생했습니다. 적용된 변경은 취소되었습니다.",
+                    GetFailureUserMessage(result),
                     $"Building construction failed: {result?.ErrorCode ?? "NULL_RESULT"}.");
             }
         }
@@ -179,6 +192,37 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     }
 
     /// <summary>
+    /// 내부 실패 코드는 로그와 테스트에서 유지하고, NoticeUI에는 사용자가 이해할 수 있는
+    /// 한국어 문구만 전달한다. 알 수 없는 코드는 안전한 공통 문구로 처리한다.
+    /// </summary>
+    private static string GetFailureUserMessage(BuildingUpgradeCommandResult result)
+    {
+        string errorCode = result?.ErrorCode ?? string.Empty;
+
+        switch(errorCode)
+        {
+            case "BUILDING_STAGE_BASECAMP_LEVEL_BLOCKED":
+                return "베이스 캠프 레벨이 부족하여 건설하거나 증축할 수 없습니다.";
+            case "BUILDING_ALREADY_MAX_LEVEL":
+                return "이미 최대 레벨인 건물입니다.";
+            case "BUILDING_LEVEL_NOT_FOUND":
+                return "다음 건설 단계 정보를 찾을 수 없습니다.";
+            case "BUILDING_INSUFFICIENT_MATERIALS":
+                return "건설 또는 증축에 필요한 재료가 부족합니다.";
+            case "BUILDING_HOME_INVENTORY_CORRUPTED":
+            case "BUILDING_STAGE_BUILDING_DATA_INVALID":
+            case "BUILDING_STAGE_DUPLICATE_BUILDING":
+            case "BUILDING_STAGE_LEVEL_MISMATCH":
+            case "BUILDING_STAGE_MATERIAL_MISMATCH":
+                return "건물 또는 창고 정보를 확인할 수 없어 건설을 중단했습니다.";
+            case "BUILDING_SAVE_FAILED":
+                return "저장에 실패하여 건설 변경 사항을 취소했습니다.";
+            default:
+                return "건설 처리 중 오류가 발생했습니다. 적용된 변경은 취소되었습니다.";
+        }
+    }
+
+    /// <summary>
     /// 재료 차감과 건물 레벨 변경 전에 트랜잭션이 변경할 저장 필드를 복사한다.
     /// Stage 또는 저장 실패 시 두 변경을 한 단위로 되돌리기 위한 Snapshot이다.
     /// </summary>
@@ -192,7 +236,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         return new TransactionSnapshot
         {
             homeInventory = CloneHomeInventory(processingSaveData.player.homeInventory),
-            villageBuildings = CloneVillageBuildings(processingSaveData.player.villageBuildings)
+            villageBuildings = CloneVillageBuildings(processingSaveData.player.villageBuildings),
+            cottageProduction = CloneCottageProduction(
+                processingSaveData.player.cottageProduction)
         };
     }
 
@@ -214,6 +260,18 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
            plan.TargetLevel < 1)
         {
             errorCode = "BUILDING_STAGE_CONTEXT_INVALID";
+            return false;
+        }
+
+        // UI 사전 검사는 안내용이다. 실제 상태 변경 경계에서도 현재 SaveData를 다시 확인해
+        // 다른 호출 경로나 향후 비동기화가 BaseCamp 레벨 상한을 우회하지 못하게 한다.
+        if(!BaseCampBuildingLevelPolicy.CanAdvance(
+               plan.BuildingId,
+               plan.TargetLevel,
+               buildings,
+               out _))
+        {
+            errorCode = "BUILDING_STAGE_BASECAMP_LEVEL_BLOCKED";
             return false;
         }
 
@@ -294,6 +352,21 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                 });
         }
 
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root?.CottageProduction?.Config != null
+            && string.Equals(
+                processingDisplayName,
+                root.CottageProduction.Config.BuildingDisplayName,
+                StringComparison.Ordinal)
+            && !root.CottageProduction.TryStageBuildingLevelChange(
+                processingSaveData,
+                plan.PreviousLevel,
+                plan.TargetLevel,
+                out errorCode))
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -338,6 +411,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         if(transactionSnapshot == null ||
            transactionSnapshot.homeInventory == null ||
            transactionSnapshot.villageBuildings == null ||
+           transactionSnapshot.cottageProduction == null ||
            processingSaveData?.player == null ||
            player == null)
         {
@@ -375,6 +449,8 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         processingSaveData.player.villageBuildings.Clear();
         processingSaveData.player.villageBuildings.AddRange(
             CloneVillageBuildings(transactionSnapshot.villageBuildings));
+        processingSaveData.player.cottageProduction =
+            CloneCottageProduction(transactionSnapshot.cottageProduction);
 
         return true;
     }
@@ -403,6 +479,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     {
         // 목록은 저장과 Runtime Commit이 모두 성공한 경우에만 다시 그린다.
         buildingListPanel?.Rebuild();
+        FrameworkEvents.RaiseCottageProductionChanged();
     }
 
     // 건설은 아이템 정의를 변경하지 않고 수량만 변경하므로 item 참조는 재사용한다.
@@ -427,6 +504,25 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                 });
         }
         return clone;
+    }
+
+    private static CottageProductionSaveData CloneCottageProduction(
+        CottageProductionSaveData source)
+    {
+        if (source == null)
+            return new CottageProductionSaveData();
+        return new CottageProductionSaveData
+        {
+            initialized = source.initialized,
+            initialSupplyGranted = source.initialSupplyGranted,
+            storedWagonCount = source.storedWagonCount,
+            storedWagonContentId = source.storedWagonContentId,
+            storedDraftAnimalCount = source.storedDraftAnimalCount,
+            storedDraftAnimalContentId = source.storedDraftAnimalContentId,
+            nextWagonProductionUtcTicks = source.nextWagonProductionUtcTicks,
+            nextDraftAnimalProductionUtcTicks = source.nextDraftAnimalProductionUtcTicks,
+            lastEvaluatedUtcTicks = source.lastEvaluatedUtcTicks
+        };
     }
 
     // 레벨 롤백이 기존 배치 좌표와 회전 정보를 손실하지 않도록 전체 저장 필드를 복사한다.
@@ -586,5 +682,6 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     {
         public List<CargoEntrySaveData> homeInventory;
         public List<VillageBuildingSaveData> villageBuildings;
+        public CottageProductionSaveData cottageProduction;
     }
 }

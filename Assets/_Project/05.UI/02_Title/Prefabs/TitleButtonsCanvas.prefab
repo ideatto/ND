@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8515140233661643278}
   - component: {fileID: 7858413492498356999}
   - component: {fileID: 2797866250685535190}
+  - component: {fileID: 5434384925781513744}
   m_Layer: 5
   m_Name: New Game Button
   m_TagString: Untagged
@@ -124,7 +125,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: ND.Framework.TitleSceneController, Assembly-CSharp
-        m_MethodName: StartNewGame
+        m_MethodName: 
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -154,6 +155,19 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &5434384925781513744
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 233425557543022603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &1211933591669135621
 GameObject:
   m_ObjectHideFlags: 0
@@ -167,6 +181,7 @@ GameObject:
   - component: {fileID: 428587385009061854}
   - component: {fileID: 3531055045972976268}
   - component: {fileID: 3592815113542055141}
+  - component: {fileID: 280735941196066673}
   m_Layer: 5
   m_Name: Continue Button
   m_TagString: Untagged
@@ -308,6 +323,19 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &280735941196066673
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1211933591669135621}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &1427408587146630386
 GameObject:
   m_ObjectHideFlags: 0
@@ -597,6 +625,7 @@ GameObject:
   - component: {fileID: 6383445692000497616}
   - component: {fileID: 7810871423109381084}
   - component: {fileID: 2064061528909920301}
+  - component: {fileID: 3673470432950200783}
   m_Layer: 5
   m_Name: ResetSave Button
   m_TagString: Untagged
@@ -738,6 +767,19 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &3673470432950200783
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4108906647181102603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &4906775497380620739
 GameObject:
   m_ObjectHideFlags: 0
@@ -751,6 +793,7 @@ GameObject:
   - component: {fileID: 8127838437737076721}
   - component: {fileID: 1727783467379197916}
   - component: {fileID: 7099304199296021040}
+  - component: {fileID: 4060225382841823951}
   m_Layer: 5
   m_Name: Exit Button
   m_TagString: Untagged
@@ -892,6 +935,19 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &4060225382841823951
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4906775497380620739}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &6040383677958885507
 GameObject:
   m_ObjectHideFlags: 0

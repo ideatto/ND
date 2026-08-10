@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8353c107215b6b94e827e261b6c8cb32, type: 3}
+  m_Name: CottageProductionData
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.CottageProductionData
+  buildingDisplayName: "\uC624\uB450\uB9C9"
+  wagonContentId: Wagon_M
+  draftAnimalContentId: Horse
+  wagonProductionIntervalSeconds: 1800
+  draftAnimalProductionIntervalSeconds: 600
+  initialWagonCount: 1
+  initialDraftAnimalCount: 2
+  levels:
+  - level: 1
+    wagonCapacity: 1
+    draftAnimalCapacity: 2
+  - level: 2
+    wagonCapacity: 2
+    draftAnimalCapacity: 4
+  - level: 3
+    wagonCapacity: 3
+    draftAnimalCapacity: 6
