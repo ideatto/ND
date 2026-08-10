@@ -3655,8 +3655,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e4ad7d5c32d403c85ed52b55579c903, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
-  townId: WindyTown
-  townData: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  townId: EastRiverTown
+  townData: {fileID: 11400000, guid: f366acf06d88a11479db62efe43786ee, type: 2}
   iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 7488270440972217235}
@@ -4418,8 +4418,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e4ad7d5c32d403c85ed52b55579c903, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
-  townId: WindyTown
-  townData: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  townId: BasinTown
+  townData: {fileID: 11400000, guid: 925a328195779074aa29b2ccafef3e2a, type: 2}
   iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 4446175958640823535}
@@ -8508,8 +8508,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e4ad7d5c32d403c85ed52b55579c903, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.TownWorldView
-  townId: WindyTown
-  townData: {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
+  townId: ForestTown
+  townData: {fileID: 11400000, guid: d52041df42bb0f64b986515e7b802ad5, type: 2}
   iconWorldSize: 1.5
   treadmillBuildingPrefab: {fileID: 0}
   iconRenderer: {fileID: 6659354567371514652}
@@ -9137,6 +9137,10 @@ PrefabInstance:
       propertyPath: townData
       value: 
       objectReference: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
+    - target: {fileID: 2883929891840334061, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: showPanel
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2996401212169344005, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: m_LocalPosition.x
       value: 4.52
@@ -9147,6 +9151,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3270757068816519589, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: drawOverlay
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3335005101101407746, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: showPanel
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3514158095428294723, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
@@ -9950,12 +9958,20 @@ PrefabInstance:
       value: 40
       objectReference: {fileID: 0}
     - target: {fileID: 8377567495607210764, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: showPanel
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8377567495607210764, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: waterGain
       value: 0.15
       objectReference: {fileID: 0}
     - target: {fileID: 8377567495607210764, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: cloudSpeed
       value: 1.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 8377567495607210764, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: startVisible
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8377567495607210764, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: initialClouds
@@ -10298,7 +10314,7 @@ MonoBehaviour:
   iconOffset: {x: 0, y: 0.6, z: 0}
   iconScale: 0.35
   rainColor: {r: 0.35, g: 0.55, b: 0.95, a: 0.95}
-  showTestButton: 1
+  showTestButton: 0
   showNotices: 1
   fireEvents: 0
   enableLightningLucky: 1
