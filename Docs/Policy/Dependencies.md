@@ -113,6 +113,26 @@
   수정: 금지 (필요 시 VendorOverrides/에셋이름)
   담당: 천성욱
 
+- 에셋이름: ClickSFX v1.0 / .unitypackage
+  위치: TeamDrive/Packages/ClickSFX_v1.0_20260810
+  Import: Assets/_ExternalPackages/ClickSFX
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: CasualGameSounds v1.1 / .unitypackage
+  위치: TeamDrive/Packages/CasualGameSounds_v1.1_20260810
+  Import: Assets/_ExternalPackages/Casual Game Sounds U6
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
+
+- 에셋이름: MusicLoopsMiniSet v2.0 / .unitypackage
+  위치: TeamDrive/Packages/MusicLoopsMiniSet_v2.0_20260810
+  Import: Assets/_ExternalPackages/Music Loops Mini Set
+  Git 포함: 아니오
+  수정: 금지 (필요 시 VendorOverrides/에셋이름)
+  담당: 천성욱
 ---
 
 ## UPM(Package Manager) 패키지

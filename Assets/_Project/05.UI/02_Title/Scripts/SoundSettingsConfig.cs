@@ -3,7 +3,7 @@
  * - Responsible Area: UI & Title Settings
  *
  * Script Purpose
- * - SoundManager가 Reset과 최초 적용에 사용하는 BGM/SFX 기본값을 ScriptableObject로 보관한다.
+ * - SoundManager가 Reset과 최초 적용에 사용하는 BGM/SFX/UI SFX 기본값을 ScriptableObject로 보관한다.
  *
  * Usage for Team Members
  * - Resources/SoundSettingsConfig asset을 Inspector에서 수정한다.
@@ -34,6 +34,11 @@ namespace ND.UI.Title
         [SerializeField]
         private float defaultSfxVolume = 1f;
 
+        [Tooltip("UI SFX 기본 볼륨입니다. 범위는 0~1입니다.")]
+        [Range(0f, 1f)]
+        [SerializeField]
+        private float defaultUiSfxVolume = 1f;
+
         [Tooltip("BGM 기본 활성 여부입니다.")]
         [SerializeField]
         private bool defaultBgmEnabled = true;
@@ -41,6 +46,10 @@ namespace ND.UI.Title
         [Tooltip("SFX 기본 활성 여부입니다.")]
         [SerializeField]
         private bool defaultSfxEnabled = true;
+
+        [Tooltip("UI SFX 기본 활성 여부입니다.")]
+        [SerializeField]
+        private bool defaultUiSfxEnabled = true;
 
         /// <summary>
         /// BGM 기본 볼륨이다. 범위: 0~1.
@@ -53,6 +62,11 @@ namespace ND.UI.Title
         public float DefaultSfxVolume => Mathf.Clamp01(defaultSfxVolume);
 
         /// <summary>
+        /// UI SFX 기본 볼륨이다. 범위: 0~1.
+        /// </summary>
+        public float DefaultUiSfxVolume => Mathf.Clamp01(defaultUiSfxVolume);
+
+        /// <summary>
         /// BGM 기본 활성 여부이다.
         /// </summary>
         public bool DefaultBgmEnabled => defaultBgmEnabled;
@@ -61,5 +75,10 @@ namespace ND.UI.Title
         /// SFX 기본 활성 여부이다.
         /// </summary>
         public bool DefaultSfxEnabled => defaultSfxEnabled;
+
+        /// <summary>
+        /// UI SFX 기본 활성 여부이다.
+        /// </summary>
+        public bool DefaultUiSfxEnabled => defaultUiSfxEnabled;
     }
 }
