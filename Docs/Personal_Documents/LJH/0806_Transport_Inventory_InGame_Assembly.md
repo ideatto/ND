@@ -146,7 +146,7 @@
 
 1. `MainUICanvas`의 팝업 계층 아래에 `TransportInventoryPopup.prefab`을 한 번 배치한다.
 2. 이름은 `TransportInventoryPopup`으로 유지한다.
-3. 화면 전체 Stretch 앵커를 사용한다.
+3. 화면 전체 Stretch 앵커를 사용한다. Prefab을 Scene 부모 아래에 배치한 직후 `RectTransform`을 `Anchor Min (0,0)`, `Anchor Max (1,1)`, `Pivot (0.5,0.5)`, `Anchored Position (0,0)`, `Size Delta (0,0)`, `Scale (1,1,1)`로 명시적으로 맞춘다. 부모를 변경하며 `Anchored Position (-960,-540)`, `Size Delta (-1920,-1080)` 같은 Canvas 크기 보정값이 남으면 화면 위치와 크기가 어긋난다.
 4. 시작 상태는 비활성화한다.
 5. 항상 활성화되는 Scene 조립 오브젝트에 `TransportInventoryMainUiEntry`를 추가한다. 현재 기준 위치는 `CaravanSettingUiConnector`다.
 6. 다음 직렬화 참조를 직접 연결한다.
