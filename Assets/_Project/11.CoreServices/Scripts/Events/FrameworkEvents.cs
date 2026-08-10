@@ -99,6 +99,12 @@ namespace ND.Framework
         public static event Action<string, int> CaravanCreated;
 
         /// <summary>
+        /// Raised after a building level is saved and committed to runtime. Consumers requery
+        /// building-derived presentation such as BaseCamp-owned Caravan slot unlocks.
+        /// </summary>
+        public static event Action VillageBuildingsChanged;
+
+        /// <summary>
         /// SceneFlowService가 scene load 완료 콜백을 받은 뒤 발생한다.
         /// </summary>
         public static event Action<string> SceneChanged;
@@ -270,6 +276,13 @@ namespace ND.Framework
         {
             FrameworkLog.Info($"CaravanCreated event raised. CaravanId: {caravanId}, SlotIndex: {slotIndex}");
             CaravanCreated?.Invoke(caravanId, slotIndex);
+        }
+
+        public static void RaiseVillageBuildingsChanged()
+        {
+            // Publish no mutable building payload: SaveData remains the authority after commit.
+            FrameworkLog.Info("VillageBuildingsChanged event raised.");
+            VillageBuildingsChanged?.Invoke();
         }
 
         /// <summary>

@@ -118,7 +118,7 @@ namespace ND.Framework
     public sealed class CaravanManagementService
     {
         /// <summary>현재 Caravan Overview가 제공하는 영구 슬롯의 총 개수이다.</summary>
-        public const int MaxCaravanSlotCount = 4;
+        public const int MaxCaravanSlotCount = BaseCampProgressionPolicy.MaxCaravanSlotCount;
 
         /// <summary>모든 신규 Caravan이 생성되는 고정 거점 Town ID이다.</summary>
         public const string InitialCaravanTownId = "BaseCamp";
@@ -177,8 +177,9 @@ namespace ND.Framework
             }
 
             // 슬롯 점유와 해금은 별도 정책이다. Caravan 생성 자체가 다음 슬롯을 열지 않는다.
-            if (saveData.world?.unlockedCaravanSlotIndices == null
-                || !saveData.world.unlockedCaravanSlotIndices.Contains(slotIndex))
+            if (!BaseCampProgressionPolicy.IsCaravanSlotUnlocked(
+                    saveData.player?.villageBuildings,
+                    slotIndex))
             {
                 return CaravanCreationResult.Failure(
                     slotIndex,

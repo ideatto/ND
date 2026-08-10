@@ -39,6 +39,30 @@ namespace ND.Framework.Editor.Tests
             Assert.That(result, Is.True);
         }
 
+        [TestCase(0, 1, false)]
+        [TestCase(4, 1, false)]
+        [TestCase(5, 1, true)]
+        [TestCase(5, 2, false)]
+        public void EndingItem_IsSingleLevelAndRequiresBaseCampLevelFive(
+            int baseCampLevel,
+            int targetLevel,
+            bool expected)
+        {
+            bool result = BaseCampBuildingLevelPolicy.CanAdvance(
+                BaseCampBuildingLevelPolicy.EndingBuildingId,
+                targetLevel,
+                Buildings(baseCampLevel),
+                out int actualBaseCampLevel);
+
+            Assert.That(result, Is.EqualTo(expected));
+            Assert.That(actualBaseCampLevel, Is.EqualTo(baseCampLevel));
+            Assert.That(
+                BaseCampBuildingLevelPolicy.GetRequiredBaseCampLevel(
+                    BaseCampBuildingLevelPolicy.EndingBuildingId,
+                    targetLevel),
+                Is.EqualTo(BaseCampProgressionPolicy.EndingBuildingUnlockLevel));
+        }
+
         [Test]
         public void DuplicateBaseCampEntries_FailClosed()
         {

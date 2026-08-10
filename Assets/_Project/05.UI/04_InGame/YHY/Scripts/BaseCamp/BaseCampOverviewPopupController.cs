@@ -17,8 +17,9 @@ namespace ND.UI.InGame.BaseCamp
 
         [SerializeField] private TMP_Text baseCampLevelText;
         [SerializeField] private BuildingLevelRow[] buildingRows = Array.Empty<BuildingLevelRow>();
-        [SerializeField] private TMP_Text levelLimitText;
         [SerializeField] private TMP_Text unlockGuideText;
+        [SerializeField] private TMP_Text caravanSlotProgressText;
+        [SerializeField] private TMP_Text nextUnlockText;
         [SerializeField] private Button backdropButton;
         [SerializeField] private Button closeButton;
 
@@ -64,10 +65,15 @@ namespace ND.UI.InGame.BaseCamp
                 row.label.text = $"Lv.{buildingLevel}";
             }
 
-            if (levelLimitText != null)
-                levelLimitText.text = $"건물 레벨 상한: Lv.{baseCampLevel}";
             if (unlockGuideText != null)
-                unlockGuideText.text = "다음 레벨을 해금하려면 베이스 캠프를 증축하세요.";
+            {
+                unlockGuideText.text = baseCampLevel
+                        < ND.Framework.BaseCampProgressionPolicy.EndingBuildingUnlockLevel
+                    ? "다음 레벨을 해금하려면 베이스 캠프를 증축하세요."
+                    : "베이스 캠프의 모든 해금 조건을 달성했습니다.";
+            }
+
+            ApplyProgressionSummary(baseCampLevel);
 
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
@@ -77,6 +83,40 @@ namespace ND.UI.InGame.BaseCamp
         public void Close()
         {
             gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Displays BaseCamp-owned unlock progress without inspecting Caravan occupancy.
+        /// The same policy used by creation and Overview state calculation owns these values.
+        /// </summary>
+        private void ApplyProgressionSummary(int baseCampLevel)
+        {
+            int unlockedSlots = Mathf.Min(
+                Mathf.Max(baseCampLevel, 0),
+                ND.Framework.BaseCampProgressionPolicy.MaxCaravanSlotCount);
+
+            if (caravanSlotProgressText != null)
+            {
+                caravanSlotProgressText.text =
+                    $"현재 캐러밴 슬롯: {unlockedSlots} / {ND.Framework.BaseCampProgressionPolicy.MaxCaravanSlotCount}";
+            }
+
+            if (nextUnlockText == null)
+                return;
+
+            if (baseCampLevel < ND.Framework.BaseCampProgressionPolicy.MaxCaravanSlotCount)
+            {
+                nextUnlockText.text = "다음 레벨: 캐러밴 슬롯 해금";
+            }
+            else if (baseCampLevel < ND.Framework.BaseCampProgressionPolicy.EndingBuildingUnlockLevel)
+            {
+                // Lv.5 unlocks the single-level EndingItem registered in the building catalog.
+                nextUnlockText.text = "다음 레벨: 엔딩 건물 해금";
+            }
+            else
+            {
+                nextUnlockText.text = "모든 캐러밴 슬롯 및 건물 해금 완료";
+            }
         }
     }
 }

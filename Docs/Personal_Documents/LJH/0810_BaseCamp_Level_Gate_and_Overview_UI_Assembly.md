@@ -143,8 +143,9 @@ Popup Controller의 필수 참조:
 
 - `baseCampLevelText`
 - `buildingRows` 6개(창고, 목장, 상점, 빵집, 오두막, 풍차)
-- `levelLimitText`
 - `unlockGuideText`
+- `caravanSlotProgressText`
+- `nextUnlockText`
 - `backdropButton`
 - `closeButton`
 
@@ -231,9 +232,14 @@ Title: 거점 건물 현황
 오두막                  Lv.N
 풍차                    Lv.N
 
-건물 레벨 상한: Lv.N
-다음 레벨을 해금하려면 베이스 캠프를 증축하세요.
+현재 캐러밴 슬롯: N / 4
+다음 레벨: 캐러밴 슬롯 해금
 ```
+
+- BaseCamp Lv.0~3: 다음 레벨에 캐러밴 슬롯 해금
+- BaseCamp Lv.4: 다음 레벨에 엔딩 건물 해금
+- BaseCamp Lv.5: 모든 캐러밴 슬롯 및 건물 해금 완료
+- Lv.5의 상단 안내는 `베이스 캠프의 모든 해금 조건을 달성했습니다.`로 표시한다.
 
 건물명과 레벨은 별도 Text 오브젝트이며 각 열 안에서 중앙 정렬한다. Popup 조회는 SaveData를 변경하거나 Dirty 처리하지 않는다. 중복·비정상 건물 데이터가 있으면 `Open()`이 실패하고 기존 NoticeUI가 한국어 안내를 표시한다.
 
@@ -252,7 +258,7 @@ Title: 거점 건물 현황
 
 1. BaseCamp Lv.1을 건설한다.
 2. 건물 목록의 BaseCamp 블록을 누른다.
-3. 현황 Popup의 BaseCamp가 Lv.1이고 상한도 Lv.1인지 확인한다.
+3. 현황 Popup의 BaseCamp가 Lv.1이고 캐러밴 슬롯이 `1 / 4`인지 확인한다.
 4. 창고 또는 목장 Lv.1 건설이 성공하는지 확인한다.
 5. 같은 건물을 Lv.2로 증축하려 하면 BaseCamp Lv.2 필요 안내가 출력되는지 확인한다.
 6. 실패 시 재료와 건물 레벨이 변하지 않았는지 확인한다.
@@ -261,7 +267,7 @@ Title: 거점 건물 현황
 
 1. BaseCamp를 Lv.2로 증축한다.
 3. 이전에 차단된 일반 건물 Lv.2 증축이 성공하는지 확인한다.
-4. Popup을 다시 열어 BaseCamp, 대상 건물, 상한이 모두 Lv.2로 갱신되는지 확인한다.
+4. Popup을 다시 열어 BaseCamp와 대상 건물이 Lv.2이고 캐러밴 슬롯이 `2 / 4`로 갱신되는지 확인한다.
 5. Play Mode를 종료 후 다시 진입해 같은 레벨이 복원되는지 확인한다.
 
 ### D. Popup 동작
@@ -316,3 +322,54 @@ Unity Test Runner에서 `BaseCampOverviewUiContractTests` Fixture 자체를 명�
 7. Unity가 자동 기록한 타 기능의 빈 직렬화 필드와 `WorldMapRenderRootV2.prefab` 기본값 변경은 제거했다.
 
 따라서 현재 기능 개발 브랜치에서는 두 조립 결과 파일을 다시 discard해도 되고, 대상 브랜치에서는 이 문서로 동일한 조립 결과를 재현한 뒤 Explicit 계약 테스트를 실행한다.
+
+## 10. EndingItem Lv.5 해금과 임시 외형 교체
+
+`EndingItem`은 증축하지 않는 단일 레벨 건물이다.
+
+```text
+buildId: EndingItem
+displayName: 황금 침대
+최대 레벨: Lv.1
+해금 조건: BaseCamp Lv.5 이상
+```
+
+관련 Asset:
+
+- `Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_EndingItem.asset`
+- `Assets/99.Sandbox/_LJH/Prefab/EndingItemPlaceholder.prefab`
+- `Assets/99.Sandbox/_LJH/Prefab/EndingItemHolderMaterial.mat`
+
+`BaseCampBuildingLevelPolicy`는 일반 건물 규칙과 별도로 `EndingItem`을 검사한다. 실제 건설은
+`targetLevel == 1 && BaseCampLevel >= 5`일 때만 허용하며 Lv.2 요청은 항상 차단한다.
+
+`Village_Home.unity/BuildingRegistry/VillageBuildingRegistry.catalog`에는 다음 일반 건물 항목을 둔다.
+
+```text
+displayName: 황금 침대
+prefab: EndingItemPlaceholder.prefab
+buildData: Build_EndingItem.asset
+isEnvironment: false
+envCost: 0
+```
+
+건물 추가 목록 표시:
+
+- BaseCamp Lv.0~4: `황금 침대`, 짙은 회갈색 비활성 행
+- BaseCamp Lv.5 및 미건설: `황금 침대 Lv.0`, 활성
+- EndingItem Lv.1 건설 후: `황금 침대 Lv.1 (건설 완료)`, 비활성
+
+실제 외형 Prefab 도착 후에는 ID와 Registry 항목을 다시 만들지 않는다. 아래 외형 데이터만 교체한다.
+
+1. `Build_EndingItem.asset > dataPerLevels[0] > buildPrefab`
+2. Registry 항목의 `prefab`
+3. 모델 기준 `visualScale`, `visualEulerAngles`, `visualOffset`
+4. 모델 크기 기준 `footprintCellsX`, `footprintCellsZ`
+5. 확정된 `buildRequirements.requireItems`
+
+Play Mode 검증:
+
+- BaseCamp Lv.4에서 목록 잠금과 실제 건설 차단 확인
+- BaseCamp Lv.5에서 최초 Lv.1 건설 확인
+- 건설 후 목록 비활성 및 Lv.2 증축 불가 확인
+- 저장 후 재진입 시 황금 침대 Lv.1과 배치 복원 확인

@@ -29,8 +29,9 @@ namespace ND.Framework.Editor.Tests
 
             SerializedObject serialized = new SerializedObject(controller);
             Assert.That(serialized.FindProperty("baseCampLevelText").objectReferenceValue, Is.Not.Null);
-            Assert.That(serialized.FindProperty("levelLimitText").objectReferenceValue, Is.Not.Null);
             Assert.That(serialized.FindProperty("unlockGuideText").objectReferenceValue, Is.Not.Null);
+            Assert.That(serialized.FindProperty("caravanSlotProgressText").objectReferenceValue, Is.Not.Null);
+            Assert.That(serialized.FindProperty("nextUnlockText").objectReferenceValue, Is.Not.Null);
             Assert.That(serialized.FindProperty("backdropButton").objectReferenceValue, Is.Not.Null);
             Assert.That(serialized.FindProperty("closeButton").objectReferenceValue, Is.Not.Null);
 
