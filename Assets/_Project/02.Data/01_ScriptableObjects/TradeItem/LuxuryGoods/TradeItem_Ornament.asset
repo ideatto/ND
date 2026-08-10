@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Ornament
   displayName: "\uC7A5\uC2DD\uD488"
-  icon: {fileID: 0}
+  icon: {fileID: 543247291, guid: 362430b4dcf2ba14fa69aa84d6e94b37, type: 3}
   description: "\uADC0\uD55C \uADC0\uAE08\uC18D\uC73C\uB85C \uCE58\uC7A5\uD55C \uC7A5\uC2DD\uD488\uC785\uB2C8\uB2E4."
   rarity: 1
   category: 3

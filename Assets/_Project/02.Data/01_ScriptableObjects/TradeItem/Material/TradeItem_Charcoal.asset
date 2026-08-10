@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Charcoal
   displayName: "\uC22F"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: caf29f6ccfb29c547a1990b59c9a559c, type: 3}
   description: 
   rarity: 1
   category: 1

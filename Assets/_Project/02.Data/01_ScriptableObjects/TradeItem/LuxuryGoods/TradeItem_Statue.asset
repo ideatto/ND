@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Statue
   displayName: "\uC870\uAC01\uC0C1"
-  icon: {fileID: 0}
+  icon: {fileID: -324412105, guid: 362430b4dcf2ba14fa69aa84d6e94b37, type: 3}
   description: "\uD55C\uAECF \uCE58\uC7A5\uB41C \uC870\uAC01\uC0C1\uC785\uB2C8\uB2E4.\uB300\uC0C1\uC740
     \uACFC\uC5F0 \uB204\uAD6C\uC77C\uAE4C\uC694?"
   rarity: 1

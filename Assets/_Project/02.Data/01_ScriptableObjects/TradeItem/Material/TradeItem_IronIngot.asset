@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: IronIngot
   displayName: "\uCCA0\uC8FC\uAD34"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 7f632a825d909324798b975e7fcee0ca, type: 3}
   description: "\uCCA0\uAD11\uC11D\uC744 \uAD73\uD600 \uB9CC\uB4E0 \uC8FC\uAD34\uC785\uB2C8\uB2E4"
   rarity: 1
   category: 1

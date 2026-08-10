@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: MagicStone
   displayName: "\uB9C8\uC11D"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: c782ac15af187494a87a9365b46b6624, type: 3}
   description: "\uB9C8\uBC95\uC0AC\uB4E4\uC5D0\uAC8C \uC815\uB9D0 \uBE44\uC2FC\uAC12\uC5D0
     \uAC70\uB798\uB418\uB294 \uB9C8\uC11D\uC785\uB2C8\uB2E4. "
   rarity: 1

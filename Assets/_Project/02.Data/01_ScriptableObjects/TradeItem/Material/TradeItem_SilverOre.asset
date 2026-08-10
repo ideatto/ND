@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: SilverOre
   displayName: "\uC740\uAD11\uC11D"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: fa4fe454e145a7a4f9f72d5deae4f684, type: 3}
   description: "\uAD11\uC0B0\uC5D0\uC11C \uB4DC\uBB3C\uAC8C \uBC1C\uACAC\uB418\uB294
     \uC740\uAD11\uC11D\uC785\uB2C8\uB2E4. \uC0AC\uCE58\uD488 \uBC0F \uC870\uD615\uBB3C\uC5D0
     \uC4F0\uC5EC\uC694."

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: GoldOre
   displayName: "\uAE08\uAD11\uC11D"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 9738d5cf743e8614daad6794bdfb3b50, type: 3}
   description: "\uAD11\uC0B0\uC5D0\uC11C \uB9E4\uC6B0 \uB4DC\uBB3C\uAC8C \uBC1C\uACAC\uB418\uB294
     \uAE08\uAD11\uC11D\uC785\uB2C8\uB2E4. \uC0AC\uCE58\uD488 \uBFD0 \uC544\uB2C8\uB77C
     \uB2E4\uC591\uD55C \uACF3\uC5D0 \uC4F0\uC5EC\uC694."
