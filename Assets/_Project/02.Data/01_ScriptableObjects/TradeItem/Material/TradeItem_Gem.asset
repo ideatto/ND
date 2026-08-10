@@ -27,15 +27,5 @@ MonoBehaviour:
   weight: 0
   isConsumable: 0
   affectModify: 1
-  modifiers:
-  - modifierType: 1
-    sourceId: "\uACA8\uC6B8\uC774"
-    displayName: 
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.15
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.15
+  modifiers: []
   localSpecialty: 0

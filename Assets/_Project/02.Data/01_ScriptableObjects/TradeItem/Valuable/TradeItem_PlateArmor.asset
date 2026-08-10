@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: TradeItem_PlateArmor
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: PlateArmor
-  displayName: "\uC804\uC2E0\uAC11\uC637"
-  icon: {fileID: 21300000, guid: a99f6926a1de93d41a4546ddf0565fd7, type: 3}
+  displayName: "\uD50C\uB808\uC774\uD2B8 \uC544\uBA38"
+  icon: {fileID: 0}
   description: "\uC774\uB984\uB09C \uB300\uC7A5\uC7A5\uC774\uAC00 \uB9CC\uB4E0 \uD654\uB824\uD55C
     \uC804\uC2E0\uAC11\uC637\uC785\uB2C8\uB2E4.  \uC2E4\uC81C\uB85C \uC785\uC73C\uB824
     \uC0AC\uB294 \uC0AC\uB78C\uC740 \uC624\uD788\uB824 \uB4DC\uBB3C\uACA0\uC9C0\uC694."
@@ -28,4 +28,4 @@ MonoBehaviour:
   isConsumable: 0
   affectModify: 1
   modifiers: []
-  localSpecialty: 0
+  localSpecialty: 1

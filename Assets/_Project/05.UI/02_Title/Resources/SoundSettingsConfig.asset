@@ -14,5 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Title.SoundSettingsConfig
   defaultBgmVolume: 0.5
   defaultSfxVolume: 0.5
+  defaultUiSfxVolume: 0.5
   defaultBgmEnabled: 1
   defaultSfxEnabled: 1
+  defaultUiSfxEnabled: 1

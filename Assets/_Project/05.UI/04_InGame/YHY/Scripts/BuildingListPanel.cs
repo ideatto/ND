@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -24,11 +25,30 @@ public class BuildingListPanel : MonoBehaviour
     [SerializeField] private RectTransform content;   // ScrollRect Content
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private float itemHeight = 56f;
+    // 건물별 기능은 이 패널에 직접 결합하지 않는다. 동적으로 생성되는 행에 대한
+    // 범용 Badge 상태만 보관하고, 오두막·빵집 등의 연결부가 공개 API로 상태를 전달한다.
+    private readonly Dictionary<string, Button> rowsByBuildingName =
+        new Dictionary<string, Button>(StringComparer.Ordinal);
+    private readonly Dictionary<string, BuildingBadgeState> badgeStates =
+        new Dictionary<string, BuildingBadgeState>(StringComparer.Ordinal);
+    private readonly Dictionary<string, GameObject> badgeObjects =
+        new Dictionary<string, GameObject>(StringComparer.Ordinal);
     [SerializeField] private BuildingAddPopup addPopup;   // [+] 가 여는 건물 추가 팝업    /// <summary>
     /// 동적으로 생성된 건물 블록이 선택된 뒤 표시 이름을 전달한다.
     /// 목록은 특정 건물 기능을 알지 않고 외부 연결부가 필요한 동작만 선택하도록 한다.
     /// </summary>
     public event Action<string> BuildingClicked;
+
+    /// <summary>
+    /// 특정 건물 행의 범용 알림 Badge를 설정한다. 행이 아직 생성되지 않았으면 상태만
+    /// 기억했다가 다음 Rebuild에서 적용하므로 기능 연결부가 UI 생성 순서를 알 필요가 없다.
+    /// </summary>
+    public void SetBuildingBadge(string buildingName, Sprite icon, bool visible)
+    {
+        if (string.IsNullOrWhiteSpace(buildingName)) return;
+        badgeStates[buildingName] = new BuildingBadgeState(icon, visible);
+        ApplyBadge(buildingName);
+    }
 
 
     private IEnumerator Start()
@@ -47,6 +67,8 @@ public class BuildingListPanel : MonoBehaviour
 public void Rebuild()
     {
         if (content == null) return;
+        rowsByBuildingName.Clear();
+        badgeObjects.Clear();
 
         // Destroy는 frame 끝에 처리되므로 먼저 부모에서 분리해 연속 Rebuild에도 중복 행이 남지 않게 한다.
         for (int i = content.childCount - 1; i >= 0; i--)
@@ -66,6 +88,7 @@ public void Rebuild()
             Button item = CreateRow(
                 $"{buildingName}  Lv.{reg.GetLevel(i)}",
                 new Color(0.76f, 0.77f, 0.73f));
+            rowsByBuildingName[buildingName] = item;
             item.onClick.AddListener(() =>
             {
                 // 기존 하이라이트는 유지하고 추가 기능은 건물 이름 이벤트를 구독한 연결부에 위임한다.
@@ -79,6 +102,51 @@ public void Rebuild()
         {
             if (addPopup != null) addPopup.Open();
         });
+        foreach (string buildingName in badgeStates.Keys)
+            ApplyBadge(buildingName);
+    }
+
+    private void ApplyBadge(string buildingName)
+    {
+        if (!badgeStates.TryGetValue(buildingName, out BuildingBadgeState state)
+            || !rowsByBuildingName.TryGetValue(buildingName, out Button row)
+            || row == null)
+            return;
+
+        if (!badgeObjects.TryGetValue(buildingName, out GameObject indicator)
+            || indicator == null)
+        {
+            indicator = new GameObject(
+                "StatusBadge",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            badgeObjects[buildingName] = indicator;
+        }
+        indicator.transform.SetParent(row.transform, false);
+        RectTransform rect = indicator.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.one;
+        rect.anchorMax = Vector2.one;
+        rect.pivot = Vector2.one;
+        rect.anchoredPosition = new Vector2(-10f, -8f);
+        rect.sizeDelta = new Vector2(28f, 28f);
+        Image image = indicator.GetComponent<Image>();
+        image.sprite = state.Icon;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        indicator.SetActive(state.Visible && state.Icon != null);
+    }
+
+    private readonly struct BuildingBadgeState
+    {
+        public BuildingBadgeState(Sprite icon, bool visible)
+        {
+            Icon = icon;
+            Visible = visible;
+        }
+
+        public Sprite Icon { get; }
+        public bool Visible { get; }
     }
 
     /// <summary>리스트 한 줄(버튼+라벨) 생성. VerticalLayoutGroup이 배치.</summary>

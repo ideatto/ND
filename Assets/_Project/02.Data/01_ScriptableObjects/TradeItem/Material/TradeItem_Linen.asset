@@ -28,7 +28,7 @@ MonoBehaviour:
   affectModify: 1
   modifiers:
   - modifierType: 1
-    sourceId: 
+    sourceId: spring
     displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1
@@ -38,7 +38,7 @@ MonoBehaviour:
       modifierOperation: 3
       value: 0.1
   - modifierType: 1
-    sourceId: 
+    sourceId: summer
     displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1
@@ -48,7 +48,7 @@ MonoBehaviour:
       modifierOperation: 3
       value: 0.2
   - modifierType: 1
-    sourceId: 
+    sourceId: winter
     displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1
