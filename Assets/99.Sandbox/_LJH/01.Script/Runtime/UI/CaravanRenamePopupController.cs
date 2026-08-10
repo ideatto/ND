@@ -9,6 +9,8 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public sealed class CaravanRenamePopupController : MonoBehaviour
 {
+    [Tooltip("Prefab-backed backdrop button. Clicking outside the panel closes this popup.")]
+    [SerializeField] private Button backdropButton;
     [SerializeField] private TMP_InputField input;
     [SerializeField] private TMP_Text errorText;
     [SerializeField] private Button cancelButton;
@@ -22,6 +24,7 @@ public sealed class CaravanRenamePopupController : MonoBehaviour
 
     private void Awake()
     {
+        backdropButton?.onClick.AddListener(Close);
         cancelButton?.onClick.AddListener(Close);
         confirmButton?.onClick.AddListener(Confirm);
         if (input != null)
