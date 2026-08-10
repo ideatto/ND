@@ -471,7 +471,8 @@ namespace ND.Framework
 
             foreach (var cargo in source)
             {
-                if (cargo == null || cargo.item == null)
+                // Do not restore legacy zero/negative cargo rows into the runtime model.
+                if (cargo == null || cargo.item == null || cargo.quantity <= 0)
                 {
                     continue;
                 }
@@ -503,7 +504,8 @@ namespace ND.Framework
 
             foreach (var cargo in source)
             {
-                if (cargo == null || cargo.item == null)
+                // Keep persisted cargo canonical so empty rows cannot return after reload.
+                if (cargo == null || cargo.item == null || cargo.quantity <= 0)
                 {
                     continue;
                 }
