@@ -316,6 +316,26 @@ namespace ND.Framework
                 data.player.villageBuildings = new System.Collections.Generic.List<VillageBuildingSaveData>();
             }
 
+            if (data.player.cottageProduction == null)
+            {
+                data.player.cottageProduction = new CottageProductionSaveData();
+                assetDataChanged = true;
+            }
+            data.player.cottageProduction.storedWagonCount =
+                Math.Max(0, data.player.cottageProduction.storedWagonCount);
+            data.player.cottageProduction.storedDraftAnimalCount =
+                Math.Max(0, data.player.cottageProduction.storedDraftAnimalCount);
+            data.player.cottageProduction.storedWagonContentId =
+                data.player.cottageProduction.storedWagonContentId ?? string.Empty;
+            data.player.cottageProduction.storedDraftAnimalContentId =
+                data.player.cottageProduction.storedDraftAnimalContentId ?? string.Empty;
+            data.player.cottageProduction.nextWagonProductionUtcTicks =
+                Math.Max(0L, data.player.cottageProduction.nextWagonProductionUtcTicks);
+            data.player.cottageProduction.nextDraftAnimalProductionUtcTicks =
+                Math.Max(0L, data.player.cottageProduction.nextDraftAnimalProductionUtcTicks);
+            data.player.cottageProduction.lastEvaluatedUtcTicks =
+                Math.Max(0L, data.player.cottageProduction.lastEvaluatedUtcTicks);
+
             for (var buildingIndex = 0; buildingIndex < data.player.villageBuildings.Count; buildingIndex++)
             {
                 var building = data.player.villageBuildings[buildingIndex];

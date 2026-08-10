@@ -236,7 +236,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         return new TransactionSnapshot
         {
             homeInventory = CloneHomeInventory(processingSaveData.player.homeInventory),
-            villageBuildings = CloneVillageBuildings(processingSaveData.player.villageBuildings)
+            villageBuildings = CloneVillageBuildings(processingSaveData.player.villageBuildings),
+            cottageProduction = CloneCottageProduction(
+                processingSaveData.player.cottageProduction)
         };
     }
 
@@ -350,6 +352,21 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                 });
         }
 
+        FrameworkRoot root = FrameworkRoot.Instance;
+        if (root?.CottageProduction?.Config != null
+            && string.Equals(
+                processingDisplayName,
+                root.CottageProduction.Config.BuildingDisplayName,
+                StringComparison.Ordinal)
+            && !root.CottageProduction.TryStageBuildingLevelChange(
+                processingSaveData,
+                plan.PreviousLevel,
+                plan.TargetLevel,
+                out errorCode))
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -394,6 +411,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         if(transactionSnapshot == null ||
            transactionSnapshot.homeInventory == null ||
            transactionSnapshot.villageBuildings == null ||
+           transactionSnapshot.cottageProduction == null ||
            processingSaveData?.player == null ||
            player == null)
         {
@@ -431,6 +449,8 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         processingSaveData.player.villageBuildings.Clear();
         processingSaveData.player.villageBuildings.AddRange(
             CloneVillageBuildings(transactionSnapshot.villageBuildings));
+        processingSaveData.player.cottageProduction =
+            CloneCottageProduction(transactionSnapshot.cottageProduction);
 
         return true;
     }
@@ -459,6 +479,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     {
         // 목록은 저장과 Runtime Commit이 모두 성공한 경우에만 다시 그린다.
         buildingListPanel?.Rebuild();
+        FrameworkEvents.RaiseCottageProductionChanged();
     }
 
     // 건설은 아이템 정의를 변경하지 않고 수량만 변경하므로 item 참조는 재사용한다.
@@ -483,6 +504,25 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                 });
         }
         return clone;
+    }
+
+    private static CottageProductionSaveData CloneCottageProduction(
+        CottageProductionSaveData source)
+    {
+        if (source == null)
+            return new CottageProductionSaveData();
+        return new CottageProductionSaveData
+        {
+            initialized = source.initialized,
+            initialSupplyGranted = source.initialSupplyGranted,
+            storedWagonCount = source.storedWagonCount,
+            storedWagonContentId = source.storedWagonContentId,
+            storedDraftAnimalCount = source.storedDraftAnimalCount,
+            storedDraftAnimalContentId = source.storedDraftAnimalContentId,
+            nextWagonProductionUtcTicks = source.nextWagonProductionUtcTicks,
+            nextDraftAnimalProductionUtcTicks = source.nextDraftAnimalProductionUtcTicks,
+            lastEvaluatedUtcTicks = source.lastEvaluatedUtcTicks
+        };
     }
 
     // 레벨 롤백이 기존 배치 좌표와 회전 정보를 손실하지 않도록 전체 저장 필드를 복사한다.
@@ -642,5 +682,6 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     {
         public List<CargoEntrySaveData> homeInventory;
         public List<VillageBuildingSaveData> villageBuildings;
+        public CottageProductionSaveData cottageProduction;
     }
 }

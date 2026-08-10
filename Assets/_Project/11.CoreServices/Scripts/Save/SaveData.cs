@@ -260,11 +260,28 @@ namespace ND.Framework
         /// </summary>
         public List<VillageBuildingSaveData> villageBuildings = new List<VillageBuildingSaveData>();
 
+        /// <summary>오두막의 미수령 생산물과 다음 UTC 생산 시각이다.</summary>
+        public CottageProductionSaveData cottageProduction = new CottageProductionSaveData();
+
         /// <summary>
         /// 거점 마을에 설치한 환경 아이템(오크나무·벤치·울타리 등) 목록이다.
         /// 건물과 달리 종류당 여러 개가 가능하고 레벨이 없으며, 인스턴스마다 고유 ID로 구분한다.
         /// </summary>
         public List<VillageEnvironmentSaveData> villageEnvironments = new List<VillageEnvironmentSaveData>();
+    }
+
+    [Serializable]
+    public sealed class CottageProductionSaveData
+    {
+        public bool initialized;
+        public bool initialSupplyGranted;
+        public int storedWagonCount;
+        public string storedWagonContentId = string.Empty;
+        public int storedDraftAnimalCount;
+        public string storedDraftAnimalContentId = string.Empty;
+        public long nextWagonProductionUtcTicks;
+        public long nextDraftAnimalProductionUtcTicks;
+        public long lastEvaluatedUtcTicks;
     }
 
     /// <summary>플레이어가 보유한 미장착 마차 한 대의 저장 데이터이다.</summary>
