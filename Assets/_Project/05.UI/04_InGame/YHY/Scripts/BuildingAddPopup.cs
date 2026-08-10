@@ -52,9 +52,13 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
     [SerializeField] private float itemHeight = 60f;
     [SerializeField] private TMP_Text headerText;
     [SerializeField] private List<MenuSection> sections = new List<MenuSection>();
+    [SerializeField] private Button rowTemplate;   // [편집형] 카탈로그 행 템플릿(지정 시 복제, 없으면 코드 생성)
 
     [Header("편집 모드 버튼 Prefab")]
     [SerializeField] private Button editModeButtonPrefab;
+    [SerializeField] private Button editModeButton;   // [편집형] 씬에 직접 둔 편집모드 버튼(지정 시 코드 생성 대신 이걸 사용)
+    [SerializeField] private Sprite editModeIcon;     // [편집형] 편집모드(진입 전) 버튼 이미지
+    [SerializeField] private Sprite editDoneIcon;     // [편집형] 편집완료(편집 중) 버튼 이미지
 
     [Header("건물 상세")]
     [SerializeField] private BuildingPopupRuntimeBinding popupRuntimeBinding;
@@ -173,6 +177,12 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
         for (int i = content.childCount - 1; i >= 0; i--)
         {
             Transform child = content.GetChild(i);
+            // [편집형] rowTemplate은 복제 원본이므로 파괴하지 않고 숨겨만 둔다(에디터에선 보이게 편집 가능).
+            if (rowTemplate != null && child == rowTemplate.transform)
+            {
+                child.gameObject.SetActive(false);
+                continue;
+            }
             child.SetParent(null);
             Destroy(child.gameObject);
         }
@@ -224,7 +234,9 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
         ResolvePlacementController();
         if (headerEditModeButton == null)
             // \uAE30\uC874 \uC704\uCE58\u00B7\uC2A4\uD0C0\uC77C \uADF8\uB300\uB85C. \uB77C\uBCA8\uC740 \uC0C1\uD0DC\uC5D0 \uB530\uB77C \uD3B8\uC9D1\uBAA8\uB4DC/\uD3B8\uC9D1\uC644\uB8CC\uB85C \uD1A0\uAE00\uB41C\uB2E4.
-            headerEditModeButton = CreateHeaderButton(editModeButtonPrefab, "\uD3B8\uC9D1\uBAA8\uB4DC", 120f);
+            headerEditModeButton = editModeButton != null
+                ? editModeButton   // [\uD3B8\uC9D1\uD615] \uC52C\uC5D0 \uC9C1\uC811 \uB454 \uBC84\uD2BC \uC0AC\uC6A9(\uC704\uCE58\u00B7\uBAA8\uC591 \uCE94\uBC84\uC2A4\uC5D0\uC11C \uD3B8\uC9D1)
+                : CreateHeaderButton(editModeButtonPrefab, "\uD3B8\uC9D1\uBAA8\uB4DC", 120f);
         headerEditModeButton.onClick.RemoveAllListeners();
         headerEditModeButton.onClick.AddListener(() =>
         {
@@ -238,12 +250,19 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
     }
 
     // \uD3B8\uC9D1 \uC0C1\uD0DC\uC5D0 \uB9DE\uCDB0 \uD3B8\uC9D1 \uBC84\uD2BC \uB77C\uBCA8\uC744 '\uD3B8\uC9D1\uBAA8\uB4DC'/'\uD3B8\uC9D1\uC644\uB8CC'\uB85C \uAC31\uC2E0(\uBC84\uD2BC\uC740 \uADF8\uB300\uB85C \uB450\uACE0 \uD14D\uC2A4\uD2B8\uB9CC).
+    // [\uD3B8\uC9D1\uD615] \uD3B8\uC9D1 \uC0C1\uD0DC\uC5D0 \uB530\uB77C \uBC84\uD2BC \uC774\uBBF8\uC9C0\uB97C \uAD50\uCCB4\uD55C\uB2E4(\uD3B8\uC9D1\uBAA8\uB4DC \uC544\uC774\uCF58 \u2194 \uD3B8\uC9D1\uC644\uB8CC \uC544\uC774\uCF58).
+    //   \uB77C\uBCA8 \uD14D\uC2A4\uD2B8\uB294 \uCE94\uBC84\uC2A4\uC5D0\uC11C \uC815\uD55C \uB300\uB85C \uB450\uACE0, \uC0C1\uD0DC\uB294 \uC774\uBBF8\uC9C0\uB85C \uD45C\uC2DC\uD55C\uB2E4.
+    //   \uB450 \uC2A4\uD504\uB77C\uC774\uD2B8\uAC00 \uBE44\uC5B4 \uC788\uC73C\uBA74(\uBBF8\uC9C0\uC815) \uC774\uBBF8\uC9C0\uB97C \uAC74\uB4DC\uB9AC\uC9C0 \uC54A\uB294\uB2E4(\uCE94\uBC84\uC2A4 \uC774\uBBF8\uC9C0 \uC720\uC9C0).
     private void UpdateEditModeButtonLabel()
     {
         if (headerEditModeButton == null) return;
         bool editing = placementController != null && placementController.IsEditMode;
-        TMPro.TMP_Text label = headerEditModeButton.GetComponentInChildren<TMPro.TMP_Text>(true);
-        if (label != null) label.text = editing ? "\uD3B8\uC9D1\uC644\uB8CC" : "\uD3B8\uC9D1\uBAA8\uB4DC";
+        Image icon = headerEditModeButton.targetGraphic as Image;
+        if (icon == null) icon = headerEditModeButton.GetComponent<Image>();
+        if (icon == null) return;
+
+        Sprite next = editing ? editDoneIcon : editModeIcon;
+        if (next != null) icon.sprite = next;
     }
 
     private Button CreateHeaderButton(Button prefab, string label, float width)
@@ -368,6 +387,28 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 
     private Button CreateRow(string label, Color background, bool childRow)
     {
+        // [편집형] rowTemplate이 지정되면 복제해서 사용(모양·폰트·높이·이미지를 씬에서 편집).
+        //   헤더/항목 구분용 색·폰트크기만 코드가 지정하고, 스프라이트 등은 템플릿 그대로 유지.
+        if (rowTemplate != null)
+        {
+            Button row = Instantiate(rowTemplate, content);
+            row.gameObject.SetActive(true);
+            row.name = childRow ? "CategoryItem" : "CategoryHeader";
+            LayoutElement rowLayout = row.GetComponent<LayoutElement>();
+            if (rowLayout == null) rowLayout = row.gameObject.AddComponent<LayoutElement>();
+            rowLayout.minHeight = itemHeight;
+            // [편집형] Image 색·스프라이트는 RowTemplate에서 정한 그대로 유지(코드가 background로 덮어쓰지 않음).
+            //   금색 스프라이트에 코드 색을 곱하면 탁해지므로, 색은 템플릿에서만 관리한다.
+            //   헤더/항목 구분은 라벨 접두(▼/▶ vs Lv.)로 됨. 색으로 구분이 필요하면 별도 요청.
+            TMP_Text rowText = row.GetComponentInChildren<TMP_Text>(true);
+            if (rowText != null)
+            {
+                rowText.text = label;
+                rowText.fontSize = childRow ? 27f : 29f;
+            }
+            return row;
+        }
+
         GameObject go = new GameObject(
             childRow ? "CategoryItem" : "CategoryHeader",
             typeof(RectTransform),

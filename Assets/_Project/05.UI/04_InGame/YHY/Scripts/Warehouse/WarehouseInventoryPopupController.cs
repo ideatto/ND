@@ -55,6 +55,7 @@ private TMP_Text tooltipPriceText;
         private Button backToCaravanButton;
         private Button priceCancelButton;
         private Button quantityCancelButton;
+        private Slider quantitySlider;   // WarehouseQuantityModal에 추가된 수량 슬라이더(버튼·수량과 동기화)
         private Button minusButton;
         private Button plusButton;
         private Button minButton;
@@ -506,6 +507,13 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             }
 
             selectedQuantity = 1;
+            if (quantitySlider != null)
+            {
+                // 슬라이더 범위를 1~최대수량으로, 정수 눈금으로 맞춘다(값 동기화는 UpdateQuantityView가 담당).
+                quantitySlider.wholeNumbers = true;
+                quantitySlider.minValue = 1;
+                quantitySlider.maxValue = Mathf.Max(1, selectedMaxQuantity);
+            }
             UpdateQuantityView();
             SetActive(selectionModalLayer, true);
             SetActive(priceGroupModal, false);
@@ -524,6 +532,10 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             if (quantityDestinationText != null)
                 quantityDestinationText.text = selectedDirection == WarehouseTransferDirection.HomeToCargo
                     ? "Cargo" : "Player Inventory";
+            // 버튼(+/-, min/max)이나 슬라이더로 수량이 바뀌어도 슬라이더 핸들이 항상 따라오게 한다.
+            //   (onValueChanged 콜백 루프를 막기 위해 SetValueWithoutNotify 사용)
+            if (quantitySlider != null)
+                quantitySlider.SetValueWithoutNotify(selectedQuantity);
         }
 
         /// <summary>Delegates final validation, mutation, save, and rollback to the transfer service.</summary>
@@ -598,6 +610,15 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
         {
             if (!AcceptInput() || presenter.Panel != WarehouseSelectionPanel.Quantity) return;
             selectedQuantity = Mathf.Clamp(value, 1, selectedMaxQuantity);
+            UpdateQuantityView();
+        }
+
+        // 슬라이더 전용: 드래그는 프레임마다 연속 발생하므로 AcceptInput(연타 방지 디바운스)을 거치지 않고 즉시 반영한다.
+        //   (SetQuantityTo에 태우면 디바운스에 대부분 이벤트가 막혀 최대로 밀어도 값이 들쭉날쭉해짐)
+        private void SetQuantityFromSlider(float value)
+        {
+            if (presenter.Panel != WarehouseSelectionPanel.Quantity) return;
+            selectedQuantity = Mathf.Clamp(Mathf.RoundToInt(value), 1, selectedMaxQuantity);
             UpdateQuantityView();
         }
 
@@ -785,6 +806,7 @@ tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetCo
             quantityCancelButton = FindWithin(Find("WarehouseQuantityModal"), "CancelButton")?.GetComponent<Button>();
             minusButton = FindWithin(Find("WarehouseQuantityModal"), "MinusButton")?.GetComponent<Button>();
             plusButton = FindWithin(Find("WarehouseQuantityModal"), "PlusButton")?.GetComponent<Button>();
+            quantitySlider = FindWithin(Find("WarehouseQuantityModal"), "Slider")?.GetComponent<Slider>();
             minButton = FindWithin(Find("WarehouseQuantityModal"), "MinButton")?.GetComponent<Button>();
             maxButton = FindWithin(Find("WarehouseQuantityModal"), "MaxButton")?.GetComponent<Button>();
             confirmButton = FindWithin(Find("WarehouseQuantityModal"), "ConfirmTransferButton")?.GetComponent<Button>();
@@ -805,6 +827,8 @@ tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetCo
             plusButton?.onClick.AddListener(() => ChangeQuantity(1));
             minButton?.onClick.AddListener(() => SetQuantityTo(1));
             maxButton?.onClick.AddListener(() => ChangeQuantity(99));
+            // 슬라이더 값 변경 → 수량에 반영. 드래그는 연속 이벤트라 디바운스를 거치지 않는 전용 메서드 사용.
+            quantitySlider?.onValueChanged.AddListener(SetQuantityFromSlider);
             confirmButton?.onClick.AddListener(ConfirmTransfer);
         }
 
