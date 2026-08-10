@@ -112,3 +112,21 @@ UI는 SaveData를 직접 변경하지 않는다. 시간 공급원의 실제 기�
 ## 8. 전달 브랜치와 조립 브랜치의 차이
 
 현재 기능 전달 브랜치에서는 `MainUICanvas.prefab` 조립 결과를 discard해도 된다. 다만 실제 통합 대상 브랜치에서는 위 설치 메뉴 실행 결과인 MainUI 변경을 저장·커밋해야 한다. `CottageProductionPopup.prefab`과 에디터 설치 도구는 조립 결과가 아니라 재조립 재료이므로 보존한다.
+# 2026-08-10 설치 메뉴 재검증 결과
+
+최신 미조립 `MainUICanvas.prefab`에서 아래 메뉴를 실행해 정적 조립이 재현됨을 확인했다.
+
+`Tools > LJH > Install Cottage Production Popup To Main UI`
+
+실행 후 필수 결과:
+
+- `CottageProductionMainUiEntry`: 정확히 1개
+- `CottageProductionPopup`: 정확히 1개, 시작 시 inactive
+- `buildingListPanel`: 기존 MainUI의 `BuildingListPanel`
+- `popup`: 설치된 Popup의 `CottageProductionPopupPresenter`
+- `productionReadyIcon`: 생산 완료 느낌표용 Sprite
+- Presenter의 `view`, `noticeUI`: 모두 연결
+
+메뉴는 기존 Cottage Popup을 정리하고 하나만 다시 설치하므로 수동 복제와 메뉴 실행을 함께 하지 않는다. 설치 결과는 `MainUICanvas.prefab`에 저장되며 `InGame.unity`에 Cottage 전용 override를 만들 필요가 없다.
+
+기능 전달 브랜치에서 임시 검증용 `MainUICanvas.prefab` 변경을 discard해도 기능 코드, 설정 SO, Popup Prefab, 설치 도구는 반드시 보존한다. 통합 브랜치에서는 메뉴 실행 결과를 discard하지 않고 MainUI 조립 결과로 커밋한다.

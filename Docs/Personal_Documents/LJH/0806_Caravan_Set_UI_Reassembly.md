@@ -170,6 +170,8 @@ git restore --source=515b3985 -- `
 9. Backdrop과 다른 전체 화면 Popup보다 앞에 보이며 입력을 정상 차단하는지 확인한다.
 10. Prefab Mode를 닫았다 다시 열고 `wagonPopup`, `buttonPrefab`, `instanceRowPrefab` 참조가 저장됐는지 재확인한다.
 
+InGame 조립에서는 `TestCaravanSettingService`를 제거하고 같은 `CaravanSettingUiConnector`에 `CaravanSettingRuntimeBridge`를 둔다. `CaravanOverviewEditBinding`의 `settingProviderBehaviour`, `settingCommandBehaviour`, `loadSettingProviderBehaviour`, `loadSettingCommandBehaviour`는 GameObject나 Binding 자기 자신이 아니라 RuntimeBridge 컴포넌트를 직접 참조해야 한다. MCP 또는 Inspector에서 GameObject를 대입하면 첫 MonoBehaviour로 잘못 해석될 수 있으므로 저장 후 네 필드의 실제 컴포넌트 타입을 다시 확인한다.
+
 현재 `TradePrepareUI.prefab` 조립 결과는 기존 내장 `WagonPopup` 유지 방식이다. `AnimalInventoryPanel.wagonPopup`, `buttonPrefab`, `instanceRowPrefab` 세 참조를 내장 Popup에 연결한다. 독립 중첩 방식으로 전환할 때는 기존 Popup과 새 Popup을 동시에 활성화하지 않는다.
 
 `settlementPanel`, `paymentPanel`, `tradeScreenPresenter` 등 Caravan Set 외 다른 기능의 빈 직렬화 필드는 이 작업의 재조립 대상이 아니다.

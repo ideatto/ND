@@ -72,15 +72,15 @@
 
 ```text
 CaravanSlot
-├─ CaravanInfo / DisplayName
-├─ RenameButton
-│  ├─ Icon
-│  └─ Label (빈 문자열, 비활성)
-├─ SettingButton
-├─ CargoButton
-├─ JourneyStateDisplay
+├─ JourneyStateDisplay            (형제 인덱스 0, 배경 Alpha 0)
 │  ├─ Label
 │  └─ Icon (Image + Animator)
+├─ CaravanInfo / DisplayName      (형제 인덱스 1)
+├─ RenameButton                   (형제 인덱스 2)
+│  ├─ Icon
+│  └─ Label (빈 문자열, 비활성)
+├─ SettingButton                  (형제 인덱스 3)
+├─ CargoButton                    (형제 인덱스 4)
 └─ LockOverlay
 ```
 
@@ -92,6 +92,7 @@ CaravanSlot
 - Prepare/Traveling은 `HorseCycle_0`, Traveling에서만 `IsTraveling=true`로 0~3 프레임을 반복한다.
 - Selling은 느낌표, Settling과 Completed는 체크 아이콘을 사용한다.
 - RenameButton, Icon, Popup을 코드가 런타임 생성하지 않는다.
+- 위 순서는 실제 `HorizontalLayoutGroup`의 Transform 형제 순서다. 상태 표시를 오른쪽 끝에 두는 구버전 순서로 조립하지 않는다.
 - Scene 전용 Transport Inventory Popup, 실패 손실 Popup, 개발용 지급 버튼은 원본 `MainUICanvas.prefab`에 Apply하지 않는다.
 
 ## 6. InGame.unity Scene 조립

@@ -158,6 +158,8 @@
 
 런타임 `Find`로 연결하지 않는다.
 
+`Size Delta (-1920,-1080)`은 1920×1080 Canvas에서 Stretch 크기를 0으로 축소하는 잘못된 override다. 이 상태에서는 카드 자식은 보이더라도 전체 화면 Backdrop이 보이지 않거나 클릭 영역이 사라질 수 있다. 조립 후 Scene Inspector에서 반드시 `Size Delta (0,0)`을 다시 확인하고, `TransportInventoryPopupController.backdropButton`이 Prefab의 `Backdrop/Button`을 참조하는지 확인한다. Backdrop Image는 전체 Stretch, Raycast Target On이며 `OnEnable()`에서 등록되는 `Close()`로 현재 팝업을 닫는다.
+
 Popup은 이름만 보고 첫 Canvas를 선택하지 않는다. 실제 `BuildingListPanel`과 함께 활성화되는 `MainUICanvas` 아래에 배치하고, 비활성 레거시 `InGameCanvas` 아래에는 배치하지 않는다. 닫힌 상태는 Popup 자신의 `activeSelf == false`여야 하며 비활성 부모에 의존하지 않는다.
 
 여기서 `MainUICanvas.prefab` 원본에 Apply하지 않는다. 현재 조립 기준은 `InGame.unity` 안의 `MainUICanvas` 프리팹 인스턴스에 Popup 인스턴스를 추가하고, Scene 조립 오브젝트에 Entry 컴포넌트를 추가하는 방식이다. 다른 씬까지 공통 적용하려는 별도 합의가 있을 때만 `MainUICanvas.prefab`에 Apply한다.
@@ -302,7 +304,7 @@ InGame
 7. 활성 Scene 조립 오브젝트에 `TransportInventoryMainUiEntry`를 추가하고 두 필드를 연결한다.
 8. 임시 서비스의 카탈로그를 보존한 채 `CaravanSettingRuntimeBridge`와 Overview Binding을 먼저 연결한다.
 9. `Logs`, `Stone`을 포함한 `tradeItemAssets`를 확인한 뒤에만 `TestCaravanSettingService`를 제거한다.
-10. 활성 `MainUICanvas` 좌하단에 테스트 지급 버튼을 한 번 배치한다.
+10. 개발 검증에서 지급 수단이 필요한 경우에만 활성 `MainUICanvas` 좌하단에 테스트 지급 버튼을 한 번 배치한다. 운영 조립에서는 생략한다.
 11. Scene과 Prefab을 저장 후 다시 열어 직렬화 참조를 확인한다.
 12. 조립 계약 테스트와 PlayMode Smoke Test를 갱신하고 실행한다.
 
@@ -444,3 +446,35 @@ RuntimeBridge 조립을 커밋할 때는 Scene 계약 테스트도 같은 커밋
 6. Popup을 닫은 뒤 기존 Caravan Setting smoke flow를 계속 실행한다.
 
 테스트 갱신은 런타임 기능을 만드는 단계가 아니라, 조립 결과가 이후 실수로 끊기지 않게 보호하는 단계다. Scene 조립만 임시 검증하고 버릴 경우에는 테스트 파일을 수정하지 않아도 되지만, 조립 변경을 커밋할 경우에는 반드시 함께 갱신한다.
+# 2026-08-10 실제 재조립 확인 사항
+
+최신 미조립 `InGame.unity`에서 다음 구성으로 정상 재현됨을 확인했다.
+
+```text
+MainUICanvas (Scene의 활성 Prefab instance)
+└─ TransportInventoryPopup [Prefab instance, inactive]
+
+CaravanSettingUiConnector
+├─ CaravanSettingRuntimeBridge
+└─ TransportInventoryMainUiEntry
+```
+
+필수 연결:
+
+| 대상 | 값 |
+| --- | --- |
+| `TransportInventoryMainUiEntry.buildingListPanel` | Scene의 기존 `BuildingListPanel` |
+| `TransportInventoryMainUiEntry.popup` | 배치한 Popup의 `TransportInventoryPopupController` |
+
+완료 판정은 Hierarchy 이름만이 아니라 타입 개수와 직렬화 참조로 한다.
+
+- `TransportInventoryMainUiEntry`: 정확히 1개
+- `TransportInventoryPopupController`: 정확히 1개
+- Popup root: 시작 시 inactive
+- Entry의 두 필드: 모두 None 아님
+- 목장 행 클릭: Popup이 열림
+- 동물 탭: 현재 해금 슬롯의 마지막 행까지 스크롤 가능
+
+`TransportInventoryPopup`은 `MainUICanvas.prefab` 원본에 Apply하지 않는 Scene 전용 조립물이다. 따라서 기능 전달 브랜치에서 `InGame.unity`를 discard할 경우 사라지는 것이 정상이며, 통합 브랜치에서 이 문서대로 다시 배치하고 Scene 변경으로 저장해야 한다.
+
+개발용 지급 버튼은 기능 필수가 아니다. 검증에 필요한 경우에만 Scene 전용으로 `TransportInventoryRewardDebugButton.prefab`을 좌하단 `(20,20)`, `260x56`으로 1개 두며 마지막 sibling으로 배치하지 않는다.
