@@ -18,7 +18,7 @@ MonoBehaviour:
     category: 0
     seasonId: spring
     operation: 2
-    value: 0.05
+    value: 0.1
     modifierType: 20
   - ruleId: summer-food
     enabled: 1
@@ -39,7 +39,7 @@ MonoBehaviour:
     category: 3
     seasonId: autumn
     operation: 2
-    value: 0.05
+    value: 0.1
     modifierType: 20
   - ruleId: winter-food
     enabled: 1
@@ -62,35 +62,91 @@ MonoBehaviour:
     value: 0.5
     modifierType: 40
   distanceRules:
-  - ruleId: distance_0_100
+  - ruleId: distance_0_200
     enabled: 1
     minimumDistanceKm: 0
     hasMaximumDistance: 1
-    maximumDistanceKm: 100
+    maximumDistanceKm: 200
     operation: 2
     value: 0
     modifierType: 40
-  - ruleId: distance_100_300
+  - ruleId: distance_200_400
     enabled: 1
-    minimumDistanceKm: 100
+    minimumDistanceKm: 200
     hasMaximumDistance: 1
-    maximumDistanceKm: 300
-    operation: 2
-    value: 0.05
-    modifierType: 40
-  - ruleId: distance_300_600
-    enabled: 1
-    minimumDistanceKm: 300
-    hasMaximumDistance: 1
-    maximumDistanceKm: 600
+    maximumDistanceKm: 400
     operation: 2
     value: 0.1
     modifierType: 40
-  - ruleId: distance_600_plus
+  - ruleId: distance_400_600
+    enabled: 1
+    minimumDistanceKm: 400
+    hasMaximumDistance: 1
+    maximumDistanceKm: 600
+    operation: 2
+    value: 0.2
+    modifierType: 40
+  - ruleId: distance_600_800
     enabled: 1
     minimumDistanceKm: 600
+    hasMaximumDistance: 1
+    maximumDistanceKm: 800
+    operation: 2
+    value: 0.3
+    modifierType: 40
+  - ruleId: distance_800_1000
+    enabled: 1
+    minimumDistanceKm: 800
+    hasMaximumDistance: 1
+    maximumDistanceKm: 1000
+    operation: 2
+    value: 0.4
+    modifierType: 40
+  - ruleId: distance_1000_1200
+    enabled: 1
+    minimumDistanceKm: 1000
+    hasMaximumDistance: 1
+    maximumDistanceKm: 1200
+    operation: 2
+    value: 0.5
+    modifierType: 40
+  - ruleId: distance_1200_1400
+    enabled: 1
+    minimumDistanceKm: 1200
+    hasMaximumDistance: 1
+    maximumDistanceKm: 1400
+    operation: 2
+    value: 0.6
+    modifierType: 40
+  - ruleId: distance_1400_1600
+    enabled: 1
+    minimumDistanceKm: 1400
+    hasMaximumDistance: 1
+    maximumDistanceKm: 1600
+    operation: 2
+    value: 0.7
+    modifierType: 40
+  - ruleId: distance_1600_1800
+    enabled: 1
+    minimumDistanceKm: 1600
+    hasMaximumDistance: 1
+    maximumDistanceKm: 1800
+    operation: 2
+    value: 0.8
+    modifierType: 40
+  - ruleId: distance_1800_2000
+    enabled: 1
+    minimumDistanceKm: 1800
+    hasMaximumDistance: 1
+    maximumDistanceKm: 2000
+    operation: 2
+    value: 0.9
+    modifierType: 40
+  - ruleId: distance_2000_plus
+    enabled: 1
+    minimumDistanceKm: 2000
     hasMaximumDistance: 0
     maximumDistanceKm: 0
     operation: 2
-    value: 0.15
+    value: 1
     modifierType: 40
