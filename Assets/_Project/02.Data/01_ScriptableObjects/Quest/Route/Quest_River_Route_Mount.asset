@@ -10,32 +10,31 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d717a7cb6b02a74daeed2c7319d2e61, type: 3}
-  m_Name: Quest_RiverTownSupply
+  m_Name: Quest_River_Route_Mount
   m_EditorClassIdentifier: Assembly-CSharp::QuestData
-  questId: "\uB354\uBBF8\uC6A9 \uB9AC\uBC84\uD0C0\uC6B4"
-  questName: "\uB9AC\uBC84\uD0C0\uC6B4 \uB354\uBBF8 \uD018\uC2A4\uD2B8"
-  description: "\uB354\uBBF8\uB354\uBBF8 \uD018\uC2A4\uD2B8"
+  questId: River_Route_Mount
+  questName: "\uC0B0\uAF2D\uB300\uAE30\uB9C8\uC744 \uBB34\uC5ED\uB85C \uD574\uAE08"
+  description: "\uAC15\uAC00\uB9C8\uC744\uC5D0\uC11C \uC0B0\uAF2D\uB300\uAE30 \uB9C8\uC744\uB85C
+    \uAC00\uB294 \uBB34\uC5ED\uB85C\uB97C \uBC1C\uACAC\uD569\uB2C8\uB2E4. "
   type: 0
   repeatPolicy: 0
   questRegenSeconds: 0
-  paymentPolicy: 0
+  paymentPolicy: 1
   submissionTownId: RiverTown
-  requiredTradingCurrency: 100
-  requiredItems: []
+  requiredTradingCurrency: 0
+  requiredItems:
+  - itemId: Apple
+    quantity: 15
   rewards:
-  - rewardType: 0
-    value: 200
-    rewardId: 
-    encounterMultiplier: 1
   - rewardType: 2
-    value: 0
+    value: 1
     rewardId: MountTown
-    encounterMultiplier: 1
+    encounterMultiplier: 0
   - rewardType: 3
-    value: 0
+    value: 1
     rewardId: RiverToMount
-    encounterMultiplier: 1
+    encounterMultiplier: 0
   - rewardType: 3
-    value: 0
+    value: 1
     rewardId: MountToRiver
-    encounterMultiplier: 1
+    encounterMultiplier: 0

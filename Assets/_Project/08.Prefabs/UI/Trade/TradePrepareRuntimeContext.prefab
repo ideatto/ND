@@ -49,6 +49,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9c4c1521bbaa1d546b26a41f7d5a8255, type: 2}
   - {fileID: 11400000, guid: 259bc7da0af73de4a867e8137f1a94c9, type: 2}
   - {fileID: 11400000, guid: 1ac5dbe488434b448aed1fb3d43990e3, type: 2}
+  - {fileID: 11400000, guid: f366acf06d88a11479db62efe43786ee, type: 2}
+  - {fileID: 11400000, guid: 925a328195779074aa29b2ccafef3e2a, type: 2}
+  - {fileID: 11400000, guid: d52041df42bb0f64b986515e7b802ad5, type: 2}
   tradeItems:
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}

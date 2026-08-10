@@ -15,7 +15,7 @@ MonoBehaviour:
   routeId: ForestToBase
   fromTown: {fileID: 11400000, guid: d52041df42bb0f64b986515e7b802ad5, type: 2}
   toTown: {fileID: 11400000, guid: 0dde79d6f6eee1344bfd9045a5daae76, type: 2}
-  displayName: "\uB2E4\uB9AC\uAC74\uB108 \uC717"
+  displayName: "\uB2E4\uB9AC\uAC74\uB108 \uC717\uAE38"
   unlockedByDefault: 0
   distance: 2000
   defaultElapsedTime: 200

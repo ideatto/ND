@@ -18,8 +18,8 @@ MonoBehaviour:
   description: "\uC637\uAC10, \uACA8\uC6B8\uC5D0 \uC218\uC694\uAC00 \uB298\uC5B4\uB09C\uB2E4."
   rarity: 1
   category: 1
-  baseBuyPrice: 70
-  baseSellPrice: 70
+  baseBuyPrice: 50
+  baseSellPrice: 50
   canStack: 1
   maxCount: 20
   weight: 1

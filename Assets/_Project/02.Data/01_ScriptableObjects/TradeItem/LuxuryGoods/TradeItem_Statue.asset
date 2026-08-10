@@ -27,4 +27,4 @@ MonoBehaviour:
   isConsumable: 0
   affectModify: 1
   modifiers: []
-  localSpecialty: 0
+  localSpecialty: 1

@@ -22,6 +22,7 @@ MonoBehaviour:
   availableRoutes:
   - {fileID: 11400000, guid: 65c62a9e92134ab4bb1aae8077ca2b8e, type: 2}
   - {fileID: 11400000, guid: f5d1adf3a0a21c84b805c7c69189b3a3, type: 2}
+  - {fileID: 11400000, guid: 61383689b41a9d04d9c97d6dbb219049, type: 2}
   - {fileID: 11400000, guid: 2db21dd9787ad8a489632e1f4a2cd2ed, type: 2}
   - {fileID: 11400000, guid: 0c69b8203cd02ed4da013f8c64aa0dd2, type: 2}
   - {fileID: 11400000, guid: 74f1c23a9f61ab4488373a9b858555a2, type: 2}

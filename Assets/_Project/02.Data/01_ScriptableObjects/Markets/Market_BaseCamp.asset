@@ -17,9 +17,9 @@ MonoBehaviour:
   itemMaxQuantity: 100
   itemRenewalCycle: 3600
   tradeItems:
+  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   - {fileID: 11400000, guid: 94ed95203aade1d4f9f3fb54372c2fd2, type: 2}
   - {fileID: 11400000, guid: 6d583a4b588878f4590e2f778fadebcf, type: 2}
-  - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}
   - {fileID: 11400000, guid: 328b25621d177644bb0a7fee80f81a9f, type: 2}
   draftAnimalItems: []

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Town_ForestTown
   m_EditorClassIdentifier: Assembly-CSharp::TownData
   townId: ForestTown
-  displayName: "\uC232\uC18D\uB9C8"
+  displayName: "\uC232\uC18D\uB9C8\uC744"
   icon: {fileID: 0}
   unlockedByDefault: 0
   description: "\uC232 \uC18D\uC5D0 \uC788\uB294 \uB9C8\uC744, "

@@ -348,6 +348,11 @@ MonoBehaviour:
     typeName: RouteData
     dataId: BaseToForest
     watchRootKind: 0
+  - assetGuid: 61383689b41a9d04d9c97d6dbb219049
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToMount.asset
+    typeName: RouteData
+    dataId: BaseToMount
+    watchRootKind: 0
   - assetGuid: 65c62a9e92134ab4bb1aae8077ca2b8e
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Routes/Route_BaseToRiver.asset
     typeName: RouteData
@@ -439,25 +444,80 @@ MonoBehaviour:
     typeName: RouteData
     dataId: WindyToBase
     watchRootKind: 0
+  - assetGuid: ad8e6c72d8ecbae4298adae4efea873a
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/LocalItem/Quest_Base_Local_Item.asset
+    typeName: QuestData
+    dataId: Base_Local_Item
+    watchRootKind: 0
+  - assetGuid: 6cd2a4f1be9fde44aa229e93e17fe2d8
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/LocalItem/Quest_Basin_Local_Item.asset
+    typeName: QuestData
+    dataId: Basin_Local_Item
+    watchRootKind: 0
+  - assetGuid: 1f2d84ecd35c90042b3ee05a0a963e1d
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/LocalItem/Quest_EastRiver_Local_Item.asset
+    typeName: QuestData
+    dataId: EastRiver_Local_Item
+    watchRootKind: 0
+  - assetGuid: f2f3a343ab94c8642a44909c19977a85
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/LocalItem/Quest_Forest_Local_Item.asset
+    typeName: QuestData
+    dataId: Forest_Local_Item
+    watchRootKind: 0
+  - assetGuid: 79d5d2abf2771b04aab5de10c7927cb6
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/LocalItem/Quest_Mount_Local_Item.asset
+    typeName: QuestData
+    dataId: Mount_Local_Item
+    watchRootKind: 0
+  - assetGuid: 08a3be11a1fc8d440b44ee640007a535
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/LocalItem/Quest_River_Local_Item.asset
+    typeName: QuestData
+    dataId: River_Local_Item
+    watchRootKind: 0
   - assetGuid: ef20f9b039acb924eb3de60ae14a8956
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_Base_Route_EastRiver.asset
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_Base_Route_EastRiver.asset
     typeName: QuestData
     dataId: Base_Route_EastRiver
     watchRootKind: 0
-  - assetGuid: dccc90017d3b6104e8d31abefd3039ea
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_QuestDummy.asset
+  - assetGuid: 74459766a239a484da965274a3c0c0ca
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_Basin_Route_Base.asset
     typeName: QuestData
-    dataId: quest_dummy_basecamp
+    dataId: Basin_Route_Base
     watchRootKind: 0
-  - assetGuid: 6cbf3fe9eef048b4b9c62884b6795a8c
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_RiverTownSupply.asset
+  - assetGuid: 2769fbaa1d421dd47a3c70c8e88259f1
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_EastRiver_Route_Basin.asset
     typeName: QuestData
-    dataId: "\uB354\uBBF8\uC6A9 \uB9AC\uBC84\uD0C0\uC6B4"
+    dataId: EastRiver_Route_Basin
     watchRootKind: 0
-  - assetGuid: d09d3d51c8d0a7a4fa4554c43f0c840f
-    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Quest_SP_RiverTown.asset
+  - assetGuid: 51482157b3a6dea48aa3cdc9b01226b3
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_EastRiver_Route_Basin_To_Forest.asset
     typeName: QuestData
-    dataId: rivertownproduct
+    dataId: EastRiver_Route_Basin_To_Forest
+    watchRootKind: 0
+  - assetGuid: 263d598f852e5f54cbe1b263e6cb7d88
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_EastRiver_Route_Forest.asset
+    typeName: QuestData
+    dataId: EastRiver_Route_Forest
+    watchRootKind: 0
+  - assetGuid: 6969382ec72d5c844b0f23c81d7d82ad
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_Forest_Route_Base.asset
+    typeName: QuestData
+    dataId: Forest_Route_Base
+    watchRootKind: 0
+  - assetGuid: 1708f5640fb009243a2a6e4b898372bc
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_Mount_Route_Base.asset
+    typeName: QuestData
+    dataId: Mount_Route_Base
+    watchRootKind: 0
+  - assetGuid: 313ce04cdfe1b1142b19487c7dace92f
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_Mount_Route_River2.asset
+    typeName: QuestData
+    dataId: Mount_Route_River2
+    watchRootKind: 0
+  - assetGuid: 0775c7b7478bc9f47896e2754e99806b
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Quest/Route/Quest_River_Route_Mount.asset
+    typeName: QuestData
+    dataId: River_Route_Mount
     watchRootKind: 0
   - assetGuid: 36370e4bc577148448efe47144bd7cf0
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Bakery.asset
@@ -635,10 +695,22 @@ MonoBehaviour:
   - 89308a28e1cc7914cb36ce138a11a2cf
   - ab351083136e105469a881549e12bb4d
   - 305ad5956f7f5444687b2b7a89c211bb
-  - dccc90017d3b6104e8d31abefd3039ea
-  - 6cbf3fe9eef048b4b9c62884b6795a8c
-  - d09d3d51c8d0a7a4fa4554c43f0c840f
+  - 61383689b41a9d04d9c97d6dbb219049
   - ef20f9b039acb924eb3de60ae14a8956
+  - 74459766a239a484da965274a3c0c0ca
+  - 2769fbaa1d421dd47a3c70c8e88259f1
+  - 51482157b3a6dea48aa3cdc9b01226b3
+  - 263d598f852e5f54cbe1b263e6cb7d88
+  - 6969382ec72d5c844b0f23c81d7d82ad
+  - 313ce04cdfe1b1142b19487c7dace92f
+  - 0775c7b7478bc9f47896e2754e99806b
+  - ad8e6c72d8ecbae4298adae4efea873a
+  - 6cd2a4f1be9fde44aa229e93e17fe2d8
+  - 1f2d84ecd35c90042b3ee05a0a963e1d
+  - f2f3a343ab94c8642a44909c19977a85
+  - 79d5d2abf2771b04aab5de10c7927cb6
+  - 08a3be11a1fc8d440b44ee640007a535
+  - 1708f5640fb009243a2a6e4b898372bc
   - 971038b3f7d63734992d6faffe696ba0
   - 1c25557e3dff25c44a9619db8fd7b6a7
   - b55dc2ae6d125fc4a8cb294bb2e31221

@@ -18,16 +18,16 @@ MonoBehaviour:
   itemRenewalCycle: 3600
   tradeItems:
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
+  - {fileID: 11400000, guid: e70021528395dfa4ebac5f411e79ec65, type: 2}
   - {fileID: 11400000, guid: a2a0117c501c137498f6554fc2180f72, type: 2}
   - {fileID: 11400000, guid: 06137b2355f47374cbaa8422591ae19e, type: 2}
   - {fileID: 11400000, guid: 9f2c731ddbd58ed47a5dab7476752b9c, type: 2}
   - {fileID: 11400000, guid: a47c8cc48a682cf4182b8a6bdc81737e, type: 2}
-  - {fileID: 11400000, guid: 3a786fc2757d8764c9afbc50804f47eb, type: 2}
   - {fileID: 11400000, guid: 0b7c39398a0ec4d44b377f492875ae77, type: 2}
-  - {fileID: 11400000, guid: b8b2c064ff3c22f4cbb81a74afdb0a6a, type: 2}
   draftAnimalItems:
   - {fileID: 11400000, guid: 3b376bfea70875947a7bbaaebbd7d735, type: 2}
   wagonItems:
   - {fileID: 11400000, guid: d1f29cbc4f6fb5d489d1ac675ed655df, type: 2}
   - {fileID: 11400000, guid: 5a4e66a6b162bbd4fa04db74a5ff2a7d, type: 2}
-  localSpecialtyItems: []
+  localSpecialtyItems:
+  - {fileID: 11400000, guid: b8b2c064ff3c22f4cbb81a74afdb0a6a, type: 2}
