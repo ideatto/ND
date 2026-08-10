@@ -2,7 +2,9 @@
 
 ## 1. 사용 목적
 
-이 문서는 `MainUICanvas.prefab`, `TradePrepareUI.prefab`, `InGame.unity`의 작업 내용을 discard한 뒤 현재 기능을 다시 조립할 때 사용하는 최상위 조립 기준이다. 이 문서 한 개만으로 필수 기능과 데이터 흐름을 복구할 수 있어야 하며, 기능별 문서는 외형 수치와 원인 분석을 위한 보충 자료로 사용한다.
+이 문서는 현재 기능 개발 브랜치에서 충돌 가능성이 큰 `MainUICanvas.prefab`, `TradePrepareUI.prefab`, `InGame.unity`의 조립 diff를 제외해 전달한 뒤, 대상 브랜치의 최신 파일에 현재 기능을 다시 조립할 때 사용하는 최상위 기준이다. 이 문서 한 개만으로 필수 기능과 데이터 흐름을 복구할 수 있어야 하며, 기능별 문서는 외형 수치와 원인 분석을 위한 보충 자료로 사용한다.
+
+> **브랜치 적용 범위:** 현재 기능 개발 브랜치에서는 다른 브랜치와의 Scene/Prefab 충돌을 줄이기 위해 `MainUICanvas.prefab`과 `InGame.unity`의 조립 diff를 discard한다. 이후 기능을 받아 조립하는 대상 브랜치에서는 이 문서대로 두 파일을 수정·저장하고 그 조립 결과를 정상적으로 커밋해야 한다. 두 파일을 항상 discard하라는 공통 규칙이 아니다.
 
 ## 2. 기능별 문서
 
@@ -12,16 +14,23 @@
 | 2 | 목장 클릭, Transport Inventory, Logs/Stone 아이콘, 동물 탭 스크롤, 테스트 지급 버튼 | `0806_Transport_Inventory_InGame_Assembly.md` |
 | 3 | Caravan Overview, Rename 버튼, Treadmill, 상태 아이콘, 말 애니메이션 | `0807_Caravan_Overview_Current_Reassembly.md` |
 | 4 | 최신 dev2 Scene/Prefab 조립, 실패 Claim 전손, 손실 Popup, 순차 정산 | `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md` |
+| 5 | BaseCamp 레벨 상한, 건물 현황 Popup, 통나무 40개 테스트 버튼, InGame 정적 조립 | `0810_BaseCamp_Level_Gate_and_Overview_UI_Assembly.md` |
 | 참고 | 기존 Overview/Treadmill 요구사항과 Scene 참조 배경 | `0805_Caravan_Overview_Treadmill_Binding_Request.md` |
 | 참고 | Transport Inventory 원인 및 수정 근거 | `0806_Transport_Inventory_PlayMode_Issue_Report.md` |
 
 ## 3. discard 범위와 보존 범위
 
-### discard 예정 조립 파일
+### 현재 기능 개발 브랜치에서만 discard할 조립 파일
 
 - `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`
 - `Assets/_Project/08.Prefabs/UI/Maps/TradePrepareUI.prefab`
 - `Assets/_Project/07.Scenes/04_InGame/InGame.unity`
+
+현재 기능 개발 브랜치에서 discard 후 사라지는 항목이며, 대상 브랜치에서는 반드시 다시 조립해 저장할 항목:
+
+- `MainUICanvas.prefab`의 `BaseCampMainUiEntry` 컴포넌트와 `BaseCampOverviewPopup` 자식 인스턴스
+- `InGame.unity`의 `BuildingLogsDebugButton` Scene 인스턴스
+- 위 두 파일에 저장된 BaseCamp 관련 Inspector 참조와 sibling override
 
 `WorldMapRenderRootV2.prefab` 변경은 위 UI 재조립과 직접 관련 없는 좌표/라인 변경이 섞일 수 있으므로 별도 검토 후 처리한다.
 
@@ -42,9 +51,14 @@
 - `FailedTradeTransportLoss.cs`와 `.meta`
 - `ReusableMessagePopup.cs`와 상위 `Common.meta`
 - `TradeFailureLossPopup.prefab`과 `.meta`
+- `BaseCampBuildingLevelPolicy.cs`와 `.meta`
+- `BaseCampOverviewPopupController.cs`, `BaseCampMainUiEntry.cs`와 `.meta`
+- `BaseCampOverviewPopup.prefab`과 `.meta`
+- `BuildingMaterialTestButton.cs`, `BuildingMaterialTestButton.prefab`과 각 `.meta`
+- BaseCamp 레벨 정책 및 UI 계약 테스트와 각 `.meta`
 - `FailedTradeTransportLossTests.cs`, `TradeFailureLossPopupWiringTests.cs`와 각 `.meta`
 
-Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. 특히 untracked 파일은 `git restore`로 복구할 수 없으므로 먼저 백업 또는 추적 상태를 확보한다.
+현재 기능 개발 브랜치에서 Prefab/Scene diff를 discard할 때 보존 목록의 파일을 함께 제거하지 않는다. 특히 untracked 파일은 `git restore`로 복구할 수 없으므로 먼저 백업 또는 추적 상태를 확보한다. 대상 브랜치에서는 재조립한 `MainUICanvas.prefab`과 `InGame.unity`를 discard하지 말고 기능 변경으로 커밋한다.
 
 필수 파일의 권위 경로:
 
@@ -57,6 +71,10 @@ Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. �
 | 실패 손실 View | `Assets/_Project/05.UI/04_InGame/YHY/Scripts/Common/ReusableMessagePopup.cs` |
 | 실패 전손 처리 | `Assets/_Project/11.CoreServices/Scripts/TradeProgress/FailedTradeTransportLoss.cs` |
 | 정산 UI Adapter | `Assets/_Project/11.CoreServices/Scripts/UI/Settlement/SettlementUiDataAdapter.cs` |
+| BaseCamp 현황 Popup | `Assets/_Project/08.Prefabs/UI/Building/BaseCampOverviewPopup.prefab` |
+| BaseCamp 레벨 정책 | `Assets/_Project/11.CoreServices/Scripts/Building/BaseCampBuildingLevelPolicy.cs` |
+| 통나무 테스트 지급 버튼 | `Assets/99.Sandbox/_LJH/Prefab/BuildingMaterialTestButton.prefab` |
+| 통나무 TradeItem | `Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Logs.asset` |
 
 ## 4. 권장 재조립 순서
 
@@ -70,6 +88,8 @@ Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. �
 - [ ] `JourneyStateDisplay.controller`에 `IsTraveling` Bool이 존재함
 - [ ] `SettlementUiDataAdapter`에 `failureLossPopup` 필드가 보임
 - [ ] `TradeFailureLossPopup.prefab`과 `ReusableMessagePopup` 타입이 존재함
+- [ ] `BaseCampOverviewPopup.prefab`, `BaseCampMainUiEntry`, `BaseCampBuildingLevelPolicy`가 존재함
+- [ ] `BuildingMaterialTestButton.prefab`의 `items[0]`이 `TradeItem_Logs.asset`, `grantQuantity`가 `40`임
 
 ### B. TradePrepareUI Prefab 조립
 
@@ -100,6 +120,10 @@ Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. �
 
 ### C. MainUICanvas Prefab 조립
 
+> 이 단계는 대상 브랜치의 최신 `MainUICanvas.prefab`에서 시작한다. 현재 기능 개발 브랜치의 조립된 Entry/Popup을 파일째 덮어쓰거나 Apply하는 절차가 아니라, 보존된 `BaseCampOverviewPopup.prefab`과 스크립트를 사용해 대상 브랜치에서 새로 연결하고 커밋하는 절차다.
+
+BaseCamp 조립은 메뉴 `ND > UI > Install BaseCamp Overview Into Main UI` 사용을 권장한다. 수동 조립 시 `BuildingListPanel` 컴포넌트가 있는 기존 오브젝트에 `BaseCampMainUiEntry`를 추가하고 MainUICanvas root 직접 자식으로 Popup Prefab을 배치한다. Entry의 `buildingListPanel`, `popup`, `noticeUI`는 같은 MainUICanvas 내부 컴포넌트로 연결하며 현재 기능 개발 브랜치의 MainUI 파일을 대상 브랜치에 덮어쓰지 않는다.
+
 - [ ] 네 Caravan Slot의 기존 직렬화 참조 유지
 - [ ] Display Name 폭 축소와 Auto Size/Ellipsis 설정
 - [ ] 네 슬롯에 RenameButton을 Prefab 오브젝트로 배치
@@ -108,6 +132,10 @@ Prefab/Scene을 discard하는 명령에 위 파일을 포함하지 않는다. �
 - [ ] Prepare/Traveling/Selling/Settling/Completed Sprite 연결
 - [ ] `CaravanOverviewRenameBinding`의 Presenter/Popup 연결
 - [ ] Transport Inventory Popup과 개발용 지급 버튼은 `MainUICanvas.prefab` 원본에 넣지 않음
+- [ ] `BaseCampOverviewPopup.prefab`을 MainUICanvas의 비활성 정적 자식으로 한 번 배치
+- [ ] 기존 `BuildingListPanel`에 `BaseCampMainUiEntry`를 한 개 추가
+- [ ] Entry의 `buildingListPanel`, `popup`, 기존 `NoticeUI` 참조 연결
+- [ ] Popup의 BaseCamp 포함 7개 행, Backdrop, X 버튼이 Prefab 오브젝트로 존재
 
 각 Slot의 필수 순서와 동작:
 
@@ -154,6 +182,10 @@ DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateD
 
 ### D. InGame Scene 조립
 
+> 이 단계는 대상 브랜치의 최신 `InGame.unity`에서 시작한다. 먼저 C 단계의 `MainUICanvas.prefab` 조립을 저장하고 Prefab Mode를 닫은 뒤 Scene을 연다. BaseCamp Popup/Entry는 Prefab 상속으로 받아야 하며 Scene에 다시 중복 생성하지 않는다. 대상 브랜치에서 완성된 Scene 변경은 정상 조립 결과이므로 저장·커밋한다.
+
+BaseCamp 조립에서는 기존 `BuildingConstructionRuntimeHandler`에 추가 Inspector 연결이 없다. InGame에는 MainUICanvas 상속 상태를 확인한 뒤 `BuildingLogsDebugButton` Prefab instance만 Scene 전용으로 추가한다. 다른 최신 dev2 Scene 오브젝트와 override는 유지한다.
+
 - [ ] `CaravanSettingUiConnector` 또는 별도 명확한 Scene 조립 루트 사용
 - [ ] `TestCaravanSettingService` 제거
 - [ ] `CaravanSettingRuntimeBridge` 정확히 1개 추가
@@ -163,26 +195,45 @@ DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateD
 - [ ] Entry `buildingListPanel` 연결
 - [ ] `InGame.unity`의 활성 MainUICanvas 인스턴스 아래에 `TransportInventoryPopup.prefab`을 한 번 배치하고 기본 비활성화
 - [ ] Entry `popup`에 위 Scene Popup 인스턴스의 `TransportInventoryPopupController` 연결
-- [ ] 개발용 운송 수단 지급 버튼을 활성 MainUICanvas Scene 인스턴스 좌하단에 한 개만 배치
+- [ ] 개발용 운송 수단 지급 버튼(`TransportInventoryRewardDebugButton.prefab`)을 활성 MainUICanvas Scene 인스턴스에 한 개만 배치
 - [ ] `CaravanOverviewPresenter.treadmillPanel`에 Scene TreadmillPanel 연결
 - [ ] 활성 MainUICanvas Scene 인스턴스 아래에 `TradeFailureLossPopup.prefab`을 한 번 배치하고 기본 비활성화
 - [ ] Scene에서 사용하는 모든 `SettlementUiDataAdapter.failureLossPopup`에 같은 Popup instance 연결
 - [ ] 실패 Popup은 일반 Town/Trade UI보다 뒤 sibling에 두되 Scene 전용 참조를 MainUICanvas 원본에 Apply하지 않음
 - [ ] Scene 전용 참조는 Prefab 에셋에 Apply하지 않고 Scene override로 저장
+- [ ] BaseCamp UI는 MainUICanvas Prefab 상속으로 반영하고 InGame에 불필요한 Scene override를 만들지 않음
+- [ ] InGame 실인스턴스에서 BaseCamp Entry 1개, Popup 1개, 건설 Handler 1개 확인
+- [ ] BaseCamp 건설 테스트용 `BuildingMaterialTestButton.prefab`을 InGame의 활성 MainUICanvas Scene 인스턴스에 정적 Prefab 인스턴스로 한 개 배치하고 이름을 `BuildingLogsDebugButton`으로 변경
+- [ ] `BuildingLogsDebugButton`의 `items[0] = TradeItem_Logs.asset`, `grantQuantity = 40`, Label = `통나무 40개 지급` 확인
 
 Scene 배치 세부 기준:
 
 - `TransportInventoryPopup`: 활성 MainUICanvas 아래, 기본 비활성
-- 개발용 지급 버튼: `InfoPanel` 바로 다음 sibling, 좌하단 `(20,20)`, 크기 `(260,56)`, 모든 Popup/알림보다 아래 렌더 순서
+- 운송 수단 지급 버튼과 통나무 지급 버튼은 서로 다른 Prefab/컴포넌트다. 한쪽으로 다른 쪽을 대체하지 않는다.
+- 운송 수단 지급 버튼: 좌하단 anchor/pivot `(0,0)`, 위치 `(20,20)`, 크기 `(260,56)`
+- `BuildingLogsDebugButton`: 운송 수단 버튼 오른쪽, 좌하단 anchor/pivot `(0,0)`, 위치 `(300,20)`, 크기 `(260,56)`
+- 두 버튼은 가로 20px 간격으로 배치한다. 둘 다 `InfoPanel` 다음 영역에 두고 일반 Popup/NoticeUI보다 낮은 sibling index를 사용해 Popup을 가리지 않는다.
 - `TradeFailureLossPopup`: 활성 MainUICanvas 아래, 기본 비활성, 일반 Popup/활동 로그보다 뒤이고 `NoticeUI` 바로 앞 sibling
 - 모든 Scene `SettlementUiDataAdapter.failureLossPopup`: 동일한 `TradeFailureLossPopup`의 `ReusableMessagePopup` 참조
 - Popup Button Persistent `OnClick`: 별도 Listener를 넣지 않음
 - `ReusableMessagePopup`: 배치된 instance의 내용과 활성 상태만 변경
 
+BaseCamp 재조립 경계:
+
+| 대상 | 저장 위치 | 현재 브랜치 discard / 대상 브랜치 조치 |
+| --- | --- | --- |
+| BaseCamp 레벨 정책·건설 검증 | C# 파일 | 보존, Scene 연결 불필요 |
+| BaseCamp Popup 원본 | `BaseCampOverviewPopup.prefab` | 보존 |
+| Popup/Entry 배치와 참조 | `MainUICanvas.prefab` | C 단계에서 재조립 |
+| 통나무 지급 버튼 원본 | `BuildingMaterialTestButton.prefab` | 보존 |
+| 통나무 지급 버튼 인스턴스 | `InGame.unity` | D 단계에서 재조립 |
+| BaseCamp 저장 데이터 | `SaveData.player.villageBuildings` | 기존 저장 흐름 사용, 별도 Scene 필드 추가 없음 |
+
 ### E. 계약 테스트와 수동 검증
 
 - [ ] Scene 계약 테스트에서 RuntimeBridge 1개, Test Service 0개
-- [ ] Entry 1개, Popup 1개, 개발용 지급 버튼 1개 이하
+- [ ] BaseCamp Entry 1개, Popup 1개, `BuildingLogsDebugButton` 1개 이하
+- [ ] 운송 수단 지급 버튼과 통나무 지급 버튼의 컴포넌트·Prefab·기능이 서로 뒤바뀌지 않음
 - [ ] 목장 Lv.1 생성 후 목장 블록 클릭 시 Transport Inventory가 열림
 - [ ] Wagon_M 1, Wagon_S 1, Horse 2 지급 후 목록에 표시됨
 - [ ] Logs/Stone 아이콘과 이름, 수량, 중량이 표시됨
@@ -195,6 +246,13 @@ Scene 배치 세부 기준:
 - [ ] 코드/Prefab 집중 테스트 통과 후, Scene 조립이 끝난 상태에서 Explicit `InGameScene_SettlementAdaptersReferencePlacedPopupInstance`도 별도 실행하여 통과
 - [ ] 실패 S8 → S9 Claim → Town 위 손실 Popup → 확인 → 다음 실패 Pending 또는 Town 순서 확인
 - [ ] Claim 저장 실패 시 장착/소유 인벤토리와 Pending이 모두 복구됨
+- [ ] BaseCamp Lv.0에서 일반 건물 Lv.1 건설이 차단되고 재료가 유지됨
+- [ ] BaseCamp Lv.1에서 일반 건물 Lv.1은 성공하고 Lv.2는 차단됨
+- [ ] BaseCamp Lv.2 증축 후 일반 건물 Lv.2가 성공함
+- [ ] `통나무 40개 지급` 1회 클릭 시 HomeInventory의 Logs가 정확히 40 증가함
+- [ ] BaseCamp 블록 클릭 시 현황 Popup의 저장 레벨과 상한이 일치함
+- [ ] Backdrop/X 닫기, 카드 내부 클릭 유지, NoticeUI 한국어 실패 안내 확인
+- [ ] 대상 브랜치 조립 후 Explicit `MainUiPrefab_HasOneWiredEntryAndPopup`, `InGameScene_InheritsBaseCampUiThroughMainUiPrefab` 통과
 
 실패 Popup 문구는 Claim 직전 실제 구성으로 선택한다.
 
@@ -215,7 +273,8 @@ Scene 배치 세부 기준:
 | Transport Inventory 진입 | 목장 블록 클릭으로 Popup 열림 | [ ] |
 | Transport Inventory 데이터 | Wagon/Animal/Cargo와 Logs/Stone 아이콘 정상 | [ ] |
 | Animal Scroll | 실제 슬롯 수 기반 높이와 최하단 접근 정상 | [ ] |
-| Debug 지급 | Wagon 2종 각 1개와 Horse 2마리 지급. `MainUICanvas/InfoPanel` 다음 sibling, 좌하단 `(20,20)`이며 모든 팝업/알림보다 아래 레이어 | [ ] |
+| 운송 수단 Debug 지급 | Wagon_M 1개, Wagon_S 1개, Horse 2마리 지급. `TransportInventoryRewardDebugButton.prefab` 사용 | [ ] |
+| 건설 재료 Debug 지급 | Logs 40개 지급. `BuildingMaterialTestButton.prefab`의 정적 Scene 인스턴스이며 `BuildingLogsDebugButton`으로 명명 | [ ] |
 | Rename | 별도 아이콘 버튼으로 팝업 열림 | [ ] |
 | Treadmill | Display Name 클릭으로 해당 Caravan 표시 | [ ] |
 | Journey Icon | Selling 느낌표, Settling/Completed 체크 | [ ] |
@@ -225,11 +284,17 @@ Scene 배치 세부 기준:
 | 실패 손실 Popup | S9 종료 후 실패 결과에만 표시하며 런타임 생성 없이 Scene prefab instance 사용 | [ ] |
 | 순차 정산 | Popup 확인 전 다음 Pending을 보류하고, 확인 후 다음 Caravan S8 또는 Town 유지 | [ ] |
 | 실패 플래그 소비 | 손실 처리 후 새 마차를 장착·저장해도 재삭제되지 않음 | [ ] |
+| BaseCamp 레벨 상한 | 일반 건물 목표 레벨이 BaseCamp 레벨을 넘으면 재료 차감 전에 차단 | [ ] |
+| BaseCamp 현황 UI | BaseCamp 포함 건물 레벨과 상한 표시, Backdrop/X 닫기, 정적 Prefab 조립 | [ ] |
+| BaseCamp 저장 복원 | BaseCamp 및 일반 건물 레벨이 재진입 후 동일하게 복원 | [ ] |
 
 ## 6. 조립 원칙
 
 - UI 버튼, 아이콘, 팝업 루트는 Prefab에 명시적으로 배치한다.
-- Scene에만 필요한 Popup과 개발용 지급 버튼은 원본 MainUICanvas Prefab을 수정하지 않고 `InGame.unity`의 활성 MainUICanvas 인스턴스 아래에 Prefab 인스턴스로 배치한다.
+- BaseCamp 현황 UI는 MainUICanvas Prefab 안에 정적으로 배치하고 런타임 생성하지 않는다.
+- BaseCamp 레벨은 `SaveData.player.villageBuildings`를 권위로 하며 Scene 건물 레벨로 건설 가능 여부를 판정하지 않는다.
+- BaseCamp 제한은 UI 사전 안내와 실제 `TryStage` 변경 경계에서 재검증한다.
+- Scene에만 필요한 Popup과 두 종류의 개발용 지급 버튼은 원본 MainUICanvas Prefab을 수정하지 않고 `InGame.unity`의 활성 MainUICanvas 인스턴스 아래에 정적 Prefab 인스턴스로 배치한다.
 - 손실 Popup은 런타임 생성하지 않으며 `ReusableMessagePopup`은 이미 배치된 instance의 내용과 활성 상태만 변경한다.
 - 실패 전손은 S8 표시 시점이 아니라 S9 Claim Save transaction 안에서 수행한다.
 - 코드가 Rename 버튼이나 상태 아이콘 GameObject를 런타임에 생성하게 만들지 않는다.

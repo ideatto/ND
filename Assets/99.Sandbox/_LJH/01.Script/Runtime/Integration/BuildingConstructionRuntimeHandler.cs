@@ -95,6 +95,19 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                 return;
             }
 
+            int targetLevel = currentLevel + 1;
+            if (!BaseCampBuildingLevelPolicy.CanAdvance(
+                    buildId,
+                    targetLevel,
+                    saveData.player.villageBuildings,
+                    out int baseCampLevel))
+            {
+                ShowFailure(
+                    $"베이스 캠프 Lv.{targetLevel}이 필요합니다. 현재 Lv.{baseCampLevel}입니다.",
+                    $"Building level gate blocked '{buildId}' Lv.{targetLevel}; BaseCamp Lv.{baseCampLevel}.");
+                return;
+            }
+
             PlayerMainManager player = PlayerMainManager.Instance;
 
             if(player == null)
@@ -156,7 +169,7 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             if(result == null || !result.Succeeded)
             {
                 ShowFailure(
-                    "건설 처리 중 오류가 발생했습니다. 적용된 변경은 취소되었습니다.",
+                    GetFailureUserMessage(result),
                     $"Building construction failed: {result?.ErrorCode ?? "NULL_RESULT"}.");
             }
         }
@@ -176,6 +189,37 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     {
         noticeUI?.Show(userMessage);
         Debug.LogError(diagnosticMessage, this);
+    }
+
+    /// <summary>
+    /// 내부 실패 코드는 로그와 테스트에서 유지하고, NoticeUI에는 사용자가 이해할 수 있는
+    /// 한국어 문구만 전달한다. 알 수 없는 코드는 안전한 공통 문구로 처리한다.
+    /// </summary>
+    private static string GetFailureUserMessage(BuildingUpgradeCommandResult result)
+    {
+        string errorCode = result?.ErrorCode ?? string.Empty;
+
+        switch(errorCode)
+        {
+            case "BUILDING_STAGE_BASECAMP_LEVEL_BLOCKED":
+                return "베이스 캠프 레벨이 부족하여 건설하거나 증축할 수 없습니다.";
+            case "BUILDING_ALREADY_MAX_LEVEL":
+                return "이미 최대 레벨인 건물입니다.";
+            case "BUILDING_LEVEL_NOT_FOUND":
+                return "다음 건설 단계 정보를 찾을 수 없습니다.";
+            case "BUILDING_INSUFFICIENT_MATERIALS":
+                return "건설 또는 증축에 필요한 재료가 부족합니다.";
+            case "BUILDING_HOME_INVENTORY_CORRUPTED":
+            case "BUILDING_STAGE_BUILDING_DATA_INVALID":
+            case "BUILDING_STAGE_DUPLICATE_BUILDING":
+            case "BUILDING_STAGE_LEVEL_MISMATCH":
+            case "BUILDING_STAGE_MATERIAL_MISMATCH":
+                return "건물 또는 창고 정보를 확인할 수 없어 건설을 중단했습니다.";
+            case "BUILDING_SAVE_FAILED":
+                return "저장에 실패하여 건설 변경 사항을 취소했습니다.";
+            default:
+                return "건설 처리 중 오류가 발생했습니다. 적용된 변경은 취소되었습니다.";
+        }
     }
 
     /// <summary>
@@ -214,6 +258,18 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
            plan.TargetLevel < 1)
         {
             errorCode = "BUILDING_STAGE_CONTEXT_INVALID";
+            return false;
+        }
+
+        // UI 사전 검사는 안내용이다. 실제 상태 변경 경계에서도 현재 SaveData를 다시 확인해
+        // 다른 호출 경로나 향후 비동기화가 BaseCamp 레벨 상한을 우회하지 못하게 한다.
+        if(!BaseCampBuildingLevelPolicy.CanAdvance(
+               plan.BuildingId,
+               plan.TargetLevel,
+               buildings,
+               out _))
+        {
+            errorCode = "BUILDING_STAGE_BASECAMP_LEVEL_BLOCKED";
             return false;
         }
 
