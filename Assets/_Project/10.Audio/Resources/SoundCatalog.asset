@@ -18,15 +18,15 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: 057d3dc62fe3c6743867d12bae6cd7f3, type: 3}
     volume: 0.3
-    minPitch: 0.1
-    maxPitch: 0.1
+    minPitch: 1
+    maxPitch: 1
   - id: bgm_ingame
     category: 0
     clips:
     - {fileID: 8300000, guid: 9dbdbbc4a082eb448b1a637880e6854c, type: 3}
     volume: 0.3
-    minPitch: 0.1
-    maxPitch: 0.1
+    minPitch: 1
+    maxPitch: 1
   - id: ui_sfx_button_wooden
     category: 2
     clips:
