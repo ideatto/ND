@@ -411,6 +411,16 @@ public class PlayerMainManager : MonoBehaviour
     public bool TryCreateWagon(string contentId, out ND.Framework.OwnedWagonSaveData created,
         out TransportInventoryValidationFailure failure)
     {
+        return TryCreateWagon(contentId, out created, out failure, publishChange: true);
+    }
+
+    /// <summary>
+    /// 트랜잭션 서비스는 저장 성공 전에 UI가 미확정 인벤토리를 관측하지 않도록
+    /// publishChange를 false로 호출하고, Commit 이후 한 번만 변경 이벤트를 발행한다.
+    /// </summary>
+    public bool TryCreateWagon(string contentId, out ND.Framework.OwnedWagonSaveData created,
+        out TransportInventoryValidationFailure failure, bool publishChange)
+    {
         created = null;
         string normalizedId = contentId?.Trim() ?? string.Empty;
         if (!CanCreateWagon(normalizedId, 1, out failure)) return false;
@@ -421,7 +431,7 @@ public class PlayerMainManager : MonoBehaviour
             contentId = normalizedId,
             currentDurability = Math.Max(0, definition.MaxDurability)
         };
-        if (!TryAddWagon(candidate))
+        if (!TryAddWagon(candidate, publishChange))
         {
             failure = TransportInventoryValidationFailure.DuplicateInstanceId;
             return false;
@@ -433,6 +443,12 @@ public class PlayerMainManager : MonoBehaviour
     public bool TryCreateDraftAnimal(string contentId, out ND.Framework.OwnedDraftAnimalSaveData created,
         out TransportInventoryValidationFailure failure)
     {
+        return TryCreateDraftAnimal(contentId, out created, out failure, publishChange: true);
+    }
+
+    public bool TryCreateDraftAnimal(string contentId, out ND.Framework.OwnedDraftAnimalSaveData created,
+        out TransportInventoryValidationFailure failure, bool publishChange)
+    {
         created = null;
         string normalizedId = contentId?.Trim() ?? string.Empty;
         if (!CanCreateDraftAnimal(normalizedId, 1, out failure)) return false;
@@ -441,7 +457,7 @@ public class PlayerMainManager : MonoBehaviour
             instanceId = CreateTransportInstanceId(),
             contentId = normalizedId
         };
-        if (!TryAddDraftAnimal(candidate))
+        if (!TryAddDraftAnimal(candidate, publishChange))
         {
             failure = TransportInventoryValidationFailure.DuplicateInstanceId;
             return false;
@@ -453,18 +469,29 @@ public class PlayerMainManager : MonoBehaviour
     /// <summary>일반 획득으로 마차를 추가한다. 정원 50대를 초과할 수 없다.</summary>
     public bool TryAddWagon(ND.Framework.OwnedWagonSaveData wagon)
     {
+        return TryAddWagon(wagon, publishChange: true);
+    }
+
+    private bool TryAddWagon(ND.Framework.OwnedWagonSaveData wagon, bool publishChange)
+    {
         if (!CanAddWagon(wagon, out _))
             return false;
 
         ND.Framework.OwnedWagonSaveData stored = Copy(wagon);
         WagonInventoryList.Add(stored);
         wagonsByInstanceId.Add(stored.instanceId, stored);
-        FrameworkEvents.RaiseTransportInventoryChanged();
+        if (publishChange)
+            FrameworkEvents.RaiseTransportInventoryChanged();
         return true;
     }
 
     /// <summary>일반 획득으로 역축을 추가한다. 정원 100마리를 초과할 수 없다.</summary>
     public bool TryAddDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal)
+    {
+        return TryAddDraftAnimal(animal, publishChange: true);
+    }
+
+    private bool TryAddDraftAnimal(ND.Framework.OwnedDraftAnimalSaveData animal, bool publishChange)
     {
         if (!CanAddDraftAnimal(animal, out _))
             return false;
@@ -472,8 +499,20 @@ public class PlayerMainManager : MonoBehaviour
         ND.Framework.OwnedDraftAnimalSaveData stored = Copy(animal);
         DraftAnimalInventoryList.Add(stored);
         draftAnimalsByInstanceId.Add(stored.instanceId, stored);
-        FrameworkEvents.RaiseTransportInventoryChanged();
+        if (publishChange)
+            FrameworkEvents.RaiseTransportInventoryChanged();
         return true;
+    }
+
+    /// <summary>
+    /// SaveData Snapshot 복원 뒤 파생 인덱스를 다시 만든다. SaveData가 원본이고
+    /// Dictionary는 조회 가속용 파생 상태이므로 트랜잭션 원복 시 반드시 함께 동기화한다.
+    /// </summary>
+    public void SynchronizeTransportInventoryFromSave(bool publishChange = true)
+    {
+        RebuildTransportInventoryIndex();
+        if (publishChange)
+            FrameworkEvents.RaiseTransportInventoryChanged();
     }
 
     /// <summary>instanceId와 contentId가 모두 일치하는 마차만 제거한다.</summary>

@@ -307,6 +307,7 @@ GameObject:
   - component: {fileID: 6400237780631808474}
   - component: {fileID: 4730381732721750359}
   - component: {fileID: 5136889978054184509}
+  - component: {fileID: 3516264562585693080}
   m_Layer: 5
   m_Name: TitleSettingsOpen_Button
   m_TagString: Untagged
@@ -429,6 +430,19 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+--- !u!114 &3516264562585693080
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1885342633582612819}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &2036703422344170100
 GameObject:
   m_ObjectHideFlags: 0

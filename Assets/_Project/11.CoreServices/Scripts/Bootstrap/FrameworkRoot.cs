@@ -49,12 +49,14 @@ namespace ND.Framework
             CalendarRestoreResult calendarResult,
             bool calendarDirty,
             bool tradeDirty,
+            bool cottageDirty,
             bool succeeded,
             SaveResult saveResult)
         {
             CalendarResult = calendarResult;
             CalendarDirty = calendarDirty;
             TradeDirty = tradeDirty;
+            CottageDirty = cottageDirty;
             Succeeded = succeeded;
             SaveResult = saveResult;
         }
@@ -62,7 +64,8 @@ namespace ND.Framework
         public CalendarRestoreResult CalendarResult { get; }
         public bool CalendarDirty { get; }
         public bool TradeDirty { get; }
-        public bool Dirty => CalendarDirty || TradeDirty;
+        public bool CottageDirty { get; }
+        public bool Dirty => CalendarDirty || TradeDirty || CottageDirty;
         public bool Succeeded { get; }
         public SaveResult SaveResult { get; }
     }
@@ -326,6 +329,8 @@ namespace ND.Framework
         /// <summary>마을 건물 배치 변경과 영속 저장을 하나의 SaveData 트랜잭션으로 처리한다.</summary>
         public BuildingPlacementCommand BuildingPlacement { get; private set; }
 
+        public CottageProductionService CottageProduction { get; private set; }
+
         /// <summary>구조 대출 발급·상환 및 상태 조회 command service이다.</summary>
         public RescueLoanCommandService RescueLoan { get; private set; }
 
@@ -396,6 +401,7 @@ namespace ND.Framework
             // 달력과 무역은 같은 경량 polling gate를 공유하지만 각자의 UTC 기준과 저장 정책은 분리한다.
             GameCalendar?.TickOnline(CurrentSaveData, SaveService);
             TradeProgressCoordinator?.CheckProgressAndCompletion(saveProgress: false);
+            CottageProduction?.TickOnline();
         }
 
         private static bool CanRunOnlineProgressTick(
@@ -536,12 +542,13 @@ namespace ND.Framework
                     "Offline progress skipped because load UTC is earlier than lastSavedUtcTicks.");
             }
 
-            var restoreTransaction = ExecuteOfflineRestore(
+            var restoreTransaction = ExecuteOfflineRestoreWithCottage(
                 CurrentSaveData,
                 restoreContext,
                 loadUtc,
                 GameCalendar,
                 TradeProgressCoordinator,
+                CottageProduction,
                 SaveService);
             LastCalendarRestoreResult = restoreTransaction.CalendarResult;
             if (!restoreTransaction.Succeeded)
@@ -603,19 +610,39 @@ namespace ND.Framework
             TradeProgressCoordinator trade,
             ISaveService saveService)
         {
+            return ExecuteOfflineRestoreWithCottage(
+                saveData, context, loadUtc, calendar, trade, null, saveService);
+        }
+
+        internal static OfflineRestoreTransactionResult ExecuteOfflineRestoreWithCottage(
+            SaveData saveData,
+            OfflineRestoreContext context,
+            DateTime loadUtc,
+            GameCalendarService calendar,
+            TradeProgressCoordinator trade,
+            CottageProductionService cottage,
+            ISaveService saveService)
+        {
             var restoreSnapshot = JsonUtility.ToJson(saveData);
             var calendarResult = calendar?.RestoreOffline(saveData, context);
             var tradeRestore = trade?.PrepareOfflineProgressOnLoad(saveData, context);
+            var cottageRestore = cottage != null
+                ? cottage.RestoreOffline(saveData, context)
+                : new CottageProductionRestoreResult(false);
             var calendarDirty = calendarResult?.Changed ?? false;
             var tradeDirty = tradeRestore?.Changed ?? false;
-            if (!calendarDirty && !tradeDirty)
+            var cottageDirty = cottageRestore.Changed;
+            if (!calendarDirty && !tradeDirty && !cottageDirty)
             {
                 FrameworkEvents.RaiseCalendarRestored(calendarResult);
                 tradeRestore?.Publish(trade, saveData);
+                if (cottageDirty)
+                    FrameworkEvents.RaiseCottageProductionChanged();
                 return new OfflineRestoreTransactionResult(
                     calendarResult,
                     calendarDirty,
                     tradeDirty,
+                    cottageDirty,
                     true,
                     null);
             }
@@ -641,16 +668,20 @@ namespace ND.Framework
                     null,
                     calendarDirty,
                     tradeDirty,
+                    cottageDirty,
                     false,
                     saveResult);
             }
 
             FrameworkEvents.RaiseCalendarRestored(calendarResult);
             tradeRestore?.Publish(trade, saveData);
+            if (cottageDirty)
+                FrameworkEvents.RaiseCottageProductionChanged();
             return new OfflineRestoreTransactionResult(
                 calendarResult,
                 calendarDirty,
                 tradeDirty,
+                cottageDirty,
                 true,
                 saveResult);
         }
@@ -720,6 +751,19 @@ namespace ND.Framework
             GameTime = new GameTimeService(policyConfig);
             GameCalendar = new GameCalendarService(GameTime);
             SaveService = new JsonSaveService();
+            var cottageConfig = Resources.Load<CottageProductionData>(
+                CottageProductionData.ResourceName);
+            if (cottageConfig == null)
+            {
+                cottageConfig = ScriptableObject.CreateInstance<CottageProductionData>();
+                FrameworkLog.Warning(
+                    $"CottageProductionData was not found at Resources/{CottageProductionData.ResourceName}. Using runtime defaults.");
+            }
+            CottageProduction = new CottageProductionService(
+                cottageConfig,
+                GameTime,
+                () => CurrentSaveData,
+                SaveService);
             SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
             DebugCommands = new FrameworkDebugCommands(
@@ -825,6 +869,18 @@ namespace ND.Framework
             if (SharedGameData == null || !SharedGameData.IsLoaded)
             {
                 FrameworkLog.Error("InGame entry blocked because shared game data provider is missing after load.");
+                return false;
+            }
+
+            // 생산 SO의 contentId는 문자열이므로 SharedGameData가 준비된 이 경계에서
+            // 실제 definition까지 확인한다. 잘못된 설정을 수령 시점까지 숨기지 않는다.
+            if (CottageProduction != null
+                && !CottageProduction.ValidateCatalog(
+                    SharedGameData,
+                    out string cottageError))
+            {
+                FrameworkLog.Error(
+                    $"InGame entry blocked because cottage production data is invalid: {cottageError}.");
                 return false;
             }
 

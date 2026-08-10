@@ -9,7 +9,7 @@
  *
  * Main Features
  * - Settings 패널 토글·열기·닫기.
- * - BGM/SFX 볼륨·토글, 창 모드·해상도, Reset을 SoundManager / DisplayManager에 전달한다.
+ * - BGM/SFX/UI SFX 볼륨·토글, 창 모드·해상도, Reset을 SoundManager / DisplayManager에 전달한다.
  * - OpenOption / ResetAllSettings 시 Slider·Toggle·Dropdown을 WithoutNotify로 동기화한다.
  *
  * Usage for Team Members — Prefab wiring
@@ -65,6 +65,10 @@ public class SettingsUIManager : MonoBehaviour
     [SerializeField]
     private Slider sfxSlider;
 
+    [Tooltip("UI SFX 볼륨 Slider입니다. 비어 있으면 동기화를 건너뜁니다.")]
+    [SerializeField]
+    private Slider uiSfxSlider;
+
     [Tooltip("BGM 활성 Toggle입니다. 비어 있으면 동기화를 건너뜁니다.")]
     [SerializeField]
     private Toggle bgmToggle;
@@ -72,6 +76,10 @@ public class SettingsUIManager : MonoBehaviour
     [Tooltip("SFX 활성 Toggle입니다. 비어 있으면 동기화를 건너뜁니다.")]
     [SerializeField]
     private Toggle sfxToggle;
+
+    [Tooltip("UI SFX 활성 Toggle입니다. 비어 있으면 동기화를 건너뜁니다.")]
+    [SerializeField]
+    private Toggle uiSfxToggle;
 
     [Header("Display Controls")]
     [Tooltip("창 모드 TMP_Dropdown입니다. 옵션 순서는 WindowDisplayMode enum과 같아야 합니다.")]
@@ -150,6 +158,18 @@ public class SettingsUIManager : MonoBehaviour
         SoundManager.Instance.SetSfxVolume(volume);
     }
 
+    /// <summary>UI SFX 볼륨 Slider 이벤트용 위임이다.</summary>
+    public void SetUiSfxVolume(float volume)
+    {
+        if (SoundManager.Instance == null)
+        {
+            Debug.LogWarning("[SettingsUIManager] SoundManager.Instance is null. SetUiSfxVolume ignored.");
+            return;
+        }
+
+        SoundManager.Instance.SetUiSfxVolume(volume);
+    }
+
     /// <summary>
     /// BGM 활성 Toggle 이벤트용 위임이다.
     /// </summary>
@@ -176,6 +196,18 @@ public class SettingsUIManager : MonoBehaviour
         }
 
         SoundManager.Instance.SetSfxEnabled(enabled);
+    }
+
+    /// <summary>UI SFX 활성 Toggle 이벤트용 위임이다.</summary>
+    public void SetUiSfxEnabled(bool enabled)
+    {
+        if (SoundManager.Instance == null)
+        {
+            Debug.LogWarning("[SettingsUIManager] SoundManager.Instance is null. SetUiSfxEnabled ignored.");
+            return;
+        }
+
+        SoundManager.Instance.SetUiSfxEnabled(enabled);
     }
 
     /// <summary>
@@ -250,6 +282,11 @@ public class SettingsUIManager : MonoBehaviour
                 sfxSlider.SetValueWithoutNotify(SoundManager.Instance.SfxVolume);
             }
 
+            if (uiSfxSlider != null)
+            {
+                uiSfxSlider.SetValueWithoutNotify(SoundManager.Instance.UiSfxVolume);
+            }
+
             if (bgmToggle != null)
             {
                 bgmToggle.SetIsOnWithoutNotify(SoundManager.Instance.BgmEnabled);
@@ -258,6 +295,11 @@ public class SettingsUIManager : MonoBehaviour
             if (sfxToggle != null)
             {
                 sfxToggle.SetIsOnWithoutNotify(SoundManager.Instance.SfxEnabled);
+            }
+
+            if (uiSfxToggle != null)
+            {
+                uiSfxToggle.SetIsOnWithoutNotify(SoundManager.Instance.UiSfxEnabled);
             }
         }
 

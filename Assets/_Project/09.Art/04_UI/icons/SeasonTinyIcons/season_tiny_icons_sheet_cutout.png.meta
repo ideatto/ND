@@ -138,8 +138,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: ca8d591e4ce1003498245217193aefc9
-      internalID: -1176938676
+      spriteID: b8483ed244138a04c880e607ad5f2807
+      internalID: -1020834243
       vertices: []
       indices: 
       edges: []
@@ -160,8 +160,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 7eba99c9f95bdbc4c9708c3cca11386b
-      internalID: 1083271812
+      spriteID: 4dc5db66d18b41d458d587c9fe402a18
+      internalID: -53724689
       vertices: []
       indices: 
       edges: []
@@ -182,8 +182,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: bec8ebca579673649b1b5166ae96d04f
-      internalID: -476731003
+      spriteID: 134b589449d2f8b41bb472300f54ab4b
+      internalID: 18883556
       vertices: []
       indices: 
       edges: []
@@ -204,8 +204,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 724560a292a0d45459316521961b6776
-      internalID: -1193401510
+      spriteID: 4667d69ec208ad4448d7fbe69f3b613c
+      internalID: 1421479765
       vertices: []
       indices: 
       edges: []
@@ -214,7 +214,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 01b284357d5857f49a356afcb3567723
+    spriteID: 6f03f2101cbc0484db8899648948a9d9
     internalID: 0
     vertices: []
     indices: 
@@ -226,10 +226,10 @@ TextureImporter:
       - key: SpriteEditor.SliceSettings
         value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":0,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      season_tiny_icons_sheet_cutout_0: -1176938676
-      season_tiny_icons_sheet_cutout_1: 1083271812
-      season_tiny_icons_sheet_cutout_2: -476731003
-      season_tiny_icons_sheet_cutout_3: -1193401510
+      season_tiny_icons_sheet_cutout_0: -1020834243
+      season_tiny_icons_sheet_cutout_1: -53724689
+      season_tiny_icons_sheet_cutout_2: 18883556
+      season_tiny_icons_sheet_cutout_3: 1421479765
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
