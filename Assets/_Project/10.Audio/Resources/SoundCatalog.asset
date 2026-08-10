@@ -32,7 +32,7 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: d34886640bfddb040bd4ed680d4c0364, type: 3}
     - {fileID: 8300000, guid: 06e6664d782c9ad4dabe7e59a3f4c93e, type: 3}
-    volume: 0.3
+    volume: 0.5
     minPitch: 0.1
     maxPitch: 0.1
   - id: sfx_arrive

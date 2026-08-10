@@ -717,6 +717,7 @@ GameObject:
   - component: {fileID: 2252206989221123798}
   - component: {fileID: 5144731988934662740}
   - component: {fileID: 9064944256389305420}
+  - component: {fileID: 6003526089961617340}
   m_Layer: 5
   m_Name: Settings_Close_Button
   m_TagString: Untagged
@@ -838,6 +839,19 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+--- !u!114 &6003526089961617340
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3638714029405171145}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &3721619326229473688
 GameObject:
   m_ObjectHideFlags: 0
@@ -925,6 +939,7 @@ GameObject:
   - component: {fileID: 4278143172365742398}
   - component: {fileID: 1409516694311508393}
   - component: {fileID: 7985871615550917001}
+  - component: {fileID: 6558132980842598659}
   m_Layer: 5
   m_Name: Settings_Reset_Button
   m_TagString: Untagged
@@ -1046,6 +1061,19 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+--- !u!114 &6558132980842598659
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3737883101925820071}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5195a1ec5cdd2343a16fa5eb282a110, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ND.Audio.UIButtonSound
+  soundId: ui_sfx_button_wooden
 --- !u!1 &5832801760110463891
 GameObject:
   m_ObjectHideFlags: 0
@@ -2066,7 +2094,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2643854041086991945, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_Sprite
-      value:
+      value: 
       objectReference: {fileID: 21300000, guid: c9126fb61a7d01342bcf32c348a3ddba, type: 3}
     - target: {fileID: 2643854041086991945, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_Color.b
@@ -2090,7 +2118,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3085108784460507937, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_Target
-      value:
+      value: 
       objectReference: {fileID: 64277575108891250}
     - target: {fileID: 3085108784460507937, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
@@ -2118,7 +2146,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3938715277950921442, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_OnValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_Target
-      value:
+      value: 
       objectReference: {fileID: 64277575108891250}
     - target: {fileID: 3938715277950921442, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_OnValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
@@ -2234,7 +2262,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6091549854991597903, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_Sprite
-      value:
+      value: 
       objectReference: {fileID: 21300000, guid: 6a9441aad6db95d449b68be36f0f2d6f, type: 3}
     - target: {fileID: 6091549854991597903, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_RaycastTarget
@@ -2282,7 +2310,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8918616912589083951, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_Sprite
-      value:
+      value: 
       objectReference: {fileID: 21300000, guid: f6483ff0adc6c37408d7abb27920e48e, type: 3}
     - target: {fileID: 8918616912589083951, guid: 601de60d9c9325b4c9591d589e73862d, type: 3}
       propertyPath: m_RaycastTarget
@@ -2318,7 +2346,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 67db9e8f0e2ae9c40bc1e2b64352a6b4, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Slider
 --- !u!1001 &8399574165330214036
 PrefabInstance:
@@ -2584,7 +2612,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9085046f02f69544eb97fd06b6048fe2, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Toggle
 --- !u!1001 &8464538127619139398
 PrefabInstance:
