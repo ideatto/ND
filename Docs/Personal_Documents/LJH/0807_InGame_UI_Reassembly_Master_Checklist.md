@@ -15,6 +15,7 @@
 | 3 | Caravan Overview, Rename 버튼, Treadmill, 상태 아이콘, 말 애니메이션 | `0807_Caravan_Overview_Current_Reassembly.md` |
 | 4 | 최신 dev2 Scene/Prefab 조립, 실패 Claim 전손, 손실 Popup, 순차 정산 | `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md` |
 | 5 | BaseCamp 레벨 상한, 건물 현황 Popup, 통나무 40개 테스트 버튼, InGame 정적 조립 | `0810_BaseCamp_Level_Gate_and_Overview_UI_Assembly.md` |
+| 6 | 오두막 UTC 생산, 받기 Popup, 생산 완료 Badge, 최신 dev2 MainUI 조립 | `0810_Cottage_Production_MainUI_Reassembly.md` |
 | 참고 | 기존 Overview/Treadmill 요구사항과 Scene 참조 배경 | `0805_Caravan_Overview_Treadmill_Binding_Request.md` |
 | 참고 | Transport Inventory 원인 및 수정 근거 | `0806_Transport_Inventory_PlayMode_Issue_Report.md` |
 
@@ -29,6 +30,7 @@
 현재 기능 개발 브랜치에서 discard 후 사라지는 항목이며, 대상 브랜치에서는 반드시 다시 조립해 저장할 항목:
 
 - `MainUICanvas.prefab`의 `BaseCampMainUiEntry` 컴포넌트와 `BaseCampOverviewPopup` 자식 인스턴스
+- `MainUICanvas.prefab`의 `CottageProductionMainUiEntry` 컴포넌트와 `CottageProductionPopup` 자식 인스턴스
 - `InGame.unity`의 `BuildingLogsDebugButton` Scene 인스턴스
 - 위 두 파일에 저장된 BaseCamp 관련 Inspector 참조와 sibling override
 
@@ -57,6 +59,9 @@
 - `BuildingMaterialTestButton.cs`, `BuildingMaterialTestButton.prefab`과 각 `.meta`
 - BaseCamp 레벨 정책 및 UI 계약 테스트와 각 `.meta`
 - `FailedTradeTransportLossTests.cs`, `TradeFailureLossPopupWiringTests.cs`와 각 `.meta`
+- 오두막 생산 코드, SaveData/이벤트 연동, `CottageProductionData.asset`
+- `CottageProductionPopup.prefab`과 View/Presenter/ViewData
+- `CottageProductionMainUiEntry.cs`와 `CottageProductionPopupPrefabBuilder.cs`
 
 현재 기능 개발 브랜치에서 Prefab/Scene diff를 discard할 때 보존 목록의 파일을 함께 제거하지 않는다. 특히 untracked 파일은 `git restore`로 복구할 수 없으므로 먼저 백업 또는 추적 상태를 확보한다. 대상 브랜치에서는 재조립한 `MainUICanvas.prefab`과 `InGame.unity`를 discard하지 말고 기능 변경으로 커밋한다.
 
@@ -75,6 +80,9 @@
 | BaseCamp 레벨 정책 | `Assets/_Project/11.CoreServices/Scripts/Building/BaseCampBuildingLevelPolicy.cs` |
 | 통나무 테스트 지급 버튼 | `Assets/99.Sandbox/_LJH/Prefab/BuildingMaterialTestButton.prefab` |
 | 통나무 TradeItem | `Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Material/TradeItem_Logs.asset` |
+| 오두막 생산 설정 | `Assets/_Project/11.CoreServices/Resources/CottageProductionData.asset` |
+| 오두막 생산 Popup | `Assets/_Project/08.Prefabs/UI/Cottage/CottageProductionPopup.prefab` |
+| 오두막 MainUI 설치 도구 | `Assets/99.Sandbox/_LJH/Editor/CottageProductionPopupPrefabBuilder.cs` |
 
 ## 4. 권장 재조립 순서
 
@@ -90,6 +98,18 @@
 - [ ] `TradeFailureLossPopup.prefab`과 `ReusableMessagePopup` 타입이 존재함
 - [ ] `BaseCampOverviewPopup.prefab`, `BaseCampMainUiEntry`, `BaseCampBuildingLevelPolicy`가 존재함
 - [ ] `BuildingMaterialTestButton.prefab`의 `items[0]`이 `TradeItem_Logs.asset`, `grantQuantity`가 `40`임
+- [ ] `CottageProductionData.asset`, `CottageProductionPopup.prefab`, `CottageProductionMainUiEntry`가 존재함
+- [ ] 오두막 설정의 `Wagon_M`, `Horse`가 런타임 카탈로그에 존재함
+
+### A-1. 오두막 생산 MainUI 조립
+
+상세 수치와 참조 계약은 `0810_Cottage_Production_MainUI_Reassembly.md`를 따른다.
+
+- [ ] `Tools > LJH > Install Cottage Production Popup To Main UI` 실행
+- [ ] MainUI 루트의 `CottageProductionMainUiEntry`가 정확히 1개
+- [ ] `CottageProductionPopup`이 정확히 1개이며 `NoticeUI` 바로 앞, 기본 비활성화
+- [ ] Entry의 BuildingListPanel/Popup/느낌표 아이콘과 Presenter의 View/NoticeUI 연결
+- [ ] 이 기능만을 위해 `InGame.unity`에 override를 만들지 않음
 
 ### B. TradePrepareUI Prefab 조립
 
@@ -287,6 +307,10 @@ BaseCamp 재조립 경계:
 | BaseCamp 레벨 상한 | 일반 건물 목표 레벨이 BaseCamp 레벨을 넘으면 재료 차감 전에 차단 | [ ] |
 | BaseCamp 현황 UI | BaseCamp 포함 건물 레벨과 상한 표시, Backdrop/X 닫기, 정적 Prefab 조립 | [ ] |
 | BaseCamp 저장 복원 | BaseCamp 및 일반 건물 레벨이 재진입 후 동일하게 복원 | [ ] |
+| 오두막 최초 지급 | 최초 Lv.1 건설 때만 마차 1/말 2가 내부 보관함에 즉시 생성 | [ ] |
+| 오두막 생산/복원 | UTC 주기 생산, 보관 한도 정지, 종료 후 경과분 복원 정상 | [ ] |
+| 오두막 받기 | 목장 검증, 개별/모두 받기, 저장 실패 롤백 정상 | [ ] |
+| 오두막 UI/Badge | 공용 건물 행 클릭으로 Popup 진입, 양쪽 Full일 때만 느낌표 | [ ] |
 
 ## 6. 조립 원칙
 
