@@ -304,8 +304,8 @@ namespace ND.UI.Quest
                 TownQuestCaravanView caravan = caravans[i];
                 Button row = Instantiate(caravanRowTemplate, caravanListContainer);
                 row.gameObject.SetActive(true);
-                SetButtonText(row,
-                    $"캐러반 {caravan.SlotIndex + 1}  ({caravan.CaravanId})");
+                // GUID는 결제 요청에만 사용하고, 결제 패널에는 플레이어가 지정한 이름을 표시한다.
+                SetButtonText(row, caravan.DisplayName);
                 row.onClick.RemoveAllListeners();
                 row.onClick.AddListener(() => SelectCaravan(caravan));
                 caravanRows.Add(row);
@@ -316,7 +316,7 @@ namespace ND.UI.Quest
         {
             selectedCaravan = caravan;
             SetText(selectedCaravanText,
-                $"선택: 캐러반 {caravan.SlotIndex + 1}");
+                $"선택: {caravan.DisplayName}");
             SetText(paymentErrorText, string.Empty);
             UpdatePaymentButtons();
         }
