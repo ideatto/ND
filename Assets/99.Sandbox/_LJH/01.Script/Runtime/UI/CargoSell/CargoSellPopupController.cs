@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ND.Framework;
+using ND.UI.InGame.Warehouse;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -23,7 +25,18 @@ namespace ND.UI.CargoSell
 
         private CargoSellPendingSaleListView pendingList;
         private Transform cargoContent;
+        private GameObject priceGroupModal;
+        private Transform priceRowsContent;
+        private GameObject priceRowTemplate;
+        private TMP_Text priceSelectedItemNameText;
+        private TMP_Text priceSelectedItemTotalText;
+        private Image priceSelectedItemIcon;
+        // Data rows are cloned from the prefab-authored template only when the pool must grow.
+        // Subsequent opens rebind and toggle these rows instead of creating/destroying UI objects.
+        private readonly List<GameObject> priceRowPool = new List<GameObject>();
         private GameObject quantityModal;
+        private TMP_Text quantitySourceText;
+        private TMP_Text quantityDestinationText;
         private TMP_Text selectedQuantityText;
         private TMP_Text titleText;
         private TMP_Text cargoTitleText;
@@ -42,6 +55,7 @@ namespace ND.UI.CargoSell
         private Button plusButton;
         private Button maxButton;
         private Button cancelQuantityButton;
+        private Button cancelPriceGroupButton;
         private Button confirmQuantityButton;
         private bool wired;
         private bool submitting;
@@ -59,7 +73,7 @@ namespace ND.UI.CargoSell
         {
             ResolveReferences();
             WireInteractions();
-            CloseQuantity();
+            CloseSelection();
         }
 
         public bool Open(CargoSellViewData value)
@@ -77,7 +91,7 @@ namespace ND.UI.CargoSell
             selected = null;
             selectedQuantity = 0;
             Render();
-            CloseQuantity();
+            CloseSelection();
             gameObject.SetActive(true);
             return true;
         }
@@ -115,13 +129,13 @@ namespace ND.UI.CargoSell
             if (loadText != null)
                 loadText.text = $"적재량 {FormatLoad(source.currentLoad)} / {FormatLoad(source.maximumLoad)}";
 
-            CargoSellCargoItemViewData[] cargo = source.cargoItems
-                ?? Array.Empty<CargoSellCargoItemViewData>();
+            CargoSellCargoItemViewData[] cargo = BuildItemSlots(
+                source.cargoItems ?? Array.Empty<CargoSellCargoItemViewData>());
             ResolveSlots();
             for (int index = 0; index < slots.Count; index++)
             {
                 CargoSellCargoItemViewData item = index < cargo.Length ? cargo[index] : null;
-                slots[index].Bind(item, OpenQuantity, ShowTooltip, HideTooltip);
+                slots[index].Bind(item, OpenItem, ShowTooltip, HideTooltip);
             }
 
             pendingList?.Render(draft.Snapshot());
@@ -138,11 +152,46 @@ namespace ND.UI.CargoSell
         private static string FormatLoad(float value) =>
             float.IsPositiveInfinity(value) ? "∞" : Math.Max(0f, value).ToString("0.##");
 
+        /// <summary>
+        /// Physical Cargo slots aggregate by item ID. Exact purchase-price groups stay in the
+        /// source snapshot and are selected in PriceGroupModal instead of becoming duplicate icons.
+        /// </summary>
+        private static CargoSellCargoItemViewData[] BuildItemSlots(
+            IEnumerable<CargoSellCargoItemViewData> priceGroups)
+        {
+            return (priceGroups ?? Enumerable.Empty<CargoSellCargoItemViewData>())
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.itemId))
+                .GroupBy(item => item.itemId, StringComparer.Ordinal)
+                .Select(group =>
+                {
+                    CargoSellCargoItemViewData first = group.First();
+                    return new CargoSellCargoItemViewData
+                    {
+                        itemId = first.itemId,
+                        purchaseUnitPrice = first.purchaseUnitPrice,
+                        displayName = first.displayName,
+                        description = first.description,
+                        icon = first.icon,
+                        cargoQuantity = group.Sum(item => Math.Max(0, item.cargoQuantity)),
+                        selectedSellQuantity = group.Sum(item => Math.Max(0, item.selectedSellQuantity)),
+                        sellUnitPrice = first.sellUnitPrice,
+                        unitWeight = first.unitWeight
+                    };
+                })
+                .ToArray();
+        }
+
         private void ShowTooltip(CargoSellCargoSlotView slot, CargoSellCargoItemViewData item)
         {
             if (itemTooltip == null || item == null) return;
             if (tooltipNameText != null) tooltipNameText.text = item.displayName;
-            if (tooltipPriceText != null) tooltipPriceText.text = $"구매 단가 {Math.Max(0L, item.purchaseUnitPrice)}G";
+            if (tooltipPriceText != null)
+            {
+                int groupCount = GetPriceGroups(item.itemId).Length;
+                tooltipPriceText.text = groupCount > 1
+                    ? $"구매가 묶음 {groupCount}종"
+                    : $"구매 단가 {Math.Max(0L, item.purchaseUnitPrice)}G";
+            }
             if (tooltipDescriptionText != null) tooltipDescriptionText.text = item.description;
             itemTooltip.SetActive(true);
             Canvas.ForceUpdateCanvases();
@@ -186,6 +235,92 @@ namespace ND.UI.CargoSell
             if (itemTooltip != null) itemTooltip.SetActive(false);
         }
 
+        /// <summary>Enters purchase-price selection before quantity whenever an item has multiple groups.</summary>
+        private void OpenItem(CargoSellCargoItemViewData item)
+        {
+            if (submitting || item == null) return;
+
+            CargoSellCargoItemViewData[] groups = GetPriceGroups(item.itemId);
+            if (groups.Length == 0) return;
+            if (groups.Length == 1)
+            {
+                OpenQuantity(groups[0]);
+                return;
+            }
+
+            PopulatePriceGroups(item, groups);
+            if (priceGroupModal != null) priceGroupModal.SetActive(true);
+            if (quantityModal != null) quantityModal.SetActive(false);
+        }
+
+        private CargoSellCargoItemViewData[] GetPriceGroups(string itemId)
+        {
+            // SaveData may hold one physical item in several acquisition-price groups. Keep zero
+            // price production goods as a real selectable group instead of treating 0G as missing.
+            return (source?.cargoItems ?? Array.Empty<CargoSellCargoItemViewData>())
+                .Where(item => item != null
+                    && string.Equals(item.itemId, itemId, StringComparison.Ordinal)
+                    && item.cargoQuantity > 0)
+                .OrderBy(item => Math.Max(0L, item.purchaseUnitPrice))
+                .ToArray();
+        }
+
+        private void PopulatePriceGroups(
+            CargoSellCargoItemViewData aggregate,
+            IReadOnlyList<CargoSellCargoItemViewData> groups)
+        {
+            if (priceSelectedItemNameText != null)
+                priceSelectedItemNameText.text = aggregate.displayName;
+            if (priceSelectedItemTotalText != null)
+                priceSelectedItemTotalText.text = $"총 보유 {groups.Sum(group => Math.Max(0, group.cargoQuantity))}개";
+            if (priceSelectedItemIcon != null)
+            {
+                priceSelectedItemIcon.sprite = aggregate.icon;
+                priceSelectedItemIcon.enabled = aggregate.icon != null;
+            }
+
+            if (priceRowsContent == null || priceRowTemplate == null) return;
+            // The template is authored in the prefab. Instantiate only when the reusable pool is
+            // too small, then rebind existing rows on later opens to avoid UI churn.
+            while (priceRowPool.Count < groups.Count)
+            {
+                GameObject pooledRow = Instantiate(priceRowTemplate, priceRowsContent);
+                pooledRow.name = $"PriceGroupRow_{priceRowPool.Count}";
+                pooledRow.SetActive(false);
+                priceRowPool.Add(pooledRow);
+            }
+
+            for (int index = 0; index < priceRowPool.Count; index++)
+            {
+                GameObject row = priceRowPool[index];
+                bool active = index < groups.Count;
+                row.SetActive(active);
+                if (!active) continue;
+
+                CargoSellCargoItemViewData group = groups[index];
+                row.name = $"PriceGroup_{Math.Max(0L, group.purchaseUnitPrice)}";
+                WarehousePriceGroupRowView view = row.GetComponent<WarehousePriceGroupRowView>();
+                view?.Bind(
+                    new WarehousePriceGroup(
+                        group.itemId,
+                        group.purchaseUnitPrice,
+                        group.cargoQuantity),
+                    OpenQuantity);
+            }
+        }
+
+        private void OpenQuantity(WarehousePriceGroup group)
+        {
+            // WarehousePriceGroupRowView is shared with Warehouse UI; translate its selection back
+            // to the exact Cargo sale row before opening the common quantity modal.
+            CargoSellCargoItemViewData item = (source?.cargoItems
+                ?? Array.Empty<CargoSellCargoItemViewData>()).FirstOrDefault(candidate =>
+                    candidate != null
+                    && string.Equals(candidate.itemId, group.ItemId, StringComparison.Ordinal)
+                    && Math.Max(0L, candidate.purchaseUnitPrice) == group.PurchaseUnitPrice);
+            OpenQuantity(item);
+        }
+
         private void OpenQuantity(CargoSellCargoItemViewData item)
         {
             if (submitting || item == null) return;
@@ -196,6 +331,14 @@ namespace ND.UI.CargoSell
                 quantitySlider.minValue = 0;
                 quantitySlider.maxValue = Math.Max(0, item.cargoQuantity);
             }
+            if (quantitySourceText != null)
+            {
+                quantitySourceText.text = string.IsNullOrWhiteSpace(source?.caravanDisplayName)
+                    ? "Caravan"
+                    : source.caravanDisplayName.Trim();
+            }
+            if (quantityDestinationText != null) quantityDestinationText.text = "판매 대기";
+            if (priceGroupModal != null) priceGroupModal.SetActive(false);
             SetQuantityModalActive(true);
             UpdateQuantityText();
         }
@@ -253,7 +396,7 @@ namespace ND.UI.CargoSell
         {
             if (submitting) return;
             draft.Clear();
-            CloseQuantity();
+            CloseSelection();
             Render();
         }
 
@@ -275,7 +418,7 @@ namespace ND.UI.CargoSell
         private void RequestClose()
         {
             if (submitting) return;
-            CloseQuantity();
+            CloseSelection();
             draft.Clear();
             source = null;
             submissionMessage = string.Empty;
@@ -305,6 +448,18 @@ namespace ND.UI.CargoSell
             selected = null;
             selectedQuantity = 0;
             SetQuantityModalActive(false);
+        }
+
+        private void ClosePriceGroups()
+        {
+            if (priceGroupModal != null) priceGroupModal.SetActive(false);
+        }
+
+        private void CloseSelection()
+        {
+            // Closing the parent popup or clearing its draft must also close either nested step.
+            CloseQuantity();
+            ClosePriceGroups();
         }
 
         private void SetQuantityModalActive(bool active)
@@ -337,7 +492,21 @@ namespace ND.UI.CargoSell
             pendingList = GetComponentInChildren<CargoSellPendingSaleListView>(true);
             Transform cargoScroll = Find("CargoScrollView");
             cargoContent = FindWithin(FindWithin(cargoScroll, "Viewport"), "Content");
+            Transform priceModalTransform = Find("PriceGroupModal");
+            priceGroupModal = priceModalTransform?.gameObject;
+            priceRowsContent = FindWithin(priceModalTransform, "Content");
+            priceRowTemplate = priceRowsContent != null && priceRowsContent.childCount > 0
+                ? priceRowsContent.GetChild(0).gameObject
+                : null;
+            priceSelectedItemNameText = FindWithin(priceModalTransform, "SelectedItemNameText")
+                ?.GetComponent<TMP_Text>();
+            priceSelectedItemTotalText = FindWithin(priceModalTransform, "SelectedItemTotalQuantityText")
+                ?.GetComponent<TMP_Text>();
+            priceSelectedItemIcon = FindWithin(priceModalTransform, "ItemIcon")?.GetComponent<Image>();
+            cancelPriceGroupButton = FindWithin(priceModalTransform, "CancelButton")?.GetComponent<Button>();
             quantityModal = Find("QuantityModal")?.gameObject;
+            quantitySourceText = FindWithin(Find("QuantityModal"), "SourceText")?.GetComponent<TMP_Text>();
+            quantityDestinationText = FindWithin(Find("QuantityModal"), "DestinationText")?.GetComponent<TMP_Text>();
             selectedQuantityText = FindWithin(
                 FindWithin(Find("QuantityModal"), "SelectedQuantity"),
                 "QuantityText")?.GetComponent<TMP_Text>();
@@ -369,6 +538,7 @@ namespace ND.UI.CargoSell
             minusButton?.onClick.AddListener(() => ChangeQuantity(-1));
             plusButton?.onClick.AddListener(() => ChangeQuantity(1));
             maxButton?.onClick.AddListener(SelectMaximum);
+            cancelPriceGroupButton?.onClick.AddListener(ClosePriceGroups);
             cancelQuantityButton?.onClick.AddListener(CloseQuantity);
             confirmQuantityButton?.onClick.AddListener(ConfirmQuantity);
             if (quantitySlider != null)

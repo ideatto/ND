@@ -118,18 +118,43 @@ public static class CaravanCalculator
         return (caravan != null && caravan.wagon != null) ? caravan.wagon.inventorySlotCount : 0;
     }
 
-    /// <summary>사용 중인 슬롯 수 = 아이템별 (수량 ÷ 스택크기, 올림) 합.
-    /// 같은 아이템은 한 칸에 maxCount개까지 쌓임. [M2]</summary>
+    /// <summary>사용 중인 슬롯 수 = itemId별 총수량을 합친 뒤 (수량 ÷ 스택크기, 올림) 합.
+    /// 구매가가 달라 Cargo 행이 나뉘어도 같은 물리 아이템은 동일 슬롯을 공유한다. [M2]</summary>
     public static int GetUsedSlots(CaravanData caravan)
     {
         if (caravan == null) return 0;
 
-        int slots = 0;
+        var quantityByItemId = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        var stackByItemId = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        int anonymousRowIndex = 0;
+
+        // purchaseUnitPrice is economic identity, not physical slot identity. Missing IDs remain
+        // isolated per row so malformed data cannot accidentally gain extra shared capacity.
         foreach (CargoEntry entry in caravan.cargo)
         {
-            if (entry == null || entry.item == null) continue;
-            int stack = (entry.item.maxCount > 0) ? entry.item.maxCount : 1;   // 스택크기(0 방어)
-            slots += (entry.quantity + stack - 1) / stack;                     // 올림 나눗셈
+            if (entry == null || entry.item == null || entry.quantity <= 0) continue;
+            string itemId = string.IsNullOrWhiteSpace(entry.item.id)
+                ? "__missing_item_" + anonymousRowIndex++
+                : entry.item.id.Trim();
+            int stack = entry.item.maxCount > 0 ? entry.item.maxCount : 1;
+
+            quantityByItemId.TryGetValue(itemId, out int quantity);
+            quantityByItemId[itemId] = quantity > int.MaxValue - entry.quantity
+                ? int.MaxValue
+                : quantity + entry.quantity;
+
+            if (!stackByItemId.TryGetValue(itemId, out int existingStack))
+                stackByItemId[itemId] = stack;
+            else
+                stackByItemId[itemId] = System.Math.Min(existingStack, stack);
+        }
+
+        int slots = 0;
+        foreach (KeyValuePair<string, int> pair in quantityByItemId)
+        {
+            int stack = stackByItemId[pair.Key];
+            int required = pair.Value / stack + (pair.Value % stack == 0 ? 0 : 1);
+            slots = slots > int.MaxValue - required ? int.MaxValue : slots + required;
         }
         return slots;
     }

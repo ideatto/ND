@@ -183,15 +183,15 @@ public sealed class TradePrepareDraftStore
     // snapshot) once the Framework Caravan command owns S4 persistence. Market purchases and saved
     // Caravan cargo must then remain separate to prevent duplicate stock/currency settlement.
     // Replaces the departure Draft cargo with one Provider-owned Caravan plan in a single update.
-    // Invalid rows are ignored and duplicate IDs are merged so a malformed snapshot cannot leak
-    // duplicate bundles into departure validation.
+    // Physical capacity still aggregates by itemId, but acquisition-price identity is retained by
+    // merging only equal (itemId, purchaseUnitPrice) rows for settlement and later sale selection.
     public void ReplaceCargoPlan(CargoItemViewData[] plannedItems)
     {
         bool wasAuthoritative = current.hasAuthoritativeCargoPlan;
         current.hasAuthoritativeCargoPlan = true;
         plannedItems = plannedItems ?? Array.Empty<CargoItemViewData>();
         var replacements = new List<TradeItemBundle>();
-        var indexesById = new Dictionary<string, int>(StringComparer.Ordinal);
+        var indexesByGroup = new Dictionary<(string ItemId, long PurchaseUnitPrice), int>();
 
         for (int index = 0; index < plannedItems.Length; index++)
         {
@@ -201,7 +201,9 @@ public sealed class TradePrepareDraftStore
             if (string.IsNullOrEmpty(itemId) || quantity == 0)
                 continue;
 
-            if (indexesById.TryGetValue(itemId, out int existingIndex))
+            long purchaseUnitPrice = Math.Max(0L, item.purchaseUnitPrice);
+            var groupKey = (itemId, purchaseUnitPrice);
+            if (indexesByGroup.TryGetValue(groupKey, out int existingIndex))
             {
                 TradeItemBundle existing = replacements[existingIndex];
                 existing.quantity = existing.quantity > int.MaxValue - quantity
@@ -210,12 +212,12 @@ public sealed class TradePrepareDraftStore
                 continue;
             }
 
-            indexesById[itemId] = replacements.Count;
+            indexesByGroup[groupKey] = replacements.Count;
             replacements.Add(new TradeItemBundle
             {
                 itemId = itemId,
                 quantity = quantity,
-                purchaseUnitPrice = Math.Max(0L, item.purchaseUnitPrice),
+                purchaseUnitPrice = purchaseUnitPrice,
                 sellUnitPrice = Math.Max(0L, item.estimatedSellUnitPrice)
             });
         }
