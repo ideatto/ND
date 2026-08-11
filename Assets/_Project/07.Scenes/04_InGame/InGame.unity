@@ -7965,6 +7965,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4431270351449980437, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: sellPriceModifierPolicy
+      value: 
+      objectReference: {fileID: 11400000, guid: 01ff3bf7584c8aa4bafdf51a69c54e87, type: 2}
     - target: {fileID: 4445839150192246327, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
       propertyPath: m_Colors.m_NormalColor.b
       value: 0.4392157
@@ -9229,6 +9233,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6133256309995111314, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: sellPriceModifierPolicy
+      value: 
+      objectReference: {fileID: 11400000, guid: 01ff3bf7584c8aa4bafdf51a69c54e87, type: 2}
     - target: {fileID: 6157698425955070327, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
       propertyPath: m_Transition
       value: 1
