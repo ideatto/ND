@@ -8221,6 +8221,38 @@ PrefabInstance:
       propertyPath: m_Color.r
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[0]'
+      value: 
+      objectReference: {fileID: 6984868319965176024, guid: c4278a6006abc3a4ab3403305e876cfc, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[1]'
+      value: 
+      objectReference: {fileID: 5901605040315382806, guid: a27b163db98df7e40989adda691ccf77, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[2]'
+      value: 
+      objectReference: {fileID: 4758909614363291953, guid: a3bb9258a7afb5f42bfa25b693a3b1bb, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[3]'
+      value: 
+      objectReference: {fileID: 1785057987565301057, guid: 0422898af4bcb994d985f5d7be43c1d6, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[4]'
+      value: 
+      objectReference: {fileID: 2408737320657131717, guid: a9f042243e80b6449823a349cb2ea157, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[5]'
+      value: 
+      objectReference: {fileID: 7154247214818489177, guid: df1b77204cbeeaa4892291578b7b68ee, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[6]'
+      value: 
+      objectReference: {fileID: 2584394220314233594, guid: 8d695d500ab9503459017cec5bee5740, type: 3}
+    - target: {fileID: 4562422387493936989, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
+      propertyPath: 'npcPrefabs.Array.data[7]'
+      value: 
+      objectReference: {fileID: 2753618734392634181, guid: eafcaafb74e76ac4d826a90d88f31e3d, type: 3}
     - target: {fileID: 4596056433884723096, guid: f33f060c1b9c4614f87a0bda7e6dce7d, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
