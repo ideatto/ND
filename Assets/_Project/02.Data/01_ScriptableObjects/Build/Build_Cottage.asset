@@ -24,11 +24,7 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems:
-      - itemId: Logs
-        quantity: 3
-      - itemId: Stone
-        quantity: 3
+      requireItems: []
   - level: 2
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
     visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
@@ -37,11 +33,7 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems:
-      - itemId: Logs
-        quantity: 5
-      - itemId: Stone
-        quantity: 5
+      requireItems: []
   - level: 3
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
     visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
@@ -50,8 +42,4 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems:
-      - itemId: Logs
-        quantity: 10
-      - itemId: Stone
-        quantity: 10
+      requireItems: []
