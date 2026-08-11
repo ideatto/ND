@@ -239,8 +239,11 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                 ND.Framework.CaravanSaveData caravan = validation.GetCaravanAt(slotIndex);
                 if (caravan == null)
                 {
-                    bool unlocked = save.world?.unlockedCaravanSlotIndices != null
-                        && save.world.unlockedCaravanSlotIndices.Contains(slotIndex);
+                    // BaseCamp 건물 레벨이 슬롯 해금의 권위 데이터다.
+                    // 구형 unlockedCaravanSlotIndices를 읽으면 MainUI 슬롯과 창고 목록이 달라질 수 있다.
+                    bool unlocked = BaseCampProgressionPolicy.IsCaravanSlotUnlocked(
+                        save.player?.villageBuildings,
+                        slotIndex);
                     if (!unlocked) continue;
 
                     GameObject emptyInstance = Instantiate(caravanSlotPrefab, caravanContent);
@@ -251,7 +254,7 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
                     emptyView.Bind(
                         null,
                         false,
-                        "Caravan 데이터가 없습니다.",
+                        "캐러밴 없음",
                         _ => { },
                         true);
                     continue;

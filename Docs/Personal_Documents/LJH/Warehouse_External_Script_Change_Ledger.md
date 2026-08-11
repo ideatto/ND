@@ -51,6 +51,7 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
 
 - `WarehouseInventoryPresentation.cs`: 캐시 없는 ViewData builder와 PriceGroup/Quantity/Busy presenter.
 - `WarehouseInventoryPopupController.cs`: TryOpen, caravanId 선택, 최신 SaveData refresh, Tooltip, 가격·수량 선택, 전송 요청, 0.15초 guard.
+- 창고의 Caravan 선택 행은 구형 `world.unlockedCaravanSlotIndices`를 해금 권위로 사용하지 않는다. `BaseCampProgressionPolicy.IsCaravanSlotUnlocked(save.player.villageBuildings, slotIndex)`로 MainUI 슬롯과 동일한 1~4칸을 표시하고, 해금됐지만 미생성인 행은 `캐러밴 없음`으로 표시한다.
   - Caravan 미선택 시 Player slot click만 차단하고 hover는 허용한다.
   - 선택 slot index로 Cargo 제목을 갱신한다.
   - +99는 현재값에서 99 증가한다.
@@ -77,6 +78,7 @@ completed가 시장 코드를 교체했다면 새 코드를 유지하고 “서�
   - 선택한 Wagon이 `CaravanSaveData.wagon`에 저장되는지 확인한다.
   - `wagon.inventorySlotCount`와 `wagon.maxLoad`가 Warehouse Cargo 슬롯·적재량에 즉시 반영되는지 확인한다.
   - TradeCycle 적재·구매와 Warehouse가 동일한 `caravan.cargo`를 조회하는지 확인한다.
+  - BaseCamp Lv.1~4에서 창고 Caravan 선택 행이 각각 1~4개 표시되고, 미생성 행 문구가 카드 폭을 넘지 않는지 확인한다.
   - 구매한 Cargo의 `purchaseUnitPrice`가 저장·불러오기·재접속 뒤에도 유지되는지 확인한다.
   - Wagon 변경으로 용량이 감소해 기존 Cargo가 초과된 경우의 정책을 확정하고 이동 차단·Notice를 검증한다.
   - 사용자 지정 Caravan 이름이 추가되어도 최종 선택과 Cargo 조회는 `caravanId`를 유지한다.
