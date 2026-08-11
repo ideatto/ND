@@ -59695,7 +59695,6 @@ GameObject:
   - component: {fileID: 84755654220061452}
   - component: {fileID: 1986947355173660733}
   - component: {fileID: 8477292821248063275}
-  - component: {fileID: 42189243194729483}
   m_Layer: 0
   m_Name: RawImage
   m_TagString: Untagged
@@ -59795,22 +59794,6 @@ MonoBehaviour:
   renderRoot: {fileID: 0}
   hitRadius: 1.2
   homeTownId: BaseCamp
---- !u!114 &42189243194729483
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8177708498477409095}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c4bc66feee6279e48acfd63e4e604796, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MinimapCaravanClickRouter
-  view: {fileID: 0}
-  renderRoot: {fileID: 0}
-  hitRadius: 0.8
-  treadmillPanel: {fileID: 0}
 --- !u!1 &8194084362679203141
 GameObject:
   m_ObjectHideFlags: 0
