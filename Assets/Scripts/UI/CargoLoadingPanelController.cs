@@ -788,7 +788,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         scrollbarRect.pivot = new Vector2(1f, 0.5f);
         scrollbarRect.anchoredPosition = new Vector2(-4f, 0f);
         scrollbarRect.sizeDelta = new Vector2(14f, -8f);
-        scrollbarObject.GetComponent<Image>().color = new Color(0.16f, 0.14f, 0.14f, 0.45f);
+        // [투명 처리] 스크롤바가 패널 밖으로 삐져나와 보기 흉해, 배경·핸들을 투명(alpha 0)으로 숨긴다.
+        //   휠/콘텐츠 드래그 스크롤은 그대로 동작한다. 투명 영역이 클릭을 먹지 않도록 raycastTarget도 끈다.
+        Image scrollbarBackground = scrollbarObject.GetComponent<Image>();
+        scrollbarBackground.color = new Color(0.16f, 0.14f, 0.14f, 0f);
+        scrollbarBackground.raycastTarget = false;
 
         GameObject handleObject = new GameObject(
             "Handle",
@@ -802,7 +806,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         handleRect.offsetMin = new Vector2(2f, 2f);
         handleRect.offsetMax = new Vector2(-2f, -2f);
         Image handleImage = handleObject.GetComponent<Image>();
-        handleImage.color = new Color(0.78f, 0.72f, 0.68f, 0.95f);
+        handleImage.color = new Color(0.78f, 0.72f, 0.68f, 0f); // 투명 — 스크롤바 숨김(휠/드래그 스크롤은 유지)
+        handleImage.raycastTarget = false;
 
         Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
         scrollbar.handleRect = handleRect;
