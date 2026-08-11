@@ -81,8 +81,21 @@ MainUICanvas
 | `Journey State Icon Image` | 상태 표시의 `Icon` Image |
 | `Journey State Icon Animator` | 같은 `Icon`의 Animator |
 | `Traveling Animator Parameter` | `IsTraveling` |
+| `Create Button` | 같은 슬롯에 미리 배치한 `CreateButton` Button |
+| `Create Button Label` | `CreateButton/Label` TMP |
+| `Lock Overlay` | 같은 슬롯의 기존 잠금 오버레이 GameObject |
+| `Lock Overlay Button` | 잠금 오버레이의 Button |
 
 버튼 `OnClick()`에는 Persistent Listener를 직접 넣지 않는다. `CaravanSlotView`가 코드에서 listener를 등록하고 Presenter 이벤트로 전달한다.
+
+네 슬롯 모두 `CreateButton`과 `LockOverlayButton`을 Prefab에 미리 배치·연결하고 런타임에서는 상태에 따라 활성/비활성만 전환한다.
+
+- Occupied: DisplayName/Rename/Set/Cargo/상태 표시 활성, Create/Lock 비활성
+- Empty: CreateButton만 활성. 클릭 시 `slotIndex` 생성 요청을 한 번만 보내고 저장 완료 전 중복 클릭을 막는다.
+- Locked: LockOverlay만 활성. 클릭 시 기존 `NoticeUI`에 필요한 BaseCamp 레벨을 한국어로 표시한다.
+- Unknown: Occupied/Create/Lock 동작을 모두 비활성화한다.
+
+`CaravanOverviewPresenter.noticeUI`는 같은 MainUICanvas의 기존 `NoticeUI`를 연결한다. 슬롯 해금 권위는 `SaveData.player.villageBuildings`의 BaseCamp 레벨이며 슬롯 0~3은 각각 BaseCamp Lv.1~4에서 해금된다.
 
 ## 5. 슬롯 가로 배치와 Rename 버튼
 
@@ -200,6 +213,8 @@ Prefab 에셋끼리 Scene 인스턴스를 직접 참조할 수 없으므로 이 
 
 - [ ] 네 슬롯의 `slotIndex`가 0~3으로 중복 없이 연결됨
 - [ ] 네 슬롯 모두 `renameButton`이 None이 아님
+- [ ] 네 슬롯 모두 `createButton`, `createButtonLabel`, `lockOverlay`, `lockOverlayButton`이 None이 아님
+- [ ] `CaravanOverviewPresenter.noticeUI`가 기존 MainUICanvas NoticeUI에 연결됨
 - [ ] Rename 버튼이 이름과 Set 버튼 사이에 있음
 - [ ] Rename 버튼에 텍스트가 보이지 않고 아이콘이 표시됨
 - [ ] 이름 클릭은 Treadmill만 열고 Rename 팝업을 열지 않음
@@ -210,5 +225,7 @@ Prefab 에셋끼리 Scene 인스턴스를 직접 참조할 수 없으므로 이 
 - [ ] Settling과 Completed에서 체크가 표시됨
 - [ ] Traveling이 아닌 상태에서 Animator가 정적 아이콘을 지우지 않음
 - [ ] Empty/Locked/Unknown 슬롯에서 Rename/Set/Cargo/상태 UI가 숨겨짐
+- [ ] Empty 슬롯 CreateButton으로 Caravan이 한 번만 생성되고 저장 후 Occupied로 갱신됨
+- [ ] Locked 슬롯 클릭 시 `베이스 캠프 레벨이 부족하여 캐러밴 슬롯을 해금할 수 없습니다. 필요 레벨: Lv.N` 안내가 표시됨
 - [ ] `CaravanOverviewPresenter.treadmillPanel`이 Scene에서 연결됨
 - [ ] Console에 Missing Script, Missing Reference, Animator Parameter 오류가 없음

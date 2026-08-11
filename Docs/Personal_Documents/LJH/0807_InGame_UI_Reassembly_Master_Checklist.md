@@ -16,8 +16,10 @@
 | 4 | 최신 dev2 Scene/Prefab 조립, 실패 Claim 전손, 손실 Popup, 순차 정산 | `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md` |
 | 5 | BaseCamp 레벨 상한, 건물 현황 Popup, InGame 정적 조립 | `0810_BaseCamp_Level_Gate_and_Overview_UI_Assembly.md` |
 | 6 | 오두막 UTC 생산, 받기 Popup, 생산 완료 Badge, 최신 dev2 MainUI 조립 | `0810_Cottage_Production_MainUI_Reassembly.md` |
+| 7 | 빵집 UTC 생산, 전체/부분 수령, 생산 완료 Badge, 0원/유료 Bread 가격 묶음 | `0811_Bakery_Production_MainUI_Reassembly.md` |
 | 참고 | 기존 Overview/Treadmill 요구사항과 Scene 참조 배경 | `0805_Caravan_Overview_Treadmill_Binding_Request.md` |
 | 참고 | Transport Inventory 원인 및 수정 근거 | `0806_Transport_Inventory_PlayMode_Issue_Report.md` |
+| 참고 | 창고 가격 묶음, 수량 Modal과 Backdrop 입력 계약 | `Warehouse_Runtime_Connection_2026-08-03.md`, `Warehouse_Inventory_UI_Implementation_Spec.md` |
 
 ## 3. discard 범위와 보존 범위
 
@@ -63,6 +65,10 @@
 - 오두막 생산 코드, SaveData/이벤트 연동, `CottageProductionData.asset`
 - `CottageProductionPopup.prefab`과 View/Presenter/ViewData
 - `CottageProductionMainUiEntry.cs`와 `CottageProductionPopupPrefabBuilder.cs`
+- 빵집 생산 코드, SaveData/이벤트 연동, `BakeryProductionData.asset`
+- `BakeryProductionPopup.prefab`과 View/Presenter/ViewData
+- `BakeryProductionMainUiEntry.cs`와 빵집 MainUI 설치 도구
+- Warehouse 가격 묶음 보존 및 수량 Modal Backdrop 처리 코드와 Prefab
 
 현재 기능 개발 브랜치에서 Prefab/Scene diff를 discard할 때 보존 목록의 파일을 함께 제거하지 않는다. 특히 untracked 파일은 `git restore`로 복구할 수 없으므로 먼저 백업 또는 추적 상태를 확보한다. 대상 브랜치에서는 재조립한 `MainUICanvas.prefab`과 `InGame.unity`를 discard하지 말고 기능 변경으로 커밋한다.
 
@@ -84,6 +90,9 @@
 | 오두막 생산 설정 | `Assets/_Project/11.CoreServices/Resources/CottageProductionData.asset` |
 | 오두막 생산 Popup | `Assets/_Project/08.Prefabs/UI/Cottage/CottageProductionPopup.prefab` |
 | 오두막 MainUI 설치 도구 | `Assets/99.Sandbox/_LJH/Editor/CottageProductionPopupPrefabBuilder.cs` |
+| 빵집 생산 설정 | `Assets/_Project/11.CoreServices/Resources/BakeryProductionData.asset` |
+| 빵집 생산 Popup | `Assets/_Project/08.Prefabs/UI/Bakery/BakeryProductionPopup.prefab` |
+| 빵집 조립 상세 | `Docs/Personal_Documents/LJH/0811_Bakery_Production_MainUI_Reassembly.md` |
 
 ## 4. 권장 재조립 순서
 
@@ -101,6 +110,8 @@
 - [ ] `BuildingMaterialTestButton.prefab`의 `items[0]`이 `TradeItem_Logs.asset`, `grantQuantity`가 `40`임
 - [ ] `CottageProductionData.asset`, `CottageProductionPopup.prefab`, `CottageProductionMainUiEntry`가 존재함
 - [ ] 오두막 설정의 `Wagon_M`, `Horse`가 런타임 카탈로그에 존재함
+- [ ] `BakeryProductionData.asset`, `BakeryProductionPopup.prefab`, `BakeryProductionMainUiEntry`가 존재함
+- [ ] 빵집 생산품 `Bread`가 런타임 카탈로그에 존재하고 수령품 구매가는 `0`으로 보존됨
 
 ### A-1. 오두막 생산 MainUI 조립
 
@@ -110,6 +121,18 @@
 - [ ] MainUI 루트의 `CottageProductionMainUiEntry`가 정확히 1개
 - [ ] `CottageProductionPopup`이 정확히 1개이며 `NoticeUI` 바로 앞, 기본 비활성화
 - [ ] Entry의 BuildingListPanel/Popup/느낌표 아이콘과 Presenter의 View/NoticeUI 연결
+- [ ] 이 기능만을 위해 `InGame.unity`에 override를 만들지 않음
+
+### A-2. 빵집 생산 MainUI 조립
+
+상세 수치와 참조 계약은 `0811_Bakery_Production_MainUI_Reassembly.md`를 따른다.
+
+- [ ] `MainUICanvas` 최상위 루트에 `BakeryProductionMainUiEntry`가 정확히 1개
+- [ ] `BakeryProductionPopup`이 정확히 1개이며 기본 비활성화
+- [ ] Entry의 BuildingListPanel/Popup/`알림 UI ICON.png`와 Presenter의 View/NoticeUI 연결
+- [ ] 빵집 행 Badge는 별도 런타임 오브젝트를 만들지 않고 `BuildingListPanel.SetBuildingBadge()`로 표시
+- [ ] 보관량이 현재 레벨 최대치일 때만 Badge가 표시되고 수령 후 즉시 숨겨짐
+- [ ] 빵집 수령 `Bread + 0원`과 상점 구매 `Bread + 실제 구매가`를 서로 다른 가격 묶음으로 보존
 - [ ] 이 기능만을 위해 `InGame.unity`에 override를 만들지 않음
 
 ### B. TradePrepareUI Prefab 조립
@@ -149,6 +172,8 @@ BaseCamp 조립은 메뉴 `ND > UI > Install BaseCamp Overview Into Main UI` 사
 - [ ] Display Name 폭 축소와 Auto Size/Ellipsis 설정
 - [ ] 네 슬롯에 RenameButton을 Prefab 오브젝트로 배치
 - [ ] 네 RenameButton 아이콘과 `CaravanSlotView.renameButton` 연결
+- [ ] 네 슬롯의 정적 `CreateButton`/Label과 `LockOverlay`/Button을 각 `CaravanSlotView`에 연결
+- [ ] `CaravanOverviewPresenter.noticeUI`를 같은 MainUICanvas의 기존 `NoticeUI`에 연결
 - [ ] 네 JourneyState Icon Image/Animator 연결
 - [ ] Prepare/Traveling/Selling/Settling/Completed Sprite 연결
 - [ ] `CaravanOverviewRenameBinding`의 Presenter/Popup 연결
@@ -175,6 +200,15 @@ JourneyStateDisplay → DisplayName → RenameButton → SettingButton → Cargo
 - `JourneyStateDisplay`는 각 Slot의 첫 번째 자식으로 배치한다. 상태 아이콘은 DisplayName 바로 왼쪽에 표시한다.
 - `JourneyStateDisplay` 루트 Image는 배경 용도이므로 알파를 `0`으로 설정한다. 자식 `Icon` Image의 알파는 `1`을 유지하여 아이콘만 보이게 한다.
 - `LockOverlay`는 항상 마지막 자식으로 유지한다.
+
+Caravan Slot 해금 및 생성 계약:
+
+- 슬롯 인덱스 `0~3`은 BaseCamp Lv.`1~4`에서 차례대로 해금한다. BaseCamp Lv.0의 해금 슬롯은 0개다.
+- Occupied: 이름/Rename/Set/Cargo/상태 표시만 활성화한다.
+- Empty: 정적 `CreateButton`만 활성화하며, 클릭 시 해당 `slotIndex` 생성 명령을 한 번만 전달하고 저장 완료 전 중복 입력을 막는다.
+- Locked: 정적 `LockOverlay`만 활성화한다. 클릭 시 기존 `NoticeUI`에 `베이스 캠프 레벨이 부족하여 캐러밴 슬롯을 해금할 수 없습니다. 필요 레벨: Lv.N`을 표시한다.
+- Unknown: Occupied/Create/Lock 동작을 모두 비활성화한다.
+- 슬롯 해금 권위는 `SaveData.player.villageBuildings`의 BaseCamp 레벨이다. UI 활성 상태나 현재 슬롯 점유 여부를 권위 데이터로 사용하지 않는다.
 
 현재 MainUICanvas 외형 재현값:
 
@@ -269,6 +303,9 @@ BaseCamp 재조립 경계:
 - [ ] 동물 슬롯이 늘어나도 스크롤이 잠금 영역까지 내려감
 - [ ] Wagon 종류 그룹과 개체별 내구도가 올바르게 표시됨
 - [ ] 다른 Caravan이 사용 중인 Wagon 개체는 선택 불가
+- [ ] BaseCamp Lv.0~4에서 슬롯 0~3이 Locked → Empty 순서로 해금됨
+- [ ] Empty 슬롯 CreateButton이 Caravan을 한 번만 생성하고 저장 후 Occupied로 갱신됨
+- [ ] Locked 슬롯 클릭 시 기존 NoticeUI에 필요한 BaseCamp 레벨이 한국어로 표시됨
 - [ ] 이름 클릭/Treadmill과 Rename 버튼 동작이 분리됨
 - [ ] Prepare/Traveling/Selling/Settling/Completed 아이콘이 상태표와 일치함
 - [ ] Missing Script, Missing Reference, 중복 이벤트 등록 오류가 없음
@@ -278,7 +315,14 @@ BaseCamp 재조립 경계:
 - [ ] BaseCamp Lv.0에서 일반 건물 Lv.1 건설이 차단되고 재료가 유지됨
 - [ ] BaseCamp Lv.1에서 일반 건물 Lv.1은 성공하고 Lv.2는 차단됨
 - [ ] BaseCamp Lv.2 증축 후 일반 건물 Lv.2가 성공함
-- [ ] BaseCamp 블록 클릭 시 현황 Popup의 저장 레벨과 상한이 일치함
+- [ ] BaseCamp 블록 클릭 시 현황 Popup의 저장 레벨, 현재 해금 슬롯 수, 다음 슬롯/EndingItem 해금 안내가 일치함
+- [ ] BaseCamp Lv.0~4에서 EndingItem은 비활성 표시되고 Lv.5에서만 활성화됨
+- [ ] EndingItem Lv.1 건설 후 추가 건설과 증축이 모두 차단됨
+- [ ] Prepare 아이콘은 네 슬롯 모두 `HorseCycle_0`이며 점 세 개 구형 아이콘이 남아 있지 않음
+- [ ] 수량 0 이하 Cargo 행은 로드/저장 및 UI 목록에서 제거됨
+- [ ] 보이지 않는 0개 Cargo가 슬롯을 차지하거나 여유 공간이 있는 Wagon 교체를 차단하지 않음
+- [ ] Warehouse 수량 Modal Backdrop 클릭 시 수량 Modal만 닫히고 Warehouse Popup과 선택 Caravan은 유지됨
+- [ ] `Bread + 0원`과 `Bread + 유료 구매가`가 동시에 있으면 가격 선택 Modal에 구매가 오름차순으로 모두 표시됨
 - [ ] Backdrop/X 닫기, 카드 내부 클릭 유지, NoticeUI 한국어 실패 안내 확인
 - [ ] 대상 브랜치 조립 후 Explicit `MainUiPrefab_HasOneWiredEntryAndPopup`, `InGameScene_InheritsBaseCampUiThroughMainUiPrefab` 통과
 
@@ -313,11 +357,18 @@ BaseCamp 재조립 경계:
 | 실패 플래그 소비 | 손실 처리 후 새 마차를 장착·저장해도 재삭제되지 않음 | [ ] |
 | BaseCamp 레벨 상한 | 일반 건물 목표 레벨이 BaseCamp 레벨을 넘으면 재료 차감 전에 차단 | [ ] |
 | BaseCamp 현황 UI | BaseCamp 포함 건물 레벨과 상한 표시, Backdrop/X 닫기, 정적 Prefab 조립 | [ ] |
+| Caravan Slot 해금 | BaseCamp Lv.1~4에 따라 슬롯 1~4 해금, Locked Notice와 Empty 생성 정상 | [ ] |
+| EndingItem 해금 | BaseCamp Lv.5에서만 활성, Lv.1 건설 후 추가 건설·증축 차단 | [ ] |
 | BaseCamp 저장 복원 | BaseCamp 및 일반 건물 레벨이 재진입 후 동일하게 복원 | [ ] |
 | 오두막 최초 지급 | 최초 Lv.1 건설 때만 마차 1/말 2가 내부 보관함에 즉시 생성 | [ ] |
 | 오두막 생산/복원 | UTC 주기 생산, 보관 한도 정지, 종료 후 경과분 복원 정상 | [ ] |
 | 오두막 받기 | 목장 검증, 개별/모두 받기, 저장 실패 롤백 정상 | [ ] |
 | 오두막 UI/Badge | 공용 건물 행 클릭으로 Popup 진입, 양쪽 Full일 때만 느낌표 | [ ] |
+| 빵집 생산/복원 | UTC 생산과 오프라인 경과분 복원, 레벨별 보관 한도 정상 | [ ] |
+| 빵집 전체/부분 수령 | 창고 검증, Slider 수량, 저장 실패 롤백 정상 | [ ] |
+| 빵집 UI/Badge | 빵집 Popup 진입, 최대 보관량일 때만 알림 아이콘 표시 | [ ] |
+| Bread 가격 묶음 | 생산 0원/상점 구매가 묶음이 저장·이동·판매 선택까지 분리 유지 | [ ] |
+| Warehouse 수량 Backdrop | 수량 Modal만 취소하고 Warehouse와 Caravan 선택은 유지 | [ ] |
 
 ## 6. 조립 원칙
 
@@ -325,6 +376,9 @@ BaseCamp 재조립 경계:
 - BaseCamp 현황 UI는 MainUICanvas Prefab 안에 정적으로 배치하고 런타임 생성하지 않는다.
 - BaseCamp 레벨은 `SaveData.player.villageBuildings`를 권위로 하며 Scene 건물 레벨로 건설 가능 여부를 판정하지 않는다.
 - BaseCamp 제한은 UI 사전 안내와 실제 `TryStage` 변경 경계에서 재검증한다.
+- Caravan Slot 잠금/생성은 `SaveData.player.villageBuildings`의 BaseCamp 레벨과 슬롯 저장 데이터를 재조회하여 판정한다.
+- 가격 묶음 권위는 `itemId + purchaseUnitPrice`이며, 비구매 생산품의 `purchaseUnitPrice = 0`도 유효한 묶음으로 취급한다.
+- Warehouse 수량 Modal Backdrop은 현재 선택만 취소하며 상위 Warehouse Popup 닫기 이벤트로 전파하지 않는다.
 - Scene에만 필요한 Popup과 두 종류의 개발용 지급 버튼은 원본 MainUICanvas Prefab을 수정하지 않고 `InGame.unity`의 활성 MainUICanvas 인스턴스 아래에 정적 Prefab 인스턴스로 배치한다.
 - 손실 Popup은 런타임 생성하지 않으며 `ReusableMessagePopup`은 이미 배치된 instance의 내용과 활성 상태만 변경한다.
 - 실패 전손은 S8 표시 시점이 아니라 S9 Claim Save transaction 안에서 수행한다.
@@ -399,5 +453,8 @@ PlayMode smoke 실행은 Unity Test Runner가 `0 tests`를 반환했기 때문�
 - `TransportInventoryPresentationTests`
 - `FailedTradeTransportLossTests`
 - `TradeArrivalSellingLifecycleTests`
+- `JourneyCargoLossCleanupTests`
+- `BakeryProductionServiceTests`
+- `WarehouseInventoryTransferTests`
 - `TradeFailureLossPopupWiringTests`
 - PlayMode에서 목장 진입부터 지급, 선택, 출발, Selling/Settling 표시까지의 수동 시나리오

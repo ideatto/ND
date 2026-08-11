@@ -359,6 +359,15 @@ envCost: 0
 - BaseCamp Lv.5 및 미건설: `황금 침대 Lv.0`, 활성
 - EndingItem Lv.1 건설 후: `황금 침대 Lv.1 (건설 완료)`, 비활성
 
+BaseCamp 현황 Popup의 하단 해금 진행도도 같은 저장 데이터를 사용한다.
+
+- BaseCamp Lv.0: `현재 캐러밴 슬롯: 0 / 4`, `다음 레벨: 캐러밴 슬롯 해금`
+- BaseCamp Lv.1~3: 현재 레벨과 같은 수의 슬롯을 표시하고 다음 레벨 안내는 `캐러밴 슬롯 해금`
+- BaseCamp Lv.4: `현재 캐러밴 슬롯: 4 / 4`, 다음 레벨 안내는 EndingItem(황금 침대) 해금
+- BaseCamp Lv.5: 슬롯 `4 / 4`, EndingItem 해금 완료 상태 표시
+
+Popup 표시값은 Scene의 슬롯 활성 상태에서 역산하지 않고 `SaveData.player.villageBuildings`의 BaseCamp/EndingItem 저장 레벨을 재조회한다.
+
 실제 외형 Prefab 도착 후에는 ID와 Registry 항목을 다시 만들지 않는다. 아래 외형 데이터만 교체한다.
 
 1. `Build_EndingItem.asset > dataPerLevels[0] > buildPrefab`
