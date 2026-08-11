@@ -33,11 +33,7 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems:
-      - itemId: Logs
-        quantity: 20
-      - itemId: Stone
-        quantity: 30
+      requireItems: []
   - level: 3
     buildPrefab: {fileID: 2872888364240210295, guid: ac4e08e6ac3b60b469fece82302f4914, type: 3}
     visualScale: {x: 1.0434784, y: 1.0434784, z: 1.0434784}
@@ -46,8 +42,4 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems:
-      - itemId: Logs
-        quantity: 40
-      - itemId: Stone
-        quantity: 50
+      requireItems: []
