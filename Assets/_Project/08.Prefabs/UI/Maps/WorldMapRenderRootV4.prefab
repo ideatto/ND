@@ -10250,6 +10250,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8223251769062633283, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       insertIndex: -1
       addedObject: {fileID: 155119753681379252}
+    - targetCorrespondingSourceObject: {fileID: 864241231561048499, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7879847129936258251}
   m_SourcePrefab: {fileID: 100100000, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
 --- !u!114 &1234163303482534806 stripped
 MonoBehaviour:
@@ -10278,6 +10281,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c5f109ea3bd24e548a32af648967c710, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MinimapWind
+--- !u!1 &4015757416137194368 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 864241231561048499, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+  m_PrefabInstance: {fileID: 4342790304127924787}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &7879847129936258251
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4015757416137194368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8b5b9bd30a75be44a952fe066d8159f, type: 3}
+  m_Name: WorldMapSeasonBackgroundBinder
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.WorldMap.WorldMapSeasonBackgroundBinder
+  targetRenderer: {fileID: 7347800576454006042}
+  springSprite: {fileID: 21300000, guid: 3715185ae81052a48b04637a51faa2fc, type: 3}
+  summerSprite: {fileID: 21300000, guid: 9c638e162d85f5d4cb96edac7af2bf6f, type: 3}
+  autumnSprite: {fileID: 21300000, guid: d8136edb3b27f7b4baa7dd9209e26ad4, type: 3}
+  winterSprite: {fileID: 21300000, guid: c31db3a99ad0ba34cba90689a59b6df8, type: 3}
 --- !u!114 &5190303486445152575 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8377567495607210764, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
@@ -10371,6 +10396,11 @@ MonoBehaviour:
   fireDuration: 8
   firePressureStrength: 1.6
   fireRadiusFactor: 0.12
+--- !u!212 &7347800576454006042 stripped
+SpriteRenderer:
+  m_CorrespondingSourceObject: {fileID: 6466062356597026601, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+  m_PrefabInstance: {fileID: 4342790304127924787}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &7943283493838734647 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5942647615646957316, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}

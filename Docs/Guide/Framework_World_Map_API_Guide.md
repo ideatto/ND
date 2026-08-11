@@ -83,6 +83,7 @@ if (coordinator.TryGetMapProgress(out var snapshot))
 | `CaravanMapMarker` | progress01로 위치·방향 재구성 |
 | `RouteMapPresentationResolver` | unlock/completed/active 표시 상태 (후속 RouteRuntimeState 확장 지점) |
 | `WorldMapTestEntry` | 레거시 런타임 생성 (베이크 후에는 Prefab 패널 사용) |
+| `WorldMapSeasonBackgroundBinder` | `SeasonChanged` + `OnEnable`로 V4 `WorldMapBackground` sprite만 계절 반영 |
 
 Risk 표시는 `SharedRouteDefinition.BaseRiskLevel`만 사용한다.
 
@@ -197,6 +198,8 @@ panel.RouteClicked += routeId => { /* 선택 UI */ };
 ## 관련 문서
 
 - [`Framework_World_Map_Usage_Guide.md`](./Framework_World_Map_Usage_Guide.md) — **처음 쓰는 사람용 사용 가이드**
+- [`World_Map_Seasonal_Background_Usage_Guide.md`](./World_Map_Seasonal_Background_Usage_Guide.md) — V4 계절 배경 배선·검증
 - [`Framework_CoreServices_Team_Usage_Guide.md`](./Framework_CoreServices_Team_Usage_Guide.md)
 - [`Docs/Personal_Documents/CSU/0715_world_map_phase1_spline_implementation.md`](../Personal_Documents/CSU/0715_world_map_phase1_spline_implementation.md)
+- [`Docs/Personal_Documents/CSU/0811_world_map_seasonal_background_logic.md`](../Personal_Documents/CSU/0811_world_map_seasonal_background_logic.md)
 - [`Docs/Personal_Documents/CSU/Handoff/07-15_World_Map_Implementation_Handoff.md`](../Personal_Documents/CSU/Handoff/07-15_World_Map_Implementation_Handoff.md)
