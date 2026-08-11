@@ -134,6 +134,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private Button popupMinButton;
     private Button popupMaxButton;
     private Button popupLoadButton;
+    [SerializeField] private Slider purchaseSlider;   // 적재 수량 슬라이더(최대 = 허용 최대 구매수). 인스펙터에서 연결
 
     private TMP_Text currentLoadText;
     private TMP_Text currentMoneyText;
@@ -260,7 +261,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         EnsureDynamicSlots();
         EnsureGridScrollViews();
         EnsureActionButtons();
-        ApplySection9LayoutAndPalette();
+        // [하드코딩 비활성화] 레이아웃/색상 팔레트를 매 초기화마다 강제로 덮어써서,
+        //   캔버스(프리팹)에서 수정한 값이 계속 초기화됐음. → 이제 프리팹 편집값을 그대로 사용.
+        //   (원래 하드코딩 스타일로 되돌리려면 아래 한 줄의 주석을 해제하세요.)
+        // ApplySection9LayoutAndPalette();
         EnsureMercenaryHirePanel();
         BuildPurchasePopup();
         InitializeState();
@@ -420,13 +424,20 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (nextLabel != null)
             nextLabel.text = "구매";
 
+        // [위치 강제 중단] 캔버스에서 옮긴 NextButton 위치가 런타임에 덮어써지지 않도록 비활성화.
+        //   (캔버스에서 직접 배치한 위치·크기를 그대로 유지)
+        /*
         if (nextButton != null)
         {
             RectTransform nextRect = nextButton.transform as RectTransform;
             nextRect.sizeDelta = detached ? new Vector2(152f, 36f) : new Vector2(180f, 44f);
             nextRect.anchoredPosition = detached ? new Vector2(392f, -128f) : new Vector2(364f, -116f);
         }
+        */
 
+        // [위치 강제 중단] 캔버스에서 옮긴 LoadedInventoryLabel 위치가 런타임에 덮어써지지 않도록 비활성화.
+        //   (NextButton과 동일 이유: 캔버스에서 직접 배치한 위치·크기를 그대로 유지)
+        /*
         TMP_Text loadedInventoryLabel = FindText("LoadedInventoryLabel");
         if (loadedInventoryLabel != null)
         {
@@ -434,6 +445,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             labelRect.anchoredPosition = detached ? new Vector2(12f, -10f) : new Vector2(12f, -12f);
             labelRect.sizeDelta = detached ? new Vector2(220f, 30f) : new Vector2(156f, 44f);
         }
+        */
 
         if (loadedGrid != null)
         {
@@ -663,7 +675,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         panelRect = transform as RectTransform;
         shopGrid = FindDeepChild(transform, "ShopGrid") as RectTransform;
-        loadedGrid = transform.Find("LoadedInventoryArea/LoadedInventoryGrid") as RectTransform;
+        // 깊이 탐색으로 변경: HLG 컨테이너 등으로 계층이 한 겹 더 감싸져도 안전하게 찾음
+        // (기존 transform.Find는 직계 경로만 찾아 LoadedInventoryArea가 중첩되면 null → 적재 그리드 유실)
+        loadedGrid = FindDeepChild(transform, "LoadedInventoryGrid") as RectTransform;
         popupOverlay = FindDeepChild(transform, "PurchasePopupOverlay")?.gameObject;
         popupRect = FindDeepChild(transform, "PurchaseAmountPopup") as RectTransform;
 
@@ -774,7 +788,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         scrollbarRect.pivot = new Vector2(1f, 0.5f);
         scrollbarRect.anchoredPosition = new Vector2(-4f, 0f);
         scrollbarRect.sizeDelta = new Vector2(14f, -8f);
-        scrollbarObject.GetComponent<Image>().color = new Color(0.16f, 0.14f, 0.14f, 0.45f);
+        // [투명 처리] 스크롤바가 패널 밖으로 삐져나와 보기 흉해, 배경·핸들을 투명(alpha 0)으로 숨긴다.
+        //   휠/콘텐츠 드래그 스크롤은 그대로 동작한다. 투명 영역이 클릭을 먹지 않도록 raycastTarget도 끈다.
+        Image scrollbarBackground = scrollbarObject.GetComponent<Image>();
+        scrollbarBackground.color = new Color(0.16f, 0.14f, 0.14f, 0f);
+        scrollbarBackground.raycastTarget = false;
 
         GameObject handleObject = new GameObject(
             "Handle",
@@ -788,7 +806,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         handleRect.offsetMin = new Vector2(2f, 2f);
         handleRect.offsetMax = new Vector2(-2f, -2f);
         Image handleImage = handleObject.GetComponent<Image>();
-        handleImage.color = new Color(0.78f, 0.72f, 0.68f, 0.95f);
+        handleImage.color = new Color(0.78f, 0.72f, 0.68f, 0f); // 투명 — 스크롤바 숨김(휠/드래그 스크롤은 유지)
+        handleImage.raycastTarget = false;
 
         Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
         scrollbar.handleRect = handleRect;
@@ -838,6 +857,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         SetRect("LoadedInventoryArea", new Vector2(516f, 172f), new Vector2(32f, -536f));
         SetRect("LoadStatusArea", new Vector2(568f, 172f), new Vector2(580f, -536f));
 
+        // [색 하드코딩 비활성화] 패널·영역·버튼·텍스트 색을 캔버스에서 정하도록 강제 색 지정 중단.
+        /*
         SetImageColor(transform, new Color32(184, 177, 177, 255));
         SetImageColor("Header", new Color32(184, 177, 177, 255));
         SetImageColor("TitleBackground", new Color32(248, 246, 243, 255));
@@ -856,6 +877,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         SetTextColor("PendingCostText", new Color32(45, 40, 39, 255));
         SetTextColor("RequiredFoodText", new Color32(45, 40, 39, 255));
         SetTextColor("LoadedFoodText", new Color32(45, 40, 39, 255));
+        */
 
         StyleLabel("ShopAreaLabel", "상점", 22f, Color.white);
         StyleLabel("LoadedInventoryLabel", "적재 인벤토리", 22f, Section9TextColor());
@@ -898,20 +920,23 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         Image background = slot.GetComponent<Image>();
         if (background == null)
             background = slot.gameObject.AddComponent<Image>();
-        background.color = new Color32(248, 246, 243, 255);
+        // [색 하드코딩 비활성화] 슬롯 배경색은 캔버스에서 지정
+        // background.color = new Color32(248, 246, 243, 255);
         background.raycastTarget = true;
 
         Outline outline = slot.GetComponent<Outline>();
         if (outline == null)
             outline = slot.gameObject.AddComponent<Outline>();
-        outline.effectColor = new Color32(91, 80, 79, 255);
+        // [색 하드코딩 비활성화] 테두리 색은 캔버스에서 지정
+        // outline.effectColor = new Color32(91, 80, 79, 255);
         outline.effectDistance = new Vector2(2f, -2f);
         outline.useGraphicAlpha = true;
 
         foreach (TMP_Text text in slot.GetComponentsInChildren<TMP_Text>(true))
         {
             text.fontSize = Mathf.Max(text.fontSize, minimumFontSize);
-            text.color = new Color32(45, 40, 39, 255);
+            // [색 하드코딩 비활성화] 슬롯 글자색은 캔버스에서 지정
+            // text.color = new Color32(45, 40, 39, 255);
         }
     }
 
@@ -955,11 +980,17 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (header == null)
             return;
 
+        // [뒤로 버튼 제거] 씬에서 지운 뒤로 버튼을 코드가 Awake에서 다시 만들지 않도록 생성 중단.
+        //   있으면 참조만 하고, 없으면 null (WireInteractions에서 null 체크되어 안전).
         Transform existing = FindDeepChild(header, "BackButton");
-        backButton = existing == null
-            ? CreateButton(header, "BackButton", "뒤로", new Vector2(112f, 56f), new Vector2(-510f, 0f))
-            : existing.GetComponent<Button>();
+        backButton = existing != null ? existing.GetComponent<Button>() : null;
 
+        // [하드코딩 비활성화] 뒤로/타이틀/구매/닫기 버튼의 위치·크기·글자를 매번 덮어써서
+        //   캔버스에서 수정이 안 됐음. → 아래 블록을 비활성화해 프리팹 편집값을 그대로 사용.
+        //   (위의 backButton 생성/할당은 그대로라 '뒤로가기' 클릭 연결은 정상 작동)
+        //   ※ 주의: 이 값들이 사라지므로, 버튼 위치·글자("무역 물품 적재"/"구매"/"X")는
+        //           프리팹에서 직접 설정해 주세요. 되돌리려면 아래 블록 주석을 해제하면 됩니다.
+        /*
         if (backButton != null)
         {
             RectTransform backRect = backButton.transform as RectTransform;
@@ -998,6 +1029,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             closeLabel.fontSize = 28f;
             closeLabel.fontStyle = FontStyles.Bold;
         }
+        */
     }
 
     private void BuildPurchasePopup()
@@ -1009,7 +1041,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (overlayImage == null)
             overlayImage = popupOverlay.AddComponent<Image>();
 
-        overlayImage.color = new Color(0f, 0f, 0f, 0.62f);
+        // [색 하드코딩 비활성화] 오버레이 어두운색은 캔버스에서 지정
+        // overlayImage.color = new Color(0f, 0f, 0f, 0.62f);
         overlayImage.raycastTarget = true;
 
         Button overlayButton = popupOverlay.GetComponent<Button>();
@@ -1023,17 +1056,18 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         if (popupRect.GetComponent<CargoPopupClickBlocker>() == null)
             popupRect.gameObject.AddComponent<CargoPopupClickBlocker>();
 
-        popupRect.anchorMin = new Vector2(0.5f, 0.5f);
-        popupRect.anchorMax = new Vector2(0.5f, 0.5f);
-        popupRect.pivot = new Vector2(0.5f, 0.5f);
-        popupRect.anchoredPosition = Vector2.zero;
-        popupRect.sizeDelta = new Vector2(560f, 420f);
+        // [캔버스 유지] 팝업 판의 위치·크기·색을 캔버스에서 정하도록 강제 배치 비활성화.
+        // popupRect.anchorMin = new Vector2(0.5f, 0.5f);
+        // popupRect.anchorMax = new Vector2(0.5f, 0.5f);
+        // popupRect.pivot = new Vector2(0.5f, 0.5f);
+        // popupRect.anchoredPosition = Vector2.zero;
+        // popupRect.sizeDelta = new Vector2(560f, 420f);
 
         Image popupImage = popupRect.GetComponent<Image>();
         if (popupImage == null)
             popupImage = popupRect.gameObject.AddComponent<Image>();
 
-        popupImage.color = new Color(0.12f, 0.13f, 0.16f, 0.98f);
+        // popupImage.color = new Color(0.12f, 0.13f, 0.16f, 0.98f);
         popupImage.raycastTarget = true;
 
         popupTitleText = EnsureText(popupRect, "PopupTitleText", "물품 구매", 28f,
@@ -1104,6 +1138,13 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         popupMinButton?.onClick.AddListener(() => SetPopupCount(1));
         popupMaxButton?.onClick.AddListener(() => SetPopupCount(GetMaximumPurchaseCount()));
         popupLoadButton?.onClick.AddListener(ConfirmPurchase);
+
+        // 슬라이더 → 수량 연결(정수). 드래그하면 SetPopupCount로 반영(-1/+1/최소/최대 버튼과 같은 경로)
+        if (purchaseSlider != null)
+        {
+            purchaseSlider.wholeNumbers = true;
+            purchaseSlider.onValueChanged.AddListener(v => SetPopupCount((int)v));
+        }
     }
 
     private void WireSlotInteractions()
@@ -1373,6 +1414,14 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         int maximum = GetMaximumPurchaseCount();
         selectedPurchaseCount = Mathf.Clamp(selectedPurchaseCount, maximum > 0 ? 1 : 0, maximum);
+
+        // 슬라이더 범위 = 허용 최대 구매수. SetValueWithoutNotify로 되먹임 루프 방지
+        if (purchaseSlider != null)
+        {
+            purchaseSlider.minValue = maximum > 0 ? 1 : 0;
+            purchaseSlider.maxValue = maximum;
+            purchaseSlider.SetValueWithoutNotify(selectedPurchaseCount);
+        }
 
         if (popupTitleText != null)
             popupTitleText.text = item.DisplayName;
@@ -1743,7 +1792,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         Transform existing = FindDeepChild(parent, objectName);
         TMP_Text text = existing == null ? null : existing.GetComponent<TMP_Text>();
-        if (text == null)
+        // [캔버스 유지] 이미 씬에 있으면 위치·크기·글자를 건드리지 않고 참조만 반환한다.
+        if (text != null)
+            return text;
+
         {
             GameObject go = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
             go.transform.SetParent(parent, false);
@@ -1776,13 +1828,11 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     {
         Transform existing = FindDeepChild(parent, objectName);
         Button button = existing == null ? null : existing.GetComponent<Button>();
-        if (button == null)
-            button = CreateButton(parent, objectName, label, size, position);
+        // [캔버스 유지] 이미 씬에 있으면 글자·위치를 건드리지 않고 참조만 반환한다.
+        if (button != null)
+            return button;
 
-        TMP_Text text = button.GetComponentInChildren<TMP_Text>(true);
-        if (text != null)
-            text.text = label;
-
+        button = CreateButton(parent, objectName, label, size, position);
         return button;
     }
 

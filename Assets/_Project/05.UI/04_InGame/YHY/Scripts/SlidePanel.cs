@@ -21,6 +21,7 @@ public class SlidePanel : MonoBehaviour
     [Header("슬라이드 대상")]
     [SerializeField] private RectTransform panel;   // 슬라이드할 패널(자기 자신 또는 자식)
     [SerializeField] private Camera rendCam;        // RendTexture Camera
+    [SerializeField] private GameObject contentRoot; // [옵션] 열릴 때만 켜는 내용 루트(닫힘=비활성) — 열 때 Presenter의 OnEnable이 재실행되어 최신 데이터로 갱신되게 한다
 
     [Header("위치")]
     [SerializeField] private Vector2 openPos;       // 열렸을 때 위치
@@ -54,6 +55,12 @@ private void Awake()
             // Keep the RenderTexture camera state consistent with the initial panel visibility.
             rendCam.enabled = isOpen;
         }
+
+        if (contentRoot != null)
+        {
+            // 내용 루트는 열림 상태에만 활성 — 닫힘으로 시작하면 꺼둔다.
+            contentRoot.SetActive(isOpen);
+        }
     }
 
     /// <summary>열림/닫힘 토글(버튼에 연결).</summary>
@@ -71,6 +78,12 @@ public void SetOpen(bool open)
         {
             // Begin rendering before the opening animation exposes the map.
             rendCam.enabled = true;
+        }
+
+        if (open && contentRoot != null)
+        {
+            // 열기 직전에 켜서 Presenter(OnEnable)가 최신 데이터로 내용을 채우게 한다.
+            contentRoot.SetActive(true);
         }
 
         if (panel == null)
@@ -96,6 +109,11 @@ public void SetOpen(bool open)
                 // An inactive panel cannot animate, so apply the final camera state immediately.
                 rendCam.enabled = open;
             }
+
+            if (contentRoot != null)
+            {
+                contentRoot.SetActive(open);
+            }
         }
     }
 
@@ -119,6 +137,12 @@ private IEnumerator Slide(Vector2 target)
         {
             // Stop rendering only after the closing animation is completely hidden.
             rendCam.enabled = false;
+        }
+
+        if (!isOpen && contentRoot != null)
+        {
+            // 닫힘 애니가 끝난 뒤 내용을 끈다(슬라이드 중엔 보이게 유지).
+            contentRoot.SetActive(false);
         }
     }
 }

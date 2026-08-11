@@ -58,6 +58,7 @@ public class CaravanSlotPanel : MonoBehaviour
             vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
             LayoutElement colLE = col.AddComponent<LayoutElement>();
             colLE.preferredWidth = 220;   // 슬롯 폭
+            colLE.flexibleWidth = 0;      // [고정폭] 개수 상관없이 안 늘어남(내부 VLG의 flexible 상속 차단 → 위치만 가운데 정렬)
 
             // 카드
             string filled = contents[i];
@@ -101,7 +102,9 @@ public class CaravanSlotPanel : MonoBehaviour
             layout.childForceExpandWidth = true;
             layout.childControlHeight = true;
             layout.childForceExpandHeight = false;
-            column.AddComponent<LayoutElement>().preferredWidth = 220;
+            LayoutElement presetLE = column.AddComponent<LayoutElement>();
+            presetLE.preferredWidth = 220;
+            presetLE.flexibleWidth = 0;   // [고정폭] 개수 상관없이 안 늘어남
 
             Button card = Instantiate(slotPrefab, column.transform);
             card.interactable = canSelect;
@@ -221,6 +224,13 @@ public class CaravanSlotPanel : MonoBehaviour
         slotContents.Clear();
         caravanIds.Clear();
         selectedIndex = -1;
+
+        // [편집형] 에디터에서 미리 넣어둔 프리뷰 슬롯 등, cards에 없는 남은 자식도 정리(런타임엔 실제 데이터만 표시)
+        if (slotContainer != null)
+        {
+            for (int i = slotContainer.childCount - 1; i >= 0; i--)
+                DestroyImmediate(slotContainer.GetChild(i).gameObject);
+        }
     }
 
     private static void SetColor(Button b, Color c)

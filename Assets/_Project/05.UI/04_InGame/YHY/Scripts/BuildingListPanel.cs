@@ -33,7 +33,10 @@ public class BuildingListPanel : MonoBehaviour
         new Dictionary<string, BuildingBadgeState>(StringComparer.Ordinal);
     private readonly Dictionary<string, GameObject> badgeObjects =
         new Dictionary<string, GameObject>(StringComparer.Ordinal);
-    [SerializeField] private BuildingAddPopup addPopup;   // [+] 가 여는 건물 추가 팝업    /// <summary>
+    [SerializeField] private BuildingAddPopup addPopup;   // [+] 가 여는 건물 추가 팝업
+    [SerializeField] private Button rowTemplate;          // [편집형] 행 템플릿(지정 시 복제, 없으면 코드 생성)
+
+    /// <summary>
     /// 동적으로 생성된 건물 블록이 선택된 뒤 표시 이름을 전달한다.
     /// 목록은 특정 건물 기능을 알지 않고 외부 연결부가 필요한 동작만 선택하도록 한다.
     /// </summary>
@@ -152,6 +155,20 @@ public void Rebuild()
     /// <summary>리스트 한 줄(버튼+라벨) 생성. VerticalLayoutGroup이 배치.</summary>
     private Button CreateRow(string label, Color bg)
     {
+        // [편집형] rowTemplate이 지정되면 복제해서 사용(모양·폰트·높이·이미지를 씬에서 편집).
+        //   ＋행/일반행 구분용 색만 코드가 tint로 지정하고, 스프라이트 등 나머지는 템플릿 그대로 유지.
+        if (rowTemplate != null)
+        {
+            Button row = Instantiate(rowTemplate, content);
+            row.gameObject.SetActive(true);
+            // [편집형] Image 색·스프라이트는 RowTemplate에서 정한 그대로 유지(코드가 bg로 덮어쓰지 않음).
+            //   흰 스프라이트 × Button 색(ColorTint)으로 원하는 색을 낸다. (덮어쓰면 금색이 탁해짐)
+            TMP_Text rowText = row.GetComponentInChildren<TMP_Text>(true);
+            if (rowText != null) rowText.text = label;
+            return row;
+        }
+
+        // [폴백] 템플릿이 없으면 기존 코드 생성 방식
         GameObject go = new GameObject("Row",
             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(LayoutElement));
         go.transform.SetParent(content, false);

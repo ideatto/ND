@@ -32,6 +32,12 @@ public class BuildingPlacementController : MonoBehaviour,
     public bool IsEditMode => editMode;
 
     /// <summary>
+    /// 일반(비편집) 모드에서 건물을 클릭했을 때, 그 건물 종류(카탈로그 displayName)로 발생한다.
+    /// VillageBuildingActionRouter가 구독해 건물별 패널(창고→인벤토리 등)을 연다.
+    /// </summary>
+    public event System.Action<string> BuildingClickedInView;
+
+    /// <summary>
     /// 건물 선택 입력을 명시적으로 허용한다. 진입 UI의 닫기 처리는 호출자 책임으로 분리한다.
     /// </summary>
     public void EnterEditMode()
@@ -412,16 +418,30 @@ public class BuildingPlacementController : MonoBehaviour,
         // 건물 추가로 새로 생긴 건물을 격자에 등록·정렬(런타임 생성분은 sceneLoaded를 안 타므로 여기서 흡수).
         RegisterExistingBuildings();
 
-        // 일반 탐색 중에는 건물을 클릭해도 선택/이동 상태로 들어가지 않는다.
-        // 편집 버튼이 명시적으로 상태를 전환한 뒤에만 기존 배치 입력을 허용한다.
+        // 일반(비편집) 모드: 건물을 클릭하면 선택/이동 대신 그 건물 종류(displayName)로 이벤트를 발생시킨다.
+        // VillageBuildingActionRouter가 그 이벤트를 받아 창고→인벤토리 등 건물별 패널 열기를 처리한다.
         if (!editMode)
         {
+            Transform clicked = PickBuildingAt(e.position);
+            if (clicked != null)
+            {
+                PlaceableBuilding pb = clicked.GetComponent<PlaceableBuilding>();
+                VillageBuildingRegistry reg = VillageBuildingRegistry.Instance;
+                if (pb != null && reg != null && reg.TryGetDisplayName(pb, out string displayName))
+                    BuildingClickedInView?.Invoke(displayName);
+            }
             SetSelected(null);
             return;
         }
 
         if (IsOverButton(e.position)) return;   // 회전 버튼 클릭이면 선택 해제 안 함
-        if (!TryMakeRay(e.position, out Ray ray)) return;
+        SetSelected(PickBuildingAt(e.position));   // 빈 곳 클릭이면 null → 선택 해제
+    }
+
+    /// <summary>화면 클릭 지점의 마을 카메라 광선에 맞는 가장 가까운 건물 Transform(없으면 null).</summary>
+    private Transform PickBuildingAt(Vector2 screenPos)
+    {
+        if (!TryMakeRay(screenPos, out Ray ray)) return null;
 
         RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
         Transform best = null;
@@ -431,7 +451,7 @@ public class BuildingPlacementController : MonoBehaviour,
             PlaceableBuilding pb = h.collider.GetComponentInParent<PlaceableBuilding>();
             if (pb != null && h.distance < bestDist) { bestDist = h.distance; best = pb.transform; }
         }
-        SetSelected(best);   // 빈 곳 클릭이면 null → 선택 해제
+        return best;
     }
 
     /// <summary>드래그: 건물 선택 중이면 건물 이동, 아니면 마을(카메라) 이동.</summary>

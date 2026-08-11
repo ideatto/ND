@@ -78,7 +78,8 @@ public class CurrencyHudPresenter : MonoBehaviour
     {
         if (tradingCurrencyText != null)
         {
-            tradingCurrencyText.text = CurrencyTextFormatter.Format(tradingCurrency);
+            // 돈은 세자리마다 콤마로 표시(지역설정 무관하게 콤마 보장). 예: 112,233,445,566,778,899
+            tradingCurrencyText.text = tradingCurrency.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
         }
     }
 }

@@ -25,6 +25,7 @@ public class TreadmillPanel : MonoBehaviour
 
     /// <summary>현재 이 패널이 보여주는 마차 id(2단계 트레드밀이 참조).</summary>
     public string CurrentCaravanId { get; private set; }
+    /// <summary>패널이 현재 열려(슬라이드 인) 있는지. 마차 버튼 토글(같은 마차 재클릭 시 닫기)에 사용.</summary>
     public bool IsOpen => slide != null && slide.IsOpen;
 
     private void Awake()

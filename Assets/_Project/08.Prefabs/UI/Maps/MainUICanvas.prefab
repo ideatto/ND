@@ -57,7 +57,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.36, g: 0.52, b: 0.75, a: 1}
@@ -3217,6 +3217,7 @@ MonoBehaviour:
   - {fileID: 1866509051800295555}
   noticeUI: {fileID: 1962801421393486745}
   arrivalSaleButton: {fileID: 5580020709590859577}
+  treadmillPanel: {fileID: 0}
 --- !u!114 &1930255170383493878
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3227,7 +3228,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b1e7377030764718bd5106cf5adf5e03, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CaravanOverviewRenameBinding
   presenter: {fileID: 3914209834831377775}
   popup: {fileID: 467987752373354970}
@@ -7739,6 +7740,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Market.MarketTradePanelController
   marketData: {fileID: 0}
   marketCatalog: []
+  sellPriceModifierPolicy: {fileID: 0}
   overrideMaximumCargoWeight: 0
   maximumCargoWeight: 100
   worldSeed: 20260721
@@ -15384,7 +15386,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2058029641247876713, guid: ddc883b5f4be47544b3f356225831707, type: 3}
       propertyPath: cargoSellPopup
-      value:
+      value: 
       objectReference: {fileID: 4120789031140537463}
     - target: {fileID: 6670375325807137613, guid: ddc883b5f4be47544b3f356225831707, type: 3}
       propertyPath: m_Pivot.x
@@ -15480,7 +15482,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 50d0223f5ec14384a701050083008600, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Market.CaravanArrivalSaleButton
 --- !u!224 &6887077358998133614 stripped
 RectTransform:
@@ -15667,7 +15669,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 178581e4bf6541b095755a57fe65e1b4, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.CargoSell.CargoSellPopupController
 --- !u!224 &5864937297942124299 stripped
 RectTransform:
@@ -15893,7 +15895,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9fb5c5893d014dd9a37af5b210132e6c, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CaravanRenamePopupController
 --- !u!224 &7852929420955288143 stripped
 RectTransform:
@@ -16284,23 +16286,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5520530236811749989, guid: ccd09d98a6fda9e449f074c121eb3405, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5520530236811749989, guid: ccd09d98a6fda9e449f074c121eb3405, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5520530236811749989, guid: ccd09d98a6fda9e449f074c121eb3405, type: 3}
       propertyPath: m_SizeDelta.x
-      value: -44
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5520530236811749989, guid: ccd09d98a6fda9e449f074c121eb3405, type: 3}
       propertyPath: m_SizeDelta.y
-      value: -36
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5520530236811749989, guid: ccd09d98a6fda9e449f074c121eb3405, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9076310821743931677, guid: ccd09d98a6fda9e449f074c121eb3405, type: 3}
       propertyPath: m_Name

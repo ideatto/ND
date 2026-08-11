@@ -171,6 +171,18 @@ public class TownRoutePanel : MonoBehaviour
         foreach (GameObject go in spawned)
             if (go != null) { go.SetActive(false); Destroy(go); }
         spawned.Clear();
+
+        // [편집형] 에디터에서 미리 넣어둔 프리뷰 버튼 등, spawned에 없는 남은 자식도 정리한다.
+        //   (런타임엔 진짜 데이터로만 채워지도록)
+        if (listContainer != null)
+        {
+            for (int i = listContainer.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = listContainer.GetChild(i).gameObject;
+                child.SetActive(false);
+                Destroy(child);
+            }
+        }
     }
 
     private static void SetLabel(Button b, string text)

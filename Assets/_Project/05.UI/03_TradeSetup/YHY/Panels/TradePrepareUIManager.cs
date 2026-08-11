@@ -127,6 +127,8 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     [SerializeField] private Button slotBack;        // ② → ①
     [SerializeField] private Button animalBack;      // ③ → ②
     [SerializeField] private Button summaryBack;     // ⑥ → ⑤(용병 다시 열기)
+    [SerializeField] private Button townRouteBack;   // ① 도시루트 → ② 슬롯(뒤로)
+    [SerializeField] private Button townRouteCancel; // ① 도시루트 무역준비 패널 닫기(취소)
 
     [Header("요약(⑥ 와이어프레임 6번)")]
     [SerializeField] private TradeSummaryPanel summaryView;   // 요약 표시 패널(순수 UI)
@@ -518,8 +520,13 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (departButton != null) departButton.onClick.AddListener(Depart);
 
         if (animalBack != null) animalBack.onClick.AddListener(GoTownRoute);
+        if (townRouteBack != null) townRouteBack.onClick.AddListener(GoCaravanSlot);   // ① 뒤로 → ② 슬롯
+        // ① 취소는 FrameworkTradeScreenPresenter.CloseTradeScreen()에 씬 persistent로 직접 연결.
+        //   (매니저의 HideTradeScreens를 직접 부르면 라우터의 isTradeScreenOpen이 살아있어 다시 열림)
         if (summaryBack != null) summaryBack.onClick.AddListener(BackFromSummary);
-        if (summaryCancel != null) summaryCancel.onClick.AddListener(OnTradeCancelledByPanels);   // ⑥ 무역 취소
+        // [닫기=전체 닫기] ⑥ 요약 무역 취소도 씬에서 CloseTradeScreen(전체 닫기)에 persistent 연결.
+        //   (도시/루트로 가던 OnTradeCancelledByPanels 연결 제거)
+        // if (summaryCancel != null) summaryCancel.onClick.AddListener(OnTradeCancelledByPanels);   // ⑥ 무역 취소
 
         if (settlementPanel != null)
         {
@@ -1156,6 +1163,11 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
         if (settlementPanel != null) settlementPanel.gameObject.SetActive(idx == 6);
         if (paymentPanel != null) paymentPanel.gameObject.SetActive(false);
         if (idx != 5 && cancelWarning != null) cancelWarning.Close();   // 진행 화면 벗어나면 경고창도 닫기
+
+        // ⑤ 용병 패널은 Show()로만 켜진다(ShowOnly 대상 아님). ShowOnly로 다른 화면을 켤 땐 항상 숨겨서,
+        //   닫았다 다시 열 때 이전에 켜졌던 용병창이 남아 위에 뜨는(=빈 데이터로 재진입) 문제를 막는다.
+        //   GoMercenary는 ShowOnly(-1) 직후 Show()를 호출하므로 정상 표시에는 영향 없음.
+        if (mercenaryPanel != null) mercenaryPanel.gameObject.SetActive(false);
     }
 
     private static void SetActive(Component panel, bool on)

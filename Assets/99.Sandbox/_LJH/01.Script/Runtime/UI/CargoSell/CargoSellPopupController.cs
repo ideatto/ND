@@ -19,6 +19,7 @@ namespace ND.UI.CargoSell
         private CargoSellViewData source;
         private CargoSellCargoItemViewData selected;
         private int selectedQuantity;
+        private Slider quantitySlider;   // 수량 슬라이더(WarehouseQuantityModal과 동일)
 
         private CargoSellPendingSaleListView pendingList;
         private Transform cargoContent;
@@ -190,6 +191,11 @@ namespace ND.UI.CargoSell
             if (submitting || item == null) return;
             selected = item;
             selectedQuantity = draft.GetQuantity(item.itemId, item.purchaseUnitPrice);
+            if (quantitySlider != null)
+            {
+                quantitySlider.minValue = 0;
+                quantitySlider.maxValue = Math.Max(0, item.cargoQuantity);
+            }
             SetQuantityModalActive(true);
             UpdateQuantityText();
         }
@@ -218,6 +224,14 @@ namespace ND.UI.CargoSell
         {
             if (selected == null) return;
             selectedQuantity = Math.Max(0, selected.cargoQuantity);
+            UpdateQuantityText();
+        }
+
+        /// <summary>슬라이더 드래그 → 수량 반영(정수, 0~보유수량으로 clamp).</summary>
+        private void SetQuantityFromSlider(float value)
+        {
+            if (selected == null) return;
+            selectedQuantity = Mathf.Clamp(Mathf.RoundToInt(value), 0, Math.Max(0, selected.cargoQuantity));
             UpdateQuantityText();
         }
 
@@ -302,6 +316,8 @@ namespace ND.UI.CargoSell
         {
             if (selectedQuantityText != null && selected != null)
                 selectedQuantityText.text = selectedQuantity + " / " + Math.Max(0, selected.cargoQuantity);
+            if (quantitySlider != null)
+                quantitySlider.SetValueWithoutNotify(selectedQuantity);
         }
 
         private void ResolveSlots()
@@ -338,6 +354,7 @@ namespace ND.UI.CargoSell
             maxButton = FindWithin(Find("QuantityModal"), "MaxButton")?.GetComponent<Button>();
             cancelQuantityButton = FindWithin(Find("QuantityModal"), "CancelButton")?.GetComponent<Button>();
             confirmQuantityButton = FindWithin(Find("QuantityModal"), "ConfirmTransferButton")?.GetComponent<Button>();
+            quantitySlider = FindWithin(Find("QuantityModal"), "Slider")?.GetComponent<Slider>();
             pendingList?.SetInteractionCallbacks(OpenQuantity, RemovePending);
         }
 
@@ -354,6 +371,11 @@ namespace ND.UI.CargoSell
             maxButton?.onClick.AddListener(SelectMaximum);
             cancelQuantityButton?.onClick.AddListener(CloseQuantity);
             confirmQuantityButton?.onClick.AddListener(ConfirmQuantity);
+            if (quantitySlider != null)
+            {
+                quantitySlider.wholeNumbers = true;                         // 정수 단위
+                quantitySlider.onValueChanged.AddListener(SetQuantityFromSlider);
+            }
         }
 
         private Transform Find(string objectName) =>
