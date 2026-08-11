@@ -68,6 +68,9 @@ TradeProgress (UTC 진행률)      캐러밴 마커 · % 라벨
 | `TownWorldView` | 마을 마커 + 클릭 → `townId` 전달 |
 | `RouteVisual` | 직선/곡선 루트 그리기 + 캐러밴 위치 계산 |
 | `CaravanMapMarker` | 진행률에 따라 캐러밴 위치 표시 |
+| `WorldMapSeasonBackgroundBinder` | `currentSeasonId`에 따라 V4 배경 Sprite만 교체 |
+
+계절 배경 Prefab 배선·아트 import·검증: [`World_Map_Seasonal_Background_Usage_Guide.md`](./World_Map_Seasonal_Background_Usage_Guide.md)
 
 ---
 
@@ -430,8 +433,10 @@ Error만 없으면 표시 테스트로는 Pass로 보면 됩니다.
 | [`Framework_World_Map_API_Guide.md`](./Framework_World_Map_API_Guide.md) | API·스냅샷·테스트 씬 구조 |
 | [`Framework_CoreServices_Team_Usage_Guide.md`](./Framework_CoreServices_Team_Usage_Guide.md) | TradeStart · 진행 · 정산 통합 |
 | [`Framework_Shared_Game_Data_Guide.md`](./Framework_Shared_Game_Data_Guide.md) | Shared catalog · `02.Data` seed · watch |
+| [`World_Map_Seasonal_Background_Usage_Guide.md`](./World_Map_Seasonal_Background_Usage_Guide.md) | V4 계절 배경 스프라이트 배선·검증 |
 
 Feature 구현 로그(개인):
 
 - `Docs/Personal_Documents/CSU/0715_world_map_phase1_spline_implementation.md`
 - `Docs/Personal_Documents/CSU/Handoff/07-15_world_map_phase1_spline_handoff.md`
+- `Docs/Personal_Documents/CSU/0811_world_map_seasonal_background_logic.md`
