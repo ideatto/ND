@@ -1,5 +1,6 @@
 using System.Linq;
 using ND.UI.CargoSell;
+using ND.UI.InGame.Warehouse;
 using ND.UI.Market;
 using NUnit.Framework;
 using UnityEditor;
@@ -130,6 +131,60 @@ namespace ND.Framework.Editor
         }
 
         [Test]
+        public void MultiplePurchasePrices_SelectPriceBeforeQuantityAndUseSaleHeader()
+        {
+            GameObject instance = InstantiatePopup(out CargoSellPopupController controller);
+            try
+            {
+                CargoSellViewData data = CreateViewData();
+                data.cargoItems = new[]
+                {
+                    new CargoSellCargoItemViewData
+                    {
+                        itemId = "Bread", purchaseUnitPrice = 0L, displayName = "빵",
+                        cargoQuantity = 3, sellUnitPrice = 72L
+                    },
+                    new CargoSellCargoItemViewData
+                    {
+                        itemId = "Bread", purchaseUnitPrice = 50L, displayName = "빵",
+                        cargoQuantity = 1, sellUnitPrice = 72L
+                    }
+                };
+
+                Assert.That(controller.Open(data), Is.True);
+                CargoSellCargoSlotView[] slots =
+                    instance.GetComponentsInChildren<CargoSellCargoSlotView>(true);
+                Assert.That(slots.Count(slot => slot.GetComponent<Button>().interactable), Is.EqualTo(1));
+
+                slots.First(slot => slot.GetComponent<Button>().interactable)
+                    .GetComponent<Button>().onClick.Invoke();
+
+                GameObject priceModal = Find(instance, "PriceGroupModal").gameObject;
+                GameObject quantityModal = Find(instance, "QuantityModal").gameObject;
+                Assert.That(priceModal.activeSelf, Is.True);
+                Assert.That(quantityModal.activeSelf, Is.False);
+
+                WarehousePriceGroupRowView[] rows = priceModal
+                    .GetComponentsInChildren<WarehousePriceGroupRowView>(true)
+                    .Where(row => row.gameObject.activeSelf)
+                    .ToArray();
+                Assert.That(rows.Length, Is.EqualTo(2));
+                rows[1].GetComponent<Button>().onClick.Invoke();
+
+                Assert.That(priceModal.activeSelf, Is.False);
+                Assert.That(quantityModal.activeSelf, Is.True);
+                Assert.That(Find(quantityModal, "SourceText").GetComponent<TMPro.TMP_Text>().text,
+                    Is.EqualTo("Caravan 1"));
+                Assert.That(Find(quantityModal, "DestinationText").GetComponent<TMPro.TMP_Text>().text,
+                    Is.EqualTo("판매 대기"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
         public void MainUi_ContainsInactiveCargoSellPopupConnectedToArrivalController()
         {
             GameObject mainUi = AssetDatabase.LoadAssetAtPath<GameObject>(MainUiPrefabPath);
@@ -188,5 +243,6 @@ namespace ND.Framework.Editor
             return root.GetComponentsInChildren<Transform>(true)
                 .First(child => child.name == objectName);
         }
+
     }
 }

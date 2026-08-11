@@ -297,7 +297,9 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
                 text.font = font;
         }
         return button;
-    }    private void CreateRegistryBuildingRows(bool environmentOnly)
+    }
+
+    private void CreateRegistryBuildingRows(bool environmentOnly)
     {
         VillageBuildingRegistry registry = VillageBuildingRegistry.Instance;
         if (registry == null)
@@ -308,12 +310,54 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             if (registry.GetCatalogIsEnvironment(i) != environmentOnly)
                 continue;   // 이 섹션(건물/환경) 카테고리에 맞는 항목만 표시
             int catalogIndex = i;
+            BuildData buildData = registry.GetCatalogBuildData(i);
+            int currentLevel = registry.GetCatalogLevel(i);
+            string rowLabel = $"{registry.GetCatalogName(i)}  Lv.{currentLevel}";
+            bool rowInteractable = true;
+
+            // EndingItem remains visible as a progression goal. Before BaseCamp Lv.5 the row is
+            // disabled, while a completed item remains clickable only to explain that no further
+            // level-up is possible. Keeping the completed row interactable also preserves the same
+            // background presentation as the other building rows.
+            if (IsEndingBuilding(buildData))
+            {
+                bool unlocked = IsEndingBuildingUnlocked();
+                rowInteractable = unlocked;
+                rowLabel = unlocked
+                    ? $"{registry.GetCatalogName(i)}  Lv.{Mathf.Min(currentLevel, 1)}"
+                    : registry.GetCatalogName(i);
+            }
+
             Button row = CreateRow(
-                $"{registry.GetCatalogName(i)}  Lv.{registry.GetCatalogLevel(i)}",
+                rowLabel,
                 new Color(0.78f, 0.79f, 0.75f),
                 true);
+            row.interactable = rowInteractable;
+            if (!rowInteractable)
+                ApplyDisabledRowPresentation(row);
             row.onClick.AddListener(() => SelectRegistryBuilding(registry, catalogIndex));
         }
+    }
+
+    /// <summary>
+    /// Makes a disabled catalog entry recognizable before the player attempts to click it.
+    /// The Button stays non-interactable; this method only strengthens its static presentation.
+    /// </summary>
+    private static void ApplyDisabledRowPresentation(Button row)
+    {
+        if (row == null)
+            return;
+
+        ColorBlock colors = row.colors;
+        // Keep the locked ending goal distinct without introducing a cold gray block into
+        // the parchment-toned construction list. Button tint multiplies the row base color.
+        colors.disabledColor = new Color(0.90f, 0.82f, 0.68f, 1f);
+        colors.colorMultiplier = 1f;
+        row.colors = colors;
+
+        TMP_Text label = row.GetComponentInChildren<TMP_Text>(true);
+        if (label != null)
+            label.color = new Color(0.25f, 0.24f, 0.22f, 1f);
     }
 
     private void CreateInspectorRows(MenuSection section)
@@ -337,6 +381,19 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 
     private void SelectRegistryBuilding(VillageBuildingRegistry registry, int catalogIndex)
     {
+        BuildData selectedBuildData = registry.GetCatalogBuildData(catalogIndex);
+        if (IsEndingBuilding(selectedBuildData) && !IsEndingBuildingUnlocked())
+        {
+            // Fail closed even if an external caller bypasses the disabled row Button.
+            return;
+        }
+
+        if (IsEndingBuilding(selectedBuildData) && registry.GetCatalogLevel(catalogIndex) >= 1)
+        {
+            ShowNotice("더 이상 레벨업할 수 없습니다.");
+            return;
+        }
+
         if (useImmediateAdd)
         {
             registry.AddOrUpgrade(catalogIndex);
@@ -345,7 +402,7 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             return;
         }
 
-        BuildData buildData = registry.GetCatalogBuildData(catalogIndex);
+        BuildData buildData = selectedBuildData;
         if (buildData == null)
         {
             Debug.LogError($"BuildingAddPopup: no BuildData is assigned to catalog index {catalogIndex}.", this);
@@ -360,6 +417,39 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 
         popupRuntimeBinding.OpenDetail(buildData, registry.GetCatalogLevel(catalogIndex));
         Close();
+    }
+
+    private static bool IsEndingBuilding(BuildData buildData)
+    {
+        return buildData != null
+            && string.Equals(
+                buildData.BuildId,
+                ND.Framework.BaseCampBuildingLevelPolicy.EndingBuildingId,
+                StringComparison.Ordinal);
+    }
+
+    private static bool IsEndingBuildingUnlocked()
+    {
+        ND.Framework.SaveData saveData =
+            ND.Framework.FrameworkRoot.Instance?.CurrentSaveData;
+        return ND.Framework.BaseCampProgressionPolicy.IsEndingBuildingUnlocked(
+            saveData?.player?.villageBuildings);
+    }
+
+    /// <summary>
+    /// Reuses the existing MainUI notice instead of adding a dedicated popup or creating UI at runtime.
+    /// </summary>
+    private void ShowNotice(string message)
+    {
+        Canvas rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+        NoticeUI notice = rootCanvas != null
+            ? rootCanvas.GetComponentInChildren<NoticeUI>(true)
+            : FindAnyObjectByType<NoticeUI>(FindObjectsInactive.Include);
+
+        if (notice != null)
+            notice.Show(message);
+        else
+            Debug.LogWarning($"BuildingAddPopup: NoticeUI를 찾지 못했습니다. {message}", this);
     }
 
     private Button CreateFromPrefab(Button prefab, string label, Color fallbackColor)

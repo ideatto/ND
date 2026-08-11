@@ -121867,6 +121867,11 @@ MonoBehaviour:
     buildData: {fileID: 11400000, guid: 302faa1f84ddd79438fa58ce8d1ea0bc, type: 2}
     isEnvironment: 1
     envCost: 100
+  - displayName: "\uD669\uAE08 \uCE68\uB300"
+    prefab: {fileID: 919132149155446097, guid: af8bac9a32f17e74b8f8a5c19fe87f3b, type: 3}
+    buildData: {fileID: 11400000, guid: 2506fbaf2b2946d4895671605816b570, type: 2}
+    isEnvironment: 0
+    envCost: 0
 --- !u!4 &903399488
 Transform:
   m_ObjectHideFlags: 0

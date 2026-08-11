@@ -99,6 +99,18 @@ namespace ND.Framework
         public static event Action<string, int> CaravanCreated;
 
         /// <summary>
+        /// Raised after a building level is saved and committed to runtime. Consumers requery
+        /// building-derived presentation such as BaseCamp-owned Caravan slot unlocks.
+        /// </summary>
+        public static event Action VillageBuildingsChanged;
+
+        /// <summary>
+        /// Raised only after one building construction or upgrade has been saved and committed.
+        /// Parameters are the committed display name and target level. SaveData remains authority.
+        /// </summary>
+        public static event Action<string, int> VillageBuildingCommitted;
+
+        /// <summary>
         /// SceneFlowService가 scene load 완료 콜백을 받은 뒤 발생한다.
         /// </summary>
         public static event Action<string> SceneChanged;
@@ -139,6 +151,7 @@ namespace ND.Framework
         /// <summary>Raised after persisted wagon or draft-animal ownership/assignment changes.</summary>
         public static event Action TransportInventoryChanged;
         public static event Action CottageProductionChanged;
+        public static event Action BakeryProductionChanged;
 
         /// <summary>
         /// Raised after one Caravan's persisted cargo changes successfully.
@@ -272,6 +285,20 @@ namespace ND.Framework
             CaravanCreated?.Invoke(caravanId, slotIndex);
         }
 
+        public static void RaiseVillageBuildingsChanged()
+        {
+            // Publish no mutable building payload: SaveData remains the authority after commit.
+            FrameworkLog.Info("VillageBuildingsChanged event raised.");
+            VillageBuildingsChanged?.Invoke();
+        }
+
+        public static void RaiseVillageBuildingCommitted(string displayName, int targetLevel)
+        {
+            FrameworkLog.Info(
+                $"VillageBuildingCommitted event raised. Building: {displayName}, Level: {targetLevel}");
+            VillageBuildingCommitted?.Invoke(displayName, targetLevel);
+        }
+
         /// <summary>
         /// scene 변경 완료 이벤트를 발행한다.
         /// </summary>
@@ -391,6 +418,12 @@ namespace ND.Framework
         {
             FrameworkLog.Info("CottageProductionChanged event raised.");
             CottageProductionChanged?.Invoke();
+        }
+
+        public static void RaiseBakeryProductionChanged()
+        {
+            FrameworkLog.Info("BakeryProductionChanged event raised.");
+            BakeryProductionChanged?.Invoke();
         }
 
         public static void RaiseRescueLoanIssued(IssueRescueLoanResult result)

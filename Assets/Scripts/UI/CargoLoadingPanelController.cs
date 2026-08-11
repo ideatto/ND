@@ -81,6 +81,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     [Header("단계 전환 대상 (선택)")]
     [SerializeField] private GameObject previousStepPanel;
     [SerializeField] private GameObject mercenaryStepPanel;
+    [Tooltip("적재 불가 사유를 표시할 기존 Main UI Notice. 비어 있으면 같은 Canvas에서 찾습니다.")]
+    [SerializeField] private NoticeUI noticeUI;
 
     [Header("단계 이벤트")]
     [SerializeField] private UnityEvent onBackRequested = new UnityEvent();
@@ -257,6 +259,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private void Awake()
     {
+        ResolveNoticeUi();
         CacheHierarchy();
         EnsureDynamicSlots();
         EnsureGridScrollViews();
@@ -1354,7 +1357,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private void OpenPurchasePopup(int shopIndex)
     {
         if (!cargoEditingEnabled)
+        {
+            ShowNotice("현재는 적재 화물을 변경할 수 없습니다.");
             return;
+        }
 
         if (shopIndex < 0 || shopIndex >= shopItems.Length || shopItems[shopIndex] == null)
             return;
@@ -1363,7 +1369,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         selectedPurchaseCount = 1;
 
         if (GetMaximumPurchaseCount() < 1)
+        {
+            ShowPurchaseUnavailableNotice(shopIndex);
             return;
+        }
 
         popupOverlay.SetActive(true);
         popupRect.localScale = Vector3.zero;
@@ -1373,6 +1382,51 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
         popupAnimation = StartCoroutine(ScaleRoutine(popupRect, Vector3.one, 0.18f, null));
         RefreshPopup();
+    }
+
+    /// <summary>
+    /// Explains why selecting a market item produced no purchase popup. Validation remains
+    /// owned by the existing capacity calculations; this method only translates the first
+    /// blocking condition into user-facing feedback.
+    /// </summary>
+    private void ShowPurchaseUnavailableNotice(int shopIndex)
+    {
+        if (shopIndex < 0 || shopIndex >= shopItems.Length || shopItems[shopIndex] == null)
+            return;
+
+        TradeItemData item = shopItems[shopIndex];
+        string message;
+        if (shopIndex >= remainingStocks.Length || remainingStocks[shopIndex] <= 0)
+            message = "해당 물품의 재고가 부족합니다.";
+        else if (GetAffordableCount(shopIndex) <= 0)
+            message = "물품을 구매할 골드가 부족합니다.";
+        else if (item.Weight > 0f && MaximumLoad - CurrentLoad + 0.0001f < item.Weight)
+            message = "캐러밴의 적재 가능 무게가 부족합니다.";
+        else if (GetAvailableSlotCapacity(item) <= 0)
+            message = "캐러밴의 적재 슬롯이 부족합니다.";
+        else
+            message = "현재 구성으로는 해당 물품을 적재할 수 없습니다.";
+
+        ShowNotice(message);
+    }
+
+    private void ShowNotice(string message)
+    {
+        ResolveNoticeUi();
+        if (noticeUI != null)
+            noticeUI.Show(message);
+        else
+            Debug.LogWarning(message, this);
+    }
+
+    private void ResolveNoticeUi()
+    {
+        if (noticeUI != null)
+            return;
+
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        if (rootCanvas != null)
+            noticeUI = rootCanvas.GetComponentInChildren<NoticeUI>(true);
     }
 
     private void ClosePurchasePopup()

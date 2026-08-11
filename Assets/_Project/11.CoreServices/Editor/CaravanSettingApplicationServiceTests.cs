@@ -304,6 +304,34 @@ public sealed class CaravanSettingApplicationServiceTests
     }
 
     [Test]
+    public void ExecuteSetting_ZeroQuantityCargoRow_DoesNotBlockWagonSwap()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.caravans[0].cargo.Add(new CargoEntrySaveData
+        {
+            item = new TradeItemSaveData { itemId = "apple", weight = 2.5f },
+            quantity = 0
+        });
+        save.player.wagonInventory.Add(new OwnedWagonSaveData
+        {
+            instanceId = "wagon-spare", contentId = "wagon-large", currentDurability = 75
+        });
+        var service = CreateService(save, new RecordingSaveService(true));
+        var draft = new CaravanSettingDraft
+        {
+            caravanId = "caravan-a",
+            selectedWagonInstanceId = "wagon-spare"
+        };
+        draft.SelectAnimal("animal-a");
+        draft.SelectAnimal("animal-b");
+
+        CaravanSettingCommandResult result = service.Execute(draft);
+
+        Assert.That(result.succeeded, Is.True, result.userMessage);
+        Assert.That(save.caravans[0].wagon.instanceId, Is.EqualTo("wagon-spare"));
+    }
+
+    [Test]
     public void ExecuteSetting_SwapSaveFailureRestoresCaravanAndInventories()
     {
         FrameworkSaveData save = CreateSave();

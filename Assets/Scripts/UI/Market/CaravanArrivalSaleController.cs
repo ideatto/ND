@@ -23,6 +23,9 @@ namespace ND.UI.Market
 
         [SerializeField] private MarketTradePanelController marketPanel;
         [SerializeField] private CargoSellPopupController cargoSellPopup;
+        // Optional cross-prefab wiring. When it is null, the controller resolves and caches the
+        // scene presenter only after a successful durable sale so an inactive flow root is safe.
+        [SerializeField] private FrameworkTradeScreenPresenter tradeScreenPresenter;
         [SerializeField] private MarketData[] marketCatalog = Array.Empty<MarketData>();
 
         private string activeCaravanId = string.Empty;
@@ -114,6 +117,7 @@ namespace ND.UI.Market
                 if (root.SettlementUiBridge == null || !root.SettlementUiBridge.PresentSettlement(caravanId, tradeId))
                     return Fail(ErrorSettlementPresentation);
 
+                OpenSettlementPresentation(caravanId, tradeId);
                 SetError(string.Empty);
                 SettlementRequested?.Invoke(caravanId, tradeId);
                 return true;
@@ -341,6 +345,7 @@ namespace ND.UI.Market
             marketPanel.Close();
             if (cargoSellPopup != null)
                 cargoSellPopup.gameObject.SetActive(false);
+            OpenSettlementPresentation(caravanId, tradeId);
             SetError(string.Empty);
             SettlementRequested?.Invoke(caravanId, tradeId);
             return true;
@@ -411,6 +416,41 @@ namespace ND.UI.Market
                 ? MarketInventoryMutationSession.ErrorInvalidFramework
                 : error);
             return false;
+        }
+
+        /// <summary>
+        /// Reopens S8 after the durable sale transition. The router may already be in Settlement,
+        /// so requesting the same state through SettlementUiBridge does not necessarily emit a
+        /// second screen-change event. An explicit view call prevents the completed sale from
+        /// leaving the player on the Town screen with an undisplayed pending settlement.
+        /// </summary>
+        private void OpenSettlementPresentation(string caravanId, string tradeId)
+        {
+            if (tradeScreenPresenter == null)
+            {
+                FrameworkTradeScreenPresenter[] presenters =
+                    Resources.FindObjectsOfTypeAll<FrameworkTradeScreenPresenter>();
+                for (int index = 0; index < presenters.Length; index++)
+                {
+                    FrameworkTradeScreenPresenter candidate = presenters[index];
+                    if (candidate != null && candidate.gameObject.scene.IsValid())
+                    {
+                        tradeScreenPresenter = candidate;
+                        break;
+                    }
+                }
+            }
+
+            if (tradeScreenPresenter != null)
+            {
+                tradeScreenPresenter.OpenSettlementScreen();
+                return;
+            }
+
+            Debug.LogError(
+                $"[ArrivalSale] Settlement was saved but no {nameof(FrameworkTradeScreenPresenter)} " +
+                $"was available to open S8. CaravanId={caravanId}, TradeId={tradeId}",
+                this);
         }
 
         private static string ResolveCaravanDisplayName(ND.Framework.CaravanSaveData caravan)

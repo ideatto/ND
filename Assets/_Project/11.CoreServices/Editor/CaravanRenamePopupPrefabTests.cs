@@ -112,7 +112,6 @@ public sealed class CaravanRenamePopupPrefabTests
                 var serialized = new SerializedObject(slot);
                 Button renameButton = serialized.FindProperty("renameButton")
                     .objectReferenceValue as Button;
-
                 Assert.That(renameButton, Is.Not.Null, slot.name);
                 Assert.That(renameButton.name, Is.EqualTo("RenameButton"), slot.name);
                 Transform journeyStateDisplay = slot.transform.Find("JourneyStateDisplay");
@@ -141,6 +140,27 @@ public sealed class CaravanRenamePopupPrefabTests
         finally
         {
             PrefabUtility.UnloadPrefabContents(mainUi);
+        }
+    }
+
+    [Test]
+    public void Popup_UsesPrefabBackedBackdropButton()
+    {
+        GameObject popupRoot = PrefabUtility.LoadPrefabContents(PopupPath);
+        try
+        {
+            CaravanRenamePopupController popup =
+                popupRoot.GetComponent<CaravanRenamePopupController>();
+            var serialized = new SerializedObject(popup);
+            Button backdropButton = serialized.FindProperty("backdropButton")
+                .objectReferenceValue as Button;
+
+            Assert.That(backdropButton, Is.Not.Null);
+            Assert.That(backdropButton.gameObject, Is.SameAs(popupRoot));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(popupRoot);
         }
     }
 

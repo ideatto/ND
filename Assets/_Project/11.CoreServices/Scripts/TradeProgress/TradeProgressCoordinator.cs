@@ -1335,8 +1335,9 @@ namespace ND.Framework
                 return false;
             }
 
-            // The journey moves the Caravan, not the player. CopyRuntimeToOwnedSave
-            // persists this authoritative Caravan location after claim succeeds.
+            // Successful arrivals already own the destination while Selling. Re-applying the
+            // resolved town here keeps legacy pending settlements compatible and leaves failed
+            // trades at their origin; this is no longer the normal location-change moment.
             caravan.currentTownId = destinationTownId;
 
             // 대기 정산과 준비 commit 정리를 같은 저장 단위에 stage한다.
@@ -1505,8 +1506,8 @@ namespace ND.Framework
                     failedAnimalInstanceIds);
             }
 
-            // A failed journey returns the claimed Caravan to its saved origin.
-            // Successful settlement still moves only that Caravan to the destination.
+            // Successful Selling already persisted this destination. Claim re-applies it for
+            // legacy pending data; a failed journey instead retains its saved origin.
             caravan.currentTownId = settlementTownId;
             if (exactTradePrepareCommitStore == null
                 || !exactTradePrepareCommitStore.TryComplete(caravanId, tradeId, out _))
@@ -2193,8 +2194,29 @@ namespace ND.Framework
             LastSettlementTradeId = settlementTradeId;
             LastSettlementResult = result;
 
+            // A successful arrival owns the Caravan location from the moment Selling begins.
+            // Keep this inside the same snapshot/save boundary as the state transition so a
+            // failed save restores both JourneyState and currentTownId together.
+            if (result.grade != JourneyResultGrade.Failed)
+            {
+                string destinationTownId = ResolveArrivalDestinationTownId(
+                    saveData.tradeProgress.caravanId,
+                    settlementTradeId,
+                    settlementRouteId);
+                if (string.IsNullOrWhiteSpace(destinationTownId))
+                {
+                    JsonUtility.FromJsonOverwrite(saveDataSnapshot, saveData);
+                    JsonUtility.FromJsonOverwrite(runtimeCaravanSnapshot, caravan);
+                    LastSettlementTradeId = previousSettlementTradeId;
+                    LastSettlementResult = previousSettlementResult;
+                    FrameworkLog.Warning("Trade arrival was rolled back because the destination town could not be resolved.");
+                    return false;
+                }
+
+                caravan.currentTownId = destinationTownId;
+            }
+
             var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
-            ApplyRouteMinimumFoodConsumption(saveData, caravan, result, sharedGameData);
             if (sharedGameData == null || !sharedGameData.IsLoaded)
             {
                 FrameworkLog.Warning("Economy M1 settlement preview skipped because shared game data is not loaded.");
@@ -2316,6 +2338,19 @@ namespace ND.Framework
                 return false;
             }
 
+            // Resolve a successful arrival before Core mutates Journey state. Failed journeys
+            // intentionally retain their origin and must still settle even if route data was lost.
+            var arrivalTownId = runtimeCaravan.runFatalReason == JourneyFailureReason.None
+                ? ResolveArrivalDestinationTownId(caravanId, tradeId, progress.activeRouteId)
+                : string.Empty;
+            if (runtimeCaravan.runFatalReason == JourneyFailureReason.None
+                && string.IsNullOrWhiteSpace(arrivalTownId))
+            {
+                FrameworkLog.Warning(
+                    $"Trade arrival blocked because its destination town could not be resolved. CaravanId: {caravanId}, TradeId: {tradeId}");
+                return false;
+            }
+
             var result = JourneyRunner.Settle(runtimeCaravan);
             if (result == null)
             {
@@ -2346,8 +2381,14 @@ namespace ND.Framework
                 return false;
             }
 
+            if (result.grade != JourneyResultGrade.Failed)
+            {
+                // Selling is already a destination-town state. Persist the new location with
+                // the arrival settlement rather than delaying it until S9 Claim.
+                runtimeCaravan.currentTownId = arrivalTownId;
+            }
+
             var sharedGameData = getSharedGameData != null ? getSharedGameData() : null;
-            ApplyRouteMinimumFoodConsumption(progress, runtimeCaravan, result, sharedGameData);
             if (sharedGameData == null || !sharedGameData.IsLoaded)
             {
                 FrameworkLog.Warning("Economy M1 settlement preview skipped because shared game data is not loaded.");
@@ -2381,10 +2422,7 @@ namespace ND.Framework
                     progress.caravanId,
                     tradeId,
                     progress.activeRouteId,
-                    ResolveArrivalDestinationTownId(
-                        progress.caravanId,
-                        tradeId,
-                        progress.activeRouteId));
+                    arrivalTownId);
             }
 
             LastSettlementTradeId = tradeId;
@@ -2414,61 +2452,6 @@ namespace ND.Framework
                 && route != null
                 ? route.ToTownId ?? string.Empty
                 : string.Empty;
-        }
-
-        private static void ApplyRouteMinimumFoodConsumption(
-            SaveData saveData,
-            CaravanData caravan,
-            JourneyResultData result,
-            ISharedGameDataProvider sharedGameData)
-        {
-            if (saveData?.tradeProgress == null || caravan == null || result == null
-                || sharedGameData == null || !sharedGameData.IsLoaded)
-            {
-                return;
-            }
-
-            string routeId = saveData.tradeProgress.activeRouteId ?? string.Empty;
-            if (string.IsNullOrEmpty(routeId)
-                || !sharedGameData.TryGetRoute(routeId, out SharedRouteDefinition route))
-            {
-                return;
-            }
-
-            int minimumConsumed = Mathf.CeilToInt(
-                Mathf.Max(0, route.BaseRequiredFoodQuantity) * Mathf.Clamp01(caravan.progress01));
-            int alreadyConsumed = Mathf.Max(0, Mathf.RoundToInt(result.foodConsumed));
-            int additionalConsumption = Mathf.Min(
-                Mathf.Max(0, minimumConsumed - alreadyConsumed),
-                Mathf.Max(0, caravan.foodAmount));
-
-            caravan.foodAmount -= additionalConsumption;
-            result.foodConsumed = alreadyConsumed + additionalConsumption;
-        }
-
-        private static void ApplyRouteMinimumFoodConsumption(
-            TradeProgressSaveData progress,
-            CaravanData caravan,
-            JourneyResultData result,
-            ISharedGameDataProvider sharedGameData)
-        {
-            if (progress == null || caravan == null || result == null
-                || sharedGameData == null || !sharedGameData.IsLoaded)
-                return;
-
-            var routeId = progress.activeRouteId ?? string.Empty;
-            if (string.IsNullOrEmpty(routeId)
-                || !sharedGameData.TryGetRoute(routeId, out SharedRouteDefinition route))
-                return;
-
-            var minimumConsumed = Mathf.CeilToInt(
-                Mathf.Max(0, route.BaseRequiredFoodQuantity) * Mathf.Clamp01(caravan.progress01));
-            var alreadyConsumed = Mathf.Max(0, Mathf.RoundToInt(result.foodConsumed));
-            var additionalConsumption = Mathf.Min(
-                Mathf.Max(0, minimumConsumed - alreadyConsumed),
-                Mathf.Max(0, caravan.foodAmount));
-            caravan.foodAmount -= additionalConsumption;
-            result.foodConsumed = alreadyConsumed + additionalConsumption;
         }
 
         private void PublishSettlementNotifications(

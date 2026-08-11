@@ -1,6 +1,8 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -31,9 +33,13 @@ public sealed class TradePrepareCargoPreservationTests
             tests.CreateFinalCargoQuantities_LoadsEverySavedStackAndAggregatesDuplicateItems();
             tests.CreateFinalCargoQuantities_DoesNotDoubleCommittedCargoAfterDraftClears();
             tests.Create_PreservesSavedCargoMissingFromCurrentMarketCatalog();
+            tests.Create_PreservesPurchasePriceGroupsWhenRuntimeCargoIsRebuilt();
+            tests.Create_UsesLatestSavedCargoWhenDraftQuantityIsStale();
+            tests.Create_DoesNotRestoreFeedAsDuplicateCargo();
+            tests.ReplaceCargoPlan_PreservesPurchasePriceGroups();
             tests.ReplaceCargoPlan_EmptyPlanPublishesAuthoritativeTransition();
             tests.SelectingFourCaravans_DoesNotCarryPreviousCargo();
-            Debug.Log("Trade prepare cargo preservation probe passed (6/6).");
+            Debug.Log("Trade prepare cargo preservation probe passed (10/10).");
         }
         catch (Exception exception)
         {
@@ -101,6 +107,91 @@ public sealed class TradePrepareCargoPreservationTests
         Assert.That(result.cargo[0].item.weight, Is.EqualTo(2f));
     }
 
+    [Test]
+    public void Create_PreservesPurchasePriceGroupsWhenRuntimeCargoIsRebuilt()
+    {
+        FrameworkSaveData saveData = CreateSaveCargo("Bread", 3, 0L);
+        AddSaveCargo(saveData, "Bread", 1, 50L);
+
+        CaravanData result = TradePrepareCaravanFactory.CreatePreview(
+            new TradePrepareDraft(),
+            new TradePrepareBuildContext { saveData = saveData });
+
+        Assert.That(result.cargo.Count, Is.EqualTo(2));
+        Assert.That(result.cargo.Sum(entry => entry.quantity), Is.EqualTo(4));
+        Assert.That(result.cargo.Single(entry => entry.item.purchaseUnitPrice == 0L).quantity,
+            Is.EqualTo(3));
+        Assert.That(result.cargo.Single(entry => entry.item.purchaseUnitPrice == 50L).quantity,
+            Is.EqualTo(1));
+
+        var roundTrip = new ND.Framework.CaravanSaveData();
+        ND.Framework.CaravanSaveDataMapper.CopyToSave(result, roundTrip);
+        Assert.That(roundTrip.cargo.Count, Is.EqualTo(2));
+        Assert.That(roundTrip.cargo.Single(entry => entry.item.purchaseUnitPrice == 0L).quantity,
+            Is.EqualTo(3));
+        Assert.That(roundTrip.cargo.Single(entry => entry.item.purchaseUnitPrice == 50L).quantity,
+            Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Create_UsesLatestSavedCargoWhenDraftQuantityIsStale()
+    {
+        FrameworkSaveData saveData = CreateSaveCargo("Bread", 3, 0L);
+        AddSaveCargo(saveData, "Bread", 1, 50L);
+        var draft = new TradePrepareDraft { hasAuthoritativeCargoPlan = true };
+        draft.selectedBuyItems.Add(new TradeItemBundle
+        {
+            itemId = "Bread", quantity = 9, purchaseUnitPrice = 0L
+        });
+
+        CaravanData result = TradePrepareCaravanFactory.CreatePreview(
+            draft,
+            new TradePrepareBuildContext { saveData = saveData });
+
+        Assert.That(result.cargo.Sum(entry => entry.quantity), Is.EqualTo(4));
+        Assert.That(result.cargo.Single(entry => entry.item.purchaseUnitPrice == 0L).quantity,
+            Is.EqualTo(3));
+        Assert.That(result.cargo.Single(entry => entry.item.purchaseUnitPrice == 50L).quantity,
+            Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Create_DoesNotRestoreFeedAsDuplicateCargo()
+    {
+        FrameworkSaveData saveData = CreateSaveCargo("Stover", 12, 1L);
+        TradeItemData feed = ScriptableObject.CreateInstance<TradeItemData>();
+        try
+        {
+            SetPrivateField(feed, "itemId", "Stover");
+            SetPrivateField(feed, "displayName", "Stover");
+            SetPrivateField(feed, "category", TradeItemCategory.DraftAnimalsFood);
+            SetPrivateField(feed, "weight", 0.1f);
+            SetPrivateField(feed, "maxCount", 99);
+
+            CaravanData result = TradePrepareCaravanFactory.CreatePreview(
+                new TradePrepareDraft(),
+                new TradePrepareBuildContext
+                {
+                    saveData = saveData,
+                    tradeItems = new[] { feed }
+                });
+
+            Assert.That(result.foodAmount, Is.EqualTo(12));
+            Assert.That(result.cargo, Is.Empty);
+            Assert.That(CaravanCalculator.GetCurrentLoad(result), Is.EqualTo(1.2f).Within(0.001f));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(feed);
+        }
+    }
+
+    private static void SetPrivateField<T>(TradeItemData target, string fieldName, T value)
+    {
+        typeof(TradeItemData).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.SetValue(target, value);
+    }
+
     private static FrameworkSaveData CreateSaveCargo(string itemId, int quantity)
     {
         var saveData = new FrameworkSaveData();
@@ -108,7 +199,23 @@ public sealed class TradePrepareCargoPreservationTests
         return saveData;
     }
 
+    private static FrameworkSaveData CreateSaveCargo(string itemId, int quantity, long purchaseUnitPrice)
+    {
+        var saveData = new FrameworkSaveData();
+        AddSaveCargo(saveData, itemId, quantity, purchaseUnitPrice);
+        return saveData;
+    }
+
     private static void AddSaveCargo(FrameworkSaveData saveData, string itemId, int quantity)
+    {
+        AddSaveCargo(saveData, itemId, quantity, 0L);
+    }
+
+    private static void AddSaveCargo(
+        FrameworkSaveData saveData,
+        string itemId,
+        int quantity,
+        long purchaseUnitPrice)
     {
         saveData.caravan.cargo.Add(new FrameworkCargoEntrySaveData
         {
@@ -118,6 +225,7 @@ public sealed class TradePrepareCargoPreservationTests
                 itemId = itemId,
                 itemName = itemId,
                 weight = 2f,
+                purchaseUnitPrice = purchaseUnitPrice,
                 basePrice = 10L,
                 maxCount = 99
             }
@@ -138,6 +246,27 @@ public sealed class TradePrepareCargoPreservationTests
         Assert.That(changed, Is.EqualTo(1));
         Assert.That(store.Current.hasAuthoritativeCargoPlan, Is.True);
         Assert.That(store.Current.selectedBuyItems, Is.Empty);
+    }
+
+    [Test]
+    public void ReplaceCargoPlan_PreservesPurchasePriceGroups()
+    {
+        var store = new TradePrepareDraftStore();
+        store.Reset("town-a");
+        store.SelectDepartureCaravan("caravan-1");
+
+        store.ReplaceCargoPlan(new[]
+        {
+            new CargoItemViewData { itemId = "Bread", quantity = 3, purchaseUnitPrice = 0L },
+            new CargoItemViewData { itemId = "Bread", quantity = 1, purchaseUnitPrice = 50L }
+        });
+
+        TradePrepareDraft snapshot = store.Current;
+        Assert.That(snapshot.selectedBuyItems.Count, Is.EqualTo(2));
+        Assert.That(snapshot.selectedBuyItems.Single(item => item.purchaseUnitPrice == 0L).quantity,
+            Is.EqualTo(3));
+        Assert.That(snapshot.selectedBuyItems.Single(item => item.purchaseUnitPrice == 50L).quantity,
+            Is.EqualTo(1));
     }
 
     [Test]

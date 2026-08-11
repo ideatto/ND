@@ -59,10 +59,12 @@ public sealed class CaravanSettingSceneContractTests
             FindComponentsInScene<TransportInventoryRewardDebugButton>(scene);
 
         Assert.That(temporaryServices, Is.Empty);
-        Assert.That(bridges.Count, Is.EqualTo(1));
-        Assert.That(popups.Count, Is.EqualTo(1));
-        Assert.That(entries.Count, Is.EqualTo(1));
-        Assert.That(rewardButtons.Count, Is.EqualTo(1));
+        Assert.That(bridges.Count, Is.EqualTo(1), "Runtime bridge count");
+        Assert.That(popups.Count, Is.EqualTo(1), "Transport inventory popup count");
+        Assert.That(entries.Count, Is.EqualTo(1), "Transport inventory entry count");
+        // The transport reward button is a development-only helper. Production assembly may omit it,
+        // but duplicated helpers still indicate an invalid scene contract.
+        Assert.That(rewardButtons.Count, Is.LessThanOrEqualTo(1));
         Assert.That(bridges[0].gameObject, Is.EqualTo(binding.gameObject));
         AssertBindingReferences(binding, bridges[0]);
         AssertCatalogReferences(new SerializedObject(bridges[0]), "tradeItemAssets", true);
@@ -70,12 +72,11 @@ public sealed class CaravanSettingSceneContractTests
         Assert.That(popups[0].gameObject.activeSelf, Is.False, "Popup must start closed.");
         Assert.That(popups[0].GetComponentInParent<Canvas>(true), Is.Not.Null);
         Assert.That(popups[0].GetComponentInParent<Canvas>(true).name, Is.EqualTo("MainUICanvas"));
-
         List<CaravanOverviewPresenter> presenters =
             FindComponentsInScene<CaravanOverviewPresenter>(scene);
         List<TreadmillPanel> treadmillPanels = FindComponentsInScene<TreadmillPanel>(scene);
-        Assert.That(presenters.Count, Is.EqualTo(1));
-        Assert.That(treadmillPanels.Count, Is.EqualTo(1));
+        Assert.That(presenters.Count, Is.EqualTo(1), "Caravan overview presenter count");
+        Assert.That(treadmillPanels.Count, Is.EqualTo(1), "Treadmill panel count");
         AssertObjectReference(
             new SerializedObject(presenters[0]),
             "treadmillPanel",

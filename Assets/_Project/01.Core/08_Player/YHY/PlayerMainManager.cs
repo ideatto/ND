@@ -675,8 +675,14 @@ public class PlayerMainManager : MonoBehaviour
     // 거점 인벤토리와 같은 CargoEntrySaveData 타입이라 창고 ↔ 마차 이동이 자연스럽다.
     // [주의] 마차 화물은 평소 무역 준비/정산 시스템이 채운다. 매니저 조작은 전환기용 창구.
 
-    /// <summary>마차에 적재된 화물 조회(읽기 전용, SaveData 참조).</summary>
-    public IReadOnlyList<ND.Framework.CargoEntrySaveData> CaravanCargo => Save.caravan.cargo;
+    /// <summary>
+    /// 마차에 적재된 화물 조회(읽기 전용, SaveData 참조).
+    /// BaseCamp Lv.0 신규 저장은 Caravan이 없으므로 빈 읽기 전용 목록으로 안전하게 처리한다.
+    /// </summary>
+    public IReadOnlyList<ND.Framework.CargoEntrySaveData> CaravanCargo =>
+        Save?.caravan?.cargo != null
+            ? Save.caravan.cargo
+            : System.Array.Empty<ND.Framework.CargoEntrySaveData>();
 
     /// <summary>마차 화물이 바뀌면 알림(마차 UI가 구독).</summary>
     public event Action OnCaravanCargoChanged;
@@ -685,7 +691,8 @@ public class PlayerMainManager : MonoBehaviour
     public void AddCargo(ND.Framework.TradeItemSaveData item, int count)
     {
         if (item == null || string.IsNullOrEmpty(item.itemId) || count == 0) return;
-        List<ND.Framework.CargoEntrySaveData> cargo = Save.caravan.cargo;
+        List<ND.Framework.CargoEntrySaveData> cargo = Save?.caravan?.cargo;
+        if (cargo == null) return;
         ND.Framework.CargoEntrySaveData entry = FindCargoEntry(item.itemId);
         if (entry == null)
         {
@@ -718,7 +725,8 @@ public class PlayerMainManager : MonoBehaviour
 
     private ND.Framework.CargoEntrySaveData FindCargoEntry(string itemId)
     {
-        foreach (ND.Framework.CargoEntrySaveData e in Save.caravan.cargo)
+        IReadOnlyList<ND.Framework.CargoEntrySaveData> cargo = CaravanCargo;
+        foreach (ND.Framework.CargoEntrySaveData e in cargo)
             if (e != null && e.item != null && e.item.itemId == itemId) return e;
         return null;
     }

@@ -521,11 +521,16 @@ namespace ND.Framework
             float totalWeight = 0f;
             foreach (CargoEntrySaveData entry in cargo ?? Array.Empty<CargoEntrySaveData>())
             {
-                if (entry?.item == null || entry.quantity <= 0 || string.IsNullOrWhiteSpace(entry.item.itemId))
+                if (entry?.item == null || entry.quantity < 0 || string.IsNullOrWhiteSpace(entry.item.itemId))
                 {
                     error = "The existing cargo contains invalid save data.";
                     return false;
                 }
+
+                // 판매·손실 처리 뒤 수량 0인 행이 저장 데이터에 남을 수 있다.
+                // 표시/적재 계산과 동일하게 빈 행은 용량 검증에서 제외한다.
+                if (entry.quantity == 0) continue;
+
                 usedSlots++;
                 totalWeight += Math.Max(0f, entry.item.weight) * entry.quantity;
             }

@@ -102,9 +102,12 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
                     saveData.player.villageBuildings,
                     out int baseCampLevel))
             {
+                int requiredBaseCampLevel =
+                    BaseCampBuildingLevelPolicy.GetRequiredBaseCampLevel(buildId, targetLevel);
                 ShowFailure(
-                    $"베이스 캠프 Lv.{targetLevel}이 필요합니다. 현재 Lv.{baseCampLevel}입니다.",
-                    $"Building level gate blocked '{buildId}' Lv.{targetLevel}; BaseCamp Lv.{baseCampLevel}.");
+                    $"베이스 캠프 Lv.{requiredBaseCampLevel}이 필요합니다. 현재 Lv.{baseCampLevel}입니다.",
+                    $"Building level gate blocked '{buildId}' Lv.{targetLevel}; "
+                    + $"required BaseCamp Lv.{requiredBaseCampLevel}, current Lv.{baseCampLevel}.");
                 return;
             }
 
@@ -238,7 +241,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             homeInventory = CloneHomeInventory(processingSaveData.player.homeInventory),
             villageBuildings = CloneVillageBuildings(processingSaveData.player.villageBuildings),
             cottageProduction = CloneCottageProduction(
-                processingSaveData.player.cottageProduction)
+                processingSaveData.player.cottageProduction),
+            bakeryProduction = CloneBakeryProduction(
+                processingSaveData.player.bakeryProduction)
         };
     }
 
@@ -366,6 +371,15 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         {
             return false;
         }
+        if (root?.BakeryProduction?.Config != null
+            && string.Equals(processingDisplayName,
+                root.BakeryProduction.Config.BuildingDisplayName,
+                StringComparison.Ordinal)
+            && !root.BakeryProduction.TryStageBuildingLevelChange(
+                processingSaveData, plan.TargetLevel, out errorCode))
+        {
+            return false;
+        }
 
         return true;
     }
@@ -451,6 +465,8 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             CloneVillageBuildings(transactionSnapshot.villageBuildings));
         processingSaveData.player.cottageProduction =
             CloneCottageProduction(transactionSnapshot.cottageProduction);
+        processingSaveData.player.bakeryProduction =
+            CloneBakeryProduction(transactionSnapshot.bakeryProduction);
 
         return true;
     }
@@ -479,7 +495,13 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
     {
         // 목록은 저장과 Runtime Commit이 모두 성공한 경우에만 다시 그린다.
         buildingListPanel?.Rebuild();
+        // BaseCamp 증축은 빈 Caravan 슬롯의 Locked/Empty 상태를 바꾸므로 저장 성공 후에만 알린다.
+        FrameworkEvents.RaiseVillageBuildingsChanged();
         FrameworkEvents.RaiseCottageProductionChanged();
+        FrameworkEvents.RaiseBakeryProductionChanged();
+        // The payload event is emitted only after Save and runtime commit succeed. Consumers such
+        // as the ending popup can distinguish a live construction from save-data restoration.
+        FrameworkEvents.RaiseVillageBuildingCommitted(processingDisplayName, plan.TargetLevel);
     }
 
     // 건설은 아이템 정의를 변경하지 않고 수량만 변경하므로 item 참조는 재사용한다.
@@ -521,6 +543,19 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
             storedDraftAnimalContentId = source.storedDraftAnimalContentId,
             nextWagonProductionUtcTicks = source.nextWagonProductionUtcTicks,
             nextDraftAnimalProductionUtcTicks = source.nextDraftAnimalProductionUtcTicks,
+            lastEvaluatedUtcTicks = source.lastEvaluatedUtcTicks
+        };
+    }
+
+    private static BakeryProductionSaveData CloneBakeryProduction(BakeryProductionSaveData source)
+    {
+        if (source == null) return new BakeryProductionSaveData();
+        return new BakeryProductionSaveData
+        {
+            initialized = source.initialized,
+            storedBreadCount = source.storedBreadCount,
+            storedBreadContentId = source.storedBreadContentId,
+            nextProductionUtcTicks = source.nextProductionUtcTicks,
             lastEvaluatedUtcTicks = source.lastEvaluatedUtcTicks
         };
     }
@@ -683,5 +718,6 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         public List<CargoEntrySaveData> homeInventory;
         public List<VillageBuildingSaveData> villageBuildings;
         public CottageProductionSaveData cottageProduction;
+        public BakeryProductionSaveData bakeryProduction;
     }
 }

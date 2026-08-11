@@ -62,8 +62,8 @@ public static class CaravanOverviewProviderTests
         CheckEqual(4, overview.caravans.Length, "슬롯은 항상 4개");
         CheckEqual("car_Y", SlotCaravanId(overview, 0), "슬롯0 = car_Y (저장 slotIndex 0)");
         CheckEqual("car_X", SlotCaravanId(overview, 2), "슬롯2 = car_X (저장 slotIndex 2)");
-        CheckEqual(CaravanSlotState.Empty, overview.caravans[1].slotState, "슬롯1은 빈칸");
-        CheckEqual(CaravanSlotState.Empty, overview.caravans[3].slotState, "슬롯3은 빈칸");
+        CheckEqual(CaravanSlotState.Locked, overview.caravans[1].slotState, "BaseCamp Lv.0 슬롯1은 잠김");
+        CheckEqual(CaravanSlotState.Locked, overview.caravans[3].slotState, "BaseCamp Lv.0 슬롯3은 잠김");
     }
 
     // -------------------------------------------------------------------------
