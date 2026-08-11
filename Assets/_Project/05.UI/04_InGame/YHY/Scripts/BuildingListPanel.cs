@@ -131,7 +131,8 @@ public void Rebuild()
         rect.anchorMin = Vector2.one;
         rect.anchorMax = Vector2.one;
         rect.pivot = Vector2.one;
-        rect.anchoredPosition = new Vector2(-10f, -8f);
+        // 행의 우상단 모서리에 살짝 걸쳐 보이도록 내부 여백보다 위쪽에 배치한다.
+        rect.anchoredPosition = new Vector2(16f, 6f);
         rect.sizeDelta = new Vector2(28f, 28f);
         Image image = indicator.GetComponent<Image>();
         image.sprite = state.Icon;

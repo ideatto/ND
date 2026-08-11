@@ -113,6 +113,28 @@ public sealed class BakeryProductionServiceTests
     }
 
     [Test]
+    public void CollectionPreservesPurchasedBreadAsASeparatePriceGroup()
+    {
+        AddBuilding(config.BuildingDisplayName, 1);
+        AddBuilding(WarehouseFunction.BuildingDisplayName, 1);
+        save.player.bakeryProduction.initialized = true;
+        save.player.bakeryProduction.storedBreadContentId = config.BreadContentId;
+        save.player.bakeryProduction.storedBreadCount = 2;
+        save.player.homeInventory.Add(Entry("Bread", 3, 50));
+
+        BakeryCollectionResult result = service.Collect();
+        IReadOnlyList<WarehousePriceGroup> groups =
+            WarehousePriceGroupResolver.Resolve(save.player.homeInventory, "Bread");
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(groups.Count, Is.EqualTo(2));
+        Assert.That(groups[0].PurchaseUnitPrice, Is.Zero);
+        Assert.That(groups[0].Quantity, Is.EqualTo(2));
+        Assert.That(groups[1].PurchaseUnitPrice, Is.EqualTo(50));
+        Assert.That(groups[1].Quantity, Is.EqualTo(3));
+    }
+
+    [Test]
     public void PopupPrefabIsStaticAndHasRequiredReferences()
     {
         const string path = "Assets/_Project/08.Prefabs/UI/Bakery/BakeryProductionPopup.prefab";

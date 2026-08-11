@@ -48,3 +48,16 @@ MainUICanvas                         [BakeryProductionMainUiEntry]
 - [ ] 빵집 내부 보관량이 최대일 때 빵집 블록에 아이콘이 나타난다.
 - [ ] 부분 또는 모두 수령 후 최대치 미만이 되면 아이콘이 사라진다.
 - [ ] Console에 Missing Reference 또는 중복 구독 오류가 없다.
+
+## 5. 창고 가격 묶음 연동
+
+- 빵집에서 수령한 `Bread`는 `purchaseUnitPrice = 0`인 비구매 획득품이다.
+- 상점에서 구매한 `Bread`는 실제 구매 당시의 `purchaseUnitPrice`를 유지한다.
+- 두 종류가 창고에 동시에 있더라도 물리 슬롯은 `itemId` 총수량으로 표시하지만, 아이템을 눌렀을 때에는 `itemId + purchaseUnitPrice`별 가격 묶음을 조회한다.
+- `0원` 묶음도 가격 선택 대상에서 제외하지 않는다. `0원`과 유료 묶음이 함께 있으면 가격 선택 Modal에 두 행이 표시되어야 한다.
+- 가격 선택 Modal이 생략되고 곧바로 수량 Modal이 뜬다면 UI를 강제로 열지 말고, 현재 SaveData의 `player.homeInventory`에 서로 다른 `Bread.purchaseUnitPrice`가 실제로 남아 있는지 먼저 확인한다. 과거 데이터가 이미 0원으로 저장된 경우 원래 구매가는 안전하게 추론할 수 없다.
+- 빵 수령 후 유료 묶음 보존은 `BakeryProductionServiceTests.CollectionPreservesPurchasedBreadAsASeparatePriceGroup`, 시장 묶음 보존은 `WarehouseInventoryTransferTests`로 검증한다.
+
+## 6. 건물 목록 알림 아이콘 위치
+
+알림 아이콘 GameObject를 MainUI에 별도로 만들지 않는다. `BuildingListPanel`이 행 우상단 기준으로 생성하며 현재 기준 좌표는 `anchoredPosition = (16, 6)`, 크기는 `28 x 28`이다. 조립 후 빵집 행 오른쪽 위 모서리에 걸쳐 보이고 행 내부 중앙 쪽으로 밀려 있지 않은지 확인한다.
