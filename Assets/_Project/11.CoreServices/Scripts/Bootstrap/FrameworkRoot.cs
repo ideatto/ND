@@ -331,6 +331,7 @@ namespace ND.Framework
         public BuildingPlacementCommand BuildingPlacement { get; private set; }
 
         public CottageProductionService CottageProduction { get; private set; }
+        public BakeryProductionService BakeryProduction { get; private set; }
 
         /// <summary>구조 대출 발급·상환 및 상태 조회 command service이다.</summary>
         public RescueLoanCommandService RescueLoan { get; private set; }
@@ -403,6 +404,7 @@ namespace ND.Framework
             GameCalendar?.TickOnline(CurrentSaveData, SaveService);
             TradeProgressCoordinator?.CheckProgressAndCompletion(saveProgress: false);
             CottageProduction?.TickOnline();
+            BakeryProduction?.TickOnline();
         }
 
         private static bool CanRunOnlineProgressTick(
@@ -543,13 +545,14 @@ namespace ND.Framework
                     "Offline progress skipped because load UTC is earlier than lastSavedUtcTicks.");
             }
 
-            var restoreTransaction = ExecuteOfflineRestoreWithCottage(
+            var restoreTransaction = ExecuteOfflineRestoreWithProduction(
                 CurrentSaveData,
                 restoreContext,
                 loadUtc,
                 GameCalendar,
                 TradeProgressCoordinator,
                 CottageProduction,
+                BakeryProduction,
                 SaveService);
             LastCalendarRestoreResult = restoreTransaction.CalendarResult;
             if (!restoreTransaction.Succeeded)
@@ -624,21 +627,42 @@ namespace ND.Framework
             CottageProductionService cottage,
             ISaveService saveService)
         {
+            return ExecuteOfflineRestoreWithProduction(
+                saveData, context, loadUtc, calendar, trade, cottage, null, saveService);
+        }
+
+        internal static OfflineRestoreTransactionResult ExecuteOfflineRestoreWithProduction(
+            SaveData saveData,
+            OfflineRestoreContext context,
+            DateTime loadUtc,
+            GameCalendarService calendar,
+            TradeProgressCoordinator trade,
+            CottageProductionService cottage,
+            BakeryProductionService bakery,
+            ISaveService saveService)
+        {
             var restoreSnapshot = JsonUtility.ToJson(saveData);
             var calendarResult = calendar?.RestoreOffline(saveData, context);
             var tradeRestore = trade?.PrepareOfflineProgressOnLoad(saveData, context);
             var cottageRestore = cottage != null
                 ? cottage.RestoreOffline(saveData, context)
                 : new CottageProductionRestoreResult(false);
+            var bakeryRestore = bakery != null
+                ? bakery.RestoreOffline(saveData, context)
+                : new BakeryProductionRestoreResult(false);
             var calendarDirty = calendarResult?.Changed ?? false;
             var tradeDirty = tradeRestore?.Changed ?? false;
-            var cottageDirty = cottageRestore.Changed;
+            var bakeryDirty = bakeryRestore.Changed;
+            var cottageProductionDirty = cottageRestore.Changed;
+            var cottageDirty = cottageProductionDirty || bakeryDirty;
             if (!calendarDirty && !tradeDirty && !cottageDirty)
             {
                 FrameworkEvents.RaiseCalendarRestored(calendarResult);
                 tradeRestore?.Publish(trade, saveData);
-                if (cottageDirty)
+                if (cottageProductionDirty)
                     FrameworkEvents.RaiseCottageProductionChanged();
+                if (bakeryDirty)
+                    FrameworkEvents.RaiseBakeryProductionChanged();
                 return new OfflineRestoreTransactionResult(
                     calendarResult,
                     calendarDirty,
@@ -676,8 +700,10 @@ namespace ND.Framework
 
             FrameworkEvents.RaiseCalendarRestored(calendarResult);
             tradeRestore?.Publish(trade, saveData);
-            if (cottageDirty)
+            if (cottageProductionDirty)
                 FrameworkEvents.RaiseCottageProductionChanged();
+            if (bakeryDirty)
+                FrameworkEvents.RaiseBakeryProductionChanged();
             return new OfflineRestoreTransactionResult(
                 calendarResult,
                 calendarDirty,
@@ -765,6 +791,20 @@ namespace ND.Framework
                 GameTime,
                 () => CurrentSaveData,
                 SaveService);
+            var bakeryConfig = Resources.Load<BakeryProductionData>(
+                BakeryProductionData.ResourceName);
+            if (bakeryConfig == null)
+            {
+                bakeryConfig = ScriptableObject.CreateInstance<BakeryProductionData>();
+                FrameworkLog.Warning(
+                    $"BakeryProductionData was not found at Resources/{BakeryProductionData.ResourceName}. Using runtime defaults.");
+            }
+            BakeryProduction = new BakeryProductionService(
+                bakeryConfig,
+                GameTime,
+                () => CurrentSaveData,
+                SaveService,
+                () => SharedGameData);
             SharedGameDataService = new SharedGameDataService();
             SceneFlow = new SceneFlowService();
             DebugCommands = new FrameworkDebugCommands(
@@ -882,6 +922,16 @@ namespace ND.Framework
             {
                 FrameworkLog.Error(
                     $"InGame entry blocked because cottage production data is invalid: {cottageError}.");
+                return false;
+            }
+
+            if (BakeryProduction != null
+                && !BakeryProduction.ValidateCatalog(
+                    SharedGameData,
+                    out string bakeryError))
+            {
+                FrameworkLog.Error(
+                    $"InGame entry blocked because bakery production data is invalid: {bakeryError}.");
                 return false;
             }
 

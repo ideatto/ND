@@ -325,6 +325,15 @@ namespace ND.Framework
                 data.player.cottageProduction = new CottageProductionSaveData();
                 assetDataChanged = true;
             }
+            if (data.player.bakeryProduction == null)
+            {
+                data.player.bakeryProduction = new BakeryProductionSaveData();
+                assetDataChanged = true;
+            }
+            data.player.bakeryProduction.storedBreadCount =
+                Math.Max(0, data.player.bakeryProduction.storedBreadCount);
+            data.player.bakeryProduction.storedBreadContentId =
+                data.player.bakeryProduction.storedBreadContentId ?? string.Empty;
             data.player.cottageProduction.storedWagonCount =
                 Math.Max(0, data.player.cottageProduction.storedWagonCount);
             data.player.cottageProduction.storedDraftAnimalCount =
