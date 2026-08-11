@@ -15,7 +15,7 @@ UI 패널과 행은 런타임에 생성하지 않는다. `BaseCampOverviewPopup.
 
 현재 기능 개발 브랜치에서는 다음 두 파일의 조립 변경을 충돌 방지를 위해 discard하고 코드·독립 Prefab·문서만 전달한다.
 
-- `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`
+- `Assets/_Project/08.Prefabs/MainUICanvas.prefab`
 - `Assets/_Project/07.Scenes/04_InGame/InGame.unity`
 
 이 discard 방침은 **현재 기능 개발 브랜치에만 적용**된다. 기능을 조립할 대상 브랜치에서는 최신 버전의 위 두 파일을 열어 이 문서대로 수정하고, 완성된 조립 결과를 저장·커밋해야 한다. 대상 브랜치에서도 두 파일을 discard하라는 뜻이 아니다.
@@ -104,7 +104,7 @@ BaseCamp 자체 건설·증축은 자기 레벨 제한에서 제외한다. 제�
 2. 기존 `BuildingListPanel` GameObject에 `BaseCampMainUiEntry`를 한 개 추가한다.
 3. 다음 참조를 연결한다.
 
-이 단계에서 `BuildingLogsDebugButton`은 배치하지 않는다. 통나무 지급 버튼은 InGame 테스트 전용 Scene 인스턴스이므로 원본 `MainUICanvas.prefab`에 Apply하면 안 된다.
+이 단계에서 `BuildingLogsDebugButton`은 배치하지 않는다. 통나무 지급 Prefab은 과거 테스트 재료로만 보존하며 기본 InGame 조립에는 사용하지 않는다.
 
 | BaseCampMainUiEntry 필드 | 대상 |
 | --- | --- |
@@ -183,8 +183,7 @@ BaseCamp 런타임 기능을 위해 `BuildingConstructionRuntimeHandler`에 새 
 
 이 버튼은 BaseCamp 기능 자체의 필수 런타임 UI가 아니라 건설·증축 검증용 Editor/Development 전용 도구다. 런타임 코드로 생성하지 않고 Scene에 Prefab 인스턴스로 배치한다.
 
-1. `BuildingMaterialTestButton.prefab`을 활성 `MainUICanvas` 바로 아래에 한 번 배치한다.
-2. Scene 인스턴스 이름을 `BuildingLogsDebugButton`으로 변경한다.
+`BuildingMaterialTestButton.prefab`은 과거 수동 검증용 재료로만 보존한다. 기본 조립에서는 활성 `MainUICanvas`나 InGame Scene에 배치하지 않는다.
 3. `InfoPanel` 바로 다음 sibling에 둔다. `BackgroundWall`이나 `InfoPanel`보다 앞 sibling이면 화면 뒤에 가려진다.
 4. RectTransform을 좌하단 anchor/pivot `(0,0)`, anchored position `(300,20)`, size `(260,56)`으로 둔다. 기존 운송 수단 지급 버튼 `(20,20)`의 오른쪽이며 두 버튼 사이 간격은 20px다.
 5. Inspector 값을 다음 표와 맞춘다.
@@ -199,12 +198,11 @@ InGame.unity
    ├─ ...최신 dev2 기존 UI 유지
    ├─ InfoPanel
    ├─ TransportInventoryRewardDebugButton (존재할 경우, 20,20)
-   ├─ BuildingLogsDebugButton (새 Scene Prefab instance, 300,20)
    └─ ...Popup / NoticeUI
 ```
 
 - `BaseCampOverviewPopup`과 `BaseCampMainUiEntry`를 InGame에서 별도로 추가하지 않는다. 둘은 MainUICanvas Prefab 상속으로 들어와야 한다.
-- `BuildingLogsDebugButton`만 Scene override이며 원본 MainUICanvas Prefab에 Apply하지 않는다.
+- `BuildingLogsDebugButton` Scene override를 만들지 않는다.
 - 최신 dev2에 운송 수단 지급 버튼이 없더라도 통나무 버튼 위치는 `(300,20)`을 유지한다.
 - Scene 저장 후 MainUICanvas Prefab override 목록에 통나무 버튼 추가 외의 BaseCamp 관련 제거·변경 override가 생기지 않았는지 확인한다.
 
@@ -241,7 +239,7 @@ Title: 거점 건물 현황
 
 ## 7. 수동 Play Mode 테스트
 
-테스트 재료가 부족할 때는 InGame의 `MainUICanvas/BuildingLogsDebugButton`을 사용한다. 이 버튼은 `BuildingMaterialTestButton.prefab`의 정적 Scene 인스턴스이며 클릭할 때마다 `PlayerMainManager.AddItem(...)`을 통해 거점 HomeInventory에 `Logs` 40개를 추가한다. Editor/Development Build에서만 동작하며 런타임에 UI를 생성하지 않는다.
+테스트 재료가 부족하더라도 기본 조립 결과에 지급 버튼을 추가하지 않는다. 필요하면 별도 테스트 절차에서 SaveData나 전용 테스트 도구를 사용한다.
 
 ### A. BaseCamp 미건설
 
@@ -262,7 +260,6 @@ Title: 거점 건물 현황
 ### C. BaseCamp Lv.2
 
 1. BaseCamp를 Lv.2로 증축한다.
-2. 재료가 부족하면 `통나무 40개 지급` 버튼을 한 번 누른다.
 3. 이전에 차단된 일반 건물 Lv.2 증축이 성공하는지 확인한다.
 4. Popup을 다시 열어 BaseCamp, 대상 건물, 상한이 모두 Lv.2로 갱신되는지 확인한다.
 5. Play Mode를 종료 후 다시 진입해 같은 레벨이 복원되는지 확인한다.
@@ -277,11 +274,11 @@ Title: 거점 건물 현황
 
 ### E. 테스트 버튼
 
-1. Play Mode에서 좌하단의 `통나무 40개 지급` 버튼이 보이는지 확인한다.
+1. Play Mode에서 좌하단에 `통나무 40개 지급` 버튼이 보이지 않는지 확인한다.
 2. 버튼 클릭 전후 HomeInventory의 Logs 수량 차이가 정확히 40인지 확인한다.
 3. 버튼을 두 번 누르면 누적 80이 증가하는지 확인한다.
 4. Popup을 연 상태에서 버튼이 Popup 위로 그려지거나 클릭을 가로채지 않는지 확인한다.
-5. Hierarchy에 `BuildingLogsDebugButton`이 한 개뿐이며 런타임 복제본이 생기지 않는지 확인한다.
+5. Hierarchy에 `BuildingLogsDebugButton`이 없는지 확인한다.
 
 ## 8. 자동 검증
 
@@ -303,7 +300,7 @@ Unity Test Runner에서 `BaseCampOverviewUiContractTests` Fixture 자체를 명�
 - MainUICanvas에 Entry/Popup 각각 정확히 1개
 - 모든 직렬화 참조 연결
 - Build UI Scene이 Popup Prefab을 참조
-- InGame Scene의 `BuildingLogsDebugButton`이 정적 Prefab 인스턴스이며 Logs/40 설정과 sibling 순서가 유지됨
+- InGame Scene에 `BuildingLogsDebugButton`이 존재하지 않음
 - Unity Console Error 0건
 
 ## 9. 원복 후 재조립 검증 기록
@@ -313,7 +310,7 @@ Unity Test Runner에서 `BaseCampOverviewUiContractTests` Fixture 자체를 명�
 1. 현재 기능 개발 브랜치의 `MainUICanvas.prefab`, `InGame.unity` 변경을 HEAD로 원복했다.
 2. BaseCamp Entry, Popup, `BuildingLogsDebugButton`이 모두 제거된 시작 상태를 확인했다.
 3. 이 문서 순서대로 MainUI의 Entry/Popup과 InGame의 통나무 버튼만 재조립했다.
-4. MainUI diff에는 `BaseCampMainUiEntry`와 `BaseCampOverviewPopupController`만, InGame diff에는 `BuildingLogsDebugButton` Prefab instance만 남는지 확인했다.
+4. MainUI diff에는 `BaseCampMainUiEntry`와 `BaseCampOverviewPopupController`만 남고, InGame에는 `BuildingLogsDebugButton` 관련 diff가 없는지 확인한다.
 5. 통나무 버튼의 `Logs`, `40`, `(300,20)`, `(260,56)`, `InfoPanel` 다음 sibling 설정을 확인했다.
 6. BaseCamp 정책/Popup/Scene 조립 계약 테스트 10/10과 수동 Play Mode 검증을 통과했다.
 7. Unity가 자동 기록한 타 기능의 빈 직렬화 필드와 `WorldMapRenderRootV2.prefab` 기본값 변경은 제거했다.

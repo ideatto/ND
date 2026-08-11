@@ -30,7 +30,7 @@
 
 ### Prefab과 Scene
 
-- `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`
+- `Assets/_Project/08.Prefabs/MainUICanvas.prefab`
 - `Assets/_Project/08.Prefabs/UI/Maps/TradePrepareUI.prefab`
 - `Assets/_Project/07.Scenes/04_InGame/InGame.unity`
 - `Assets/_Project/08.Prefabs/UI/Trade/TradeFailureLossPopup.prefab`

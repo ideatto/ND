@@ -77,7 +77,7 @@ InGame.unity
 
 ## 관련 요소 위치
 
-- Overview 프리팹: `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`
+- Overview 프리팹: `Assets/_Project/08.Prefabs/MainUICanvas.prefab`
 - Presenter 오브젝트: `MainUICanvas/InfoPanel/CaravanPanel/CaravanScrollView`
 - Presenter 스크립트: `Assets/99.Sandbox/_LJH/01.Script/MonoBehaviour/CaravanOverviewPresenter.cs`
 - 슬롯 입력 스크립트: `Assets/99.Sandbox/_LJH/01.Script/MonoBehaviour/CaravanSlotView.cs`

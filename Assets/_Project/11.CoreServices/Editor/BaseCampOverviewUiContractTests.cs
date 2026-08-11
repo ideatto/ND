@@ -11,7 +11,7 @@ namespace ND.Framework.Editor.Tests
         private const string PopupPath =
             "Assets/_Project/08.Prefabs/UI/Building/BaseCampOverviewPopup.prefab";
         private const string MainUiPath =
-            "Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab";
+            "Assets/_Project/08.Prefabs/MainUICanvas.prefab";
         private const string BuildUiScenePath =
             "Assets/_Project/07.Scenes/04_InGame/Build UI.unity";
         private const string InGameScenePath =

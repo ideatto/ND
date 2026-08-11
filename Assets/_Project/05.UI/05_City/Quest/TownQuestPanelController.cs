@@ -208,21 +208,23 @@ namespace ND.UI.Quest
                     : caravan.currentTownId.Trim();
                 SetButtonText(
                     row,
-                    $"Caravan {caravan.slotIndex + 1}  —  {town}");
+                    $"{ResolveCaravanDisplayName(caravan)}  —  {town}");
                 row.interactable = !string.IsNullOrWhiteSpace(
                     caravan.currentTownId);
                 string townId = caravan.currentTownId;
+                string caravanDisplayName = ResolveCaravanDisplayName(caravan);
                 int slotIndex = caravan.slotIndex;
                 row.onClick.RemoveAllListeners();
                 row.onClick.AddListener(
-                    () => SelectQuestCaravan(townId, slotIndex));
+                    () => SelectQuestCaravan(townId, slotIndex, caravanDisplayName));
                 caravanSelectionRows.Add(row);
             }
         }
 
         private void SelectQuestCaravan(
             string townId,
-            int slotIndex)
+            int slotIndex,
+            string caravanDisplayName)
         {
             if (string.IsNullOrWhiteSpace(townId)) return;
 
@@ -234,8 +236,23 @@ namespace ND.UI.Quest
             SetActive(listPanel, true);
             SetText(
                 questListContextText,
-                $"Caravan {slotIndex + 1}  /  {currentTownId}");
+                $"{NormalizeCaravanDisplayName(caravanDisplayName, slotIndex)}  /  {currentTownId}");
             bridge?.RequestTownQuestList(currentTownId);
+        }
+
+        // Rename 결과를 모든 퀘스트 화면에서 사용하고, 구버전 저장 데이터만 슬롯 기본명으로 보완한다.
+        private static string ResolveCaravanDisplayName(ND.Framework.CaravanSaveData caravan)
+        {
+            if (caravan == null) return string.Empty;
+            return NormalizeCaravanDisplayName(caravan.displayName, caravan.slotIndex);
+        }
+
+        private static string NormalizeCaravanDisplayName(string displayName, int slotIndex)
+        {
+            string normalized = displayName?.Trim() ?? string.Empty;
+            return string.IsNullOrEmpty(normalized)
+                ? $"Caravan {slotIndex + 1}"
+                : normalized;
         }
 
         private void RenderPanel(TownQuestOpenResult result)

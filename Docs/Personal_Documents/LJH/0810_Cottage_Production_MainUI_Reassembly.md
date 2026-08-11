@@ -2,7 +2,7 @@
 
 ## 1. 목적과 기준 상태
 
-이 문서는 최신 `dev2`의 수정되지 않은 `MainUICanvas.prefab`에 오두막 생산 UI를 조립하는 기준이다. 전달 브랜치에는 기능 코드, 설정 SO, 고정 Popup Prefab과 에디터 조립 도구만 보존하고, `MainUICanvas.prefab`의 조립 결과는 포함하지 않는 것을 전제로 한다.
+이 문서는 최신 `dev2`의 수정되지 않은 `Assets/_Project/08.Prefabs/MainUICanvas.prefab`에 오두막 생산 UI를 조립하는 기준이다. `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`은 InGame Scene이 참조하지 않으므로 설치 대상으로 사용하지 않는다. 전달 브랜치에는 기능 코드, 설정 SO, 고정 Popup Prefab과 에디터 조립 도구만 보존하고, `MainUICanvas.prefab`의 조립 결과는 포함하지 않는 것을 전제로 한다.
 
 `InGame.unity`에는 이 기능을 위한 개별 오브젝트나 override를 추가하지 않는다. InGame Scene의 기존 `MainUICanvas.prefab` 인스턴스가 수정된 Prefab 에셋을 상속한다.
 

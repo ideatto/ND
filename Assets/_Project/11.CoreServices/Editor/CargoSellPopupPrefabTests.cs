@@ -13,7 +13,7 @@ namespace ND.Framework.Editor
         private const string PrefabPath =
             "Assets/_Project/08.Prefabs/UI/Trade/CargoSellPopup.prefab";
         private const string MainUiPrefabPath =
-            "Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab";
+            "Assets/_Project/08.Prefabs/MainUICanvas.prefab";
 
         [Test]
         public void Prefab_OpenBindsExactCaravanAndTradeWithoutSceneConnection()

@@ -2,7 +2,7 @@
 
 ## 1. 목적과 적용 범위
 
-이 문서는 `MainUICanvas.prefab`과 `InGame.unity`의 현재 변경을 폐기한 뒤에도 Caravan Overview를 현재 형태로 다시 조립하기 위한 기준 문서다. 최신 dev2의 실패 Claim 전손, 손실 Popup과 순차 정산은 `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md`를 함께 따른다.
+이 문서는 `Assets/_Project/08.Prefabs/MainUICanvas.prefab`과 `InGame.unity`의 현재 변경을 폐기한 뒤에도 Caravan Overview를 현재 형태로 다시 조립하기 위한 기준 문서다. `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`은 InGame Scene 인스턴스의 원본이 아니다. 최신 dev2의 실패 Claim 전손, 손실 Popup과 순차 정산은 `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md`를 함께 따른다.
 
 포함 기능은 다음과 같다.
 
@@ -49,14 +49,14 @@ MainUICanvas
          └─ Viewport
             └─ Content
                ├─ CaravanSlot 0   [CaravanSlotView]
+               │  ├─ JourneyStateDisplay
+               │  │  ├─ Label     [TMP_Text]
+               │  │  └─ Icon      [Image, Animator]
                │  ├─ CaravanInfo / DisplayName
                │  ├─ RenameButton [Image, Button, LayoutElement]
                │  │  └─ Icon      [Image]
                │  ├─ SettingButton
                │  ├─ CargoButton
-               │  ├─ JourneyStateDisplay
-               │  │  ├─ Label     [TMP_Text]
-               │  │  └─ Icon      [Image, Animator]
                │  └─ LockOverlay
                ├─ CaravanSlot 1
                ├─ CaravanSlot 2
@@ -103,6 +103,17 @@ MainUICanvas
 - Rename Icon의 `Raycast Target`: Off
 
 Rename 버튼은 Display Name과 Setting 버튼 사이에 둔다. 버튼 자체와 아이콘은 Prefab에 존재해야 하며 런타임에 생성하지 않는다.
+
+최신 Slot의 고정 자식 순서는 다음과 같다.
+
+```text
+JourneyStateDisplay → CaravanInfo(DisplayName) → RenameButton → SettingButton → CargoButton → LockOverlay
+```
+
+- `JourneyStateDisplay`는 맨 왼쪽, 즉 DisplayName 바로 왼쪽에 둔다.
+- `JourneyStateDisplay` 루트 Image의 Color Alpha는 `0`으로 두어 기존 파란 배경을 숨긴다.
+- 실제 상태 Sprite를 표시하는 자식 `Icon` Image는 Color Alpha `1`을 유지한다.
+- `LockOverlay`는 입력 차단을 위해 항상 마지막 자식으로 둔다.
 
 동작 계약은 다음과 같다.
 

@@ -12,7 +12,7 @@ public sealed class CaravanRenamePopupPrefabTests
     private const string PopupPath =
         "Assets/_Project/08.Prefabs/UI/Trade/CaravanRenamePopup.prefab";
     private const string MainUiPath =
-        "Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab";
+        "Assets/_Project/08.Prefabs/MainUICanvas.prefab";
 
     [Test]
     public void Popup_ReopenEnablesInputAndSubmitsNewCaravanIdentity()
@@ -115,7 +115,14 @@ public sealed class CaravanRenamePopupPrefabTests
 
                 Assert.That(renameButton, Is.Not.Null, slot.name);
                 Assert.That(renameButton.name, Is.EqualTo("RenameButton"), slot.name);
-                Assert.That(renameButton.transform.GetSiblingIndex(), Is.EqualTo(1), slot.name);
+                Transform journeyStateDisplay = slot.transform.Find("JourneyStateDisplay");
+                Assert.That(journeyStateDisplay, Is.Not.Null, slot.name);
+                Assert.That(journeyStateDisplay.GetSiblingIndex(), Is.EqualTo(0), slot.name);
+                Assert.That(renameButton.transform.GetSiblingIndex(), Is.EqualTo(2), slot.name);
+
+                Image journeyBackground = journeyStateDisplay.GetComponent<Image>();
+                Assert.That(journeyBackground, Is.Not.Null, slot.name);
+                Assert.That(journeyBackground.color.a, Is.EqualTo(0f), slot.name);
                 TMP_Text label = renameButton.GetComponentInChildren<TMP_Text>(true);
                 Assert.That(label.text, Is.Empty, slot.name);
                 Assert.That(label.gameObject.activeSelf, Is.False, slot.name);

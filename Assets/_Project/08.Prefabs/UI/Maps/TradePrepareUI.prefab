@@ -5034,6 +5034,7 @@ MonoBehaviour:
   onMercenaryHireRequested:
     m_PersistentCalls:
       m_Calls: []
+  purchaseSlider: {fileID: 0}
 --- !u!1 &1731291343711435950
 GameObject:
   m_ObjectHideFlags: 0
@@ -7155,6 +7156,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WagonSelectPopup
   listContainer: {fileID: 3497241900484304321}
   buttonPrefab: {fileID: 307645470522611213}
+  instanceRowPrefab: {fileID: 3334901695345298056, guid: f3f8e3ffcab20dd478f9d61b28e9b644, type: 3}
   cancelButton: {fileID: 2738813024528780979}
 --- !u!1 &2691193020088295531
 GameObject:
@@ -21067,6 +21069,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.SettlementUiDataAdapter
   settlementViewBehaviour: {fileID: 5870760159899889851}
   refreshOnEnable: 1
+  failureLossPopup: {fileID: 0}
 --- !u!1 &6736160133223636499
 GameObject:
   m_ObjectHideFlags: 0
@@ -21371,6 +21374,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MercenaryHirePanelController
   expectedRisk: 75
   offers: []
+  mercenaryCatalog: []
   onConfirmed:
     m_PersistentCalls:
       m_Calls:
@@ -23819,6 +23823,8 @@ MonoBehaviour:
   slotBack: {fileID: 2507674247983347034}
   animalBack: {fileID: 2306426270614305777}
   summaryBack: {fileID: 7802778719951759051}
+  townRouteBack: {fileID: 0}
+  townRouteCancel: {fileID: 0}
   summaryView: {fileID: 6452992165941542605}
   summaryCancel: {fileID: 4133723298913800895}
 --- !u!114 &1385336027663899871
@@ -23840,6 +23846,7 @@ MonoBehaviour:
   cargoPanel: {fileID: 8310179726972870462}
   marketTradePanel: {fileID: 0}
   departureWarning: {fileID: 0}
+  tradeScreenPresenter: {fileID: 0}
 --- !u!114 &6308273598796661662
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -23854,6 +23861,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.Framework.SettlementUiDataAdapter
   settlementViewBehaviour: {fileID: 5144582942133012181}
   refreshOnEnable: 1
+  failureLossPopup: {fileID: 0}
 --- !u!1 &7551056227630151929
 GameObject:
   m_ObjectHideFlags: 0
@@ -26446,6 +26454,8 @@ MonoBehaviour:
   editWagonButton: {fileID: 7657281797986516741}
   wagonPopup: {fileID: 6675489471149589050}
   removeWagonButton: {fileID: 4674729694475083095}
+  initialInventoryButtonPoolSize: 4
+  initialWagonSlotPoolSize: 5
   tooltip: {fileID: 5096730673189375926}
 --- !u!1 &8374020106604071458
 GameObject:
