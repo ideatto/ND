@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: 'SmokedMeat '
   displayName: "\uD6C8\uC81C\uACE0\uAE30"
-  icon: {fileID: 0}
-  description: 
+  icon: {fileID: -237291104, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
+  description: "\uACE0\uAE30\uB97C \uD6C8\uC81C\uD588\uC2B5\uB2C8\uB2E4. \uC624\uB798
+    \uBCF4\uAD00\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4."
   rarity: 1
   category: 0
   baseBuyPrice: 80
@@ -24,6 +25,6 @@ MonoBehaviour:
   maxCount: 40
   weight: 0.5
   isConsumable: 0
-  affectModify: 1
+  affectModify: 0
   modifiers: []
   localSpecialty: 0

@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Wine
   displayName: "\uC640\uC778"
-  icon: {fileID: 0}
-  description: 
+  icon: {fileID: 921987638, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
+  description: "\uC640\uC778\uC785\uB2C8\uB2E4. \uC624\uB798\uBCF4\uAD00\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4. "
   rarity: 1
   category: 0
   baseBuyPrice: 180
@@ -24,6 +24,6 @@ MonoBehaviour:
   maxCount: 40
   weight: 0.5
   isConsumable: 0
-  affectModify: 1
+  affectModify: 0
   modifiers: []
   localSpecialty: 0

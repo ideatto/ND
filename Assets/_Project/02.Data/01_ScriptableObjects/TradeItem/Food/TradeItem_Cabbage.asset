@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Cabbage
   displayName: "\uC591\uBC30\uCD94"
-  icon: {fileID: 0}
-  description: 
+  icon: {fileID: 1203980084, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
+  description: "\uC591\uBC30\uCD94\uC785\uB2C8\uB2E4. \uBD04\uC5D0 \uACF5\uAE09\uC774
+    \uC99D\uAC00\uD569\uB2C8\uB2E4. "
   rarity: 1
   category: 0
   baseBuyPrice: 20
@@ -27,7 +28,7 @@ MonoBehaviour:
   affectModify: 1
   modifiers:
   - modifierType: 1
-    sourceId: 
+    sourceId: spring
     displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4."
     modifierBundles:
     - modifierTarget: 1
@@ -37,17 +38,7 @@ MonoBehaviour:
       modifierOperation: 3
       value: -0.15
   - modifierType: 1
-    sourceId: 
-    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4."
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.1
-  - modifierType: 1
-    sourceId: 
+    sourceId: winter
     displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1

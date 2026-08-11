@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d717a7cb6b02a74daeed2c7319d2e61, type: 3}
+  m_Name: Quest_EastRiver_Local_Item
+  m_EditorClassIdentifier: Assembly-CSharp::QuestData
+  questId: EastRiver_Local_Item
+  questName: "\uB3D9\uCABD \uAC15\uAC00\uB9C8\uC744 \uD2B9\uC0B0\uD488 \uD574\uAE08"
+  description: "\uB3D9\uCABD \uAC15\uAC00\uB9C8\uC744\uC758 \uD2B9\uC0B0\uD488\uC778
+    \uC870\uAC01\uC0C1\uC774 \uD574\uAE08\uB429\uB2C8\uB2E4."
+  type: 0
+  repeatPolicy: 0
+  questRegenSeconds: 0
+  paymentPolicy: 1
+  submissionTownId: EastRiverTown
+  requiredTradingCurrency: 0
+  requiredItems:
+  - itemId: Apple
+    quantity: 1
+  - itemId: Honey
+    quantity: 1
+  - itemId: Fish
+    quantity: 1
+  rewards:
+  - rewardType: 1
+    value: 1
+    rewardId: Statue
+    encounterMultiplier: 0

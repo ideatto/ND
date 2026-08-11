@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Silk
   displayName: "\uC2E4\uD06C"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 2afcf33bac6467f49a64e77e6e395a6c, type: 3}
   description: "\uB3D9\uC591\uC758 \uC2E0\uBE44\uB85C\uC6B4 \uC9C1\uBB3C\uC785\uB2C8\uB2E4.
     \uC5B4\uB5BB\uAC8C \uB9CC\uB4E4\uC5B4\uC84C\uB294\uC9C0\uB294 \uC544\uB294\uC0AC\uB78C\uB9CC
     \uC54C\uACA0\uC8E0. "
@@ -27,35 +27,5 @@ MonoBehaviour:
   weight: 1
   isConsumable: 0
   affectModify: 1
-  modifiers:
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.05
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.05
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uAC00\uC744\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.05
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.05
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.15
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.15
+  modifiers: []
   localSpecialty: 0

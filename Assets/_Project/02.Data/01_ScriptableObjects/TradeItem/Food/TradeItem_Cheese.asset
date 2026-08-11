@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Cheese
   displayName: "\uCE58\uC988"
-  icon: {fileID: 0}
-  description: 
+  icon: {fileID: -849794814, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
+  description: "\uCE58\uC988\uC785\uB2C8\uB2E4. \uC800\uC7A5\uC2DD\uD488\uC774\uB77C
+    \uD56D\uC0C1 \uACF5\uAE09\uC774 \uC77C\uC815\uD569\uB2C8\uB2E4."
   rarity: 1
   category: 0
   baseBuyPrice: 60
@@ -24,36 +25,6 @@ MonoBehaviour:
   maxCount: 40
   weight: 0.5
   isConsumable: 0
-  affectModify: 1
-  modifiers:
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.1
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uAC00\uC744\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.05
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.05
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.15
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.15
+  affectModify: 0
+  modifiers: []
   localSpecialty: 0

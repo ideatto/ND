@@ -14,17 +14,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: Honey
   displayName: "\uBC8C\uAFC0"
-  icon: {fileID: 0}
-  description: "\uB2EC\uB514\uB2EC\uACE0\uB2EC\uB514\uB2E8\uBC8C\uAFC0\uC785\uB2C8\uB2E4.
-    \uB2E4\uB978\uAC78 \uAE30\uB300\uD558\uC168\uB098\uC694?"
+  icon: {fileID: -1596172332, guid: f7114601435a5874aad4c3fe2527bde8, type: 3}
+  description: "\uBC8C\uAFC0\uC785\uB2C8\uB2E4. \uC5EC\uB984\uC5D0 \uACF5\uAE09\uC774
+    \uC99D\uAC00\uD569\uB2C8\uB2E4. "
   rarity: 1
   category: 0
-  baseBuyPrice: 0
-  baseSellPrice: 0
+  baseBuyPrice: 120
+  baseSellPrice: 120
   canStack: 1
   maxCount: 40
   weight: 0.5
   isConsumable: 0
   affectModify: 1
-  modifiers: []
+  modifiers:
+  - modifierType: 1
+    sourceId: summer
+    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
+    modifierBundles:
+    - modifierTarget: 1
+      modifierOperation: 3
+      value: -0.1
+    - modifierTarget: 2
+      modifierOperation: 3
+      value: -0.1
   localSpecialty: 0

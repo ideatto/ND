@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: SolidWood
   displayName: "\uC6D0\uBAA9"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: a5d8060071786014ba2d282351d30a2f, type: 3}
   description: "\uC2E4\uB825\uC788\uB294 \uB098\uBB47\uAFBC\uB4E4\uC740 \uD070\uB098\uBB34\uB97C
     \uD1B5\uC9F8\uB85C \uAC00\uACF5\uD558\uACE0\uB294 \uD569\uB2C8\uB2E4. \uADF8\uB9CC\uD07C
     \uB354 \uBE44\uC2F8\uC8E0."
@@ -29,37 +29,7 @@ MonoBehaviour:
   affectModify: 0
   modifiers:
   - modifierType: 1
-    sourceId: 
-    displayName: "\uBD04\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.1
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.05
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.05
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uAC00\uC744\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.1
-  - modifierType: 1
-    sourceId: 
+    sourceId: winter
     displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
     modifierBundles:
     - modifierTarget: 1

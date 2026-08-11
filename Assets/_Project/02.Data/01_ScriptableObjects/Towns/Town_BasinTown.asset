@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f32ce7dc35c28ff42affbb4305649f6f, type: 3}
+  m_Name: Town_BasinTown
+  m_EditorClassIdentifier: Assembly-CSharp::TownData
+  townId: BasinTown
+  displayName: "\uBD84\uC9C0\uB9C8\uC744"
+  icon: {fileID: 21300000, guid: adbbe34224cc5174d84ef879bffd22b0, type: 3}
+  unlockedByDefault: 0
+  description: "\uBD84\uC9C0\uB9C8\uC744, \uC8FC\uBC88\uC774 \uC0B0\uC73C\uB85C \uB458\uB7EC\uC313\uC5EC
+    \uC788\uC2B5\uB2C8\uB2E4."
+  market: {fileID: 11400000, guid: e6255a363300fd441a5ba189a22af8a2, type: 2}
+  availableRoutes:
+  - {fileID: 11400000, guid: 0eb310a7e64b6ae4287755e04c015147, type: 2}
+  - {fileID: 11400000, guid: 369b1d3f5fd4e5942b5328d00dcc7cf9, type: 2}
+  - {fileID: 11400000, guid: 4a13aa55d2ed4b643aa2b5ee25528f9c, type: 2}
+  canContribute: 0
+  maximumContributionLimit: 0

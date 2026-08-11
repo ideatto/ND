@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TradeItemData
   itemId: CopperOre
   displayName: "\uAD6C\uB9AC\uAD11\uC11D"
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: a5d79744bab5aaa42ba98721503b8e81, type: 3}
   description: "\uAD6C\uB9AC\uAD11\uC11D\uC785\uB2C8\uB2E4. \uAC74\uCD95 \uBFD0\uC544\uB2C8\uB77C
     \uB3D9\uC804\uC774\uB098 \uC2DD\uAE30\uB4F1 \uC5EC\uB7EC\uACF3\uC5D0 \uC4F0\uC778\uB2E4\uACE0
     \uD558\uB124\uC694."
@@ -26,26 +26,6 @@ MonoBehaviour:
   maxCount: 5
   weight: 5
   isConsumable: 0
-  affectModify: 1
-  modifiers:
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uC5EC\uB984\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: -0.05
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: -0.05
-  - modifierType: 1
-    sourceId: 
-    displayName: "\uACA8\uC6B8\uC774 \uC654\uC2B5\uB2C8\uB2E4"
-    modifierBundles:
-    - modifierTarget: 1
-      modifierOperation: 3
-      value: 0.1
-    - modifierTarget: 2
-      modifierOperation: 3
-      value: 0.1
+  affectModify: 0
+  modifiers: []
   localSpecialty: 0
