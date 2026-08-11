@@ -10,6 +10,7 @@
  * - SceneChanged를 구독해 Scene BGM을 전환하고 활성 loop SFX를 정리한다.
  * - BGM fade factor와 사용자 볼륨을 분리해 전환 중 설정 변경을 보존한다.
  * - ID 기반 one-shot은 독립 AudioSource를 사용해 동시 random pitch를 보존한다.
+ * - Config 기본값에 PlayerPrefs 사용자 설정을 덮어써 초기화하고 변경값을 즉시 기록한다.
  */
 using System.Collections;
 using System.Collections.Generic;
@@ -76,7 +77,7 @@ namespace ND.UI.Title
             DontDestroyOnLoad(gameObject);
             EnsureAudioSources();
             LoadResources();
-            ResetToDefaults();
+            LoadInitialSettings();
             FrameworkEvents.SceneChanged += HandleSceneChanged;
         }
 
@@ -92,6 +93,7 @@ namespace ND.UI.Title
         {
             bgmVolume = Mathf.Clamp01(volume);
             ApplyBgmAudioState();
+            PlayerPrefs.SetFloat(SettingsPlayerPrefsKeys.BgmVolume, bgmVolume);
         }
 
         public void SetSfxVolume(float volume)
@@ -100,18 +102,21 @@ namespace ND.UI.Title
             ApplySfxAudioState();
             foreach (LoopPlayback playback in loopSources.Values)
                 playback.Source.volume = sfxVolume * playback.DefinitionVolume;
+            PlayerPrefs.SetFloat(SettingsPlayerPrefsKeys.SfxVolume, sfxVolume);
         }
 
         public void SetUiSfxVolume(float volume)
         {
             uiSfxVolume = Mathf.Clamp01(volume);
             ApplyUiSfxAudioState();
+            PlayerPrefs.SetFloat(SettingsPlayerPrefsKeys.UiSfxVolume, uiSfxVolume);
         }
 
         public void SetBgmEnabled(bool enabled)
         {
             bgmEnabled = enabled;
             ApplyBgmAudioState();
+            PlayerPrefs.SetInt(SettingsPlayerPrefsKeys.BgmEnabled, enabled ? 1 : 0);
         }
 
         public void SetSfxEnabled(bool enabled)
@@ -119,12 +124,14 @@ namespace ND.UI.Title
             sfxEnabled = enabled;
             ApplySfxAudioState();
             foreach (LoopPlayback playback in loopSources.Values) playback.Source.mute = !sfxEnabled;
+            PlayerPrefs.SetInt(SettingsPlayerPrefsKeys.SfxEnabled, enabled ? 1 : 0);
         }
 
         public void SetUiSfxEnabled(bool enabled)
         {
             uiSfxEnabled = enabled;
             ApplyUiSfxAudioState();
+            PlayerPrefs.SetInt(SettingsPlayerPrefsKeys.UiSfxEnabled, enabled ? 1 : 0);
         }
 
         public void PlayBgm(AudioClip clip, bool loop = true)
@@ -233,15 +240,51 @@ namespace ND.UI.Title
         public void ResetToDefaults()
         {
             if (settingsConfig == null) LoadResources();
+            ApplyDefaultSettings();
+            DeleteSavedSettings();
+            ApplyBgmAudioState();
+            ApplySfxAudioState();
+            ApplyUiSfxAudioState();
+            foreach (LoopPlayback playback in loopSources.Values)
+            {
+                playback.Source.volume = sfxVolume * playback.DefinitionVolume;
+                playback.Source.mute = !sfxEnabled;
+            }
+            PlayerPrefs.Save();
+        }
+
+        private void LoadInitialSettings()
+        {
+            ApplyDefaultSettings();
+            bgmVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(SettingsPlayerPrefsKeys.BgmVolume, bgmVolume));
+            sfxVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(SettingsPlayerPrefsKeys.SfxVolume, sfxVolume));
+            uiSfxVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(SettingsPlayerPrefsKeys.UiSfxVolume, uiSfxVolume));
+            bgmEnabled = PlayerPrefs.GetInt(SettingsPlayerPrefsKeys.BgmEnabled, bgmEnabled ? 1 : 0) != 0;
+            sfxEnabled = PlayerPrefs.GetInt(SettingsPlayerPrefsKeys.SfxEnabled, sfxEnabled ? 1 : 0) != 0;
+            uiSfxEnabled = PlayerPrefs.GetInt(SettingsPlayerPrefsKeys.UiSfxEnabled, uiSfxEnabled ? 1 : 0) != 0;
+            ApplyBgmAudioState();
+            ApplySfxAudioState();
+            ApplyUiSfxAudioState();
+        }
+
+        private void ApplyDefaultSettings()
+        {
             bgmVolume = settingsConfig != null ? settingsConfig.DefaultBgmVolume : 1f;
             sfxVolume = settingsConfig != null ? settingsConfig.DefaultSfxVolume : 1f;
             uiSfxVolume = settingsConfig != null ? settingsConfig.DefaultUiSfxVolume : 1f;
             bgmEnabled = settingsConfig == null || settingsConfig.DefaultBgmEnabled;
             sfxEnabled = settingsConfig == null || settingsConfig.DefaultSfxEnabled;
             uiSfxEnabled = settingsConfig == null || settingsConfig.DefaultUiSfxEnabled;
-            ApplyBgmAudioState();
-            ApplySfxAudioState();
-            ApplyUiSfxAudioState();
+        }
+
+        private static void DeleteSavedSettings()
+        {
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.BgmVolume);
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.BgmEnabled);
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.SfxVolume);
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.SfxEnabled);
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.UiSfxVolume);
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.UiSfxEnabled);
         }
 
         private void LoadResources()
