@@ -10,7 +10,8 @@ public static class BaseCampOverviewUiPrefabBuilder
 {
     private const string Folder = "Assets/_Project/08.Prefabs/UI/Building";
     private const string PrefabPath = Folder + "/BaseCampOverviewPopup.prefab";
-    private const string MainUiPrefabPath = "Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab";
+    // InGame.unity가 실제로 참조하는 MainUICanvas 원본에 설치해야 BuildingListPanel 이벤트를 받을 수 있다.
+    private const string MainUiPrefabPath = "Assets/_Project/08.Prefabs/MainUICanvas.prefab";
 
     [MenuItem("ND/UI/Build BaseCamp Overview Popup")]
     public static void Build()

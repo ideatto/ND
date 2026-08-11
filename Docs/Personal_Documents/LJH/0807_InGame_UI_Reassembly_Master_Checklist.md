@@ -14,7 +14,7 @@
 | 2 | 목장 클릭, Transport Inventory, Logs/Stone 아이콘, 동물 탭 스크롤, 테스트 지급 버튼 | `0806_Transport_Inventory_InGame_Assembly.md` |
 | 3 | Caravan Overview, Rename 버튼, Treadmill, 상태 아이콘, 말 애니메이션 | `0807_Caravan_Overview_Current_Reassembly.md` |
 | 4 | 최신 dev2 Scene/Prefab 조립, 실패 Claim 전손, 손실 Popup, 순차 정산 | `0807_Dev2_InGame_Reassembly_and_Failed_Trade_Loss.md` |
-| 5 | BaseCamp 레벨 상한, 건물 현황 Popup, 통나무 40개 테스트 버튼, InGame 정적 조립 | `0810_BaseCamp_Level_Gate_and_Overview_UI_Assembly.md` |
+| 5 | BaseCamp 레벨 상한, 건물 현황 Popup, InGame 정적 조립 | `0810_BaseCamp_Level_Gate_and_Overview_UI_Assembly.md` |
 | 6 | 오두막 UTC 생산, 받기 Popup, 생산 완료 Badge, 최신 dev2 MainUI 조립 | `0810_Cottage_Production_MainUI_Reassembly.md` |
 | 참고 | 기존 Overview/Treadmill 요구사항과 Scene 참조 배경 | `0805_Caravan_Overview_Treadmill_Binding_Request.md` |
 | 참고 | Transport Inventory 원인 및 수정 근거 | `0806_Transport_Inventory_PlayMode_Issue_Report.md` |
@@ -23,7 +23,9 @@
 
 ### 현재 기능 개발 브랜치에서만 discard할 조립 파일
 
-- `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`
+- `Assets/_Project/08.Prefabs/MainUICanvas.prefab`
+
+> 주의: `InGame.unity`의 MainUICanvas 인스턴스가 실제 참조하는 원본은 위 경로다. `Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab`에 조립하면 Scene의 건물 Block 이벤트와 연결되지 않는다.
 - `Assets/_Project/08.Prefabs/UI/Maps/TradePrepareUI.prefab`
 - `Assets/_Project/07.Scenes/04_InGame/InGame.unity`
 
@@ -31,7 +33,6 @@
 
 - `MainUICanvas.prefab`의 `BaseCampMainUiEntry` 컴포넌트와 `BaseCampOverviewPopup` 자식 인스턴스
 - `MainUICanvas.prefab`의 `CottageProductionMainUiEntry` 컴포넌트와 `CottageProductionPopup` 자식 인스턴스
-- `InGame.unity`의 `BuildingLogsDebugButton` Scene 인스턴스
 - 위 두 파일에 저장된 BaseCamp 관련 Inspector 참조와 sibling override
 
 `WorldMapRenderRootV2.prefab` 변경은 위 UI 재조립과 직접 관련 없는 좌표/라인 변경이 섞일 수 있으므로 별도 검토 후 처리한다.
@@ -160,7 +161,7 @@ BaseCamp 조립은 메뉴 `ND > UI > Install BaseCamp Overview Into Main UI` 사
 각 Slot의 필수 순서와 동작:
 
 ```text
-DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateDisplay
+JourneyStateDisplay → DisplayName → RenameButton → SettingButton → CargoButton
 ```
 
 - DisplayName 클릭: Treadmill만 호출
@@ -171,6 +172,9 @@ DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateD
 - Selling: 느낌표
 - Settling/Completed: 체크
 - RenameButton과 상태 Icon은 네 Slot에 미리 배치하며 런타임 생성하지 않음
+- `JourneyStateDisplay`는 각 Slot의 첫 번째 자식으로 배치한다. 상태 아이콘은 DisplayName 바로 왼쪽에 표시한다.
+- `JourneyStateDisplay` 루트 Image는 배경 용도이므로 알파를 `0`으로 설정한다. 자식 `Icon` Image의 알파는 `1`을 유지하여 아이콘만 보이게 한다.
+- `LockOverlay`는 항상 마지막 자식으로 유지한다.
 
 현재 MainUICanvas 외형 재현값:
 
@@ -200,11 +204,18 @@ DisplayName → RenameButton → SettingButton → CargoButton → JourneyStateD
 - `journeyStateIconAnimator`
 - `travelingAnimatorParameter = IsTraveling`
 
+Trading Currency HUD 계약:
+
+- [ ] `CurrencyHUD`의 `CurrencyHudRuntimeBinding.currencyChangedChannel`을 `Assets/_Project/02.Data/01_ScriptableObjects/EventChannels/EventChannel_CurrencyChanged.asset`에 연결
+- [ ] `CurrencyHudPivot`의 `CurrencyHudPresenter.currencyChangedChannel`도 같은 Asset에 연결
+- [ ] 두 컴포넌트가 동일한 채널을 사용하고 `FrameworkEvents.TradingCurrencyChanged` 발생 직후 HUD가 갱신되는지 확인
+- [ ] HUD 갱신을 위한 `Update()` 폴링을 추가하지 않음
+
 ### D. InGame Scene 조립
 
 > 이 단계는 대상 브랜치의 최신 `InGame.unity`에서 시작한다. 먼저 C 단계의 `MainUICanvas.prefab` 조립을 저장하고 Prefab Mode를 닫은 뒤 Scene을 연다. BaseCamp Popup/Entry는 Prefab 상속으로 받아야 하며 Scene에 다시 중복 생성하지 않는다. 대상 브랜치에서 완성된 Scene 변경은 정상 조립 결과이므로 저장·커밋한다.
 
-BaseCamp 조립에서는 기존 `BuildingConstructionRuntimeHandler`에 추가 Inspector 연결이 없다. InGame에는 MainUICanvas 상속 상태를 확인한 뒤 `BuildingLogsDebugButton` Prefab instance만 Scene 전용으로 추가한다. 다른 최신 dev2 Scene 오브젝트와 override는 유지한다.
+BaseCamp 조립에서는 기존 `BuildingConstructionRuntimeHandler`에 추가 Inspector 연결이 없다. `BuildingLogsDebugButton`은 기본 조립 대상이 아니며 InGame Scene에 배치하지 않는다. 다른 최신 dev2 Scene 오브젝트와 override는 유지한다.
 
 - [ ] `CaravanSettingUiConnector` 또는 별도 명확한 Scene 조립 루트 사용
 - [ ] `TestCaravanSettingService` 제거
@@ -223,15 +234,13 @@ BaseCamp 조립에서는 기존 `BuildingConstructionRuntimeHandler`에 추가 I
 - [ ] Scene 전용 참조는 Prefab 에셋에 Apply하지 않고 Scene override로 저장
 - [ ] BaseCamp UI는 MainUICanvas Prefab 상속으로 반영하고 InGame에 불필요한 Scene override를 만들지 않음
 - [ ] InGame 실인스턴스에서 BaseCamp Entry 1개, Popup 1개, 건설 Handler 1개 확인
-- [ ] BaseCamp 건설 테스트용 `BuildingMaterialTestButton.prefab`을 InGame의 활성 MainUICanvas Scene 인스턴스에 정적 Prefab 인스턴스로 한 개 배치하고 이름을 `BuildingLogsDebugButton`으로 변경
-- [ ] `BuildingLogsDebugButton`의 `items[0] = TradeItem_Logs.asset`, `grantQuantity = 40`, Label = `통나무 40개 지급` 확인
+- [ ] InGame Scene에 `BuildingLogsDebugButton`이 배치되지 않았는지 확인
 
 Scene 배치 세부 기준:
 
 - `TransportInventoryPopup`: 활성 MainUICanvas 아래, 기본 비활성
 - 운송 수단 지급 버튼과 통나무 지급 버튼은 서로 다른 Prefab/컴포넌트다. 한쪽으로 다른 쪽을 대체하지 않는다.
 - 운송 수단 지급 버튼: 좌하단 anchor/pivot `(0,0)`, 위치 `(20,20)`, 크기 `(260,56)`
-- `BuildingLogsDebugButton`: 운송 수단 버튼 오른쪽, 좌하단 anchor/pivot `(0,0)`, 위치 `(300,20)`, 크기 `(260,56)`
 - 두 버튼은 가로 20px 간격으로 배치한다. 둘 다 `InfoPanel` 다음 영역에 두고 일반 Popup/NoticeUI보다 낮은 sibling index를 사용해 Popup을 가리지 않는다.
 - `TradeFailureLossPopup`: 활성 MainUICanvas 아래, 기본 비활성, 일반 Popup/활동 로그보다 뒤이고 `NoticeUI` 바로 앞 sibling
 - 모든 Scene `SettlementUiDataAdapter.failureLossPopup`: 동일한 `TradeFailureLossPopup`의 `ReusableMessagePopup` 참조
@@ -252,7 +261,7 @@ BaseCamp 재조립 경계:
 ### E. 계약 테스트와 수동 검증
 
 - [ ] Scene 계약 테스트에서 RuntimeBridge 1개, Test Service 0개
-- [ ] BaseCamp Entry 1개, Popup 1개, `BuildingLogsDebugButton` 1개 이하
+- [ ] BaseCamp Entry 1개, Popup 1개, `BuildingLogsDebugButton` 0개
 - [ ] 운송 수단 지급 버튼과 통나무 지급 버튼의 컴포넌트·Prefab·기능이 서로 뒤바뀌지 않음
 - [ ] 목장 Lv.1 생성 후 목장 블록 클릭 시 Transport Inventory가 열림
 - [ ] Wagon_M 1, Wagon_S 1, Horse 2 지급 후 목록에 표시됨
@@ -269,7 +278,6 @@ BaseCamp 재조립 경계:
 - [ ] BaseCamp Lv.0에서 일반 건물 Lv.1 건설이 차단되고 재료가 유지됨
 - [ ] BaseCamp Lv.1에서 일반 건물 Lv.1은 성공하고 Lv.2는 차단됨
 - [ ] BaseCamp Lv.2 증축 후 일반 건물 Lv.2가 성공함
-- [ ] `통나무 40개 지급` 1회 클릭 시 HomeInventory의 Logs가 정확히 40 증가함
 - [ ] BaseCamp 블록 클릭 시 현황 Popup의 저장 레벨과 상한이 일치함
 - [ ] Backdrop/X 닫기, 카드 내부 클릭 유지, NoticeUI 한국어 실패 안내 확인
 - [ ] 대상 브랜치 조립 후 Explicit `MainUiPrefab_HasOneWiredEntryAndPopup`, `InGameScene_InheritsBaseCampUiThroughMainUiPrefab` 통과
@@ -294,7 +302,6 @@ BaseCamp 재조립 경계:
 | Transport Inventory 데이터 | Wagon/Animal/Cargo와 Logs/Stone 아이콘 정상 | [ ] |
 | Animal Scroll | 실제 슬롯 수 기반 높이와 최하단 접근 정상 | [ ] |
 | 운송 수단 Debug 지급 | Wagon_M 1개, Wagon_S 1개, Horse 2마리 지급. `TransportInventoryRewardDebugButton.prefab` 사용 | [ ] |
-| 건설 재료 Debug 지급 | Logs 40개 지급. `BuildingMaterialTestButton.prefab`의 정적 Scene 인스턴스이며 `BuildingLogsDebugButton`으로 명명 | [ ] |
 | Rename | 별도 아이콘 버튼으로 팝업 열림 | [ ] |
 | Treadmill | Display Name 클릭으로 해당 Caravan 표시 | [ ] |
 | Journey Icon | Selling 느낌표, Settling/Completed 체크 | [ ] |

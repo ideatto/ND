@@ -15,7 +15,8 @@ public static class CottageProductionPopupPrefabBuilder
     private const string PrefabFolder = "Assets/_Project/08.Prefabs/UI/Cottage";
     private const string PrefabPath = PrefabFolder + "/CottageProductionPopup.prefab";
     private const string MainUiPrefabPath =
-        "Assets/_Project/08.Prefabs/UI/Maps/MainUICanvas.prefab";
+        // InGame.unity가 실제로 참조하는 MainUICanvas 원본에 설치한다.
+        "Assets/_Project/08.Prefabs/MainUICanvas.prefab";
     private static TMP_FontAsset font;
 
     [MenuItem("Tools/LJH/Build Cottage Production Popup")]
