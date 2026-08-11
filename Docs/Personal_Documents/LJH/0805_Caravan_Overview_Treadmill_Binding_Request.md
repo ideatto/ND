@@ -1,6 +1,6 @@
 # Caravan Overview 트레드밀 연결 요청
 
-> 2026-08-07 현재 Rename 버튼, Journey 아이콘, Horse 애니메이션까지 포함한 최신 재조립 절차는 `0807_Caravan_Overview_Current_Reassembly.md`를 우선 사용한다. 이 문서는 Treadmill 연결의 배경과 기존 계약을 확인하는 참고 문서로 유지한다.
+> Rename 버튼, Journey 아이콘, Horse 애니메이션은 최신 dev2에 조립되어 있다. 이 문서는 Treadmill 연결의 배경과 기존 계약을 확인하는 참고 문서로만 유지하며 재조립 진입점으로 사용하지 않는다. 현재 기능 브랜치의 증분 조립은 `0811_BaseCamp_Bakery_Delta_Reassembly.md`를 따른다.
 
 ## 2026-08-07 Rename 버튼 분리 변경
 
@@ -22,15 +22,14 @@
 
 ## 목적
 
-Caravan Slot의 이름 영역을 짧게 클릭하면 해당 Caravan ID의 트레드밀을 열고, 1초 이상 누르면 기존 이름 변경 팝업을 연다.
+Caravan Slot의 이름 영역을 클릭하면 해당 Caravan ID의 트레드밀을 열고, 별도 `RenameButton`을 누르면 이름 변경 팝업을 연다. 아래의 롱프레스 방식은 최초 설계 기록이며 현재 조립 계약으로 사용하지 않는다.
 
 ## 현재 준비된 코드
 
-- `CaravanSlotView`는 짧은 클릭과 1초 롱프레스를 구분한다.
-- 짧은 클릭은 `TreadmillRequested(caravanId, displayName)`을 전달한다.
-- 롱프레스는 기존 `RenameRequested(caravanId)`을 전달한다.
+- `CaravanSlotView`는 이름 버튼 클릭으로 `TreadmillRequested(caravanId, displayName)`을 전달한다.
+- 별도 `RenameButton` 클릭으로 `RenameRequested(caravanId)`를 전달한다.
 - `CaravanOverviewPresenter`의 직렬화된 `treadmillPanel` 필드가 런타임 검색 없이 패널을 연다.
-- Presenter는 짧은 클릭 시 `TreadmillPanel.Toggle(caravanId, displayName)`을 호출한다.
+- Presenter는 이름 버튼 클릭 시 `TreadmillPanel.Toggle(caravanId, displayName)`을 호출한다.
 - `Toggle`은 같은 Caravan이 이미 열려 있으면 패널을 닫고, 다른 Caravan이면 열린 상태에서 해당 Lane으로 전환한다.
 - `TreadmillPanel.Open(caravanId, displayName)`은 전달된 이름을 표시하고 Lane을 여는 기존 명시적 진입점으로 유지한다.
 - Presenter가 ViewData를 다시 생성할 때 열린 패널의 `CurrentCaravanId`와 같은 Caravan만 `RefreshDisplayName`으로 라벨을 갱신한다.
