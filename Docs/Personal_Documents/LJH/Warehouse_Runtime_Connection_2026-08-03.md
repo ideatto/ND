@@ -31,6 +31,7 @@
 
 - PriceGroup, Quantity, Busy는 상호 배타적인 presenter 상태다.
 - Modal backdrop은 현재 Modal만 닫고 Caravan 선택은 유지한다.
+- `WarehouseQuantityModal` Prefab의 루트 전체 화면 `Button`도 수량 Modal backdrop이다. `WarehouseInventoryPopupController.quantityBackdropButton`이 이 버튼을 `CancelSelection()`에 연결해야 하며, 공용 `ModalBlocker`만 연결하면 루트 Image가 앞에서 클릭을 받아 닫히지 않을 수 있다.
 - 취소 시 item, 가격 묶음, 선택 수량, 최대 수량을 초기화한다.
 - +99는 현재 수량에서 99 증가하고 최대 이동량에서 clamp한다.
 - 0.15초 unscaled guard로 같은 pointer sequence와 연속 입력을 막는다.

@@ -177,7 +177,10 @@ private static object CreateMarketSessionForCargo(FrameworkCaravanSaveData carav
         MethodInfo method = typeof(MarketInventoryMutationSession).GetMethod(
             "ApplyCargoDelta", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null);
-        method.Invoke(session, new object[] { itemId, delta, price });
+        // Reflection does not apply C# optional-parameter defaults. Pass the current
+        // sale-price-group argument explicitly so these regression tests exercise
+        // the same four-argument market mutation contract as production code.
+        method.Invoke(session, new object[] { itemId, delta, price, null });
     }
 
 

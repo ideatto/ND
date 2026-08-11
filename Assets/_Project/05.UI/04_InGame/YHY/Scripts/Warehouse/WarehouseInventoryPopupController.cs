@@ -52,6 +52,7 @@ private TMP_Text tooltipPriceText;
         private Button closeButton;
         private Button backdropButton;
         private Button modalBlockerButton;
+        private Button quantityBackdropButton;
         private Button backToCaravanButton;
         private Button priceCancelButton;
         private Button quantityCancelButton;
@@ -801,6 +802,7 @@ tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetCo
             closeButton = Find("CloseButton")?.GetComponent<Button>();
             backdropButton = Find("BackdropButton")?.GetComponent<Button>();
             modalBlockerButton = Find("ModalBlocker")?.GetComponent<Button>();
+            quantityBackdropButton = Find("WarehouseQuantityModal")?.GetComponent<Button>();
             backToCaravanButton = Find("BackToCaravanSelectButton")?.GetComponent<Button>();
             priceCancelButton = FindWithin(Find("PriceGroupModal"), "CancelButton")?.GetComponent<Button>();
             quantityCancelButton = FindWithin(Find("WarehouseQuantityModal"), "CancelButton")?.GetComponent<Button>();
@@ -820,6 +822,8 @@ tooltipPriceText = FindWithin(Find("SharedItemTooltip"), "BasePriceText")?.GetCo
             closeButton?.onClick.AddListener(ClosePopup);
             backdropButton?.onClick.AddListener(ClosePopup);
             modalBlockerButton?.onClick.AddListener(CancelSelection);
+            // Quantity Modal의 정적 전체 화면 Button은 ModalBlocker보다 앞에 있어 직접 닫기 구독이 필요하다.
+            quantityBackdropButton?.onClick.AddListener(CancelSelection);
             backToCaravanButton?.onClick.AddListener(BackToCaravanSelection);
             priceCancelButton?.onClick.AddListener(CancelSelection);
             quantityCancelButton?.onClick.AddListener(CancelSelection);
