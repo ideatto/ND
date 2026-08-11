@@ -127,32 +127,31 @@ public class BuildingPlacementController : MonoBehaviour,
             RegisterExistingBuildings();    // registered 셋으로 신규만 처리
 
             // [NPC 스폰 타이밍] 마을 씬 로드 콜백(OnAnySceneLoaded)은 건물 등록 '전에' 떠서 스폰을 놓친다.
-            // 그래서 여기서(등록 후) 건물이 하나라도 잡히면 NPC를 한 번만 스폰한다. 마을 씬은 그 건물의 소속 씬으로 잡는다.
-            if (!npcSpawned && npcBuildingList.Count > 0)
+            // 그래서 여기서(등록 후) 건물이 잡히면 씬을 확정하고, 매 스캔마다 건물 레벨에 맞춰 NPC 수를 맞춘다(반응형).
+            if (npcBuildingList.Count > 0)
             {
-                PlaceableBuilding first = npcBuildingList.Find(b => b != null);
-                if (first != null)
+                if (!villageSceneValid)
                 {
-                    villageScene = first.gameObject.scene;
-                    villageSceneValid = villageScene.IsValid();
-                    SpawnNpcs();
-                    npcSpawned = true;
+                    PlaceableBuilding first = npcBuildingList.Find(b => b != null);
+                    if (first != null)
+                    {
+                        villageScene = first.gameObject.scene;
+                        villageSceneValid = villageScene.IsValid();
+                    }
                 }
+                AdjustNpcsToBuildings();
             }
         }
     }
 
-    private bool npcSpawned;
-
     private void OnAnySceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
     {
-        // 마을 씬이 올라왔고 건물 등록이 끝났으면, NPC를 한 번만 스폰(건물 칸을 피해 배회).
-        if (!npcSpawned && registered.Count > 0)
+        // 마을 씬이 올라왔고 건물 등록이 끝났으면, 씬을 확정하고 건물 레벨에 맞춰 NPC 수를 맞춘다.
+        if (registered.Count > 0)
         {
             villageScene = s;
             villageSceneValid = s.IsValid();
-            SpawnNpcs();
-            npcSpawned = true;
+            AdjustNpcsToBuildings();
         }
     }
 
@@ -1110,28 +1109,75 @@ public class BuildingPlacementController : MonoBehaviour,
     }
 
     [Header("NPC")]
-    [SerializeField] private int npcCount = 3;               // 스폰할 NPC 수
     [Tooltip("스폰에 사용할 NPC 프리팹들(VillageNpc 컴포넌트 보유). 여기서 넣고 빼면 등장 NPC가 바뀐다. 비면 큐브로 폴백.")]
     [SerializeField] private List<GameObject> npcPrefabs = new List<GameObject>();
     [SerializeField] private float npcCubeSize = 0.6f;       // 폴백 큐브 크기(프리팹 없을 때)
 
-    /// <summary>NPC를 npcCount만큼 생성해 grid + 공유 건물 목록을 주입한다.
-    /// npcPrefabs에서 골라 스폰하고, 비어 있으면 큐브로 폴백한다.</summary>
-    private void SpawnNpcs()
+    // 현재 스폰돼 있는 NPC들(반응형 증감용). 건물 레벨이 바뀌면 이 수를 desired에 맞춘다.
+    private readonly List<GameObject> spawnedNpcs = new List<GameObject>();
+
+    /// <summary>건물 구성(베이스캠프·오두막 레벨)에 맞는 목표 NPC 수를 계산한다.
+    ///  · 베이스캠프 Lv≥1 → +1 (레벨 무관 고정)
+    ///  · 오두막 → 레벨당 +2 (Lv1=+2, Lv2=+4 …)
+    ///  건물이 없으면 0.</summary>
+    private int ComputeDesiredNpcCount()
+    {
+        VillageBuildingRegistry reg = VillageBuildingRegistry.Instance;
+        if (reg == null) return 0;
+
+        int desired = 0;
+        for (int i = 0; i < reg.Count; i++)
+        {
+            string displayName = reg.GetName(i);
+            int level = reg.GetLevel(i);
+            if (level < 1 || string.IsNullOrEmpty(displayName)) continue;
+
+            if (IsBaseCamp(displayName)) desired += 1;              // 베이스캠프: 레벨 무관 1명 고정
+            else if (IsCottage(displayName)) desired += 2 * level;  // 오두막: 레벨당 2명
+        }
+        return desired;
+    }
+
+    // 건물 식별은 표시명 부분일치로(데이터 표시명이 한/영 혼재해도 견디게).
+    private static bool IsBaseCamp(string n) =>
+        n.Contains("베이스") || n.Contains("BaseCamp") || n.Contains("Base Camp");
+    private static bool IsCottage(string n) =>
+        n.Contains("오두막") || n.Contains("Cottage") || n.Contains("Hut");
+
+    /// <summary>목표 수에 맞춰 NPC를 추가/제거한다(0.25초 스캔·씬 로드에서 호출).</summary>
+    private void AdjustNpcsToBuildings()
+    {
+        spawnedNpcs.RemoveAll(n => n == null);   // 파괴된 참조 정리
+        int desired = ComputeDesiredNpcCount();
+        while (spawnedNpcs.Count < desired) SpawnOneNpc(spawnedNpcs.Count);
+        while (spawnedNpcs.Count > desired) DespawnLastNpc();
+    }
+
+    /// <summary>NPC 하나 생성 → 마을 씬 이동 → grid·건물목록 주입 → 추적 목록에 등록.</summary>
+    private void SpawnOneNpc(int index)
     {
         // 스폰 시점의 건물은 RegisterExistingBuildings가 이미 npcBuildingList에 넣고 태그했다.
-        for (int i = 0; i < npcCount; i++)
-        {
-            GameObject go = MakeNpcObject(i);
+        GameObject go = MakeNpcObject(index);
 
-            // 마을 씬으로 옮기고(마을 카메라가 비추게), 시작 위치는 대충 중앙 근처
-            if (villageSceneValid) UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, villageScene);
-            go.transform.position = new Vector3(i * 0.5f, 0f, 0f);
+        // 마을 씬으로 옮기고(마을 카메라가 비추게), 시작 위치는 대충 중앙 근처
+        if (villageSceneValid) UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, villageScene);
+        go.transform.position = new Vector3(index * 0.5f, 0f, 0f);
 
-            var npc = go.GetComponent<VillageNpc>();
-            if (npc == null) npc = go.AddComponent<VillageNpc>();
-            npc.Init(grid, npcBuildingList);
-        }
+        var npc = go.GetComponent<VillageNpc>();
+        if (npc == null) npc = go.AddComponent<VillageNpc>();
+        npc.Init(grid, npcBuildingList);
+
+        spawnedNpcs.Add(go);
+    }
+
+    /// <summary>가장 최근 NPC 하나 제거(레벨 하락·건물 철거로 목표가 줄면).</summary>
+    private void DespawnLastNpc()
+    {
+        int last = spawnedNpcs.Count - 1;
+        if (last < 0) return;
+        GameObject go = spawnedNpcs[last];
+        spawnedNpcs.RemoveAt(last);
+        if (go != null) Destroy(go);
     }
 
     /// <summary>NPC 오브젝트 하나 생성 — 프리팹 목록에서 순환 선택, 없으면 큐브 폴백.</summary>
