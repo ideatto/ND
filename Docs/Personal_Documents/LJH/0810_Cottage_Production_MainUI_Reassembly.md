@@ -57,7 +57,7 @@ Popup은 `NoticeUI` 바로 앞 sibling에 두고 기본 비활성화한다. Popu
 | --- | --- |
 | `CottageProductionMainUiEntry.buildingListPanel` | MainUI 내부 기존 `BuildingListPanel` (`BuildingPanel`) |
 | `CottageProductionMainUiEntry.popup` | `CottageProductionPopupPresenter` |
-| `CottageProductionMainUiEntry.productionReadyIcon` | `Assets/_Project/09.Art/04_UI/icons/Icon_caravan_slot_settling.png` |
+| `CottageProductionMainUiEntry.productionReadyIcon` | `Assets/_Project/09.Art/04_UI/icons/알림 UI ICON.png` |
 | `CottageProductionPopupPresenter.view` | 같은 Popup의 `CottageProductionPopupView` |
 | `CottageProductionPopupPresenter.noticeUI` | MainUI 내부 기존 `NoticeUI` |
 
