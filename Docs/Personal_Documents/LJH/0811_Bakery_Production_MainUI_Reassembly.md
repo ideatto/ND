@@ -14,6 +14,9 @@
 
 ## 2. MainUICanvas 배치
 
+권장 자동 조립은 Unity 메뉴 `ND > UI > Install Bakery Production Into Main UI`를 실행한다.
+이 메뉴는 실제 InGame Scene이 참조하는 `Assets/_Project/08.Prefabs/MainUICanvas.prefab`에 아래 구조와 참조를 정적으로 저장하며, 반복 실행해도 Entry/Popup을 중복 생성하지 않는다.
+
 ```text
 MainUICanvas                         [BakeryProductionMainUiEntry]
 ├─ ...
@@ -60,4 +63,4 @@ MainUICanvas                         [BakeryProductionMainUiEntry]
 
 ## 6. 건물 목록 알림 아이콘 위치
 
-알림 아이콘 GameObject를 MainUI에 별도로 만들지 않는다. `BuildingListPanel`이 행 우상단 기준으로 생성하며 현재 기준 좌표는 `anchoredPosition = (16, 6)`, 크기는 `28 x 28`이다. 조립 후 빵집 행 오른쪽 위 모서리에 걸쳐 보이고 행 내부 중앙 쪽으로 밀려 있지 않은지 확인한다.
+알림 아이콘 GameObject를 MainUI에 별도로 만들지 않는다. `BuildingListPanel`이 건물 행 내부에 공용 Badge를 생성하며 현재 기준 좌표는 우상단 Anchor 기준 `anchoredPosition = (-120, -6)`, 크기는 `28 x 28`이다. 조립 후 아이콘이 패널 밖에서 잘리지 않고 건물 이름·레벨의 오른쪽 가까이에 표시되는지 확인한다.

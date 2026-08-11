@@ -61,7 +61,7 @@ Popup은 `NoticeUI` 바로 앞 sibling에 두고 기본 비활성화한다. Popu
 | `CottageProductionPopupPresenter.view` | 같은 Popup의 `CottageProductionPopupView` |
 | `CottageProductionPopupPresenter.noticeUI` | MainUI 내부 기존 `NoticeUI` |
 
-`BuildingListPanel`에 오두막 전용 행을 만들지 않는다. 기존 공용 건물 행을 사용하며, `CottageProductionMainUiEntry`가 `BuildingClicked` 이벤트를 받아 오두막 이름일 때만 Popup을 연다. 양쪽 보관함이 모두 찼을 때만 `SetBuildingBadge`를 통해 기존 오두막 행 우상단에 느낌표 아이콘을 표시한다.
+`BuildingListPanel`에 오두막 전용 행을 만들지 않는다. 기존 공용 건물 행을 사용하며, `CottageProductionMainUiEntry`가 `BuildingClicked` 이벤트를 받아 오두막 이름일 때만 Popup을 연다. 양쪽 보관함이 모두 찼을 때만 `SetBuildingBadge`를 통해 기존 오두막 행에 알림 아이콘을 표시한다. 공용 Badge 위치는 우상단 Anchor 기준 `(-120, -6)`, 크기는 `28 x 28`이며 건물 이름·레벨 오른쪽에서 잘리지 않아야 한다.
 
 ## 5. 데이터 흐름 계약
 

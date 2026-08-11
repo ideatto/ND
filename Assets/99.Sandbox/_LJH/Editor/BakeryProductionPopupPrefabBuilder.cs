@@ -9,6 +9,9 @@ public static class BakeryProductionPopupPrefabBuilder
 {
     private const string PrefabPath = "Assets/_Project/08.Prefabs/UI/Bakery/BakeryProductionPopup.prefab";
     private const string BuildUiScenePath = "Assets/_Project/07.Scenes/04_InGame/Build UI.unity";
+    private const string MainUiPrefabPath = "Assets/_Project/08.Prefabs/MainUICanvas.prefab";
+    private const string ProductionReadyIconPath =
+        "Assets/_Project/09.Art/04_UI/icons/알림 UI ICON.png";
 
     [MenuItem("ND/UI/Build Bakery Production Popup")]
     public static void Build()
@@ -105,6 +108,59 @@ public static class BakeryProductionPopupPrefabBuilder
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         Selection.activeObject = prefab;
+    }
+
+    /// <summary>
+    /// 최신 MainUICanvas 원본에 빵집 Entry와 고정 Popup 인스턴스를 조립한다.
+    /// Player 런타임에는 UI를 생성하지 않고 이 에디터 메뉴가 저장한 오브젝트만 사용한다.
+    /// 반복 실행 시 기존 Popup을 교체하고 Entry를 재사용하여 중복 조립을 막는다.
+    /// </summary>
+    [MenuItem("ND/UI/Install Bakery Production Into Main UI")]
+    public static void InstallIntoMainUi()
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(MainUiPrefabPath);
+        try
+        {
+            Transform existing = root.transform.Find("BakeryProductionPopup");
+            if (existing != null)
+                Object.DestroyImmediate(existing.gameObject);
+
+            GameObject popupPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            if (popupPrefab == null)
+                throw new System.InvalidOperationException("Bakery popup prefab을 찾을 수 없습니다.");
+
+            var popup = (GameObject)PrefabUtility.InstantiatePrefab(popupPrefab, root.transform);
+            popup.name = "BakeryProductionPopup";
+
+            BuildingListPanel buildingList = root.GetComponentInChildren<BuildingListPanel>(true);
+            NoticeUI notice = root.GetComponentInChildren<NoticeUI>(true);
+            BakeryProductionPopupPresenter presenter =
+                popup.GetComponent<BakeryProductionPopupPresenter>();
+            BakeryProductionPopupView view = popup.GetComponent<BakeryProductionPopupView>();
+            if (buildingList == null || presenter == null || view == null)
+                throw new System.InvalidOperationException("Bakery Main UI 연결 대상이 누락되었습니다.");
+
+            presenter.Configure(view, notice);
+            BakeryProductionMainUiEntry entry = root.GetComponent<BakeryProductionMainUiEntry>();
+            if (entry == null)
+                entry = root.AddComponent<BakeryProductionMainUiEntry>();
+            Sprite readyIcon = AssetDatabase.LoadAssetAtPath<Sprite>(ProductionReadyIconPath);
+            if (readyIcon == null)
+                throw new System.InvalidOperationException("Bakery 생산 완료 아이콘을 찾을 수 없습니다.");
+            entry.Configure(buildingList, presenter, readyIcon);
+
+            if (notice != null)
+                popup.transform.SetSiblingIndex(notice.transform.GetSiblingIndex());
+            popup.SetActive(false);
+            PrefabUtility.SaveAsPrefabAsset(root, MainUiPrefabPath);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+
+        AssetDatabase.SaveAssets();
+        Debug.Log("Installed Bakery production popup into " + MainUiPrefabPath);
     }
 
     private static GameObject CreateQuantityModal(Transform parent, out Button min,
