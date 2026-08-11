@@ -105,6 +105,12 @@ namespace ND.Framework
         public static event Action VillageBuildingsChanged;
 
         /// <summary>
+        /// Raised only after one building construction or upgrade has been saved and committed.
+        /// Parameters are the committed display name and target level. SaveData remains authority.
+        /// </summary>
+        public static event Action<string, int> VillageBuildingCommitted;
+
+        /// <summary>
         /// SceneFlowService가 scene load 완료 콜백을 받은 뒤 발생한다.
         /// </summary>
         public static event Action<string> SceneChanged;
@@ -284,6 +290,13 @@ namespace ND.Framework
             // Publish no mutable building payload: SaveData remains the authority after commit.
             FrameworkLog.Info("VillageBuildingsChanged event raised.");
             VillageBuildingsChanged?.Invoke();
+        }
+
+        public static void RaiseVillageBuildingCommitted(string displayName, int targetLevel)
+        {
+            FrameworkLog.Info(
+                $"VillageBuildingCommitted event raised. Building: {displayName}, Level: {targetLevel}");
+            VillageBuildingCommitted?.Invoke(displayName, targetLevel);
         }
 
         /// <summary>

@@ -207,6 +207,7 @@ public class VillageBuildingRegistry : MonoBehaviour
     // FrameworkRoot·SaveData가 준비된 뒤 거점 건물 진행을 복원한다.
     private void Start()
     {
+        SynchronizeEndingBuildingDisplayName();
         StripEnvironmentBuildingSaveEntries();   // 과거 잘못 저장된 '환경' 건물 항목 제거(마이그레이션, 팀원 세이브 치유).
         SeedMissingBuildingsToSave();   // 뉴게임: SaveData에 없는 거점 건물을 채운다(이미 있으면 보존). 이동 저장의 전제.
         RestoreFromSaveData();
@@ -219,6 +220,46 @@ public class VillageBuildingRegistry : MonoBehaviour
     private void OnDestroy()
     {
         if (Instance == this) Instance = null;
+    }
+
+    /// <summary>
+    /// 엔딩 건물의 표시 이름은 Catalog의 복사 문자열이 아니라 BuildData.DisplayName을 권위로 삼는다.
+    /// SO 이름이 바뀌어도 기존 Scene 항목과 SaveData를 같은 이름으로 이동시켜 중복 건설을 막는다.
+    /// </summary>
+    private void SynchronizeEndingBuildingDisplayName()
+    {
+        FrameworkRoot root = FrameworkRoot.Instance;
+        List<VillageBuildingSaveData> saved = root?.CurrentSaveData?.player?.villageBuildings;
+
+        foreach (CatalogEntry entry in catalog)
+        {
+            if (entry?.buildData == null
+                || !string.Equals(
+                    entry.buildData.BuildId,
+                    ND.Framework.BaseCampBuildingLevelPolicy.EndingBuildingId,
+                    System.StringComparison.Ordinal))
+                continue;
+
+            string oldName = entry.displayName?.Trim() ?? string.Empty;
+            string currentName = entry.buildData.DisplayName?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(currentName)
+                || string.Equals(oldName, currentName, System.StringComparison.Ordinal))
+                continue;
+
+            entry.displayName = currentName;
+            foreach (Building building in buildings)
+            {
+                if (building != null && string.Equals(building.displayName, oldName, System.StringComparison.Ordinal))
+                    building.displayName = currentName;
+            }
+
+            if (saved == null) continue;
+            foreach (VillageBuildingSaveData building in saved)
+            {
+                if (building != null && string.Equals(building.displayName, oldName, System.StringComparison.Ordinal))
+                    building.displayName = currentName;
+            }
+        }
     }
 
     private Building FindByName(string name)

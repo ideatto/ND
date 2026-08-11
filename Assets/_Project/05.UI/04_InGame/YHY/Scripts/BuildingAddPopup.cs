@@ -315,20 +315,17 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             string rowLabel = $"{registry.GetCatalogName(i)}  Lv.{currentLevel}";
             bool rowInteractable = true;
 
-            // EndingItem remains visible as a progression goal, but it cannot open before
-            // BaseCamp Lv.5 or after its single construction level has been completed.
-            // The locked row uses its color instead of a long suffix to communicate that state,
-            // keeping the catalog readable while BaseCamp UI owns the detailed unlock guidance.
+            // EndingItem remains visible as a progression goal. Before BaseCamp Lv.5 the row is
+            // disabled, while a completed item remains clickable only to explain that no further
+            // level-up is possible. Keeping the completed row interactable also preserves the same
+            // background presentation as the other building rows.
             if (IsEndingBuilding(buildData))
             {
                 bool unlocked = IsEndingBuildingUnlocked();
-                bool completed = currentLevel >= 1;
-                rowInteractable = unlocked && !completed;
-                rowLabel = completed
-                    ? $"{registry.GetCatalogName(i)}  Lv.1  (건설 완료)"
-                    : unlocked
-                        ? $"{registry.GetCatalogName(i)}  Lv.0"
-                        : registry.GetCatalogName(i);
+                rowInteractable = unlocked;
+                rowLabel = unlocked
+                    ? $"{registry.GetCatalogName(i)}  Lv.{Mathf.Min(currentLevel, 1)}"
+                    : registry.GetCatalogName(i);
             }
 
             Button row = CreateRow(
@@ -352,7 +349,9 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             return;
 
         ColorBlock colors = row.colors;
-        colors.disabledColor = new Color(0.66f, 0.64f, 0.59f, 1f);
+        // Keep the locked ending goal distinct without introducing a cold gray block into
+        // the parchment-toned construction list. Button tint multiplies the row base color.
+        colors.disabledColor = new Color(0.90f, 0.82f, 0.68f, 1f);
         colors.colorMultiplier = 1f;
         row.colors = colors;
 
@@ -383,10 +382,15 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
     private void SelectRegistryBuilding(VillageBuildingRegistry registry, int catalogIndex)
     {
         BuildData selectedBuildData = registry.GetCatalogBuildData(catalogIndex);
-        if (IsEndingBuilding(selectedBuildData)
-            && (!IsEndingBuildingUnlocked() || registry.GetCatalogLevel(catalogIndex) >= 1))
+        if (IsEndingBuilding(selectedBuildData) && !IsEndingBuildingUnlocked())
         {
             // Fail closed even if an external caller bypasses the disabled row Button.
+            return;
+        }
+
+        if (IsEndingBuilding(selectedBuildData) && registry.GetCatalogLevel(catalogIndex) >= 1)
+        {
+            ShowNotice("더 이상 레벨업할 수 없습니다.");
             return;
         }
 
@@ -430,6 +434,22 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             ND.Framework.FrameworkRoot.Instance?.CurrentSaveData;
         return ND.Framework.BaseCampProgressionPolicy.IsEndingBuildingUnlocked(
             saveData?.player?.villageBuildings);
+    }
+
+    /// <summary>
+    /// Reuses the existing MainUI notice instead of adding a dedicated popup or creating UI at runtime.
+    /// </summary>
+    private void ShowNotice(string message)
+    {
+        Canvas rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+        NoticeUI notice = rootCanvas != null
+            ? rootCanvas.GetComponentInChildren<NoticeUI>(true)
+            : FindAnyObjectByType<NoticeUI>(FindObjectsInactive.Include);
+
+        if (notice != null)
+            notice.Show(message);
+        else
+            Debug.LogWarning($"BuildingAddPopup: NoticeUI를 찾지 못했습니다. {message}", this);
     }
 
     private Button CreateFromPrefab(Button prefab, string label, Color fallbackColor)

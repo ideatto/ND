@@ -499,6 +499,9 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         FrameworkEvents.RaiseVillageBuildingsChanged();
         FrameworkEvents.RaiseCottageProductionChanged();
         FrameworkEvents.RaiseBakeryProductionChanged();
+        // The payload event is emitted only after Save and runtime commit succeed. Consumers such
+        // as the ending popup can distinguish a live construction from save-data restoration.
+        FrameworkEvents.RaiseVillageBuildingCommitted(processingDisplayName, plan.TargetLevel);
     }
 
     // 건설은 아이템 정의를 변경하지 않고 수량만 변경하므로 item 참조는 재사용한다.
