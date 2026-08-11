@@ -132,6 +132,7 @@
 - [ ] Entry의 BuildingListPanel/Popup/`알림 UI ICON.png`와 Presenter의 View/NoticeUI 연결
 - [ ] 빵집 행 Badge는 별도 런타임 오브젝트를 만들지 않고 `BuildingListPanel.SetBuildingBadge()`로 표시
 - [ ] 보관량이 현재 레벨 최대치일 때만 Badge가 표시되고 수령 후 즉시 숨겨짐
+- [ ] 오두막·빵집 공용 Badge가 우상단 Anchor 기준 `(-120, -6)`, `28 x 28`로 건물 이름·레벨 오른쪽에 표시되고 패널 밖으로 잘리지 않음
 - [ ] 빵집 수령 `Bread + 0원`과 상점 구매 `Bread + 실제 구매가`를 서로 다른 가격 묶음으로 보존
 - [ ] 이 기능만을 위해 `InGame.unity`에 override를 만들지 않음
 
@@ -322,6 +323,7 @@ BaseCamp 재조립 경계:
 - [ ] 수량 0 이하 Cargo 행은 로드/저장 및 UI 목록에서 제거됨
 - [ ] 보이지 않는 0개 Cargo가 슬롯을 차지하거나 여유 공간이 있는 Wagon 교체를 차단하지 않음
 - [ ] Warehouse 수량 Modal Backdrop 클릭 시 수량 Modal만 닫히고 Warehouse Popup과 선택 Caravan은 유지됨
+- [ ] Warehouse Caravan 선택 목록은 BaseCamp 저장 레벨을 권위로 사용하여 Lv.1~4에서 1~4개 행을 표시하고, 미생성 행은 `캐러밴 없음`으로 표시함
 - [ ] `Bread + 0원`과 `Bread + 유료 구매가`가 동시에 있으면 가격 선택 Modal에 구매가 오름차순으로 모두 표시됨
 - [ ] Backdrop/X 닫기, 카드 내부 클릭 유지, NoticeUI 한국어 실패 안내 확인
 - [ ] 대상 브랜치 조립 후 Explicit `MainUiPrefab_HasOneWiredEntryAndPopup`, `InGameScene_InheritsBaseCampUiThroughMainUiPrefab` 통과
