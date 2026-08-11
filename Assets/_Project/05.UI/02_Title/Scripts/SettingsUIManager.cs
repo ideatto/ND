@@ -8,7 +8,7 @@
  * - 패널을 열거나 Reset할 때 매니저(SO 기본값 포함) 현재 상태를 UI 컨트롤에 동기화한다.
  *
  * Main Features
- * - Settings 패널 토글·열기·닫기.
+ * - Settings 패널 토글·열기·닫기와 닫을 때 PlayerPrefs flush.
  * - BGM/SFX/UI SFX 볼륨·토글, 창 모드·해상도, Reset을 SoundManager / DisplayManager에 전달한다.
  * - OpenOption / ResetAllSettings 시 Slider·Toggle·Dropdown을 WithoutNotify로 동기화한다.
  *
@@ -128,6 +128,8 @@ public class SettingsUIManager : MonoBehaviour
         {
             optionPanel.SetActive(false);
         }
+
+        PlayerPrefs.Save();
     }
 
     /// <summary>

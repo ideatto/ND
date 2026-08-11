@@ -7,7 +7,7 @@
  * - FrameworkRoot와 분리되어 BeforeSceneLoad에서 자동 생성된다.
  *
  * Main Features
- * - Resources/DisplaySettingsConfig를 로드해 최초 적용 및 Reset 기준으로 사용한다.
+ * - Resources/DisplaySettingsConfig 기본값에 유효한 PlayerPrefs 사용자 설정을 덮어써 최초 적용한다.
  * - 창모드 / 전체 창모드 / 전체모드와 1280x720·1920x1080·2560x1440 프리셋을 적용한다.
  *
  * Usage for Team Members
@@ -74,7 +74,7 @@ namespace ND.UI.Title
             Instance = this;
             DontDestroyOnLoad(gameObject);
             LoadSettingsConfig();
-            ResetToDefaults();
+            LoadInitialSettings();
         }
 
         /// <summary>
@@ -82,8 +82,15 @@ namespace ND.UI.Title
         /// </summary>
         public void SetWindowMode(WindowDisplayMode mode)
         {
+            if (!System.Enum.IsDefined(typeof(WindowDisplayMode), mode))
+            {
+                Debug.LogWarning($"[DisplayManager] Invalid window mode: {mode}");
+                return;
+            }
+
             currentWindowMode = mode;
             ApplyCurrent();
+            PlayerPrefs.SetInt(SettingsPlayerPrefsKeys.WindowMode, (int)mode);
         }
 
         /// <summary>
@@ -106,8 +113,15 @@ namespace ND.UI.Title
         /// </summary>
         public void SetResolution(ResolutionPreset preset)
         {
+            if (!System.Enum.IsDefined(typeof(ResolutionPreset), preset))
+            {
+                Debug.LogWarning($"[DisplayManager] Invalid resolution preset: {preset}");
+                return;
+            }
+
             currentResolution = preset;
             ApplyCurrent();
+            PlayerPrefs.SetInt(SettingsPlayerPrefsKeys.Resolution, (int)preset);
         }
 
         /// <summary>
@@ -156,6 +170,37 @@ namespace ND.UI.Title
             }
 
             ApplyCurrent();
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.WindowMode);
+            PlayerPrefs.DeleteKey(SettingsPlayerPrefsKeys.Resolution);
+            PlayerPrefs.Save();
+        }
+
+        private void LoadInitialSettings()
+        {
+            ApplyDefaults();
+
+            int savedWindowMode = PlayerPrefs.GetInt(SettingsPlayerPrefsKeys.WindowMode, (int)currentWindowMode);
+            if (System.Enum.IsDefined(typeof(WindowDisplayMode), savedWindowMode))
+                currentWindowMode = (WindowDisplayMode)savedWindowMode;
+
+            int savedResolution = PlayerPrefs.GetInt(SettingsPlayerPrefsKeys.Resolution, (int)currentResolution);
+            if (System.Enum.IsDefined(typeof(ResolutionPreset), savedResolution))
+                currentResolution = (ResolutionPreset)savedResolution;
+
+            ApplyCurrent();
+        }
+
+        private void ApplyDefaults()
+        {
+            if (settingsConfig == null)
+            {
+                currentWindowMode = WindowDisplayMode.Windowed;
+                currentResolution = ResolutionPreset.Res1920x1080;
+                return;
+            }
+
+            currentWindowMode = settingsConfig.DefaultWindowMode;
+            currentResolution = settingsConfig.DefaultResolution;
         }
 
         private void LoadSettingsConfig()
