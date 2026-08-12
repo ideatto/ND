@@ -267,6 +267,15 @@ public class SettingsUIManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 현재 SoundManager / DisplayManager 상태를 이벤트를 발생시키지 않고 Settings UI에 반영한다.
+    /// 설정 패널 활성화 브리지가 호출하며, 준비되지 않은 매니저의 항목은 변경하지 않는다.
+    /// </summary>
+    public void RefreshUiFromCurrentSettings()
+    {
+        SyncUiFromManagers();
+    }
+
+    /// <summary>
     /// SoundManager / DisplayManager의 현재 값을 Settings UI 컨트롤에 반영한다.
     /// WithoutNotify를 사용해 동기화 중 onValueChanged가 다시 매니저를 덮지 않게 한다.
     /// </summary>
