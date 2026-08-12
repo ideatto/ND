@@ -23,7 +23,7 @@ public class CaravanSlotPanel : MonoBehaviour
 
     [Header("색")]
     [SerializeField] private Color emptyColor = new Color(0.88f, 0.88f, 0.90f);
-    [SerializeField] private Color selectedColor = new Color(0.45f, 0.70f, 0.45f);
+    [SerializeField] private Color selectedColor = new Color(1f, 1f, 1f, 1f);   // 선택 시 초록 틴트 대신 흰색 → 카드 스프라이트가 살짝 밝아져 하이라이트처럼 보임
     [SerializeField] private Color editColor = new Color(0.95f, 0.85f, 0.55f);
 
     /// <summary>슬롯이 선택될 때. 인자 = 슬롯 index(해제 시 -1).</summary>
@@ -54,16 +54,19 @@ public class CaravanSlotPanel : MonoBehaviour
             col.transform.SetParent(slotContainer, false);
             VerticalLayoutGroup vlg = col.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 8; vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.childControlWidth = true; vlg.childForceExpandWidth = true;
-            vlg.childControlHeight = true; vlg.childForceExpandHeight = false;
+            // [카드 원본 크기 존중] 컬럼 VLG가 카드의 폭·높이를 강제하지 않게 한다(원본 Card 크기 그대로).
+            vlg.childControlWidth = false; vlg.childForceExpandWidth = false;
+            vlg.childControlHeight = false; vlg.childForceExpandHeight = false;
             LayoutElement colLE = col.AddComponent<LayoutElement>();
-            colLE.preferredWidth = 220;   // 슬롯 폭
-            colLE.flexibleWidth = 0;      // [고정폭] 개수 상관없이 안 늘어남(내부 VLG의 flexible 상속 차단 → 위치만 가운데 정렬)
+            colLE.flexibleWidth = 0;      // [고정폭] 개수 상관없이 안 늘어남
 
             // 카드
             string filled = contents[i];
             bool isEmpty = string.IsNullOrEmpty(filled);
             Button card = Instantiate(slotPrefab, col.transform);
+            // 컬럼 폭 = 카드 원본 폭(자동) → 카드 크기만큼만 자리 예약
+            RectTransform cardRt = card.transform as RectTransform;
+            colLE.preferredWidth = cardRt != null ? cardRt.rect.width : 220f;
             TMP_Text t = card.GetComponentInChildren<TMP_Text>();
             if (t != null) t.text = isEmpty ? $"슬롯 {i + 1}\n[ 비어있음 ]" : $"슬롯 {i + 1}\n{filled}";
             SetColor(card, emptyColor);
@@ -98,15 +101,18 @@ public class CaravanSlotPanel : MonoBehaviour
             VerticalLayoutGroup layout = column.AddComponent<VerticalLayoutGroup>();
             layout.spacing = 8;
             layout.childAlignment = TextAnchor.UpperCenter;
-            layout.childControlWidth = true;
-            layout.childForceExpandWidth = true;
-            layout.childControlHeight = true;
+            // [카드 원본 크기 존중] 컬럼 VLG가 카드의 폭·높이를 강제하지 않게 한다.
+            layout.childControlWidth = false;
+            layout.childForceExpandWidth = false;
+            layout.childControlHeight = false;
             layout.childForceExpandHeight = false;
             LayoutElement presetLE = column.AddComponent<LayoutElement>();
-            presetLE.preferredWidth = 220;
             presetLE.flexibleWidth = 0;   // [고정폭] 개수 상관없이 안 늘어남
 
             Button card = Instantiate(slotPrefab, column.transform);
+            // 컬럼 폭 = 카드 원본 폭(자동)
+            RectTransform presetCardRt = card.transform as RectTransform;
+            presetLE.preferredWidth = presetCardRt != null ? presetCardRt.rect.width : 220f;
             card.interactable = canSelect;
             TMP_Text label = card.GetComponentInChildren<TMP_Text>();
             if (label != null)
