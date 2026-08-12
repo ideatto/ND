@@ -894,6 +894,22 @@ namespace ND.Framework
         public bool isCompleted;
         public bool isSkipped;
         public int stepIndex;
+        public List<string> completedChapterIds = new List<string>();
+        public List<string> learnedFeatureIds = new List<string>();
+        public List<TutorialChapterProgressSaveData> chapterProgress =
+            new List<TutorialChapterProgressSaveData>();
+    }
+
+    /// <summary>
+    /// One tutorial chapter's restart-safe action progress. Presentation remains in the
+    /// chapter ScriptableObject; only stable IDs are persisted here.
+    /// </summary>
+    [Serializable]
+    public sealed class TutorialChapterProgressSaveData
+    {
+        public string chapterId = string.Empty;
+        public int presentationVersion;
+        public List<string> completedStepIds = new List<string>();
     }
 
     /// <summary>

@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97767bc6e2d8b004f8dd1ab27f0297e8, type: 3}
+  m_Name: TutorialChapter_BuildingFunction
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Tutorial.TutorialChapterData
+  chapterId: building_function
+  title: "\uAC74\uBB3C \uAE30\uB2A5\uC744 \uC0AC\uC6A9\uD558\uC138\uC694"
+  presentationVersion: 1
+  introDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uD328\uB110 \uD558\uB2E8\uC758 \uAC74\uBB3C\uC744 \uC120\uD0DD\uD558\uBA74
+      \uAC74\uBB3C\uB9C8\uB2E4 \uAE30\uB2A5\uC744 \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4\uC545"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 21300000, guid: 21d88ab45131cc84d896078db86df0e7, type: 3}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uBB34\uC5ED\uC744 \uD558\uAE30 \uC55E\uC11C \uB9C8\uCC28\uC640 \uB9D0\uC744
+      \uBC1B\uC544\uC57C\uD558\uB2C8\uAE4C \uC624\uB450\uB9C9\uC744 \uB204\uB985\uC2DC\uB2E4\uC545"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB9D0\uACFC \uB9C8\uCC28 \uBAA8\uB450 \uBC1B\uAE30\uB97C \uB20C\uB974\uC154\uC57C
+      \uD569\uB2C8\uB2E4\uC545"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 21300000, guid: da38a76ff3ad98041b030bfcd6f09936, type: 3}
+  failureDialogue: []
+  steps:
+  - stepId: open_cottage_function
+    label: "\uC624\uB450\uB9C9\uC744 \uB20C\uB7EC \uAE30\uB2A5 \uCC3D\uC744 \uC5EC\uC138\uC694"
+  - stepId: collect_all_cottage_products
+    label: "\uBAA8\uB450 \uBC1B\uAE30\uB97C \uB20C\uB7EC \uC0DD\uC0B0\uBB3C\uC744
+      \uBC1B\uC73C\uC138\uC694"
+  completionDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB9D0\uACFC \uB9C8\uCC28\uB97C \uBC1B\uC558\uC73C\uB2C8 \uC774\uC81C
+      \uCE90\uB7EC\uBC18\uC744 \uD574\uAE08\uD558\uBA74 \uB429\uB2C8\uB2E4\uC545"
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uCE90\uB7EC\uBC18\uC744 \uD574\uAE08\uD558\uB294 \uBC29\uBC95\uC740
+      \uD558\uB2E8 \uC911\uC559\uC758 \uD30C\uB780\uC0C9 \uD328\uB110\uC744 \uB204\uB974\uBA74
+      \uB429\uB2C8\uB2E4\uC545"
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}

@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97767bc6e2d8b004f8dd1ab27f0297e8, type: 3}
+  m_Name: TutorialChapter_QuestCompletion
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Tutorial.TutorialChapterData
+  chapterId: quest_completion
+  title: "\uD018\uC2A4\uD2B8\uB97C \uD574\uACB0\uD588\uC2B5\uB2C8\uB2E4"
+  presentationVersion: 1
+  introDialogue: []
+  failureDialogue: []
+  steps: []
+  completionDialogue: []

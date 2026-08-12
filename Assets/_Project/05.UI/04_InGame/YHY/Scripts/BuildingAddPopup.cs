@@ -17,6 +17,10 @@ using UnityEngine.UI;
 /// </remarks>
 public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
 {
+    public event Action Opened;
+    public event Action Dismissed;
+    public event Action<string> BuildingSelected;
+
     /// <summary>Section 항목을 어디서 구성할지 결정하며 UI가 데이터 원본을 추측하지 않게 한다.</summary>
     public enum SectionContentSource
     {
@@ -104,18 +108,30 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
         gameObject.SetActive(false);
     }
 
+    public void Dismiss()
+    {
+        if (!gameObject.activeSelf)
+            return;
+
+        gameObject.SetActive(false);
+        Dismissed?.Invoke();
+    }
+
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData != null && eventData.pointerCurrentRaycast.gameObject == gameObject)
-            Close();
+            Dismiss();
     }
 
     private void OpenInternal()
     {
+        bool wasOpen = gameObject.activeSelf;
         gameObject.SetActive(true);
         transform.SetAsLastSibling();
         ResolveHeader();
         BuildCatalog();
+        if (!wasOpen)
+            Opened?.Invoke();
     }
 
     private void ResolveHeader()
@@ -408,6 +424,8 @@ public class BuildingAddPopup : MonoBehaviour, IPointerClickHandler
             Debug.LogError($"BuildingAddPopup: no BuildData is assigned to catalog index {catalogIndex}.", this);
             return;
         }
+
+        BuildingSelected?.Invoke(buildData.BuildId);
 
         if (popupRuntimeBinding == null)
         {

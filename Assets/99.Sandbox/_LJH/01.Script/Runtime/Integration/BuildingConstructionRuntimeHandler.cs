@@ -11,6 +11,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildingUpgradeTransactionPort
 {
+    public event Action<string, int> ConstructionCommitted;
+
     [SerializeField] private BuildingPopupRuntimeBinding popupBinding;
     [SerializeField] private BuildingListPanel buildingListPanel;
     [SerializeField] private NoticeUI noticeUI;
@@ -502,6 +504,8 @@ public sealed class BuildingConstructionRuntimeHandler : MonoBehaviour, IBuildin
         // The payload event is emitted only after Save and runtime commit succeed. Consumers such
         // as the ending popup can distinguish a live construction from save-data restoration.
         FrameworkEvents.RaiseVillageBuildingCommitted(processingDisplayName, plan.TargetLevel);
+        if (plan != null)
+            ConstructionCommitted?.Invoke(plan.BuildingId, plan.TargetLevel);
     }
 
     // 건설은 아이템 정의를 변경하지 않고 수량만 변경하므로 item 참조는 재사용한다.

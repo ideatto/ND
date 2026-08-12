@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97767bc6e2d8b004f8dd1ab27f0297e8, type: 3}
+  m_Name: TutorialChapter_RescueLoan
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Tutorial.TutorialChapterData
+  chapterId: rescue_loan
+  title: "\uAD6C\uC870 \uB300\uCD9C\uC744 \uBC1B\uC544\uBCF4\uC138\uC694"
+  presentationVersion: 1
+  introDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uD070..\uD070\uC77C\uC774\uC5D0\uC694. \uBB34\uC5ED\uC744 \uD560 \uC790\uAE08\uC774
+      \uBD80\uC871\uD574\uC694! "
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uBCF4\uC720\uD55C \uAE08\uC561\uC774 1000\uACE8\uB4DC \uC774\uD558\uB85C
+      \uB5A8\uC5B4\uC9C0\uBA74 \uB300\uCD9C\uC744 \uBC1B\uC744 \uC218 \uC788\uAC8C\uB418\uC694."
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uADF8\uB7FC \uC774\uC81C \uB300\uCD9C\uC744 \uBC1B\uC544\uBCFC\uAE4C\uC694?"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  failureDialogue: []
+  steps:
+  - stepId: open_rescue_loan_panel
+    label: "\uB300\uCD9C \uBC84\uD2BC\uC744 \uB20C\uB7EC \uAD6C\uC870 \uB300\uCD9C
+      \uD328\uB110\uC744 \uC5EC\uC138\uC694"
+  - stepId: issue_fixed_principal_loan
+    label: "\uACE0\uC815 \uC6D0\uAE08 \uB300\uCD9C \uBC1B\uAE30 \uBC84\uD2BC\uC744
+      \uB204\uB974\uC138\uC694"
+  completionDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uAD6C\uC870 \uB300\uCD9C\uC774 \uC815\uC0C1\uC801\uC73C\uB85C \uBC1C\uAE09\uB418\uC5C8\uC5B4\uC694.
+      \uB300\uCD9C \uC0C1\uD0DC\uC640 \uC794\uC5EC \uC6D0\uAE08\uC740 \uAC19\uC740
+      \uD328\uB110\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uC5B4\uC694."
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB300\uCD9C\uC744 \uC644\uB8CC\uD558\uAE30 \uC804\uAE4C\uC9C0 \uB2E4\uC2DC
+      \uB300\uCD9C\uC744 \uBC1B\uC744 \uC218 \uC5C6\uC73C\uB2C8 \uC774\uC810 \uC720\uC758\uD574\uC57C\uD574\uC694."
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB610\uD55C \uC0C1\uD658\uD560 \uB54C \uAC00\uC9C0\uACE0 \uC788\uB294
+      \uC6D0\uAE08\uC774 1000\uACE8\uB4DC \uBBF8\uB9CC\uC774 \uB418\uB3C4\uB85D \uD560
+      \uC218 \uC5C6\uC5B4\uC694!"
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}

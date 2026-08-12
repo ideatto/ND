@@ -174,6 +174,9 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     /// <summary>Raised after a detached Overview edit session closes without routing back to S1.</summary>
     public event Action OnCaravanEditClosed;
 
+    /// <summary>Raised after matching Caravan setting data has been bound and the detached S3 panel is visible.</summary>
+    public event Action<string> OnCaravanSettingOpened;
+
     /// <summary>Forwards an S3 UI Draft for Framework validation and persistence.</summary>
     public event Action<CaravanSettingDraft> OnCaravanSettingConfirmRequested;
     public event Action OnCaravanCompositionConfirmed;
@@ -301,6 +304,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
 
         SetTradeRootActive(true);
         ShowOnly(2);
+        OnCaravanSettingOpened?.Invoke(activeCaravanEditId);
         return true;
     }
 
@@ -1099,10 +1103,13 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public void HideTradeScreens()
     {
         // Settlement UI has a separate adapter, so this manager only hides its own panels.
+        bool closedDetachedEdit = detachedCaravanEditMode != DetachedCaravanEditMode.None;
         ClearDetachedCaravanEditState();
         if (progressPanel != null) progressPanel.StopTimer();
         ShowOnly(-1);
         SetTradeRootActive(false);
+        if (closedDetachedEdit)
+            OnCaravanEditClosed?.Invoke();
     }
 
     private void SetTradeRootActive(bool active)

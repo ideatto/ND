@@ -668,9 +668,97 @@ namespace ND.Framework
             if (data.tutorial == null)
             {
                 data.tutorial = new TutorialSaveData();
+                assetDataChanged = true;
             }
 
+            assetDataChanged |= NormalizeTutorial(data.tutorial);
+
             return assetDataChanged;
+        }
+
+        private static bool NormalizeTutorial(TutorialSaveData tutorial)
+        {
+            bool changed = false;
+            if (tutorial.completedChapterIds == null)
+            {
+                tutorial.completedChapterIds = new List<string>();
+                changed = true;
+            }
+            if (tutorial.learnedFeatureIds == null)
+            {
+                tutorial.learnedFeatureIds = new List<string>();
+                changed = true;
+            }
+            if (tutorial.chapterProgress == null)
+            {
+                tutorial.chapterProgress = new List<TutorialChapterProgressSaveData>();
+                changed = true;
+            }
+
+            changed |= NormalizeTutorialIds(tutorial.completedChapterIds);
+            changed |= NormalizeTutorialIds(tutorial.learnedFeatureIds);
+
+            var chapterIds = new HashSet<string>(StringComparer.Ordinal);
+            for (int index = tutorial.chapterProgress.Count - 1; index >= 0; index--)
+            {
+                TutorialChapterProgressSaveData progress = tutorial.chapterProgress[index];
+                if (progress == null)
+                {
+                    tutorial.chapterProgress.RemoveAt(index);
+                    changed = true;
+                    continue;
+                }
+
+                string chapterId = progress.chapterId?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(chapterId) || !chapterIds.Add(chapterId))
+                {
+                    tutorial.chapterProgress.RemoveAt(index);
+                    changed = true;
+                    continue;
+                }
+
+                if (!string.Equals(progress.chapterId, chapterId, StringComparison.Ordinal))
+                {
+                    progress.chapterId = chapterId;
+                    changed = true;
+                }
+                if (progress.presentationVersion < 0)
+                {
+                    progress.presentationVersion = 0;
+                    changed = true;
+                }
+                if (progress.completedStepIds == null)
+                {
+                    progress.completedStepIds = new List<string>();
+                    changed = true;
+                }
+                changed |= NormalizeTutorialIds(progress.completedStepIds);
+            }
+
+            return changed;
+        }
+
+        private static bool NormalizeTutorialIds(List<string> ids)
+        {
+            bool changed = false;
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            for (int index = ids.Count - 1; index >= 0; index--)
+            {
+                string normalized = ids[index]?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(normalized) || !unique.Add(normalized))
+                {
+                    ids.RemoveAt(index);
+                    changed = true;
+                    continue;
+                }
+
+                if (!string.Equals(ids[index], normalized, StringComparison.Ordinal))
+                {
+                    ids[index] = normalized;
+                    changed = true;
+                }
+            }
+            return changed;
         }
 
         private static bool NormalizeTransportInventory(PlayerSaveData player)

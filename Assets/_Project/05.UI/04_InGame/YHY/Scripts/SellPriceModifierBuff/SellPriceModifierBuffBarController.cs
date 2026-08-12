@@ -1,9 +1,17 @@
+using System;
 using ND.Economy;
 using ND.Framework;
 using UnityEngine;
 
 namespace ND.UI.InGame.SellPriceModifierBuff
 {
+    public enum SellPriceModifierBuffKind
+    {
+        Season,
+        Distance,
+        LuckyMoney
+    }
+
     public sealed class SellPriceModifierBuffBarController : MonoBehaviour
     {
         [Header("Data")]
@@ -25,6 +33,8 @@ namespace ND.UI.InGame.SellPriceModifierBuff
         [SerializeField] private Sprite luckyMoneySprite;
 
         private SellPriceModifierBuffView activeView;
+
+        public event Action<SellPriceModifierBuffKind> BuffInspected;
 
         public void ConfigureReferences(
             SellPriceModifierBuffView season,
@@ -62,6 +72,13 @@ namespace ND.UI.InGame.SellPriceModifierBuff
         {
             if (view == null || view != activeView) return;
             tooltip?.ToggleDetail();
+
+            if (view == seasonBuff)
+                BuffInspected?.Invoke(SellPriceModifierBuffKind.Season);
+            else if (view == distanceBuff)
+                BuffInspected?.Invoke(SellPriceModifierBuffKind.Distance);
+            else if (view == luckyMoneyBuff)
+                BuffInspected?.Invoke(SellPriceModifierBuffKind.LuckyMoney);
         }
 
         public void Close(SellPriceModifierBuffView view)

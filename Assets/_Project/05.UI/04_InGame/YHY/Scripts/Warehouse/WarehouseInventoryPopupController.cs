@@ -14,6 +14,9 @@ namespace ND.UI.InGame.Warehouse
     /// </summary>
     public sealed class WarehouseInventoryPopupController : MonoBehaviour
     {
+        public event Action Opened;
+        public event Action<WarehouseTransferDirection> TransferSucceeded;
+
         [Header("Warehouse-only prefabs")]
         [SerializeField] private GameObject inventorySlotPrefab;
         [SerializeField] private GameObject caravanSlotPrefab;
@@ -118,6 +121,7 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
             gameObject.SetActive(true);
             ResetTransientState();
             RefreshAll();
+            Opened?.Invoke();
             return true;
         }
 
@@ -580,7 +584,10 @@ FrameworkEvents.CaravanCargoChanged -= OnCaravanCargoChanged;
 
             CloseSelection();
             if (succeeded)
+            {
                 RefreshAll();
+                TransferSucceeded?.Invoke(request.Direction);
+            }
             else
                 ShowFailure(failure);
         }

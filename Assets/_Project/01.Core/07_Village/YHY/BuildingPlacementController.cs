@@ -30,8 +30,6 @@ public class BuildingPlacementController : MonoBehaviour,
 
     /// <summary>외부 저장/종료 UI가 현재 편집 상태를 표시하고 버튼 상태를 갱신할 때 조회한다.</summary>
     public bool IsEditMode => editMode;
-
-    /// <summary>편집 모드 진입(true)/종료(false) 시 발생. 리스트 재정렬 UI 등이 구독해 편집 도구를 표시한다.</summary>
     public event System.Action<bool> EditModeChanged;
 
     /// <summary>
@@ -45,6 +43,9 @@ public class BuildingPlacementController : MonoBehaviour,
     /// </summary>
     public void EnterEditMode()
     {
+        if (editMode)
+            return;
+
         editMode = true;
         EditModeChanged?.Invoke(true);
     }
@@ -56,6 +57,9 @@ public class BuildingPlacementController : MonoBehaviour,
     public void ExitEditMode()
     {
         CancelPlacementSelection();
+        if (!editMode)
+            return;
+
         editMode = false;
         EditModeChanged?.Invoke(false);
     }

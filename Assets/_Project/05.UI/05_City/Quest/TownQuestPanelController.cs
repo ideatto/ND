@@ -71,6 +71,13 @@ namespace ND.UI.Quest
         private TownQuestCaravanView selectedCaravan;
         private string currentTownId = string.Empty;
 
+        public event Action QuestMenuOpened;
+        public event Action QuestMenuClosed;
+        public event Action<string, int> QuestCaravanContextSelected;
+        public event Action<string, TownQuestPanelKind> QuestPanelChanged;
+        public event Action<string> QuestAccepted;
+        public event Action<string> PaymentCaravanSelected;
+
         private void Awake()
         {
             SetAllPanels(false);
@@ -120,6 +127,7 @@ namespace ND.UI.Quest
 
         public void OpenTownQuestList(string townId)
         {
+            QuestMenuOpened?.Invoke();
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
             if (!TryBindBridge() || string.IsNullOrWhiteSpace(townId))
@@ -136,6 +144,7 @@ namespace ND.UI.Quest
 
         public void OpenCaravanSelection()
         {
+            QuestMenuOpened?.Invoke();
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
             if (!TryBindBridge())
@@ -251,6 +260,7 @@ namespace ND.UI.Quest
                 questListContextText,
                 $"{NormalizeCaravanDisplayName(caravanDisplayName, slotIndex)}  /  {currentTownId}");
             bridge?.RequestTownQuestList(currentTownId);
+            QuestCaravanContextSelected?.Invoke(currentTownId, slotIndex);
         }
 
         // Rename 결과를 모든 퀘스트 화면에서 사용하고, 구버전 저장 데이터만 슬롯 기본명으로 보완한다.
@@ -272,12 +282,14 @@ namespace ND.UI.Quest
         {
             if (result == null || result.PanelKind == TownQuestPanelKind.None)
             {
+                QuestPanelChanged?.Invoke(string.Empty, TownQuestPanelKind.None);
                 CloseDetailPanels();
                 return;
             }
 
             currentQuest = result.Quest;
             selectedCaravan = null;
+            QuestPanelChanged?.Invoke(currentQuest?.QuestId ?? string.Empty, result.PanelKind);
             SetActive(offerPanel, result.PanelKind == TownQuestPanelKind.Offer);
             SetActive(progressPanel, result.PanelKind == TownQuestPanelKind.Progress);
             SetActive(paymentPanel, result.PanelKind == TownQuestPanelKind.Payment);
@@ -328,6 +340,7 @@ namespace ND.UI.Quest
         private void SelectCaravan(TownQuestCaravanView caravan)
         {
             selectedCaravan = caravan;
+            PaymentCaravanSelected?.Invoke(caravan?.CaravanId ?? string.Empty);
             SetText(selectedCaravanText,
                 $"선택: {caravan.DisplayName}");
             SetText(paymentErrorText, string.Empty);
@@ -353,7 +366,14 @@ namespace ND.UI.Quest
 
         private void AcceptQuest()
         {
+            string questId = currentQuest?.QuestId ?? string.Empty;
             QuestMutationResult result = bridge?.AcceptOpenQuest();
+            if (result != null && result.Succeeded)
+            {
+                QuestAccepted?.Invoke(questId);
+                return;
+            }
+
             if (result == null || !result.Succeeded)
                 SetText(offerConditionText, "퀘스트 수락 저장에 실패했습니다.");
         }
@@ -496,6 +516,7 @@ namespace ND.UI.Quest
             SetActive(caravanSelectionPanel, false);
             SetActive(listPanel, false);
             currentTownId = string.Empty;
+            QuestMenuClosed?.Invoke();
             gameObject.SetActive(false);
         }
     }

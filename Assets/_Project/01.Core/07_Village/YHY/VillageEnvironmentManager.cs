@@ -18,6 +18,7 @@
 // [주의] 건물 팝업 이벤트는 재현님 핸들러도 함께 구독하므로, 그쪽은 환경 buildId를 early-return으로 건너뛴다.
 // =============================================================================
 
+using System;
 using UnityEngine;
 using ND.Framework;
 
@@ -25,6 +26,7 @@ using ND.Framework;
 public sealed class VillageEnvironmentManager : MonoBehaviour
 {
     public static VillageEnvironmentManager Instance { get; private set; }
+    public event Action<string, long> EnvironmentInstalled;
 
     [Tooltip("건물추가 팝업 바인딩(BuildConfirmed 구독). 비면 런타임 탐색.")]
     [SerializeField] private BuildingPopupRuntimeBinding popupBinding;
@@ -136,6 +138,10 @@ public sealed class VillageEnvironmentManager : MonoBehaviour
         }
 
         // 6) 신축 성공 → 편집모드로 전환하고 방금 설치한 것을 선택(위치는 이미 화면 중앙).
+        // 저장까지 확정된 재화 변경만 공용 구독자(구조 대출 UI 등)에 알린다.
+        FrameworkEvents.RaiseTradingCurrencyChanged(player.Gold);
+
+        EnvironmentInstalled?.Invoke(buildId, cost);
         controller.EnterEditModeAndSelect(placeable.transform);
     }
 
