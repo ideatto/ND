@@ -1247,6 +1247,26 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             TMP_Text quantity = FindDeepChild(loadedSlots[i], "QuantityText")?.GetComponent<TMP_Text>();
             TMP_Text foodBadge = FindDeepChild(loadedSlots[i], "FoodBadge")?.GetComponent<TMP_Text>();
 
+            // Three-digit stack counts must stay on one line even when an assembled UI still
+            // contains an older, narrower LoadedItemSlot instance.
+            if (quantity != null)
+            {
+                quantity.textWrappingMode = TextWrappingModes.NoWrap;
+                RectTransform quantityRect = quantity.rectTransform;
+                if (quantityRect.sizeDelta.x < 56f)
+                    quantityRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 56f);
+            }
+
+            // Detached cargo presentation uses FoodBadge as its quantity label. Keep that
+            // alternate label wide and unwrapped as well, otherwise 100 is rendered as 10 / 0.
+            if (foodBadge != null)
+            {
+                foodBadge.textWrappingMode = TextWrappingModes.NoWrap;
+                RectTransform badgeRect = foodBadge.rectTransform;
+                if (badgeRect.sizeDelta.x < 56f)
+                    badgeRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 56f);
+            }
+
             if (icon != null)
             {
                 icon.enabled = hasLine;
