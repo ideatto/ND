@@ -17,29 +17,17 @@ MonoBehaviour:
   presentationVersion: 1
   introDialogue:
   - npcName: "\uC548\uB0B4\uC778"
-    message: "\uC774\uC81C \uAC74\uBB3C\uC744 \uC6C0\uC9C1\uC774\uB294 \uBC29\uBC95\uC744
-      \uC54C\uB824\uB4DC\uB9B4\uAC8C\uC694."
+    message: "\uC774\uC81C \uAC74\uBB3C \uD3B8\uC9D1 \uBAA8\uB4DC\uB97C \uD0A4\uACE0
+      \uB044\uB294 \uBC29\uBC95\uC744 \uC54C\uB824\uB4DC\uB9AC\uACA0\uC2B5\uB2C8\uB2E4\uC545"
     emotion: 0
     npcSprite: {fileID: 0}
     illustrationSprite: {fileID: 0}
   - npcName: "\uC548\uB0B4\uC778"
-    message: "\uAC74\uBB3C\uC744 \uAFB9 \uB204\uB974\uACE0 \uB2F9\uACA8\uC11C \uC6D0\uD558\uB294
-      \uC9C0\uC5ED\uC5D0 \uB193\uC73C\uBA74 \uD574\uB2F9 \uAC74\uBB3C\uC774 \uC774\uB3D9\uD574\uC694."
+    message: "\uC5EC\uAE30 \uAC15\uC870\uB41C \uBD80\uBD84\uC744 \uB204\uB97C \uB54C
+      \uD3B8\uC9D1\uBAA8\uB4DC\uAC00 \uAEBC\uC9C0\uAC70\uB098 \uCF1C\uC9D1\uB2C8\uB2E4\uC545"
     emotion: 0
     npcSprite: {fileID: 0}
-    illustrationSprite: {fileID: 0}
-  - npcName: "\uC548\uB0B4\uC778"
-    message: "\uC591 \uC606\uC5D0 \uC788\uB294 \uD654\uC0B4\uD45C\uB97C \uB20C\uB7EC\uC11C
-      \uAC74\uBB3C\uC758 \uAC01\uB3C4\uB97C \uB3CC\uB9B4 \uC218 \uC788\uC5B4\uC694."
-    emotion: 0
-    npcSprite: {fileID: 0}
-    illustrationSprite: {fileID: 0}
-  - npcName: "\uC548\uB0B4\uC778"
-    message: "\uD3B8\uC9D1\uC744 \uC644\uB8CC\uD558\uBA74 \uC9C0\uAE08 \uC5EC\uAE30\uC5D0
-      \uD328\uB110 \uBC84\uD2BC\uC744 \uB204\uB974\uC2DC\uBA74 \uB418\uC694."
-    emotion: 0
-    npcSprite: {fileID: 0}
-    illustrationSprite: {fileID: 0}
+    illustrationSprite: {fileID: 21300000, guid: 5781810560a708c41a230dc4dac2dfbf, type: 3}
   failureDialogue: []
   steps:
   - stepId: enter_edit_mode
@@ -48,13 +36,13 @@ MonoBehaviour:
     label: "\uD3B8\uC9D1\uC744 \uC644\uB8CC\uD558\uC138\uC694"
   completionDialogue:
   - npcName: "\uC548\uB0B4\uC778"
-    message: "\uAC74\uBB3C \uD3B8\uC9D1\uC744 \uC644\uB8CC\uD588\uC5B4\uC694!"
+    message: "\uAC74\uBB3C \uD3B8\uC9D1\uC744 \uC644\uB8CC\uD588\uC2B5\uB2C8\uB2E4\uC545"
     emotion: 1
     npcSprite: {fileID: 0}
     illustrationSprite: {fileID: 0}
   - npcName: "\uC548\uB0B4\uC778"
     message: "\uADF8\uB7EC\uBA74 \uC774\uC5B4\uC11C \uB9C8\uC744\uC744 \uC880 \uB354
-      \uAFB8\uBA70\uBCFC\uAE4C\uC694?"
+      \uAFB8\uBA70\uBD05\uC2DC\uB2E4\uC545"
     emotion: 1
     npcSprite: {fileID: 0}
     illustrationSprite: {fileID: 0}

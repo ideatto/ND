@@ -18,17 +18,4 @@ MonoBehaviour:
   introDialogue: []
   failureDialogue: []
   steps: []
-  completionDialogue:
-  - npcName: "\uC548\uB0B4\uC778"
-    message: "\uD018\uC2A4\uD2B8\uB97C \uC131\uACF5\uC801\uC73C\uB85C \uD574\uACB0\uD588\uC5B4\uC694!"
-    emotion: 1
-    npcSprite: {fileID: 0}
-    illustrationSprite: {fileID: 0}
-  - npcName: "\uC548\uB0B4\uC778"
-    message: "\uD018\uC2A4\uD2B8\uC5D0 \uBCF4\uC0C1\uC5D0\uB294 \uC0B0\uC801\uC774
-      \uB098\uD0C0\uB0A0 \uC704\uD611 \uAC10\uC18C\uC640 \uD2B9\uC0B0\uD488 \uD574\uAE08
-      \uBC0F \uBB34\uC5ED\uB85C \uAE4C\uC9C0 \uC5F4\uB9AC\uB2C8 \uAF2D \uD574\uACB0\uD558\uB294
-      \uD3B8\uC774 \uC88B\uACA0\uC8E0?"
-    emotion: 1
-    npcSprite: {fileID: 0}
-    illustrationSprite: {fileID: 0}
+  completionDialogue: []
