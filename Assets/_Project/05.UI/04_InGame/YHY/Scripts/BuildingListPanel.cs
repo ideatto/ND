@@ -15,6 +15,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using ND.Framework;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -35,6 +37,8 @@ public class BuildingListPanel : MonoBehaviour
         new Dictionary<string, GameObject>(StringComparer.Ordinal);
     [SerializeField] private BuildingAddPopup addPopup;   // [+] 가 여는 건물 추가 팝업
     [SerializeField] private Button rowTemplate;          // [편집형] 행 템플릿(지정 시 복제, 없으면 코드 생성)
+    [SerializeField] private BuildingPlacementController placementController; // 편집 모드 신호원(비면 런타임 탐색)
+    private bool reorderMode;   // 편집 모드 = 리스트 순서 변경 가능(행에 ▲▼ 버튼 표시)
 
     /// <summary>
     /// 동적으로 생성된 건물 블록이 선택된 뒤 표시 이름을 전달한다.
@@ -62,8 +66,31 @@ public class BuildingListPanel : MonoBehaviour
             timeout -= Time.deltaTime;
             yield return null;
         }
+
+        // 편집 모드 신호원 연결(비면 씬에서 탐색). 편집 진입/종료 시 재정렬 버튼을 켜고 끈다.
+        if (placementController == null)
+            placementController = FindAnyObjectByType<BuildingPlacementController>(FindObjectsInactive.Include);
+        if (placementController != null)
+        {
+            reorderMode = placementController.IsEditMode;
+            placementController.EditModeChanged += OnEditModeChanged;
+        }
+
         if (VillageBuildingRegistry.Instance != null)
             Rebuild();
+    }
+
+    private void OnDestroy()
+    {
+        if (placementController != null)
+            placementController.EditModeChanged -= OnEditModeChanged;
+    }
+
+    // 편집 모드 토글 시: 행에 ▲▼ 재정렬 버튼을 붙이거나 떼기 위해 다시 그린다.
+    private void OnEditModeChanged(bool editing)
+    {
+        reorderMode = editing;
+        Rebuild();
     }
 
     /// <summary>Registry의 현재 건물 상태를 기준으로 리스트를 처음부터 다시 만든다.</summary>
@@ -84,20 +111,33 @@ public void Rebuild()
         VillageBuildingRegistry reg = VillageBuildingRegistry.Instance;
         if (reg == null) return;
 
+        // 표시 순서 = 저장된 villageBuildings 순서(그 목록에서의 위치로 정렬, 없으면 뒤로).
+        //   OrderBy는 안정 정렬이라 동순위(미등록)는 레지스트리 순서를 유지한다.
+        List<string> savedOrder = GetSavedOrder();
+        List<BuildingEntry> entries = new List<BuildingEntry>();
         for (int i = 0; i < reg.Count; i++)
+            entries.Add(new BuildingEntry(reg.GetName(i), reg.GetLevel(i), i));
+        entries = entries.OrderBy(e => OrderIndex(savedOrder, e.Name)).ToList();
+
+        for (int e = 0; e < entries.Count; e++)
         {
-            int idx = i;
-            string buildingName = reg.GetName(i);
+            BuildingEntry entry = entries[e];
+            int regIdx = entry.RegIndex;         // 하이라이트는 원래 레지스트리 인덱스로(표시 순서와 무관)
+            string buildingName = entry.Name;
             Button item = CreateRow(
-                $"{buildingName}  Lv.{reg.GetLevel(i)}",
+                $"{buildingName}  Lv.{entry.Level}",
                 new Color(0.76f, 0.77f, 0.73f));
             rowsByBuildingName[buildingName] = item;
             item.onClick.AddListener(() =>
             {
                 // 기존 하이라이트는 유지하고 추가 기능은 건물 이름 이벤트를 구독한 연결부에 위임한다.
-                reg.Highlight(idx);
+                reg.Highlight(regIdx);
                 BuildingClicked?.Invoke(buildingName);
             });
+
+            // 편집 모드면 행 오른쪽에 ▲▼ 재정렬 버튼(맨 위=▲비활성, 맨 아래=▼비활성).
+            if (reorderMode)
+                AddReorderButtons(item.transform, buildingName, e == 0, e == entries.Count - 1);
         }
 
         Button addBtn = CreateRow("+", new Color(0.6f, 0.7f, 0.55f));
@@ -150,6 +190,100 @@ public void Rebuild()
 
         public Sprite Icon { get; }
         public bool Visible { get; }
+    }
+
+    // 표시 순서 정렬용 임시 항목(이름·레벨·원래 레지스트리 인덱스).
+    private readonly struct BuildingEntry
+    {
+        public BuildingEntry(string name, int level, int regIndex)
+        {
+            Name = name;
+            Level = level;
+            RegIndex = regIndex;
+        }
+
+        public string Name { get; }
+        public int Level { get; }
+        public int RegIndex { get; }
+    }
+
+    /// <summary>저장된 표시 순서(villageBuildings의 displayName 순서). 없으면 빈 목록.</summary>
+    private static List<string> GetSavedOrder()
+    {
+        List<string> names = new List<string>();
+        List<VillageBuildingSaveData> list = FrameworkRoot.Instance?.CurrentSaveData?.player?.villageBuildings;
+        if (list != null)
+            foreach (VillageBuildingSaveData b in list)
+                if (b != null && !string.IsNullOrEmpty(b.displayName)) names.Add(b.displayName);
+        return names;
+    }
+
+    // 저장 순서에서의 위치(없으면 맨 뒤). 안정 정렬과 함께 써서 미등록 항목은 레지스트리 순서 유지.
+    private static int OrderIndex(List<string> order, string name)
+    {
+        int i = order.IndexOf(name);
+        return i < 0 ? int.MaxValue : i;
+    }
+
+    /// <summary>건물을 저장 순서(villageBuildings)에서 delta칸 이동 → 저장 → 다시 그린다.</summary>
+    private void MoveBuilding(string buildingName, int delta)
+    {
+        FrameworkRoot root = FrameworkRoot.Instance;
+        List<VillageBuildingSaveData> list = root?.CurrentSaveData?.player?.villageBuildings;
+        if (list == null) return;
+
+        int idx = list.FindIndex(b => b != null && string.Equals(b.displayName, buildingName, StringComparison.Ordinal));
+        int target = idx + delta;
+        if (idx < 0 || target < 0 || target >= list.Count) return;   // 경계 밖이면 무시
+
+        VillageBuildingSaveData tmp = list[idx];   // 인접 항목과 swap
+        list[idx] = list[target];
+        list[target] = tmp;
+
+        root.SaveService?.Save(root.CurrentSaveData);   // 순서 영구 저장
+        Rebuild();
+    }
+
+    /// <summary>행 오른쪽에 위/아래 이동 버튼을 붙인다(편집 모드 전용). 경계 방향은 비활성.</summary>
+    private void AddReorderButtons(Transform row, string buildingName, bool isFirst, bool isLast)
+    {
+        GameObject holder = new GameObject("ReorderButtons", typeof(RectTransform));
+        holder.transform.SetParent(row, false);
+        RectTransform hr = holder.GetComponent<RectTransform>();
+        hr.anchorMin = new Vector2(1f, 0f);
+        hr.anchorMax = new Vector2(1f, 1f);
+        hr.pivot = new Vector2(1f, 0.5f);
+        hr.sizeDelta = new Vector2(46f, 0f);
+        hr.anchoredPosition = new Vector2(-6f, 0f);
+
+        CreateArrowButton(holder.transform, "▲", new Vector2(0.5f, 0.72f), !isFirst, () => MoveBuilding(buildingName, -1));
+        CreateArrowButton(holder.transform, "▼", new Vector2(0.5f, 0.28f), !isLast, () => MoveBuilding(buildingName, +1));
+    }
+
+    private void CreateArrowButton(Transform parent, string label, Vector2 anchor, bool enabled, UnityEngine.Events.UnityAction onClick)
+    {
+        GameObject b = new GameObject("Arrow", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        b.transform.SetParent(parent, false);
+        RectTransform r = b.GetComponent<RectTransform>();
+        r.anchorMin = anchor; r.anchorMax = anchor; r.pivot = new Vector2(0.5f, 0.5f);
+        r.sizeDelta = new Vector2(40f, 24f); r.anchoredPosition = Vector2.zero;
+
+        Image img = b.GetComponent<Image>();
+        img.color = new Color(0.902f, 0.757f, 0.439f, 1f);   // 금색 톤(UI 팔레트)
+        Button btn = b.GetComponent<Button>();
+        btn.targetGraphic = img;
+        btn.interactable = enabled;
+        btn.onClick.AddListener(onClick);
+
+        GameObject lgo = new GameObject("T", typeof(RectTransform));
+        lgo.transform.SetParent(b.transform, false);
+        RectTransform lr = lgo.GetComponent<RectTransform>();
+        lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one; lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
+        TextMeshProUGUI t = lgo.AddComponent<TextMeshProUGUI>();
+        t.font = font; t.text = label; t.fontSize = 20f;
+        t.alignment = TextAlignmentOptions.Center;
+        t.color = new Color(0.2f, 0.2f, 0.2f);
+        t.raycastTarget = false;
     }
 
     /// <summary>리스트 한 줄(버튼+라벨) 생성. VerticalLayoutGroup이 배치.</summary>

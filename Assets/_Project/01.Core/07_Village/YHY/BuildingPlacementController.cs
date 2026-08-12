@@ -31,6 +31,9 @@ public class BuildingPlacementController : MonoBehaviour,
     /// <summary>외부 저장/종료 UI가 현재 편집 상태를 표시하고 버튼 상태를 갱신할 때 조회한다.</summary>
     public bool IsEditMode => editMode;
 
+    /// <summary>편집 모드 진입(true)/종료(false) 시 발생. 리스트 재정렬 UI 등이 구독해 편집 도구를 표시한다.</summary>
+    public event System.Action<bool> EditModeChanged;
+
     /// <summary>
     /// 일반(비편집) 모드에서 건물을 클릭했을 때, 그 건물 종류(카탈로그 displayName)로 발생한다.
     /// VillageBuildingActionRouter가 구독해 건물별 패널(창고→인벤토리 등)을 연다.
@@ -43,6 +46,7 @@ public class BuildingPlacementController : MonoBehaviour,
     public void EnterEditMode()
     {
         editMode = true;
+        EditModeChanged?.Invoke(true);
     }
 
     /// <summary>
@@ -53,6 +57,7 @@ public class BuildingPlacementController : MonoBehaviour,
     {
         CancelPlacementSelection();
         editMode = false;
+        EditModeChanged?.Invoke(false);
     }
 
     [SerializeField] private RawImage view;            // RT를 그리는 RawImage(비면 자기 자신)
