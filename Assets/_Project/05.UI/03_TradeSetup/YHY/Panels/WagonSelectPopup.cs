@@ -9,6 +9,7 @@ public class WagonSelectPopup : MonoBehaviour
 {
     [Header("목록")]
     [SerializeField] private Transform listContainer;
+    [SerializeField] private ScrollRect listScrollRect;
     [SerializeField] private Button buttonPrefab;
     [SerializeField] private WagonInstanceRowView instanceRowPrefab;
 
@@ -36,8 +37,12 @@ public class WagonSelectPopup : MonoBehaviour
     {
         EnsureWired();
         onSelect = selectCallback;
-        Rebuild(wagons, null);
+        // Activate before rebuilding so layout components include every pooled row in the
+        // content height. Rebuilding under an inactive popup can leave the final row outside
+        // ScrollRect's cached bounds until another layout pass happens.
         gameObject.SetActive(true);
+        Rebuild(wagons, null);
+        RefreshScrollLayout(true);
     }
 
     private void Rebuild(IReadOnlyList<TransportSelectPanel.TransportEntry> wagons,
@@ -74,6 +79,17 @@ public class WagonSelectPopup : MonoBehaviour
             string.Equals(expandedContentId, contentId, StringComparison.Ordinal)
                 ? null
                 : contentId);
+        RefreshScrollLayout(false);
+    }
+
+    private void RefreshScrollLayout(bool moveToTop)
+    {
+        if (listContainer is RectTransform content)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+        Canvas.ForceUpdateCanvases();
+
+        if (moveToTop && listScrollRect != null)
+            listScrollRect.verticalNormalizedPosition = 1f;
     }
 
     private Button GetHeader(string label)

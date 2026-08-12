@@ -27,4 +27,10 @@ MonoBehaviour:
     footprintCellsX: 1
     footprintCellsZ: 1
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: SyntheticWood
+        quantity: 10
+      - itemId: Silk
+        quantity: 20
+      - itemId: MagicStone
+        quantity: 4

@@ -6,6 +6,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.U2D.Sprites;
 using UnityEngine;
+using UnityEngine.UI;
 
 internal static class TradeSettlementPrefabGenerator
 {
@@ -126,6 +127,7 @@ internal static class TradeSettlementPrefabGenerator
             SetObjectReference(controller, "receiptBackgroundSprite", receiptSprite);
             SetObjectReference(controller, "uiFont", uiFont);
             InvokeBuildView(controller);
+            SetObjectReference(controller, "settlementScrollRect", root.GetComponentInChildren<ScrollRect>(true));
             root.SetActive(false);
             PrefabUtility.SaveAsPrefabAsset(root, SettlementPrefabPath);
         }

@@ -70,11 +70,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Market.CaravanArrivalSaleController
   marketPanel: {fileID: 1633589682794510387}
   marketCatalog:
-  - {fileID: 11400000, guid: 53ff6f350e87d224aac61db15be826f9, type: 2}
   - {fileID: 11400000, guid: 2c96b46f441c50c41af162d300042fdf, type: 2}
   - {fileID: 11400000, guid: 3f9e7b158e821a448ac5b0531b807095, type: 2}
   - {fileID: 11400000, guid: 24facdcdcd1273e4a901c56ee267a402, type: 2}
   - {fileID: 11400000, guid: 339c690cf763c7344b2b1e65b2277910, type: 2}
+  - {fileID: 11400000, guid: e6255a363300fd441a5ba189a22af8a2, type: 2}
+  - {fileID: 11400000, guid: f246cfb292b6bc64e850f9036f17d9b8, type: 2}
+  - {fileID: 11400000, guid: 797081c929888224f8f6b1019052f3db, type: 2}
+  - {fileID: 11400000, guid: 4d98318228db09a4c9eaade1455cb1e4, type: 2}
 --- !u!114 &7954224673043205460
 MonoBehaviour:
   m_ObjectHideFlags: 0

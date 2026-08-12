@@ -19,8 +19,8 @@ MonoBehaviour:
     \uC99D\uAC00\uB2C8\uB2E4. \uBD04 \uACA8\uC6B8\uC5D0\uB294 \uBE44\uC309\uB2C8\uB2E4."
   rarity: 1
   category: 0
-  baseBuyPrice: 30
-  baseSellPrice: 30
+  baseBuyPrice: 25
+  baseSellPrice: 25
   canStack: 1
   maxCount: 10
   weight: 1

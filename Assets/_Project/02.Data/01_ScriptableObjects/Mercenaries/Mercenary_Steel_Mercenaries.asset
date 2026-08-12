@@ -15,7 +15,8 @@ MonoBehaviour:
   mercenaryId: SteelMercenariesMercenary
   displayName: "\uAC15\uCCA0 \uC6A9\uBCC0\uB2E8"
   icon: {fileID: 21300000, guid: 50911d80b5967574b831f6a43e65e4cb, type: 3}
-  description: 
+  description: "\uAC15\uCCA0\uB85C \uBAB8\uC744 \uB458\uB7EC\uC2FC, \uB6F0\uC5B4\uB09C
+    \uC804\uD22C\uB825\uC744 \uC790\uB791\uD558\uB294 \uAC15\uCCA0\uC6A9\uBCD1\uB2E8\uC774\uB2E4."
   rarity: 0
   baseBuyPrice: 400
   combatCapability: 40

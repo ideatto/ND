@@ -36,6 +36,36 @@ public sealed class CaravanSettingApplicationServiceTests
     }
 
     [Test]
+    public void GetLoadSetting_CargoOutsideCurrentMarket_UsesSharedCatalogPresentation()
+    {
+        FrameworkSaveData save = CreateSave();
+        save.caravans[0].cargo.Add(new CargoEntrySaveData
+        {
+            item = new TradeItemSaveData
+            {
+                itemId = "cabbage",
+                itemName = "stale saved name",
+                weight = 0.25f,
+                purchaseUnitPrice = 20,
+                basePrice = 20,
+                maxCount = 40
+            },
+            quantity = 5
+        });
+
+        CaravanLoadSettingViewData result = CreateService(
+            save,
+            new RecordingSaveService(true)).GetLoadSetting("caravan-a");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.plannedItems.Length, Is.EqualTo(1));
+        Assert.That(result.plannedItems[0].itemId, Is.EqualTo("cabbage"));
+        Assert.That(result.plannedItems[0].displayName, Is.EqualTo("Cabbage"));
+        Assert.That(result.plannedItems[0].unitWeight, Is.EqualTo(0.5f));
+        Assert.That(result.plannedItems[0].purchaseUnitPrice, Is.EqualTo(20));
+    }
+
+    [Test]
     public void ExecuteSetting_ReordersAssignedAnimalsAndPersistsOnce()
     {
         FrameworkSaveData save = CreateSave();
@@ -398,6 +428,15 @@ public sealed class CaravanSettingApplicationServiceTests
                     BaseBuyPrice = 100,
                     BaseSellPrice = 80,
                     MaxCount = 20
+                },
+                ["cabbage"] = new SharedTradeItemDefinition
+                {
+                    Id = "cabbage",
+                    DisplayName = "Cabbage",
+                    Weight = 0.5f,
+                    BaseBuyPrice = 20,
+                    BaseSellPrice = 20,
+                    MaxCount = 40
                 }
             },
             new Dictionary<string, SharedWagonDefinition>

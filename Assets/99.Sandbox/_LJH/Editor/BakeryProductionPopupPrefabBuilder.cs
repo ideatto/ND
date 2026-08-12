@@ -60,8 +60,9 @@ public static class BakeryProductionPopupPrefabBuilder
             new Vector2(-122.5f, -254), new Vector2(12.5f, -222), new Vector2(.5f, 1f));
         TextMeshProUGUI amount = Text("StoredAmountText", card.transform, "0 / 5", 23,
             Vector2.zero, Vector2.zero, TextAlignmentOptions.Right);
+        amount.textWrappingMode = TextWrappingModes.NoWrap;
         SetRect(amount.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-            new Vector2(30, -254), new Vector2(100, -222), new Vector2(.5f, 1f));
+            new Vector2(0, -254), new Vector2(100, -222), new Vector2(.5f, 1f));
         TextMeshProUGUI remaining = Text("RemainingTimeText", card.transform,
             "다음 생산까지 01:00", 21, Vector2.zero, Vector2.zero, TextAlignmentOptions.Center);
         SetRect(remaining.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),

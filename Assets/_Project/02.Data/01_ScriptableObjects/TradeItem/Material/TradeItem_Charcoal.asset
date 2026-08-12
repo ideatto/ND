@@ -22,7 +22,7 @@ MonoBehaviour:
   baseSellPrice: 70
   canStack: 1
   maxCount: 5
-  weight: 5
+  weight: 3
   isConsumable: 0
   affectModify: 1
   modifiers: []

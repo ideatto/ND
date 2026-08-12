@@ -309,20 +309,36 @@ namespace ND.Framework
         private CargoItemViewData[] BuildCargo(CaravanSaveData caravan, CaravanMarketCatalogSnapshot catalog)
         {
             CaravanSavedCargoSnapshot snapshot = savedCargo.CreateSnapshot(caravan);
+            ISharedGameDataProvider shared = getSharedGameData();
             var result = new CargoItemViewData[snapshot.Items.Count];
             for (int i = 0; i < result.Length; i++)
             {
                 CaravanSavedCargoItem item = snapshot.Items[i];
                 CaravanMarketCatalogItem marketItem = null;
                 catalog?.TryGetItem(item.ItemId, out marketItem);
+                SharedTradeItemDefinition sharedItem = null;
+                if (shared != null && shared.IsLoaded)
+                    shared.TryGetTradeItem(item.ItemId, out sharedItem);
                 TradeItemData asset = resolveTradeItemAsset?.Invoke(item.ItemId);
                 TradeItemSaveData savedItem = item.SavedItem ?? new TradeItemSaveData();
-                float unitWeight = marketItem?.Definition?.Weight ?? savedItem.weight;
+
+                // Cargo may contain an item that the current town does not sell. Resolve its
+                // presentation from the complete shared catalog before falling back to the
+                // scene asset table or persisted text. Purchase history remains SaveData-owned.
+                float unitWeight = sharedItem?.Weight
+                    ?? marketItem?.Definition?.Weight
+                    ?? savedItem.weight;
                 result[i] = new CargoItemViewData
                 {
                     itemId = item.ItemId,
-                    displayName = asset != null ? asset.DisplayName : marketItem?.Definition?.DisplayName ?? savedItem.itemName,
-                    icon = asset != null ? asset.Icon : marketItem?.Definition?.Icon,
+                    displayName = sharedItem?.DisplayName
+                        ?? (asset != null ? asset.DisplayName : null)
+                        ?? marketItem?.Definition?.DisplayName
+                        ?? savedItem.itemName
+                        ?? item.ItemId,
+                    icon = sharedItem?.Icon
+                        ?? (asset != null ? asset.Icon : null)
+                        ?? marketItem?.Definition?.Icon,
                     quantity = item.Quantity,
                     unitWeight = unitWeight,
                     totalWeight = unitWeight * item.Quantity,

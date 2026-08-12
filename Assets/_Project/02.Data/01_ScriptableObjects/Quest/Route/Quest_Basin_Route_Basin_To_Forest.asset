@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d717a7cb6b02a74daeed2c7319d2e61, type: 3}
-  m_Name: Quest_EastRiver_Route_Basin_To_Forest
+  m_Name: Quest_Basin_Route_Basin_To_Forest
   m_EditorClassIdentifier: Assembly-CSharp::QuestData
   questId: EastRiver_Route_Basin_To_Forest
   questName: "\uBD84\uC9C0\uB9C8\uC744\uACFC \uC232\uC18D\uB9C8\uC744 \uBB34\uC5ED\uB85C
@@ -21,13 +21,13 @@ MonoBehaviour:
   repeatPolicy: 0
   questRegenSeconds: 0
   paymentPolicy: 1
-  submissionTownId: EastRiverTown
+  submissionTownId: BasinTown
   requiredTradingCurrency: 0
   requiredItems:
   - itemId: PlateArmor
     quantity: 2
-  - itemId: MagicStone
-    quantity: 2
+  - itemId: Fish
+    quantity: 10
   rewards:
   - rewardType: 3
     value: 1

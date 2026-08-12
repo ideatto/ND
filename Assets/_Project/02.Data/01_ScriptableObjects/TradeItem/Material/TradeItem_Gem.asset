@@ -24,7 +24,7 @@ MonoBehaviour:
   baseSellPrice: 650
   canStack: 0
   maxCount: 1
-  weight: 0
+  weight: 0.1
   isConsumable: 0
   affectModify: 1
   modifiers: []

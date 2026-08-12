@@ -27,7 +27,7 @@ MonoBehaviour:
     quantity: 1
   - itemId: Honey
     quantity: 1
-  - itemId: Fish
+  - itemId: SmokedMeat
     quantity: 1
   rewards:
   - rewardType: 1

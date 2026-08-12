@@ -24,7 +24,7 @@ MonoBehaviour:
   submissionTownId: MountTown
   requiredTradingCurrency: 0
   requiredItems:
-  - itemId: Cheese
+  - itemId: Cloth
     quantity: 10
   rewards:
   - rewardType: 3

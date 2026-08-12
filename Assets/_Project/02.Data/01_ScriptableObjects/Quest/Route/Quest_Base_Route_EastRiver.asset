@@ -15,8 +15,8 @@ MonoBehaviour:
   questId: Base_Route_EastRiver
   questName: "\uB3D9\uCABD \uAC15\uAC00\uB9C8\uC744 \uD574\uAE08"
   description: "\uD1B5\uB098\uBB34 10\uAC1C\uC640 \uBB3C\uACE0\uAE30 10\uAC1C\uB97C
-    \uAC00\uC838\uC624\uBA74 \uB3D9\uCABD\uB9C8\uC744\uB85C \uD5A5\uD558\uB294 \uBB34\uC5ED\uB85C\uAC00
-    \uD574\uAE08\uB429\uB2C8\uB2E4. "
+    \uAC00\uC838\uC624\uBA74 \uB3D9\uCABD \uAC15\uB9C8\uC744\uB85C \uD5A5\uD558\uB294
+    \uBB34\uC5ED\uB85C\uAC00 \uD574\uAE08\uB429\uB2C8\uB2E4. "
   type: 2
   repeatPolicy: 0
   questRegenSeconds: 0
@@ -25,7 +25,7 @@ MonoBehaviour:
   requiredTradingCurrency: 0
   requiredItems:
   - itemId: Logs
-    quantity: 10
+    quantity: 3
   - itemId: Fish
     quantity: 10
   rewards:

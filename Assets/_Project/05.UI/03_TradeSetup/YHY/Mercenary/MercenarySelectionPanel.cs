@@ -62,11 +62,13 @@ public sealed class MercenarySelectionPanel : MonoBehaviour
         }
 
         SetText(powerText, $"용병 전투력  {viewData.selectedMercenaryPower:N0} / {viewData.requiredMercenaryPower:N0}");
-        SetText(currencyText, $"사용 가능 금액 {viewData.estimatedCurrencyAfterPurchase:N0} G"); // Shows the estimated hiring budget after cargo costs. // SaveData currency remains unchanged until departure is confirmed.
+        // Cargo was already paid for when it entered the Caravan. Show the authoritative SaveData
+        // balance here instead of subtracting the historical cargo purchase cost a second time.
+        SetText(currencyText, $"소지 금액 {viewData.currentTradingCurrency:N0} G");
         SetText(costText, $"용병 고용 가격  {viewData.mercenaryCost:N0} G");
         SetText(messageText, !viewData.canHireSelectedMercenaries
             ? "보유 금액이 부족합니다. 선택을 해제하거나 용병 없이 진행하세요."
-            : "용병 고용은 선택 사항입니다."); // Uses the total preparation cost, including cargo and selected mercenaries.
+            : "용병 고용은 선택 사항입니다.");
 
         MercenaryViewData[] mercenaries = viewData.mercenaries ?? Array.Empty<MercenaryViewData>();
         foreach (MercenaryViewData mercenary in mercenaries)

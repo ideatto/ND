@@ -97,7 +97,9 @@ public sealed class TradePrepareViewDataBuilder
 
         // Mercenary cost comes from the actually selected mercenaries, not the legacy route cost.
         long mercenaryCost = selectedMercenaryHireCost;
-        long totalPreparationCost = AddClamped(totalPurchaseCost, mercenaryCost);
+        // Cargo purchases are committed before the preparation flow reaches mercenary hiring.
+        // Only the still-unpaid mercenary fee belongs to the departure-time preparation cost.
+        long totalPreparationCost = mercenaryCost;
         long currentTradingCurrency = ReadTradingCurrency(saveData);
         CalculateCurrencyProjection(
             currentTradingCurrency,
@@ -107,7 +109,9 @@ public sealed class TradePrepareViewDataBuilder
             out long estimatedCurrencyAfterHire,
             out bool canPurchaseCargo,
             out bool canHireSelectedMercenaries);
-        long estimatedNetProfit = sellRevenue - totalPreparationCost;
+        // Affordability uses only unpaid departure costs, while profit must still account for
+        // the historical cargo acquisition cost that was committed during immediate purchase.
+        long estimatedNetProfit = sellRevenue - AddClamped(totalPurchaseCost, mercenaryCost);
         bool routeSelectable = IsRouteSelectable(selectedRoute, context.towns, currentTownId, saveData);
         DraftAnimalType[] selectedAnimalTypes = GetSelectedAnimalTypes(draft, availableAnimals);
 
@@ -1265,14 +1269,14 @@ public sealed class TradePrepareViewDataBuilder
         out bool canHire)
     {
         currentCurrency = Math.Max(0L, currentCurrency);
-        purchaseCost = Math.Max(0L, purchaseCost);
         hireCost = Math.Max(0L, hireCost);
-        long totalCost = AddClamped(purchaseCost, hireCost);
 
-        canPurchase = purchaseCost <= currentCurrency;
-        estimatedAfterPurchase = SubtractFloorZero(currentCurrency, purchaseCost);
-        canHire = totalCost <= currentCurrency;
-        estimatedAfterHire = SubtractFloorZero(currentCurrency, totalCost);
+        // purchaseCost is retained in the ViewData for historical cost/profit presentation, but
+        // it has already been paid by the immediate-purchase cargo flow. Do not reserve it again.
+        canPurchase = true;
+        estimatedAfterPurchase = currentCurrency;
+        canHire = hireCost <= currentCurrency;
+        estimatedAfterHire = SubtractFloorZero(currentCurrency, hireCost);
     }
 
     private static int AddClampedInt(int left, int right)

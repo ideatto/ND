@@ -817,6 +817,8 @@ private static string BuildDepartureWarning(TradePrepareStartResult result)
                 return false;
             }
 
+            runtimeContext?.RecordPurchaseDelta(model.CaravanId, result);
+
             // Market commit is authoritative for currency, stock, and Cargo SaveData.
             // Rebuild every downstream view from Saved Cargo instead of reusing the UI snapshot.
             CaravanCargoDraftStore.Clear(model.MarketId, model.CaravanId);
@@ -950,14 +952,12 @@ private static string BuildDepartureWarning(TradePrepareStartResult result)
             fromTown = string.IsNullOrWhiteSpace(fromTown) ? "-" : fromTown,
             toTown = string.IsNullOrWhiteSpace(toTown) ? "-" : toTown,
             destinationSprite = destinationTown != null ? destinationTown.icon : null,
-            viaText = "없음",
             expectedRisk = Mathf.RoundToInt(
                 Mathf.Clamp01(viewData.eventOccurrenceProbability) * 100f),
             mercenaryPower = Mathf.Max(0, viewData.selectedMercenaryPower),
             expectedFood = Mathf.Max(0, viewData.requiredDraftAnimalFoodQuantity),
             loadedFood = Mathf.Max(0, viewData.loadedDraftAnimalFoodQuantity),
             prepareCost = Math.Max(0L, viewData.totalPreparationCost),
-            expectedProfit = viewData.estimatedNetProfit,
             // Summary displays whole seconds. Preserve any positive sub-second test route as 1 second
             // instead of making a valid calculation look like a missing 00:00:00 value.
             durationSeconds = viewData.finalExpectedTravelTime > 0f

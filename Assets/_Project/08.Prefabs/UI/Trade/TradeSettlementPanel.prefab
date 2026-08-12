@@ -773,6 +773,7 @@ MonoBehaviour:
   errorText: {fileID: 4543065278644437204}
   paymentButton: {fileID: 7989959214979736286}
   paperRect: {fileID: 343582277070294143}
+  settlementScrollRect: {fileID: 4110148376995036151}
 --- !u!1 &6886730906304403909
 GameObject:
   m_ObjectHideFlags: 0
