@@ -57,6 +57,12 @@ namespace ND.UI.Quest
         [SerializeField] private Button allItemsPaymentButton;
         [SerializeField] private Button paymentCancelButton;
 
+        [Header("Back (뒤로 가기 — 이전 단계로)")]
+        [SerializeField] private Button listBackButton;      // 목록 → 마차 선택
+        [SerializeField] private Button offerBackButton;     // 상세(수락) → 목록
+        [SerializeField] private Button progressBackButton;  // 상세(진행) → 목록
+        [SerializeField] private Button paymentBackButton;   // 상세(결제) → 목록
+
         private readonly List<Button> questRows = new List<Button>();
         private readonly List<Button> caravanSelectionRows = new List<Button>();
         private readonly List<Button> caravanRows = new List<Button>();
@@ -78,9 +84,10 @@ namespace ND.UI.Quest
             Button backdropButton = GetComponent<Button>();
             backdropButton?.onClick.AddListener(CloseAllPanels);
             acceptButton?.onClick.AddListener(AcceptQuest);
-            rejectButton?.onClick.AddListener(CloseCurrentPanel);
-            progressCloseButton?.onClick.AddListener(CloseCurrentPanel);
-            paymentCancelButton?.onClick.AddListener(CloseCurrentPanel);
+            // 닫기/취소/거절은 '전 단계로'가 아니라 퀘스트 UI를 통째로 닫는다(뒤로 버튼과 역할 분리).
+            rejectButton?.onClick.AddListener(CloseAllPanels);
+            progressCloseButton?.onClick.AddListener(CloseAllPanels);
+            paymentCancelButton?.onClick.AddListener(CloseAllPanels);
             caravanSelectionCloseButton?.onClick.AddListener(
                 CloseCaravanSelection);
             listCloseButton?.onClick.AddListener(CloseList);
@@ -88,6 +95,12 @@ namespace ND.UI.Quest
                 () => Complete(QuestPaymentMode.TradingCurrency));
             allItemsPaymentButton?.onClick.AddListener(
                 () => Complete(QuestPaymentMode.CaravanItems));
+
+            // 뒤로 가기(이전 단계로) — 목록→마차선택, 상세→목록
+            listBackButton?.onClick.AddListener(BackToCaravanSelection);
+            offerBackButton?.onClick.AddListener(BackToList);
+            progressBackButton?.onClick.AddListener(BackToList);
+            paymentBackButton?.onClick.AddListener(BackToList);
         }
 
         private void OnEnable()
@@ -365,9 +378,18 @@ namespace ND.UI.Quest
             RefreshOpenTownQuestList();
         }
 
-        private void CloseCurrentPanel()
+        /// <summary>상세(offer/progress/payment) → 이전 단계인 퀘스트 목록으로.</summary>
+        private void BackToList()
         {
-            bridge?.CancelPanel();
+            SetAllPanels(false);
+            SetActive(listPanel, true);
+            RefreshOpenTownQuestList();   // 현재 마을 목록 다시 채움
+        }
+
+        /// <summary>퀘스트 목록 → 이전 단계인 마차 선택으로.</summary>
+        private void BackToCaravanSelection()
+        {
+            OpenCaravanSelection();
         }
 
         private void CloseDetailPanels()

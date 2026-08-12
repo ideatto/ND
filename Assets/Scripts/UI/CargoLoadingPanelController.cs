@@ -131,6 +131,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private TMP_Text popupTitleText;
     private TMP_Text popupInfoText;
     private TMP_Text popupCountText;
+    private TMP_Text popupGoldText;   // 팝업 내 'Gold' 텍스트(적재 버튼의 가격을 여기로 표시)
     private Button popupMinusButton;
     private Button popupPlusButton;
     private Button popupMinButton;
@@ -153,7 +154,6 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private RectTransform[] loadedSlots = Array.Empty<RectTransform>();
     private int detachedInventorySlotLimit = -1;
     private ScrollRect shopScrollRect;
-    private ScrollRect loadedScrollRect;
 
     private int selectedShopIndex = -1;
     private int selectedPurchaseCount = 1;
@@ -450,6 +450,9 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         }
         */
 
+        // [위치·레이아웃 강제 중단] 캔버스(씬)에서 배치한 LoadedInventoryGrid 위치·패딩·간격을
+        //   런타임이 덮어쓰지 않게 비활성화(LoadedInventoryLabel과 동일 이유). 이제 씬 값이 그대로 유지된다.
+        /*
         if (loadedGrid != null)
         {
             loadedGrid.anchoredPosition = detached ? new Vector2(20f, -12f) : new Vector2(20f, -52f);
@@ -462,6 +465,7 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
                 layout.spacing = detached ? new Vector2(12f, 12f) : new Vector2(20f, 12f);
             }
         }
+        */
 
         if (loadedFoodText != null)
         {
@@ -743,7 +747,10 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
     private void EnsureGridScrollViews()
     {
         shopScrollRect = EnsureVerticalScroll(shopGrid, "ShopScrollbar");
-        loadedScrollRect = EnsureVerticalScroll(loadedGrid, "LoadedInventoryScrollbar");
+        // [적재 인벤토리 스크롤 제거] LoadedInventoryGrid를 세로 ScrollRect의 Content로 만들면
+        //   그리드의 세로 위치가 스크롤에 잡혀 씬에서 위치 조절이 안 됐다. 스크롤을 만들지 않아
+        //   그리드를 자유 배치할 수 있게 한다. (넘치는 슬롯은 GridLayoutGroup 열/셀 크기로 맞춘다.)
+        // loadedScrollRect = EnsureVerticalScroll(loadedGrid, "LoadedInventoryScrollbar");
     }
 
     private static ScrollRect EnsureVerticalScroll(RectTransform content, string scrollbarName)
@@ -1092,6 +1099,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
             new Vector2(72f, 46f), new Vector2(184f, -78f));
         popupLoadButton = EnsureButton(popupRect, "PopupLoadButton", "적재",
             new Vector2(220f, 54f), new Vector2(0f, -154f));
+        // 씬에 배치된 'Gold' 텍스트(적재 버튼의 가격 표시를 이쪽으로 분리). 없으면 null(가격은 버튼에만).
+        popupGoldText = FindDeepChild(popupRect, "Gold")?.GetComponent<TMP_Text>();
 
         Button popupClose = EnsureButton(popupRect, "PopupCloseButton", "×",
             new Vector2(44f, 40f), new Vector2(246f, 186f));
@@ -1499,9 +1508,14 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
         popupMaxButton.interactable = maximum > 0 && selectedPurchaseCount != maximum;
         popupLoadButton.interactable = maximum > 0 && selectedPurchaseCount > 0;
 
+        long totalPrice = GetMarketBuyUnitPrice(selectedShopIndex) * selectedPurchaseCount;
         TMP_Text loadLabel = popupLoadButton.GetComponentInChildren<TMP_Text>(true);
         if (loadLabel != null)
-            loadLabel.text = $"적재  {(GetMarketBuyUnitPrice(selectedShopIndex) * selectedPurchaseCount):N0} G";
+            loadLabel.text = "";                          // 버튼은 '적재'만
+        if (popupGoldText != null)
+            popupGoldText.text = $"{totalPrice:N0} G";        // 가격은 Gold 요소로
+        else if (loadLabel != null)
+            loadLabel.text = $"적재  {totalPrice:N0} G";      // Gold 요소 없으면 기존처럼 버튼에 함께
     }
 
     private void SetPopupCount(int value)
