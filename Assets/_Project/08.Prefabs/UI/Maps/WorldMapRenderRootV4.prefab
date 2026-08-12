@@ -8929,6 +8929,90 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 13.33
       objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.size
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[0].sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 821f64e1baf63374fa10f5fee4a239f5, type: 3}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[0].tint.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[0].tint.b
+      value: 0.8537736
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[0].tint.g
+      value: 0.8537736
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[0].tint.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[1].sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 821f64e1baf63374fa10f5fee4a239f5, type: 3}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[1].tint.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[1].tint.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[1].tint.g
+      value: 0.8429245
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[1].tint.r
+      value: 0.8254717
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[2].sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 821f64e1baf63374fa10f5fee4a239f5, type: 3}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[2].tint.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[2].tint.b
+      value: 0.8537736
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[2].tint.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[2].tint.r
+      value: 0.8620283
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[3].sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 821f64e1baf63374fa10f5fee4a239f5, type: 3}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[3].tint.a
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[3].tint.b
+      value: 0.8537736
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[3].tint.g
+      value: 0.99415094
+      objectReference: {fileID: 0}
+    - target: {fileID: 1783667683770831253, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
+      propertyPath: slotVisuals.Array.data[3].tint.r
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1932129270290742044, guid: 92a5d3bbe9ebe70479995436be3f2f11, type: 3}
       propertyPath: m_LocalPosition.x
       value: 4.68

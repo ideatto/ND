@@ -8,12 +8,12 @@
 //        리스트라 여러 대가 동시에 이동할 수 있다. 이 컴포넌트는 모든 캐러밴을 읽어
 //        - 이동 중이면 해당 route(RouteVisual) 위 진행 위치에,
 //        - 정박 중이면 현재 마을(TownWorldView) 위에
-//        슬롯별 색 마커를 찍어 "여러 캐러밴 동시 이동"을 눈으로 볼 수 있게 한다.
+//        슬롯별 Sprite와 Tint가 적용된 마커를 찍어 "여러 캐러밴 동시 이동"을 눈으로 볼 수 있게 한다.
 //
 // [비침습] 정헌님/성욱님 코드는 읽기만 한다. 진행률은 TryGetMapProgress와 동일한
 //        UTC tick 공식으로 계산(= (now-start)/(end-start)).
 //
-// [부착] V2 렌더 루트(WorldMapRenderRootV2)에 붙인다. 기존 단일 표시(프레임워크
+// [부착] V4 렌더 루트(WorldMapRenderRootV4)에 붙인다. 기존 단일 표시(프레임워크
 //        CaravanMapMarker, MinimapCaravanIndicator)와 겹치지 않게 그것들은 숨긴다.
 // =============================================================================
 
@@ -30,10 +30,21 @@ using FrameworkTradeProgressState = ND.Framework.TradeProgressState;
 /// <summary>여러 캐러밴을 슬롯 색으로 구분해 미니맵에 동시 표시한다.</summary>
 public class MinimapMultiCaravanMarkers : MonoBehaviour
 {
+    [System.Serializable]
+    private sealed class CaravanMarkerVisual
+    {
+        [Tooltip("캐러밴 마커에 표시할 스프라이트")]
+        public Sprite sprite;
+
+        [Tooltip("캐러밴 마커 스프라이트에 적용할 색상")]
+        public Color tint = Color.white;
+    }
+
     [SerializeField] private Transform renderRoot;              // 마을/경로 탐색 범위(비면 자기 자신)
     [SerializeField] private float iconScale = 0.4f;            // 마커 크기(월드)
     [SerializeField] private Vector3 offset = new Vector3(0f, 0.35f, 0f); // 마을/경로 위로 살짝
     [SerializeField] private bool hideFrameworkSingleMarker = true; // 프레임워크 단일 마커/구 인디케이터 숨김
+    [SerializeField] private CaravanMarkerVisual[] slotVisuals;
 
     // 슬롯(캐러밴)별 색 — 1번=주황, 2번=파랑, 3번=초록, 4번=노랑
     private static readonly Color[] SlotColors =
@@ -46,6 +57,7 @@ public class MinimapMultiCaravanMarkers : MonoBehaviour
 
     private readonly Dictionary<string, SpriteRenderer> markers = new Dictionary<string, SpriteRenderer>();
     private readonly HashSet<string> warnedDisplayIssues = new HashSet<string>();
+    private readonly HashSet<int> warnedMissingVisualSlots = new HashSet<int>();
     private RouteVisual[] routes;
     private TownWorldView[] towns;
 
@@ -76,7 +88,8 @@ public class MinimapMultiCaravanMarkers : MonoBehaviour
             Vector3 pos;
             if (!TryResolvePosition(save, c, out pos)) continue;
 
-            var m = GetOrCreateMarker(c.caravanId, SlotColors[Mathf.Abs(c.slotIndex) % SlotColors.Length]);
+            var m = GetOrCreateMarker(c.caravanId);
+            ApplyVisual(m, c.slotIndex);
             m.transform.position = pos + offset;
             m.enabled = true;
             used.Add(c.caravanId);
@@ -178,19 +191,46 @@ public class MinimapMultiCaravanMarkers : MonoBehaviour
         return null;
     }
 
-    private SpriteRenderer GetOrCreateMarker(string caravanId, Color color)
+    private CaravanMarkerVisual GetVisual(int slot)
+    {
+        if (slotVisuals == null || slotVisuals.Length == 0 || slot < 0 || slot >= slotVisuals.Length)
+            return null;
+
+        return slotVisuals[slot];
+    }
+
+    /// <summary>현재 슬롯 설정을 기존 마커에도 다시 적용하며, Sprite 누락 시 캐시된 기본 마커를 사용한다.</summary>
+    private void ApplyVisual(SpriteRenderer renderer, int slot)
+    {
+        var visual = GetVisual(slot);
+        renderer.sprite = visual != null && visual.sprite != null ? visual.sprite : MakeSquareSprite();
+        renderer.color = visual != null ? visual.tint : GetDefaultSlotColor(slot);
+
+        if ((visual == null || visual.sprite == null) && warnedMissingVisualSlots.Add(slot))
+        {
+            Debug.LogWarning(
+                $"[MinimapMultiCaravanMarkers] No marker sprite configured for slot {slot}. "
+                + "Using fallback square marker.",
+                this);
+        }
+    }
+
+    private static Color GetDefaultSlotColor(int slot)
+    {
+        int index = slot % SlotColors.Length;
+        if (index < 0) index += SlotColors.Length;
+        return SlotColors[index];
+    }
+
+    private SpriteRenderer GetOrCreateMarker(string caravanId)
     {
         if (markers.TryGetValue(caravanId, out var sr) && sr != null)
-        {
-            sr.color = color;   // 슬롯 색 최신화
             return sr;
-        }
+
         var go = new GameObject("CaravanMarker_" + caravanId);
         go.transform.SetParent(renderRoot, false);
         go.transform.localScale = Vector3.one * iconScale;
         sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = MakeSquareSprite();
-        sr.color = color;
         sr.sortingOrder = 32;   // 마을(10)·구 인디케이터(30)보다 위
         markers[caravanId] = sr;
         return sr;
