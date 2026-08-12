@@ -14,7 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildData
   buildId: Warehouse
   displayName: "\uCC3D\uACE0"
-  description: 
+  description: "\uBB3C\uAC74\uB4E4\uC744 \uC800\uC7A5\uD560 \uC218 \uC788\uB294 \uCC3D\uACE0\uB2E4.\n\n\uBB34\uC5ED
+    \uBB3C\uD488\uB4E4\uC744 \uC774 \uACF3\uC5D0 \uB123\uC5B4\uB458 \uC218 \uC788\uB2E4."
   dataPerLevels:
   - level: 1
     buildPrefab: {fileID: 3207291499333707442, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
@@ -33,7 +34,11 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Stone
+        quantity: 20
+      - itemId: Logs
+        quantity: 20
   - level: 3
     buildPrefab: {fileID: 3207291499333707442, guid: 95aeadb719318db449a23aa87c2af525, type: 3}
     visualScale: {x: 0.9322035, y: 0.9322035, z: 0.9322035}
@@ -42,4 +47,8 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Stone
+        quantity: 40
+      - itemId: SolidWood
+        quantity: 20
