@@ -23,8 +23,8 @@ MonoBehaviour:
   submissionTownId: EastRiverTown
   requiredTradingCurrency: 0
   requiredItems:
-  - itemId: Logs
-    quantity: 20
+  - itemId: SolidWood
+    quantity: 5
   - itemId: Wine
     quantity: 10
   rewards:
