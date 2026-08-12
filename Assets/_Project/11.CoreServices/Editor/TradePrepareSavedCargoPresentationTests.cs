@@ -179,4 +179,38 @@ private TradeItemData CreateItem(string itemId, float weight = 1f)
             UnityEngine.Object.DestroyImmediate(host);
         }
     }
+
+    [Test]
+    public void CargoPanel_VisibleCardsFollowPhysicalStackCount()
+    {
+        TradeItemData ingot = CreateItem("ingot");
+        typeof(TradeItemData).GetField("maxCount", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(ingot, 5);
+        TradeItemData gem = CreateItem("gem");
+        typeof(TradeItemData).GetField("maxCount", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(gem, 1);
+
+        GameObject host = new GameObject("CargoPanelPhysicalStackViewTest");
+        try
+        {
+            CargoLoadingPanelController panel = host.AddComponent<CargoLoadingPanelController>();
+            panel.Configure(10000, 100f, 0, new[] { ingot, gem }, new[] { 20, 20 }, new long[] { 1, 1 });
+            panel.SetDetachedInventorySlotLimit(5);
+            panel.RestoreSelectedCargo(new[]
+            {
+                new TradeItemViewData { itemId = "ingot", selectedBuyAmount = 9 },
+                new TradeItemViewData { itemId = "gem", selectedBuyAmount = 2 }
+            }, false, false);
+
+            MethodInfo buildViews = typeof(CargoLoadingPanelController).GetMethod(
+                "BuildLoadedSlotViews", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(buildViews, Is.Not.Null);
+            var views = (System.Collections.ICollection)buildViews.Invoke(panel, null);
+            Assert.That(views.Count, Is.EqualTo(4));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(host);
+        }
+    }
 }

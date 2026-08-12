@@ -109,7 +109,8 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     /// <summary>
     /// Presentation-only projection. Persisted Cargo and Market reservations stay as separate
-    /// LoadedLine records, while equal item IDs occupy one visible slot with a combined quantity.
+    /// LoadedLine records, while the UI divides the combined item quantity into physical stacks.
+    /// Purchase-price groups must not create extra slots, but quantities above MaxCount must.
     /// </summary>
     private sealed class LoadedSlotView
     {
@@ -1744,16 +1745,34 @@ public sealed class CargoLoadingPanelController : MonoBehaviour
 
     private List<LoadedSlotView> BuildLoadedSlotViews()
     {
-        return loadedLines
+        var result = new List<LoadedSlotView>();
+        foreach (IGrouping<string, LoadedLine> group in loadedLines
             .Where(line => line.HasItem && line.Quantity > 0)
-            .GroupBy(line => line.ItemId, StringComparer.Ordinal)
-            .Select(group => new LoadedSlotView
+            .GroupBy(line => line.ItemId, StringComparer.Ordinal))
+        {
+            LoadedLine presentationLine = group.FirstOrDefault(line => line.IsSaved) ?? group.First();
+            TradeItemData definition = FindShopItem(group.Key);
+            bool canStack = definition != null ? definition.CanStack : presentationLine.CanStack;
+            int maxCount = definition != null ? definition.MaxCount : presentationLine.MaxCount;
+            int stackSize = canStack ? Mathf.Max(1, maxCount) : 1;
+            int remaining = group.Sum(line => Mathf.Max(0, line.Quantity));
+
+            // The view mirrors the same physical-stack rule used by slot validation. Internal
+            // saved/reserved and purchase-price rows remain untouched for commit and settlement.
+            while (remaining > 0)
             {
-                ItemId = group.Key,
-                PresentationLine = group.FirstOrDefault(line => line.IsSaved) ?? group.First(),
-                Quantity = group.Sum(line => line.Quantity)
-            })
-            .ToList();
+                int stackQuantity = Mathf.Min(stackSize, remaining);
+                result.Add(new LoadedSlotView
+                {
+                    ItemId = group.Key,
+                    PresentationLine = presentationLine,
+                    Quantity = stackQuantity
+                });
+                remaining -= stackQuantity;
+            }
+        }
+
+        return result;
     }
 
     private LoadedSlotView GetVisibleLoadedSlot(int slotIndex)
