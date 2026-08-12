@@ -31,6 +31,7 @@ public sealed class CottageProductionPopupView : MonoBehaviour
     public event Action WagonReceiveRequested;
     public event Action DraftAnimalReceiveRequested;
     public event Action ReceiveAllRequested;
+    public event Action Closed;
 
     private void OnEnable()
     {
@@ -100,6 +101,8 @@ public sealed class CottageProductionPopupView : MonoBehaviour
 
     public void Close()
     {
+        if (!gameObject.activeSelf) return;
+        Closed?.Invoke();
         gameObject.SetActive(false);
     }
 

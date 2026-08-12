@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using ND.Framework;
 using UnityEngine;
@@ -12,6 +13,11 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
     [SerializeField] private CottageProductionPopupView view;
     [SerializeField] private NoticeUI noticeUI;
     private Coroutine remainingTimeRoutine;
+    private bool hasOpenSession;
+
+    public event Action Opened;
+    public event Action Closed;
+    public event Action<CottageCollectionTarget> CollectionSucceeded;
 
     public void Configure(CottageProductionPopupView popupView, NoticeUI notice)
     {
@@ -26,6 +32,7 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
             view.WagonReceiveRequested += ReceiveWagon;
             view.DraftAnimalReceiveRequested += ReceiveDraftAnimal;
             view.ReceiveAllRequested += ReceiveAll;
+            view.Closed += HandleViewClosed;
         }
         FrameworkEvents.CottageProductionChanged += Refresh;
         FrameworkEvents.SharedGameDataLoaded += HandleFrameworkReady;
@@ -41,6 +48,7 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
             view.WagonReceiveRequested -= ReceiveWagon;
             view.DraftAnimalReceiveRequested -= ReceiveDraftAnimal;
             view.ReceiveAllRequested -= ReceiveAll;
+            view.Closed -= HandleViewClosed;
         }
         FrameworkEvents.CottageProductionChanged -= Refresh;
         FrameworkEvents.SharedGameDataLoaded -= HandleFrameworkReady;
@@ -50,6 +58,7 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
             StopCoroutine(remainingTimeRoutine);
             remainingTimeRoutine = null;
         }
+        NotifyClosed();
     }
 
     public bool TryOpen()
@@ -59,6 +68,8 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
             return false;
         view.Open();
         Refresh();
+        hasOpenSession = true;
+        Opened?.Invoke();
         return true;
     }
 
@@ -97,6 +108,7 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
         if (result.Succeeded)
         {
             Refresh();
+            CollectionSucceeded?.Invoke(target);
             return;
         }
         switch (result.FailureReason)
@@ -122,4 +134,12 @@ public sealed class CottageProductionPopupPresenter : MonoBehaviour
 
     private void HandleFrameworkReady(ISharedGameDataProvider _) => Refresh();
     private void HandleFrameworkReady(ND.Framework.SaveData _) => Refresh();
+    private void HandleViewClosed() => NotifyClosed();
+
+    private void NotifyClosed()
+    {
+        if (!hasOpenSession) return;
+        hasOpenSession = false;
+        Closed?.Invoke();
+    }
 }

@@ -63,6 +63,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
 
     public string CurrentEditCaravanId { get; private set; } = string.Empty;
     public CaravanOverviewEditTarget CurrentEditTarget { get; private set; }
+    public event Action<string> CaravanSettingSaved;
 
     private ICaravanSettingViewDataProvider settingProvider;
     private ICaravanSettingCommand settingCommand;
@@ -326,6 +327,7 @@ public sealed class CaravanOverviewEditBinding : MonoBehaviour
             draft?.caravanId);
 
         // Only a successful Command may close S3 and refresh the Overview from authoritative data.
+        CaravanSettingSaved?.Invoke(draft.caravanId);
         TreadmillLaneManager.Instance?.RefreshCaravan(draft.caravanId);
         tradePrepareUi?.CloseCaravanEdit();
         overviewPresenter?.Refresh();

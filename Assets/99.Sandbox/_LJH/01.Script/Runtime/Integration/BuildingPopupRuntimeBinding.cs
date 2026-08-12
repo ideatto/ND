@@ -22,18 +22,21 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
 
     /// <summary>최종 확인된 건물의 buildId를 실제 건설 실행 계층에 전달한다.</summary>
     public event Action<string> BuildConfirmed;
+    public event Action DetailDismissed;
+    public event Action ConfirmationDismissed;
 
     private void OnEnable()
     {
         if(detailPresenter != null)
         {
             detailPresenter.BuildRequested += HandleBuildRequested;
-            detailPresenter.CloseRequested += ClearSelection;
+            detailPresenter.CloseRequested += HandleDetailDismissed;
         }
 
         if(confirmPresenter != null)
         {
             confirmPresenter.ConfirmRequested += HandleConfirmRequested;
+            confirmPresenter.CancelRequested += HandleConfirmationDismissed;
         }
     }
 
@@ -42,12 +45,13 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
         if (detailPresenter != null)
         {
             detailPresenter.BuildRequested -= HandleBuildRequested;
-            detailPresenter.CloseRequested -= ClearSelection;
+            detailPresenter.CloseRequested -= HandleDetailDismissed;
         }
 
         if (confirmPresenter != null)
         {
             confirmPresenter.ConfirmRequested -= HandleConfirmRequested;
+            confirmPresenter.CancelRequested -= HandleConfirmationDismissed;
         }
 
         // Binding이 다시 활성화됐을 때 이전 선택과 Popup 상태가 남지 않게 정리한다.
@@ -210,6 +214,18 @@ public sealed class BuildingPopupRuntimeBinding : MonoBehaviour
     {
         selectedBuildData = null;
         selectedBuildingCurrentLevel = 0;
+    }
+
+    private void HandleDetailDismissed()
+    {
+        ClearSelection();
+        DetailDismissed?.Invoke();
+    }
+
+    private void HandleConfirmationDismissed()
+    {
+        ClearSelection();
+        ConfirmationDismissed?.Invoke();
     }
 
 }

@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97767bc6e2d8b004f8dd1ab27f0297e8, type: 3}
+  m_Name: TutorialChapter_CaravanComposition
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Tutorial.TutorialChapterData
+  chapterId: caravan_composition
+  title: "\uCE90\uB7EC\uBC18\uC744 \uAD6C\uC131\uD558\uC138\uC694"
+  presentationVersion: 1
+  introDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uBB34\uC5ED\uC5D0 \uC0AC\uC6A9\uD560 \uB9C8\uCC28\uC640 \uB9D0\uC744
+      \uCE90\uB7EC\uBC18\uC5D0 \uD3B8\uC131\uD574 \uBCFC\uAE4C\uC694?"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uADF8\uC804\uC5D0 \uC9C0\uAE08 \uAC15\uC870\uB41C \uD45C\uC2DC\uB97C
+      \uAE30\uC900\uC73C\uB85C \uC67C\uCABD\uBD80\uD130 \uC124\uBA85 \uB4DC\uB9AC\uC790\uBA74
+      \uCCAB\uBC88\uC9F8\uB294 \uCE90\uB7EC\uBC18\uC758 \uD604\uC7AC \uC0C1\uD0DC,"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uCE90\uB7EC\uBC18\uC758 \uC774\uB984 \uC815\uD558\uAE30, \uCE90\uB7EC\uBC18
+      \uD3B8\uC131, \uB9C8\uCF13\uC785\uC7A5\uC774\uC5D0\uC694."
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uBB34\uC5ED\uC5D0 \uB123\uC744 \uB9C8\uCC28\uB97C \uC120\uD0DD\uD558\uACE0
+      \uB9D0\uC744 \uB123\uACE0 \uC800\uC7A5\uC744 \uD558\uBA74 \uD574\uB2F9 \uB9C8\uCC28\uB85C
+      \uBB34\uC5ED\uC744 \uB5A0\uB0A0 \uC900\uBE44\uAC00 \uB05D\uB09C\uAC70\uC5D0\uC694!"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB2E4\uB9CC \uB9C8\uCC28\uB294 \uB0B4\uAD6C\uB3C4\uAC00 \uC788\uC5B4\uC11C
+      \uBB34\uB9AC\uD55C \uC0C1\uD589\uC73C\uB85C \uC778\uD55C \uD30C\uC190\uC774
+      \uBC1C\uC0DD\uD560 \uC218 \uC788\uC73C\uB2C8 \uC870\uC2EC\uD574\uC57C\uD574\uC694!"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  failureDialogue: []
+  steps:
+  - stepId: open_caravan_setting
+    label: "\uCE90\uB7EC\uBC18\uC758 \uD3B8\uC9D1 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694"
+  - stepId: select_wagon
+    label: "\uB9C8\uCC28\uB97C \uC120\uD0DD\uD558\uC138\uC694"
+  - stepId: assign_animals
+    label: "\uB9C8\uCC28\uC5D0 \uD544\uC694\uD55C \uB9D0\uC744 \uB123\uC73C\uC138\uC694"
+  - stepId: save_caravan_setting
+    label: "\uC138\uD305 \uC800\uC7A5 \uBC84\uD2BC\uC744 \uB204\uB974\uC138\uC694"
+  completionDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB9C8\uCC28\uC640 \uB9D0\uC744 \uD3B8\uC131\uD574 \uCE90\uB7EC\uBC18
+      \uC124\uC815\uC744 \uC800\uC7A5\uD588\uC5B4\uC694! \uC774\uC81C \uB9C8\uCC28\uC5D0
+      \uC0C1\uD488\uC744 \uC2E4\uC5B4\uBCFC\uAE4C\uC694?"
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uC544\uAE4C \uC54C\uB824\uB4DC\uB838\uB358 \uB9C8\uCF13 \uC785\uC7A5\uC744
+      \uB20C\uB7EC\uC8FC\uC138\uC694."
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}

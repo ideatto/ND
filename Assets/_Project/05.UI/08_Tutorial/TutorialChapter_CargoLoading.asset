@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97767bc6e2d8b004f8dd1ab27f0297e8, type: 3}
+  m_Name: TutorialChapter_CargoLoading
+  m_EditorClassIdentifier: Assembly-CSharp::ND.UI.Tutorial.TutorialChapterData
+  chapterId: cargo_loading
+  title: "\uC0C1\uC810 \uBB3C\uAC74\uC744 \uC801\uC7AC\uD558\uC138\uC694"
+  presentationVersion: 1
+  introDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uBB34\uC5ED\uC744 \uC2DC\uC791\uD558\uB824\uBA74 \uCE90\uB7EC\uBC34\uC5D0
+      \uD310\uB9E4\uD560 \uC0C1\uD488\uC744 \uC2E4\uC5B4\uC57C\uD574\uC694."
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB9C8\uCF13\uC785\uC7A5\uC744 \uC5F4\uACE0, \uC6D0\uD558\uB294 \uC0C1\uD488\uC744
+      \uC801\uC7AC\uD55C \uB4A4 \uAD6C\uB9E4\uB97C \uD655\uC815\uD574 \uBCF4\uC138\uC694."
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB9C8\uCC28\uB97C \uB04C\uACE0 \uB2E4\uB2D0 \uB9D0\uC744 \uC704\uD55C
+      \uC5EC\uBB3C\uB3C4 \uCDA9\uBD84\uD788 \uAC00\uC9C0\uACE0 \uB2E4\uB140\uC57C\uD574\uC694.
+      \uC77C\uB2E8 \uC2A4\uBB34\uAC1C\uB9CC \uAC00\uC838\uAC00 \uBCFC\uAE4C\uC694?"
+    emotion: 0
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  failureDialogue: []
+  steps:
+  - stepId: open_cargo_panel
+    label: "\uC0C1\uD488 \uAD6C\uB9E4 \uD328\uB110\uC744 \uC5EC\uC138\uC694"
+  - stepId: load_cargo_draft
+    label: "\uC0C1\uC810 \uC0C1\uD488\uC744 \uC801\uC7AC \uBAA9\uB85D\uC5D0 \uB2F4\uC73C\uC138\uC694"
+  - stepId: commit_cargo_purchase
+    label: "\uAD6C\uB9E4 \uBC84\uD2BC\uC73C\uB85C \uC801\uC7AC\uB97C \uD655\uC815\uD558\uC138\uC694"
+  completionDialogue:
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uC0C1\uD488 \uC801\uC7AC\uAC00 \uC644\uB8CC\uB418\uC5C8\uC5B4\uC694!"
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
+  - npcName: "\uC548\uB0B4\uC778"
+    message: "\uB2E4\uC74C\uC740 \uC774\uC81C \uBB34\uC5ED\uC744 \uC9C4\uD589\uD574\uBCF4\uB3C4\uB85D
+      \uD560\uAE4C\uC694?"
+    emotion: 1
+    npcSprite: {fileID: 0}
+    illustrationSprite: {fileID: 0}
