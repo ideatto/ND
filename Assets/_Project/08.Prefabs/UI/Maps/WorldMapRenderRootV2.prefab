@@ -3435,6 +3435,7 @@ MonoBehaviour:
   iconScale: 0.4
   offset: {x: 0, y: 0.35, z: 0}
   hideFrameworkSingleMarker: 1
+  slotVisuals: []
 --- !u!114 &3270757068816519589
 MonoBehaviour:
   m_ObjectHideFlags: 0
