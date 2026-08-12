@@ -22,7 +22,7 @@ MonoBehaviour:
   questRegenSeconds: 0
   paymentPolicy: 0
   submissionTownId: BasinTown
-  requiredTradingCurrency: 5000
+  requiredTradingCurrency: 20000
   requiredItems: []
   rewards:
   - rewardType: 3

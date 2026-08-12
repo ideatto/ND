@@ -22,6 +22,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 3e14187fa72b01d458ec2ab21159480f, type: 2}
   - {fileID: 11400000, guid: e97afc45c11cc144cba3e7e06edcc891, type: 2}
   - {fileID: 11400000, guid: 63af5decbf34d1747ab76c42cf4e8942, type: 2}
+  - {fileID: 11400000, guid: 62714ff7c0675654e961b595acb45855, type: 2}
   draftAnimalItems: []
   wagonItems: []
   localSpecialtyItems:

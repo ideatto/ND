@@ -156,7 +156,7 @@ MonoBehaviour:
   - assetGuid: 0d426ac1820959540a74bd660a406757
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_SmokedMeat.asset
     typeName: TradeItemData
-    dataId: 'SmokedMeat '
+    dataId: SmokedMeat
     watchRootKind: 0
   - assetGuid: f546f2032fa12be49bb841ec17ba64c8
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/TradeItem/Food/TradeItem_Wheat.asset

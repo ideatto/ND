@@ -16,15 +16,14 @@ MonoBehaviour:
   displayName: "\uCCA0\uAD11\uC11D"
   icon: {fileID: 21300000, guid: f9425fa719fbc97488f2d6f8b1c4b4c7, type: 3}
   description: "\uAD11\uC0B0\uC5D0\uC11C \uD754\uD558\uAC8C \uBC1C\uACAC\uB418\uB294
-    \uAD11\uBB3C\uC785\uB2C8\uB2E4. \uAC74\uCD95\uC5D0 \uD544\uC218\uC801\uC73C\uB85C
-    \uC4F0\uC5EC\uC694"
+    \uAD11\uBB3C\uC785\uB2C8\uB2E4. \uAC74\uCD95\uC5D0 \uC0AC\uC6A9\uB418\uC8E0."
   rarity: 1
   category: 1
   baseBuyPrice: 90
   baseSellPrice: 90
   canStack: 1
   maxCount: 5
-  weight: 5
+  weight: 3
   isConsumable: 0
   affectModify: 0
   modifiers: []

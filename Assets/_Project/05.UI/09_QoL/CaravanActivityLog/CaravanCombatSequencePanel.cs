@@ -99,6 +99,7 @@ public sealed class CaravanCombatSequencePanel : MonoBehaviour
 
     private void OnEnable()
     {
+        FrameworkEvents.RouteCombatResolved += OnRouteCombatResolved;
         observedSaveData = GetCurrentSaveData();
         lastObservedSequence = GetLatestSequence(observedSaveData);
         nextRefreshTime = Time.unscaledTime;
@@ -109,6 +110,7 @@ public sealed class CaravanCombatSequencePanel : MonoBehaviour
 
     private void OnDisable()
     {
+        FrameworkEvents.RouteCombatResolved -= OnRouteCombatResolved;
         if (playbackCoroutine != null)
         {
             StopCoroutine(playbackCoroutine);
@@ -117,6 +119,23 @@ public sealed class CaravanCombatSequencePanel : MonoBehaviour
         presentationQueue.Clear();
         pendingEncounters.Clear();
         HideImmediately();
+    }
+
+    private void OnRouteCombatResolved(string caravanId, bool victory)
+    {
+        var saveData = GetCurrentSaveData();
+        observedSaveData = saveData;
+        // The committed save already contains the encounter/outcome pair. Advance the polling
+        // cursor so the fallback scanner cannot enqueue the same presentation a second time.
+        lastObservedSequence = GetLatestSequence(saveData);
+        pendingEncounters.Clear();
+        presentationQueue.Enqueue(new CombatPresentation(
+            ResolveCaravanName(saveData, caravanId),
+            victory));
+        if (playbackCoroutine == null && isActiveAndEnabled)
+        {
+            playbackCoroutine = StartCoroutine(PlayQueuedPresentations());
+        }
     }
 
     private void Update()
@@ -130,11 +149,10 @@ public sealed class CaravanCombatSequencePanel : MonoBehaviour
         var currentSaveData = GetCurrentSaveData();
         if (!ReferenceEquals(observedSaveData, currentSaveData))
         {
+            // Trade transactions replace FrameworkRoot.CurrentSaveData with a committed clone.
+            // Keep the last sequence actually consumed by this panel; adopting the clone's latest
+            // sequence here would incorrectly mark the newly committed combat logs as already seen.
             observedSaveData = currentSaveData;
-            lastObservedSequence = GetLatestSequence(currentSaveData);
-            presentationQueue.Clear();
-            pendingEncounters.Clear();
-            return;
         }
 
         ScanNewCombatLogs(currentSaveData);

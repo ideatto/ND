@@ -191,6 +191,12 @@ namespace ND.Framework
         /// </remarks>
         public static event Action<string, string> RouteEventForced;
 
+        /// <summary>
+        /// 저장에 성공한 실시간 산적 전투 결과를 UI 계층에 전달한다.
+        /// 오프라인 복원 결과는 갑작스러운 연출 재생을 막기 위해 발행자가 제외한다.
+        /// </summary>
+        public static event Action<string, bool> RouteCombatResolved;
+
         /// <summary>Raised after Quest rewards are persisted. Payload IDs are newly added entries.</summary>
         public static event Action<QuestRewardsCommittedEvent> QuestRewardsCommitted;
 
@@ -469,6 +475,11 @@ namespace ND.Framework
         {
             FrameworkLog.Info($"RouteEventForced event raised. TradeId: {tradeId}, EventId: {eventId}");
             RouteEventForced?.Invoke(tradeId, eventId);
+        }
+
+        public static void RaiseRouteCombatResolved(string caravanId, bool victory)
+        {
+            RouteCombatResolved?.Invoke(caravanId ?? string.Empty, victory);
         }
     }
 }

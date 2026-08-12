@@ -33,7 +33,9 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Bread
+        quantity: 10
   - level: 3
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     visualScale: {x: 1.0041841, y: 1.0041841, z: 1.0041841}
@@ -42,7 +44,13 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Bread
+        quantity: 20
+      - itemId: Stone
+        quantity: 5
+      - itemId: Logs
+        quantity: 5
   - level: 4
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     visualScale: {x: 1.0041841, y: 1.0041841, z: 1.0041841}
@@ -51,7 +59,13 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Bread
+        quantity: 40
+      - itemId: Stone
+        quantity: 10
+      - itemId: SolidWood
+        quantity: 5
   - level: 5
     buildPrefab: {fileID: 5086136745699945733, guid: 231d8dbd788492f4eb7d583bf64d0941, type: 3}
     visualScale: {x: 1.0041841, y: 1.0041841, z: 1.0041841}
@@ -60,4 +74,10 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Bread
+        quantity: 50
+      - itemId: Stone
+        quantity: 15
+      - itemId: SyntheticWood
+        quantity: 15

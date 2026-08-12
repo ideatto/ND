@@ -1139,7 +1139,8 @@ namespace ND.Framework
                     occurrence.EventId,
                     occurrence.CheckIndex,
                     isOfflineRestore,
-                    occurrence.IsFatal));
+                    occurrence.IsFatal,
+                    occurrence.CombatVictory));
             }
             return result.Changed;
         }
@@ -2487,6 +2488,12 @@ namespace ND.Framework
                 var notification = notifications[index];
                 FrameworkLog.Info(
                     $"Route event occurred after save. CaravanId: {notification.CaravanId}, TradeId: {notification.TradeId}, RouteId: {notification.RouteId}, EventId: {notification.EventId}, CheckIndex: {notification.CheckIndex}, Forced: False, Offline: {notification.IsOffline}, Fatal: {notification.IsFatal}");
+                if (!notification.IsOffline && notification.CombatVictory.HasValue)
+                {
+                    FrameworkEvents.RaiseRouteCombatResolved(
+                        notification.CaravanId,
+                        notification.CombatVictory.Value);
+                }
             }
         }
 
@@ -2749,7 +2756,8 @@ namespace ND.Framework
                 string eventId,
                 int checkIndex,
                 bool isOffline,
-                bool isFatal)
+                bool isFatal,
+                bool? combatVictory)
             {
                 CaravanId = caravanId;
                 TradeId = tradeId;
@@ -2758,6 +2766,7 @@ namespace ND.Framework
                 CheckIndex = checkIndex;
                 IsOffline = isOffline;
                 IsFatal = isFatal;
+                CombatVictory = combatVictory;
             }
 
             public string CaravanId { get; }
@@ -2767,6 +2776,7 @@ namespace ND.Framework
             public int CheckIndex { get; }
             public bool IsOffline { get; }
             public bool IsFatal { get; }
+            public bool? CombatVictory { get; }
         }
 
         internal sealed class TradeOfflineRestoreResult

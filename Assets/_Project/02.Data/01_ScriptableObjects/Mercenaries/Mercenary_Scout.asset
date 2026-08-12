@@ -15,7 +15,8 @@ MonoBehaviour:
   mercenaryId: ScoutMercenary
   displayName: "\uC815\uCC30\uBCD1"
   icon: {fileID: 21300000, guid: 8b9df205e3b8bb745899fbd115856397, type: 3}
-  description: 
+  description: "\uB208\uC774 \uB6F0\uC5B4\uB098 \uC2B5\uACA9\uC744 \uC54C\uC544\uCC44\uB294
+    \uB2A5\uB825\uC774 \uB6F0\uC5B4\uB09C \uC815\uCC30\uBCD1\uC774\uB2E4."
   rarity: 0
   baseBuyPrice: 50
   combatCapability: 5

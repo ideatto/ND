@@ -21,7 +21,7 @@ MonoBehaviour:
   defaultElapsedTime: 80
   baseFoodCost: 0
   baseMercenaryCost: 0
-  baseRequiredFoodQuantity: 8
+  baseRequiredFoodQuantity: 27
   baseRequiredMercenaryPower: 8
   baseRiskLevel: 0.1
   maxEventCount: 2

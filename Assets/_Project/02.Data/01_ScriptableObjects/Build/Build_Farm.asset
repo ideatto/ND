@@ -14,7 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildData
   buildId: Farm
   displayName: "\uBAA9\uC7A5"
-  description: 
+  description: "\uB3D9\uBB3C\uB4E4\uC758 \uC9D1\uC778 \uBAA9\uC7A5\uC774\uB2E4. \uAD6C\uC218\uD55C
+    \uB0C4\uC0C8\uAC00 \uD48D\uACA8\uC628\uB2E4.\n\n\uC18C\uC9C0\uD558\uACE0 \uC788\uB294
+    \uB9C8\uCC28\uC640 \uACAC\uC778 \uB3D9\uBB3C\uC744 \uC774 \uACF3\uC5D0\uC11C
+    \uBCFC \uC218 \uC788\uB2E4."
   dataPerLevels:
   - level: 1
     buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
@@ -33,7 +36,11 @@ MonoBehaviour:
     footprintCellsX: 5
     footprintCellsZ: 5
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Stone
+        quantity: 10
+      - itemId: Logs
+        quantity: 10
   - level: 3
     buildPrefab: {fileID: 3153057373428757356, guid: 2fc718bd9a458604e838fc2a188210ec, type: 3}
     visualScale: {x: 6, y: 6, z: 6}
@@ -42,4 +49,8 @@ MonoBehaviour:
     footprintCellsX: 5
     footprintCellsZ: 5
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Stover
+        quantity: 300
+      - itemId: SolidWood
+        quantity: 20

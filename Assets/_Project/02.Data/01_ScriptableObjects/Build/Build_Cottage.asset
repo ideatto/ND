@@ -14,7 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildData
   buildId: Cottage
   displayName: "\uC624\uB450\uB9C9"
-  description: 
+  description: "\uBC14\uB78C\uC744 \uB9C9\uC544\uC8FC\uB294 \uC624\uB450\uB9C9\uC774\uB2E4.\n\n\uC77C\uC815
+    \uC2DC\uAC04\uB9C8\uB2E4 \uB9C8\uCC28\uC640 \uB9D0\uC744 \uD68D\uB4DD\uD560 \uC218
+    \uC788\uB2E4."
   dataPerLevels:
   - level: 1
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
@@ -33,7 +35,11 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: Stone
+        quantity: 10
+      - itemId: Logs
+        quantity: 10
   - level: 3
     buildPrefab: {fileID: 6250120686377767566, guid: b5fd987fa504bd3428abc2f51a65a081, type: 3}
     visualScale: {x: 0.85106385, y: 0.85106385, z: 0.85106385}
@@ -42,4 +48,8 @@ MonoBehaviour:
     footprintCellsX: 2
     footprintCellsZ: 2
     buildRequirements:
-      requireItems: []
+      requireItems:
+      - itemId: IronOre
+        quantity: 15
+      - itemId: SolidWood
+        quantity: 15

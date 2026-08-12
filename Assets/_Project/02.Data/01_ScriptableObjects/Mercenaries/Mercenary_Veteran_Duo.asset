@@ -15,7 +15,8 @@ MonoBehaviour:
   mercenaryId: VeteranDuoMercenary
   displayName: "\uBCA0\uD14C\uB791 \uB4C0\uC624"
   icon: {fileID: 21300000, guid: df8caf3c2b36c3743a07ce8af2e684bc, type: 3}
-  description: 
+  description: "\uBB34\uC218\uD55C \uC5ED\uACBD\uC744 \uC774\uACA8\uB0B8 \uB178\uB828\uD55C
+    \uBCA0\uD14C\uB791 \uB4C0\uC624\uC774\uB2E4."
   rarity: 0
   baseBuyPrice: 200
   combatCapability: 20

@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: Wagon_WagonS
   m_EditorClassIdentifier: Assembly-CSharp::WagonData
   wagonId: Wagon_S
-  displayName: Wagon_S
+  displayName: "\uC190\uC218\uB808"
   icon: {fileID: 21300000, guid: 450411227168c1e47a77864b9c404b27, type: 3}
   prefab: {fileID: 2409661924617045558, guid: ac052bd02ad467d40980aa7757061016, type: 3}
-  description: Wagon small size
+  description: "\uC18C\uD615 \uB9C8\uCC28.\n\uACAC\uC778 \uB3D9\uBB3C\uC744 \uC0AC\uC6A9\uD558\uC9C0
+    \uC54A\uB294, \uC218\uB808\uC774\uB2E4."
   wagonType: 2
   maxDurability: 100
   overLoad: 1

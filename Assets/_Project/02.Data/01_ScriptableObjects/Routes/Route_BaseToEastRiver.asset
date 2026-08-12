@@ -20,8 +20,8 @@ MonoBehaviour:
   distance: 800
   defaultElapsedTime: 80
   baseFoodCost: 8
-  baseMercenaryCost: 5
-  baseRequiredFoodQuantity: 8
+  baseMercenaryCost: 0
+  baseRequiredFoodQuantity: 27
   baseRequiredMercenaryPower: 5
   baseRiskLevel: 0.2
   maxEventCount: 1

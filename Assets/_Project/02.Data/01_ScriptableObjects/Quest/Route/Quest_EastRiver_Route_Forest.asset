@@ -19,12 +19,12 @@ MonoBehaviour:
   type: 0
   repeatPolicy: 0
   questRegenSeconds: 0
-  paymentPolicy: 1
+  paymentPolicy: 2
   submissionTownId: EastRiverTown
-  requiredTradingCurrency: 0
+  requiredTradingCurrency: 50000
   requiredItems:
   - itemId: Stone
-    quantity: 20
+    quantity: 5
   - itemId: Honey
     quantity: 20
   rewards:

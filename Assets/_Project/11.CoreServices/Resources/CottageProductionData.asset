@@ -15,8 +15,8 @@ MonoBehaviour:
   buildingDisplayName: "\uC624\uB450\uB9C9"
   wagonContentId: Wagon_M
   draftAnimalContentId: Horse
-  wagonProductionIntervalSeconds: 1800
-  draftAnimalProductionIntervalSeconds: 600
+  wagonProductionIntervalSeconds: 300
+  draftAnimalProductionIntervalSeconds: 300
   initialWagonCount: 1
   initialDraftAnimalCount: 2
   levels:

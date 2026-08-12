@@ -19,11 +19,11 @@ MonoBehaviour:
     \uD55C\uB2E4."
   rarity: 1
   category: 1
-  baseBuyPrice: 400
-  baseSellPrice: 400
+  baseBuyPrice: 30
+  baseSellPrice: 30
   canStack: 1
-  maxCount: 5
-  weight: 5
+  maxCount: 10
+  weight: 2
   isConsumable: 0
   affectModify: 0
   modifiers: []
