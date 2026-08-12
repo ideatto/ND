@@ -39,7 +39,11 @@ public sealed class TradePrepareCargoPreservationTests
             tests.ReplaceCargoPlan_PreservesPurchasePriceGroups();
             tests.ReplaceCargoPlan_EmptyPlanPublishesAuthoritativeTransition();
             tests.SelectingFourCaravans_DoesNotCarryPreviousCargo();
-            Debug.Log("Trade prepare cargo preservation probe passed (10/10).");
+            tests.PurchaseDelta_ExcludesResidualCargoAndUsesCurrentPurchases();
+            tests.PurchaseDelta_NoCurrentPurchaseCommitsZero();
+            tests.PurchaseDelta_AccumulatesTransactionsAndPreservesPriceGroups();
+            tests.PurchaseDelta_IsolatesCaravansAndClearsOnlyRequestedOwner();
+            Debug.Log("Trade prepare cargo preservation probe passed (14/14).");
         }
         catch (Exception exception)
         {
@@ -302,6 +306,103 @@ public sealed class TradePrepareCargoPreservationTests
                 Assert.That(snapshot.selectedBuyItems[0].quantity, Is.EqualTo(index));
             }
         }
+    }
+
+    [Test]
+    public void PurchaseDelta_ExcludesResidualCargoAndUsesCurrentPurchases()
+    {
+        var draft = new TradePrepareDraft { departureCaravanId = "caravan-a" };
+        draft.selectedBuyItems.Add(new TradeItemBundle
+        {
+            itemId = "apple", quantity = 5, purchaseUnitPrice = 10L
+        });
+        var store = new TradePreparePurchaseDeltaStore();
+        store.RecordPurchase("caravan-a", 24L, new[]
+        {
+            new TradeItemBundle { itemId = "apple", quantity = 2, purchaseUnitPrice = 12L }
+        });
+
+        TradePrepareCommitData commit = CreateCommit(draft, store, "caravan-a", 74L);
+
+        Assert.That(commit.purchaseCost, Is.EqualTo(24L));
+        Assert.That(commit.purchasedItems, Has.Length.EqualTo(1));
+        Assert.That(commit.purchasedItems[0].quantity, Is.EqualTo(2));
+        Assert.That(draft.selectedBuyItems[0].quantity, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void PurchaseDelta_NoCurrentPurchaseCommitsZero()
+    {
+        var draft = new TradePrepareDraft { departureCaravanId = "caravan-a" };
+        draft.selectedBuyItems.Add(new TradeItemBundle
+        {
+            itemId = "apple", quantity = 5, purchaseUnitPrice = 10L
+        });
+
+        TradePrepareCommitData commit = CreateCommit(
+            draft, new TradePreparePurchaseDeltaStore(), "caravan-a", 50L);
+
+        Assert.That(commit.purchaseCost, Is.Zero);
+        Assert.That(commit.purchasedItems, Is.Empty);
+    }
+
+    [Test]
+    public void PurchaseDelta_AccumulatesTransactionsAndPreservesPriceGroups()
+    {
+        var store = new TradePreparePurchaseDeltaStore();
+        store.RecordPurchase("caravan-a", 20L, new[]
+        {
+            new TradeItemBundle { itemId = "item", quantity = 2, purchaseUnitPrice = 10L }
+        });
+        store.RecordPurchase("caravan-a", 24L, new[]
+        {
+            new TradeItemBundle { itemId = "item", quantity = 2, purchaseUnitPrice = 12L }
+        });
+        store.RecordPurchase("caravan-a", 10L, new[]
+        {
+            new TradeItemBundle { itemId = "item", quantity = 1, purchaseUnitPrice = 10L }
+        });
+
+        Assert.That(store.TryGet("caravan-a", out long cost, out TradeItemBundle[] items), Is.True);
+        Assert.That(cost, Is.EqualTo(54L));
+        Assert.That(items, Has.Length.EqualTo(2));
+        Assert.That(items.Single(item => item.purchaseUnitPrice == 10L).quantity, Is.EqualTo(3));
+        Assert.That(items.Single(item => item.purchaseUnitPrice == 12L).quantity, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void PurchaseDelta_IsolatesCaravansAndClearsOnlyRequestedOwner()
+    {
+        var store = new TradePreparePurchaseDeltaStore();
+        store.RecordPurchase("caravan-a", 100L, Array.Empty<TradeItemBundle>());
+        store.RecordPurchase("caravan-b", 40L, Array.Empty<TradeItemBundle>());
+
+        store.Clear("caravan-a");
+
+        Assert.That(store.TryGet("caravan-a", out _, out _), Is.False);
+        Assert.That(store.TryGet("caravan-b", out long cost, out _), Is.True);
+        Assert.That(cost, Is.EqualTo(40L));
+    }
+
+    private static TradePrepareCommitData CreateCommit(
+        TradePrepareDraft draft,
+        TradePreparePurchaseDeltaStore store,
+        string caravanId,
+        long cargoValuation)
+    {
+        MethodInfo method = typeof(TradePrepareStartAdapter).GetMethod(
+            "CreateCommitData",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        return (TradePrepareCommitData)method.Invoke(null, new object[]
+        {
+            draft,
+            new TradePrepareViewData { totalPurchaseCost = cargoValuation },
+            "trade",
+            "route",
+            caravanId,
+            store
+        });
     }
 }
 #endif

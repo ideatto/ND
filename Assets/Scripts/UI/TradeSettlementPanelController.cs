@@ -31,6 +31,7 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
     [SerializeField, HideInInspector] private TMP_Text errorText;
     [SerializeField, HideInInspector] private Button paymentButton;
     [SerializeField, HideInInspector] private RectTransform paperRect;
+    [SerializeField, HideInInspector] private ScrollRect settlementScrollRect;
     private Coroutine presentationRoutine;
     private string completeReceipt = string.Empty;
     private bool typing;
@@ -139,6 +140,9 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         paymentButton.gameObject.SetActive(false);
 
         gameObject.SetActive(true);
+        Canvas.ForceUpdateCanvases();
+        if (settlementScrollRect != null)
+            settlementScrollRect.verticalNormalizedPosition = 1f;
         if (presentationRoutine != null)
             StopCoroutine(presentationRoutine);
         presentationRoutine = StartCoroutine(PresentRoutine());
@@ -278,7 +282,6 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         AppendEntries(builder, settlement.Entries, SettlementEntryType.EventProfit, "주요 이벤트 수익");
         AppendEntries(builder, settlement.Entries, SettlementEntryType.EventLoss, "주요 이벤트 손실");
 
-        AppendSingle(builder, settlement.Entries, SettlementEntryType.FoodCost, "먹이 비용");
         AppendSingle(builder, settlement.Entries, SettlementEntryType.MercenaryCost, "용병 고용 비용");
         AppendSingle(builder, settlement.Entries, SettlementEntryType.CartRepairCost, "마차 수리 비용");
         AppendSingle(builder, settlement.Entries, SettlementEntryType.LostItemValue, "상품 손실");
@@ -287,7 +290,6 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         builder.AppendLine($"총 사용 금액  {settlement.TotalExpense:N0} G");
         builder.AppendLine($"총 수익       {settlement.TotalRevenue:N0} G");
         builder.AppendLine($"순이익        {Signed(settlement.NetProfit)} G");
-        builder.AppendLine($"성장 포인트   +{settlement.DevelopmentCurrencyReward:N0}");
         return builder.ToString().TrimEnd();
     }
 
@@ -504,6 +506,7 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         scroll.horizontal = false;
         scroll.vertical = true;
         scroll.movementType = ScrollRect.MovementType.Clamped;
+        settlementScrollRect = scroll;
 
         errorText = EconomySettlementUiFactory.CreateText(paperRect, "ErrorText", 18f, FontStyles.Bold,
             new Vector2(300f, 30f), new Vector2(0f, -282f), TextAlignmentOptions.Left, new Color32(184, 58, 52, 255));
