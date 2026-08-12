@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: Wagon_WagonM
   m_EditorClassIdentifier: Assembly-CSharp::WagonData
   wagonId: Wagon_M
-  displayName: Wagon_M
+  displayName: "\uB9C8\uCC28(\uC911)"
   icon: {fileID: 21300000, guid: 450411227168c1e47a77864b9c404b27, type: 3}
   prefab: {fileID: 1888460102753451980, guid: ba99e5848ccccb64eb45b1cc65bd9464, type: 3}
-  description: Wagon middle size need Hourse or donkey
+  description: "\uC911\uD615 \uB9C8\uCC28.\n\uB9D0\uACFC \uB2F9\uB098\uADC0\uB97C
+    \uD1B5\uD574 \uB04C \uC218 \uC788\uB2E4."
   wagonType: 1
   maxDurability: 300
   overLoad: 5
