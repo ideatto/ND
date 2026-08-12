@@ -85,6 +85,10 @@ namespace ND.Framework
                 version = SaveData.CurrentVersion,
                 lastSavedUtcTicks = createdUtcTicks
             };
+            // SaveData still creates a fixture Caravan for legacy unit tests. Product new games
+            // begin with no Caravan; BaseCamp Lv.1 unlocks slot 0 as Empty and creation owns data.
+            data.caravans.Clear();
+            data.selectedCaravanId = string.Empty;
             data.world.worldSeed = GameCalendarSeed.Create();
             data.world.calendar = new GameCalendarSaveData
             {
@@ -321,6 +325,15 @@ namespace ND.Framework
                 data.player.cottageProduction = new CottageProductionSaveData();
                 assetDataChanged = true;
             }
+            if (data.player.bakeryProduction == null)
+            {
+                data.player.bakeryProduction = new BakeryProductionSaveData();
+                assetDataChanged = true;
+            }
+            data.player.bakeryProduction.storedBreadCount =
+                Math.Max(0, data.player.bakeryProduction.storedBreadCount);
+            data.player.bakeryProduction.storedBreadContentId =
+                data.player.bakeryProduction.storedBreadContentId ?? string.Empty;
             data.player.cottageProduction.storedWagonCount =
                 Math.Max(0, data.player.cottageProduction.storedWagonCount);
             data.player.cottageProduction.storedDraftAnimalCount =
@@ -381,12 +394,6 @@ namespace ND.Framework
             CaravanActivityLog.TrimToLimit(data);
             if (data.caravanActivityLogs.Count != activityLogCountBeforeTrim)
             {
-                assetDataChanged = true;
-            }
-
-            if (data.caravans.Count == 0)
-            {
-                data.caravans.Add(new CaravanSaveData());
                 assetDataChanged = true;
             }
 
@@ -520,7 +527,9 @@ namespace ND.Framework
             CaravanSaveData selected;
             if (!SaveDataLookup.TryGetCaravan(data, data.selectedCaravanId, out selected))
             {
-                data.selectedCaravanId = data.caravans[0].caravanId;
+                data.selectedCaravanId = data.caravans.Count > 0
+                    ? data.caravans[0].caravanId
+                    : string.Empty;
                 assetDataChanged = true;
             }
 
@@ -537,10 +546,9 @@ namespace ND.Framework
 
             if (data.world.unlockedCaravanSlotIndices == null)
             {
-                // Backward-compatible additive field for version 6 saves. Slot 2 is unlocked only
-                // for the current creation test; final new games should expose only the provided
-                // first Caravan slot until progression explicitly unlocks another slot.
-                data.world.unlockedCaravanSlotIndices = new List<int> { 1 };
+                // Preserve the additive version-6 field for old JSON without treating it as
+                // progression authority. BaseCampProgressionPolicy derives current unlocks.
+                data.world.unlockedCaravanSlotIndices = new List<int>();
                 assetDataChanged = true;
             }
             else

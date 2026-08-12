@@ -157,7 +157,8 @@ public sealed class CaravanSettingPlayModeSmokeTests
         Assert.That(tradePrepareManagers.Count, Is.EqualTo(1));
         Assert.That(inventoryEntries.Count, Is.EqualTo(1));
         Assert.That(inventoryPopups.Count, Is.EqualTo(1));
-        Assert.That(rewardButtons.Count, Is.EqualTo(1));
+        // The transport reward button is optional in production-oriented scene assembly.
+        Assert.That(rewardButtons.Count, Is.LessThanOrEqualTo(1));
         Assert.That(bridges[0].isActiveAndEnabled, Is.True);
         Assert.That(bindings[0].isActiveAndEnabled, Is.True);
         Assert.That(bridges[0].GetOptions(), Is.Not.Null);

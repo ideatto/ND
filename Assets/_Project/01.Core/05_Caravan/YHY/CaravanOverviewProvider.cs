@@ -50,11 +50,14 @@ public static class CaravanOverviewProvider
             return -1;
         };
 
-        // 3) 해금 규칙·안내문: [임시] 아직 기획 확정 전 → null로 넘겨 조립기의 기본값 사용
-        //    (null이면 CaravanOverviewBuilder가 "전부 해금 + 기본 안내문"으로 처리)
-        //    TODO: 슬롯 해금 규칙 확정되면 여기에 진짜 판정 함수를 꽂는다.
-        Func<int, bool> isSlotUnlocked = null;
-        Func<int, string> getUnlockHint = null;
+        // 3) BaseCamp SaveData level is the single slot-unlock authority.
+        //    The Builder receives the rule instead of reading presentation objects or legacy flags.
+        Func<int, bool> isSlotUnlocked = (slotIndex) =>
+            ND.Framework.BaseCampProgressionPolicy.IsCaravanSlotUnlocked(
+                saveData?.player?.villageBuildings,
+                slotIndex);
+        Func<int, string> getUnlockHint = (slotIndex) =>
+            $"베이스 캠프 레벨이 부족하여 캐러밴 슬롯을 해금할 수 없습니다. 필요 레벨: Lv.{slotIndex + 1}";
 
         // 4) 조립기에 진짜 데이터·판정을 넣어 최종 스냅샷을 만든다.
         return CaravanOverviewBuilder.Build(caravans, slotOf, isSlotUnlocked, getUnlockHint);

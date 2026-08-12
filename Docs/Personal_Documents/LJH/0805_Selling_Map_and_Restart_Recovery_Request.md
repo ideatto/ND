@@ -40,6 +40,10 @@
 
 `Selling`에서는 이동 경로가 끝난 상태이므로 진행률은 `1`로 취급한다. 목적지 식별은 해당 Caravan의 `activeTradeId`, progress의 도착지 정보, 저장된 pending result 가운데 현재 계약상 권위 데이터로 결정한다. 식별 데이터가 실제로 손상된 경우에만 경고하고, 정상적인 `Selling` 자체를 오류로 기록하지 않는다.
 
+성공 도착 저장 시 `JourneyState.Selling`, `TradeProgressState.Selling`, `caravan.currentTownId = destinationTownId`를 같은 저장 단위로 반영한다. S9 Claim은 이 위치 변경의 발생 시점이 아니며, 기존 저장 호환을 위해 목적지를 재확인할 수만 있다. 실패 도착은 출발지 `currentTownId`를 유지한다.
+
+Route의 `baseRequiredFoodQuantity`는 준비 화면에서 보여 주는 기준 예상량이다. 실제 정산의 `foodConsumed`는 Caravan 구성의 초당 식량 소비와 실제 경과 시간으로 계산하며, 기준 예상량을 최소 실제 소비량으로 강제하지 않는다. 따라서 식량 소비 동물이 없는 `Wagon_S` 구성은 Route SO를 수정하지 않아도 실제 식량을 소비하지 않는다.
+
 ### 3.2 상태별 재실행 복구 동작
 
 저장 데이터가 다음 조건을 만족하면 판매 대기 상태로 복구한다.
@@ -108,3 +112,14 @@
 - 저장 후 재실행 시 상태와 식별자가 유지된다.
 - 정상 `Selling` 상태에 대한 지도·복구 경고가 사라진다.
 - 기존 `Traveling`, 성공/실패 `SettlementPending`, Claim 흐름에 회귀가 없다.
+# 2026-08-10 무소모 운송 수단 식량 판정
+
+`Wagon_S`처럼 견인 동물이 없어 `CaravanCalculator.GetConsumptionPerSec(caravan) == 0`인 구성은 식량을 Cargo에 싣지 않아도 `FoodDepleted`가 아니다. `JourneyRunner.CheckFoodDepletion`은 남은 식량이 0인지 보기 전에 실제 소비율을 확인하며, 소비율이 0이면 고갈 플래그와 고갈 진행도를 유지하지 않는다.
+
+이 규칙은 예상 식량 UI 보정이 아니라 실제 Journey 실패 판정 계약이다. `baseRequiredFoodQuantity`나 Wagon SO를 변경해 우회하지 않는다. 회귀 검증은 `JourneyFoodDepletionTests.SetProgress_ZeroConsumptionAndZeroFood_DoesNotFail`로 수행한다.
+
+## 2026-08-11 화물 손실 후 cargo 정규화
+
+산적 등 Journey 이벤트가 화물의 마지막 수량을 차감해 `quantity == 0`이 되면 해당 행을 `caravan.cargo`에서 즉시 제거한다. UI에서만 숨기고 데이터 행을 남기면 Caravan 구성 변경 시 보이지 않는 화물이 검증을 방해할 수 있기 때문이다.
+
+과거 저장 데이터에 이미 남은 0 이하 cargo 행은 `CaravanSaveDataMapper`의 SaveData↔런타임 변환 양쪽에서 제외한다. 음수 행은 손실 대상으로 계산하지 않는다. 회귀 검증은 `JourneyCargoLossCleanupTests`로 수행한다.

@@ -11,6 +11,7 @@ namespace ND.Framework
     {
         public const string BaseCampBuildingId = "BaseCamp";
         public const string BaseCampDisplayName = "베이스 캠프";
+        public const string EndingBuildingId = "EndingItem";
 
         public static bool CanAdvance(
             string buildingId,
@@ -29,7 +30,27 @@ namespace ND.Framework
             if (!TryGetUniqueLevel(buildings, BaseCampDisplayName, out baseCampLevel))
                 return false;
 
+            // EndingItem is a one-time Lv.1 construction unlocked by BaseCamp Lv.5. It must not
+            // inherit the ordinary targetLevel <= BaseCamp rule, which would expose it at Lv.1.
+            if (string.Equals(buildingId, EndingBuildingId, StringComparison.Ordinal))
+            {
+                return targetLevel == 1
+                    && baseCampLevel >= BaseCampProgressionPolicy.EndingBuildingUnlockLevel;
+            }
+
             return targetLevel <= baseCampLevel;
+        }
+
+        /// <summary>
+        /// Returns the BaseCamp level shown when construction is rejected. This keeps user-facing
+        /// guidance consistent with the same special policy used by the command gate.
+        /// </summary>
+        public static int GetRequiredBaseCampLevel(string buildingId, int targetLevel)
+        {
+            if (string.Equals(buildingId, EndingBuildingId, StringComparison.Ordinal))
+                return BaseCampProgressionPolicy.EndingBuildingUnlockLevel;
+
+            return Math.Max(1, targetLevel);
         }
 
         public static bool TryGetUniqueLevel(

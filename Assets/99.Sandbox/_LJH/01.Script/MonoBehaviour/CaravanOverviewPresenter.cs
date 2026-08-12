@@ -74,7 +74,11 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         Refresh();
     }
 
-    /// <summary>Queries the current Provider and redraws all fixed slots.</summary>
+    /// <summary>
+    /// Rebuilds the entire fixed-slot UI from one Provider snapshot. Slot state is calculated by
+    /// the Provider and applied only through CaravanSlotView.Bind, so event handlers never mutate
+    /// Locked/Empty/Occupied visuals independently.
+    /// </summary>
     public void Refresh()
     {
         ShowEverySlotAsUnknown();
@@ -352,6 +356,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         ND.Framework.FrameworkEvents.CaravanCargoChanged += HandleCaravanCargoChanged;
         ND.Framework.FrameworkEvents.CaravanJourneyStateChanged +=
             HandleCaravanJourneyStateChanged;
+        ND.Framework.FrameworkEvents.VillageBuildingsChanged += HandleVillageBuildingsChanged;
     }
 
     private void UnsubscribeFromFrameworkEvents()
@@ -362,6 +367,7 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
         ND.Framework.FrameworkEvents.CaravanCargoChanged -= HandleCaravanCargoChanged;
         ND.Framework.FrameworkEvents.CaravanJourneyStateChanged -=
             HandleCaravanJourneyStateChanged;
+        ND.Framework.FrameworkEvents.VillageBuildingsChanged -= HandleVillageBuildingsChanged;
     }
 
     private void HandleFrameworkLoadCompleted(ND.Framework.SaveData _)
@@ -384,6 +390,13 @@ public sealed class CaravanOverviewPresenter : MonoBehaviour
 
     private void HandleCaravanCargoChanged(string _)
     {
+        Refresh();
+    }
+
+    private void HandleVillageBuildingsChanged()
+    {
+        // A BaseCamp level change can unlock a slot without changing Caravan data. Requery the
+        // complete snapshot once instead of polling or patching one view in place.
         Refresh();
     }
 

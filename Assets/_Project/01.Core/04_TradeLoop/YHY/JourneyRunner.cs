@@ -133,13 +133,18 @@ public static class JourneyRunner
         foreach (CargoEntry entry in caravan.cargo)
         {
             if (remaining <= 0) break;
-            if (entry == null) continue;
+            // Legacy/corrupt non-positive rows are cleanup targets, not loss candidates.
+            if (entry == null || entry.quantity <= 0) continue;
 
             int take = (entry.quantity < remaining) ? entry.quantity : remaining;  // 이 상품에서 뺄 수 있는 만큼
             entry.quantity -= take;      // 실제 수량 감소 → 판매·적재에 반영됨
             remaining -= take;
             caravan.runCargoLost += take;  // 실제로 잃은 개수만 기록(부분성공 판정·표시용)
         }
+
+        // 수량만 0으로 만든 행을 남기면 UI에는 숨겨져도 이후 구성 검증에서는
+        // 유효하지 않은 화물로 오인될 수 있으므로 손실 처리 직후 목록도 정규화한다.
+        RemoveEmptyCargoEntries(caravan);
     }
 
     /// <summary>이동 중 이벤트 — 식량 차감(도난 등). 나중에 이벤트 시스템이 이 함수를 부른다.</summary>
@@ -308,6 +313,19 @@ public static class JourneyRunner
                 break;
             }
         }
+
+        // Random loss can also reduce a stack to exactly zero.
+        RemoveEmptyCargoEntries(caravan);
+    }
+
+    /// <summary>
+    /// Keeps the cargo list canonical after a loss: only positive-quantity rows survive.
+    /// This prevents invisible zero rows from blocking later caravan composition changes.
+    /// </summary>
+    private static void RemoveEmptyCargoEntries(CaravanData caravan)
+    {
+        if (caravan?.cargo == null) return;
+        caravan.cargo.RemoveAll(entry => entry == null || entry.quantity <= 0);
     }
 
     private static uint InitializeRandomState(int seed)
@@ -334,6 +352,17 @@ public static class JourneyRunner
     private static void CheckFoodDepletion(CaravanData caravan)
     {
         if (caravan.runFatalReason != JourneyFailureReason.None) return;   // 이미 실패면 스킵
+
+        // 견인 동물이 없어 식량 소모율이 0인 운송 수단(Wagon_S 등)은
+        // 식량을 적재하지 않아도 고갈 상태가 아니다. 잔량만 0인지 검사하면
+        // 무소모 구성도 출발 직후 FoodDepleted로 실패하므로 소모 계약을 먼저 확인한다.
+        if (CaravanCalculator.GetConsumptionPerSec(caravan) <= 0f)
+        {
+            caravan.runFoodDepleted = false;
+            caravan.runFoodDepletedProgress = 0f;
+            return;
+        }
+
         if (CaravanCalculator.GetRemainingFood(caravan) > 0f) return;      // 아직 식량 있음
 
         // 식량 바닥 — 처음 바닥나면 시점 기록 (즉사 아님, 여기서 제한시간 시작)

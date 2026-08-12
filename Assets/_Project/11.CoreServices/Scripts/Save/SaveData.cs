@@ -263,6 +263,9 @@ namespace ND.Framework
         /// <summary>오두막의 미수령 생산물과 다음 UTC 생산 시각이다.</summary>
         public CottageProductionSaveData cottageProduction = new CottageProductionSaveData();
 
+        /// <summary>빵집의 미수령 생산량과 다음 UTC 생산 시각이다.</summary>
+        public BakeryProductionSaveData bakeryProduction = new BakeryProductionSaveData();
+
         /// <summary>
         /// 거점 마을에 설치한 환경 아이템(오크나무·벤치·울타리 등) 목록이다.
         /// 건물과 달리 종류당 여러 개가 가능하고 레벨이 없으며, 인스턴스마다 고유 ID로 구분한다.
@@ -281,6 +284,16 @@ namespace ND.Framework
         public string storedDraftAnimalContentId = string.Empty;
         public long nextWagonProductionUtcTicks;
         public long nextDraftAnimalProductionUtcTicks;
+        public long lastEvaluatedUtcTicks;
+    }
+
+    [Serializable]
+    public sealed class BakeryProductionSaveData
+    {
+        public bool initialized;
+        public int storedBreadCount;
+        public string storedBreadContentId = string.Empty;
+        public long nextProductionUtcTicks;
         public long lastEvaluatedUtcTicks;
     }
 
@@ -689,12 +702,10 @@ namespace ND.Framework
         public GameCalendarSaveData calendar;
 
         /// <summary>
-        /// Caravan creation is permitted only for these persistent slot indices.
-        /// Occupying a slot does not unlock another slot.
-        /// Slot 2 is unlocked temporarily for creation testing. In the final new-game policy,
-        /// only the first, initially provided Caravan slot is expected to be available.
+        /// Legacy version-6 slot unlock payload retained for JSON compatibility.
+        /// Runtime creation and presentation derive unlocks from BaseCampProgressionPolicy.
         /// </summary>
-        public List<int> unlockedCaravanSlotIndices = new List<int> { 1 };
+        public List<int> unlockedCaravanSlotIndices = new List<int>();
 
         /// <summary>
         /// 현재 계절 ID이다. Economy PriceCalculationInput.SeasonId와 연결된다.

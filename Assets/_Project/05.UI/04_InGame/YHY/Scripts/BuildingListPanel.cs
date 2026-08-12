@@ -171,7 +171,8 @@ public void Rebuild()
         rect.anchorMin = Vector2.one;
         rect.anchorMax = Vector2.one;
         rect.pivot = Vector2.one;
-        rect.anchoredPosition = new Vector2(-10f, -8f);
+        // 행 오른쪽 위 모서리의 안쪽으로 배치해 패널 마스크 밖에서 잘리지 않게 한다.
+        rect.anchoredPosition = new Vector2(-120f, -6f);
         rect.sizeDelta = new Vector2(28f, 28f);
         Image image = indicator.GetComponent<Image>();
         image.sprite = state.Icon;

@@ -21,6 +21,7 @@ namespace ND.Framework
     public sealed class TownQuestCaravanView
     {
         public string CaravanId { get; internal set; }
+        public string DisplayName { get; internal set; }
         public int SlotIndex { get; internal set; }
         public bool CanPayTradingCurrency { get; internal set; }
         public bool CanPayAllItems { get; internal set; }
@@ -163,6 +164,8 @@ namespace ND.Framework
                 view.EligibleCaravans.Add(new TownQuestCaravanView
                 {
                     CaravanId = caravan.caravanId,
+                    // ID는 결제 명령의 식별자로 보존하고, 사용자에게는 저장된 이름을 노출한다.
+                    DisplayName = ResolveCaravanDisplayName(caravan),
                     SlotIndex = caravan.slotIndex,
                     CanPayTradingCurrency = canCurrency,
                     CanPayAllItems = canItems
@@ -170,6 +173,14 @@ namespace ND.Framework
             }
             view.HasEligibleCaravan = view.EligibleCaravans.Count > 0;
             return view;
+        }
+
+        private static string ResolveCaravanDisplayName(CaravanSaveData caravan)
+        {
+            string displayName = caravan?.displayName?.Trim() ?? string.Empty;
+            return string.IsNullOrEmpty(displayName)
+                ? $"Caravan {(caravan?.slotIndex ?? 0) + 1}"
+                : displayName;
         }
 
         private static bool HasAllItems(

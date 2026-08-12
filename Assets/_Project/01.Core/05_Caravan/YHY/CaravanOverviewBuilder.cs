@@ -62,7 +62,9 @@ public static class CaravanOverviewBuilder
 
                 // 범위 밖·이미 찬 슬롯·잠긴 슬롯이면 → 해금된 빈 자리로 방어 배치 (데이터 꼬임 방어)
                 // ※ 잠긴 슬롯엔 상단을 앉히지 않는다 — 해금 규칙이 무의미해지므로.
-                if (slot < 0 || slot >= MaxSlots || slots[slot] != null || !IsUnlocked(isSlotUnlocked, slot))
+                // Persisted occupancy wins over the current unlock level for backward compatibility.
+                // Unlock rules apply only when presenting/creating an empty slot.
+                if (slot < 0 || slot >= MaxSlots || slots[slot] != null)
                     slot = FindFirstFreeUnlockedSlot(slots, isSlotUnlocked);
                 if (slot < 0) continue;   // 해금된 빈 자리가 없으면 이 상단은 표시하지 않음 (초과·꼬임 방어)
 

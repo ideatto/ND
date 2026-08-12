@@ -34,7 +34,7 @@ public static class BaseCampOverviewUiPrefabBuilder
         GameObject card = Panel("Card", root.transform, new Color32(239, 225, 195, 255));
         RectTransform cardRect = (RectTransform)card.transform;
         cardRect.anchorMin = cardRect.anchorMax = new Vector2(0.5f, 0.5f);
-        cardRect.sizeDelta = new Vector2(600f, 650f);
+        cardRect.sizeDelta = new Vector2(600f, 740f);
 
         GameObject header = Panel("Header", card.transform, new Color32(216, 195, 159, 255));
         Stretch((RectTransform)header.transform, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -78f), Vector2.zero);
@@ -51,10 +51,19 @@ public static class BaseCampOverviewUiPrefabBuilder
         TextNode("Label", closeObject.transform, "X", 25f, TextAlignmentOptions.Center, font);
 
         TextMeshProUGUI overviewTitle = TextNode("OverviewTitle", card.transform, "거점 건물 현황", 27f, TextAlignmentOptions.Center, font);
-        AnchorTop((RectTransform)overviewTitle.transform, 36f, -136f, -36f, -88f);
+        AnchorTop((RectTransform)overviewTitle.transform, 36f, -132f, -36f, -88f);
+
+        TextMeshProUGUI guide = TextNode(
+            "UnlockGuide",
+            card.transform,
+            "다음 레벨을 해금하려면 베이스 캠프를 증축하세요.",
+            15f,
+            TextAlignmentOptions.MidlineRight,
+            font);
+        AnchorTop((RectTransform)guide.transform, 150f, -158f, -54f, -134f);
 
         GameObject columns = Panel("ColumnHeader", card.transform, new Color32(197, 190, 176, 255));
-        AnchorTop((RectTransform)columns.transform, 54f, -188f, -54f, -146f);
+        AnchorTop((RectTransform)columns.transform, 54f, -204f, -54f, -162f);
         TextMeshProUGUI buildingColumn = TextNode("BuildingColumn", columns.transform, "건물", 21f, TextAlignmentOptions.Center, font);
         SetHorizontalRange((RectTransform)buildingColumn.transform, 0f, 0.62f, 12f, -6f);
         TextMeshProUGUI levelColumn = TextNode("LevelColumn", columns.transform, "현재 레벨", 21f, TextAlignmentOptions.Center, font);
@@ -69,7 +78,7 @@ public static class BaseCampOverviewUiPrefabBuilder
                 "BuildingRow_" + i,
                 card.transform,
                 i % 2 == 0 ? new Color32(246, 239, 223, 255) : new Color32(229, 220, 201, 255));
-            float top = -196f - i * 46f;
+            float top = -212f - i * 46f;
             AnchorTop((RectTransform)row.transform, 54f, top - 42f, -54f, top);
 
             string buildingName = i == 0 ? "베이스 캠프" : names[i - 1];
@@ -85,25 +94,40 @@ public static class BaseCampOverviewUiPrefabBuilder
         }
 
         GameObject divider = Panel("Divider", card.transform, new Color32(174, 151, 113, 255));
-        AnchorTop((RectTransform)divider.transform, 54f, -526f, -54f, -523f);
+        AnchorTop((RectTransform)divider.transform, 54f, -542f, -54f, -539f);
 
-        TextMeshProUGUI limit = TextNode("LevelLimit", card.transform, "건물 레벨 상한: Lv.0", 23f, TextAlignmentOptions.MidlineLeft, font);
-        AnchorTop((RectTransform)limit.transform, 54f, -575f, -54f, -531f);
-
-        TextMeshProUGUI guide = TextNode(
-            "UnlockGuide",
+        // Caravan progression is a separate static block below the building table. Runtime code
+        // changes only the values and never creates UI objects.
+        GameObject caravanProgressPanel = Panel(
+            "CaravanProgressPanel",
             card.transform,
-            "다음 레벨을 해금하려면 베이스 캠프를 증축하세요.",
-            20f,
+            new Color32(226, 207, 177, 255));
+        AnchorTop((RectTransform)caravanProgressPanel.transform, 54f, -690f, -54f, -552f);
+
+        TextMeshProUGUI caravanSlotProgress = TextNode(
+            "CaravanSlotProgress",
+            caravanProgressPanel.transform,
+            "현재 캐러밴 슬롯: 0 / 4",
+            23f,
             TextAlignmentOptions.MidlineLeft,
             font);
-        AnchorTop((RectTransform)guide.transform, 54f, -619f, -54f, -573f);
+        AnchorTop((RectTransform)caravanSlotProgress.transform, 24f, -61f, -24f, -13f);
+
+        TextMeshProUGUI nextUnlock = TextNode(
+            "NextUnlock",
+            caravanProgressPanel.transform,
+            "다음 레벨: 캐러밴 슬롯 해금",
+            21f,
+            TextAlignmentOptions.MidlineLeft,
+            font);
+        AnchorTop((RectTransform)nextUnlock.transform, 24f, -117f, -24f, -69f);
 
         BaseCampOverviewPopupController controller = root.AddComponent<BaseCampOverviewPopupController>();
         SerializedObject serialized = new SerializedObject(controller);
         serialized.FindProperty("baseCampLevelText").objectReferenceValue = baseLevel;
-        serialized.FindProperty("levelLimitText").objectReferenceValue = limit;
         serialized.FindProperty("unlockGuideText").objectReferenceValue = guide;
+        serialized.FindProperty("caravanSlotProgressText").objectReferenceValue = caravanSlotProgress;
+        serialized.FindProperty("nextUnlockText").objectReferenceValue = nextUnlock;
         serialized.FindProperty("backdropButton").objectReferenceValue = backdropButton;
         serialized.FindProperty("closeButton").objectReferenceValue = closeButton;
         SerializedProperty rows = serialized.FindProperty("buildingRows");

@@ -138,7 +138,7 @@ public static class CottageProductionPopupPrefabBuilder
             if (entry == null)
                 entry = root.AddComponent<CottageProductionMainUiEntry>();
             Sprite readyIcon = AssetDatabase.LoadAssetAtPath<Sprite>(
-                "Assets/_Project/09.Art/04_UI/icons/Icon_caravan_slot_settling.png");
+                "Assets/_Project/09.Art/04_UI/icons/알림 UI ICON.png");
             entry.Configure(buildingList, presenter, readyIcon);
 
             if (notice != null)

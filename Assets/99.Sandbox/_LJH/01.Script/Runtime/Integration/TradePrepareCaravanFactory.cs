@@ -51,8 +51,80 @@ public static class TradePrepareCaravanFactory
         if (ND.Framework.SaveDataLookup.TryGetCaravan(saveData, caravan.caravanId, out savedCaravan))
         {
             caravan.baseSafetyChancePercent = savedCaravan.baseSafetyChancePercent;
+            RestoreSavedCargoPriceGroups(caravan, savedCaravan, items);
+        }
+        else if (saveData != null && saveData.caravan != null)
+        {
+            // The legacy single-Caravan compatibility path has no explicit departure ID.
+            RestoreSavedCargoPriceGroups(caravan, saveData.caravan, items);
         }
         return caravan;
+    }
+
+    /// <summary>
+    /// Rebuilds departure Cargo from the selected Caravan's latest SaveData snapshot.
+    /// The Draft and aggregate runtime rows are presentation/validation derivatives and may be
+    /// stale after a Warehouse transfer; SaveData owns the S4 departure quantities and price groups.
+    /// </summary>
+    private static void RestoreSavedCargoPriceGroups(
+        CaravanData runtimeCaravan,
+        ND.Framework.CaravanSaveData savedCaravan,
+        TradeItemData[] catalogItems)
+    {
+        if (runtimeCaravan == null || runtimeCaravan.cargo == null
+            || savedCaravan == null || savedCaravan.cargo == null)
+        {
+            return;
+        }
+
+        var runtimeMetadataById = new Dictionary<string, imsiTradeItemData>(StringComparer.Ordinal);
+        foreach (CargoEntry aggregate in runtimeCaravan.cargo)
+        {
+            string itemId = NormalizeId(aggregate?.item?.id);
+            if (string.IsNullOrEmpty(itemId) || aggregate.quantity <= 0)
+                continue;
+            runtimeMetadataById[itemId] = aggregate.item;
+        }
+
+        var restored = new List<CargoEntry>();
+        foreach (ND.Framework.CargoEntrySaveData row in savedCaravan.cargo)
+        {
+            ND.Framework.TradeItemSaveData savedItem = row?.item;
+            string itemId = NormalizeId(savedItem?.itemId);
+            if (string.IsNullOrEmpty(itemId) || row.quantity <= 0)
+                continue;
+
+            TradeItemData catalogItem = TradePrepareViewDataBuilder.FindItem(catalogItems, itemId);
+            // CreatePreviewCaravan already maps feed to foodAmount. Adding the same saved row to
+            // Cargo would count its weight twice and can falsely fail departure at max load.
+            if (catalogItem != null && catalogItem.Category == TradeItemCategory.DraftAnimalsFood)
+                continue;
+
+            runtimeMetadataById.TryGetValue(itemId, out imsiTradeItemData runtimeItem);
+            restored.Add(new CargoEntry
+            {
+                item = new imsiTradeItemData
+                {
+                    // Current catalog/runtime metadata wins when available. SaveData remains the
+                    // fallback for removed definitions and owns acquisition-price identity.
+                    id = runtimeItem?.id ?? catalogItem?.ItemId ?? savedItem.itemId ?? string.Empty,
+                    itemName = runtimeItem?.itemName ?? catalogItem?.DisplayName
+                        ?? savedItem.itemName ?? string.Empty,
+                    weight = runtimeItem?.weight ?? catalogItem?.Weight ?? savedItem.weight,
+                    purchaseUnitPrice = Math.Max(0L, savedItem.purchaseUnitPrice),
+                    basePrice = Math.Max(0L, runtimeItem?.basePrice
+                        ?? catalogItem?.BaseBuyPrice ?? savedItem.basePrice),
+                    maxCount = runtimeItem != null && runtimeItem.maxCount > 0
+                        ? runtimeItem.maxCount
+                        : (catalogItem != null
+                            ? catalogItem.MaxCount
+                            : (savedItem.maxCount > 0 ? savedItem.maxCount : 1))
+                },
+                quantity = row.quantity
+            });
+        }
+
+        runtimeCaravan.cargo = restored;
     }
 
     // Creates the runtime Caravan only after confirming that the Draft refers to one selectable Provider option.

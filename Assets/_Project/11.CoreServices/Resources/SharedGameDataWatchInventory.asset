@@ -534,6 +534,11 @@ MonoBehaviour:
     typeName: BuildData
     dataId: Cottage
     watchRootKind: 0
+  - assetGuid: 2506fbaf2b2946d4895671605816b570
+    assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_EndingItem.asset
+    typeName: BuildData
+    dataId: EndingItem
+    watchRootKind: 0
   - assetGuid: 0a137ed9d48fedc4ab8b2178af1a0913
     assetPath: Assets/_Project/02.Data/01_ScriptableObjects/Build/Build_Farm.asset
     typeName: BuildData
@@ -729,3 +734,4 @@ MonoBehaviour:
   - 41b18299e39f6fd4aa7b92710a41324a
   - 68c9a81f94ce36946a014d1a705c5d39
   - 302faa1f84ddd79438fa58ce8d1ea0bc
+  - 2506fbaf2b2946d4895671605816b570

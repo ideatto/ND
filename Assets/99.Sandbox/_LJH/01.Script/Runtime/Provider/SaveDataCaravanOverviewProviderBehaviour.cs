@@ -49,25 +49,14 @@ public CaravanOverviewViewData GetOverview()
         if (validation.HasInvalidEntries)
             Debug.LogWarning("Invalid Caravan slot data was excluded from the Main UI.", this);
 
-        // Unlock ownership remains in persistent progression data. Creating a Caravan changes only
-        // occupancy and must never unlock the next slot by itself.
+        // Slot state calculation is centralized in CreateVacantBlock so every refresh applies
+        // the same BaseCamp rule. Occupied legacy slots remain visible and are not downgraded.
         for (int index = 0; index < slots.Length; index++)
         {
             if (slots[index] != null)
                 continue;
 
-            bool isUnlocked =
-                saveData.world?.unlockedCaravanSlotIndices?.Contains(index) == true;
-            slots[index] = new CaravanBlockViewData
-            {
-                slotIndex = index,
-                slotState = isUnlocked
-                    ? CaravanSlotState.Empty
-                    : CaravanSlotState.Locked,
-                unlockHintText = isUnlocked
-                    ? string.Empty
-                    : "Complete the required quest to unlock this Caravan slot."
-            };
+            slots[index] = CreateVacantBlock(saveData, index);
         }
 
         return new CaravanOverviewViewData { caravans = slots };
@@ -100,6 +89,28 @@ public CaravanOverviewViewData GetOverview()
         {
             slotIndex = slotIndex,
             slotState = CaravanSlotState.Unknown
+        };
+    }
+
+    /// <summary>
+    /// Converts one unoccupied persistent slot into Empty or Locked from the authoritative
+    /// BaseCamp level. Keeping this decision in the Provider prevents individual views from
+    /// reading SaveData or duplicating progression rules.
+    /// </summary>
+    private static CaravanBlockViewData CreateVacantBlock(
+        FrameworkSaveData saveData,
+        int slotIndex)
+    {
+        bool isUnlocked = BaseCampProgressionPolicy.IsCaravanSlotUnlocked(
+            saveData?.player?.villageBuildings,
+            slotIndex);
+        return new CaravanBlockViewData
+        {
+            slotIndex = slotIndex,
+            slotState = isUnlocked ? CaravanSlotState.Empty : CaravanSlotState.Locked,
+            unlockHintText = isUnlocked
+                ? string.Empty
+                : $"베이스 캠프 레벨이 부족하여 캐러밴 슬롯을 해금할 수 없습니다. 필요 레벨: Lv.{slotIndex + 1}"
         };
     }
 
