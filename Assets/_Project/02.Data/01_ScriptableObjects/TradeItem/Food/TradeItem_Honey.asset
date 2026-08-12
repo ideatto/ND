@@ -37,4 +37,4 @@ MonoBehaviour:
     - modifierTarget: 2
       modifierOperation: 3
       value: -0.1
-  localSpecialty: 0
+  localSpecialty: 1

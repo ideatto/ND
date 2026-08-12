@@ -15,7 +15,7 @@ MonoBehaviour:
   marketId: RiverTownMarket
   itemMinimumQuantity: 30
   itemMaxQuantity: 150
-  itemRenewalCycle: 3600
+  itemRenewalCycle: 1800
   tradeItems:
   - {fileID: 11400000, guid: d81e172ffdc16d948b37a48d1a89a98a, type: 2}
   - {fileID: 11400000, guid: f546f2032fa12be49bb841ec17ba64c8, type: 2}

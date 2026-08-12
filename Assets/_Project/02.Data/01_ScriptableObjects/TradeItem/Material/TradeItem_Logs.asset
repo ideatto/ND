@@ -20,11 +20,11 @@ MonoBehaviour:
     \uC704\uD5D8\uD574\uC11C \uC791\uC5C5\uC744 \uD558\uC9C0 \uC54A\uC544\uC694."
   rarity: 1
   category: 1
-  baseBuyPrice: 400
-  baseSellPrice: 400
+  baseBuyPrice: 50
+  baseSellPrice: 50
   canStack: 1
   maxCount: 5
-  weight: 5
+  weight: 4
   isConsumable: 0
   affectModify: 1
   modifiers:
