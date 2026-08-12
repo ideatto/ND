@@ -278,7 +278,6 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         AppendEntries(builder, settlement.Entries, SettlementEntryType.EventProfit, "주요 이벤트 수익");
         AppendEntries(builder, settlement.Entries, SettlementEntryType.EventLoss, "주요 이벤트 손실");
 
-        AppendSingle(builder, settlement.Entries, SettlementEntryType.FoodCost, "먹이 비용");
         AppendSingle(builder, settlement.Entries, SettlementEntryType.MercenaryCost, "용병 고용 비용");
         AppendSingle(builder, settlement.Entries, SettlementEntryType.CartRepairCost, "마차 수리 비용");
         AppendSingle(builder, settlement.Entries, SettlementEntryType.LostItemValue, "상품 손실");
@@ -287,7 +286,6 @@ public sealed class TradeSettlementPanelController : MonoBehaviour, IPointerClic
         builder.AppendLine($"총 사용 금액  {settlement.TotalExpense:N0} G");
         builder.AppendLine($"총 수익       {settlement.TotalRevenue:N0} G");
         builder.AppendLine($"순이익        {Signed(settlement.NetProfit)} G");
-        builder.AppendLine($"성장 포인트   +{settlement.DevelopmentCurrencyReward:N0}");
         return builder.ToString().TrimEnd();
     }
 

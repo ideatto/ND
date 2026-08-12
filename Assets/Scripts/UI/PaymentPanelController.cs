@@ -117,11 +117,9 @@ public sealed class PaymentPanelController : MonoBehaviour
             return "결제할 정산 데이터가 없습니다.";
 
         SettlementBreakdown settlement = viewData.Settlement;
-        long foodCost = SumEntry(settlement, SettlementEntryType.FoodCost);
         long mercenaryCost = SumEntry(settlement, SettlementEntryType.MercenaryCost);
         long repairCost = SumEntry(settlement, SettlementEntryType.CartRepairCost);
         return
-            $"먹이 비용       -{foodCost:N0} G\n" +
             $"용병 고용 비용  -{mercenaryCost:N0} G\n" +
             $"마차 수리 비용  -{repairCost:N0} G\n\n" +
             $"총 사용 금액    {settlement.TotalExpense:N0} G\n" +

@@ -65,7 +65,7 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
     public struct SummaryStats
     {
         public string fromTownName;   // 출발 도시(루트 SO의 FromTown)
-        public string viaText;        // 경유 도시 표기(비면 "없음" 처리)
+        public string viaText;        // 레거시 요약 공급자 호환용(현재 UI에는 표시하지 않음)
         public int expectedRisk;      // 전체 여정에서 하나 이상의 이벤트가 발생할 확률(%)
         public float expectedFood;    // 예상 음식 소모량
         public float durationSeconds; // 예상 소요 시간(초)
@@ -994,26 +994,21 @@ public class TradePrepareUIManager : MonoBehaviour, ITradeScreenView
             lastFromTownName = string.IsNullOrEmpty(st.fromTownName) ? "-" : st.fromTownName;
             lastDuration = st.durationSeconds;
 
-            // 비용·이익(번들에서 직접 집계 — 배율은 배율 데이터 확정 후 적용)
-            long cargoCost = 0, profit = 0;
+            // 비용(번들에서 직접 집계)
+            long cargoCost = 0;
             foreach (TradeItemBundle b in bundles)
-            {
                 cargoCost += b.purchaseUnitPrice * b.quantity;
-                profit += b.sellUnitPrice * b.quantity;
-            }
             long mercCost = mercenaryPanel != null ? mercenaryPanel.SelectedHireCost : 0;
             int mercPower = mercenaryPanel != null ? mercenaryPanel.SelectedCombatPower : 0;
 
             TradeSummaryPanel.SummaryData d = new TradeSummaryPanel.SummaryData();
             d.fromTown = string.IsNullOrEmpty(st.fromTownName) ? "-" : st.fromTownName;
             d.toTown = Resolve(selTownId);
-            d.viaText = string.IsNullOrEmpty(st.viaText) ? "없음" : st.viaText;   // 경유 없을 시 '없음'(와이어프레임)
             d.expectedRisk = st.expectedRisk;
             d.mercenaryPower = mercPower;
             d.expectedFood = st.expectedFood;
             d.loadedFood = loadedFood;
             d.prepareCost = cargoCost + mercCost;
-            d.expectedProfit = profit;
             d.durationSeconds = st.durationSeconds;
             summaryView.Show(d);
         }
