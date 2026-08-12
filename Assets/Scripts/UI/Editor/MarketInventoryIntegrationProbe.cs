@@ -719,10 +719,23 @@ public static class MarketInventoryIntegrationProbe
 
         var viewData = new TradePrepareViewData
         {
-            totalPurchaseCost = 400L,
+            totalPurchaseCost = 900L,
             estimatedSellRevenue = 900L,
             mercenaryCost = 50L
         };
+        var purchaseDeltaStore = new TradePreparePurchaseDeltaStore();
+        purchaseDeltaStore.RecordPurchase(
+            TestOnlyCaravanId,
+            400L,
+            new[]
+            {
+                new TradeItemBundle
+                {
+                    itemId = "probe-item",
+                    quantity = 4,
+                    purchaseUnitPrice = 100L
+                }
+            });
         var commit = createCommit.Invoke(
             null,
             new object[]
@@ -731,7 +744,8 @@ public static class MarketInventoryIntegrationProbe
                 viewData,
                 "market-separated",
                 "route",
-                TestOnlyCaravanId
+                TestOnlyCaravanId,
+                purchaseDeltaStore
             })
             as TradePrepareCommitData;
 
@@ -739,8 +753,10 @@ public static class MarketInventoryIntegrationProbe
             && commit.caravanId == TestOnlyCaravanId
             && commit.purchaseCost == 400L
             && commit.estimatedSellRevenue == 0L
-            && (commit.purchasedItems == null || commit.purchasedItems.Length == 0),
-            "Departure commit must preserve the selected Caravan ID and paid purchase receipt, while excluding automatic sale revenue.");
+            && commit.purchasedItems?.Length == 1
+            && commit.purchasedItems[0].itemId == "probe-item"
+            && commit.purchasedItems[0].quantity == 4,
+            "Departure commit must use the Caravan purchase delta rather than the full Cargo valuation.");
         Assert(commit.mercenaryCost == 50L,
             "Separating market settlement must preserve non-market departure costs.");
         checks.Add("departure_commit_preserves_paid_purchase_receipt_without_reapplying_market_settlement");

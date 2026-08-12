@@ -817,6 +817,8 @@ private static string BuildDepartureWarning(TradePrepareStartResult result)
                 return false;
             }
 
+            runtimeContext?.RecordPurchaseDelta(model.CaravanId, result);
+
             // Market commit is authoritative for currency, stock, and Cargo SaveData.
             // Rebuild every downstream view from Saved Cargo instead of reusing the UI snapshot.
             CaravanCargoDraftStore.Clear(model.MarketId, model.CaravanId);

@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 [System.Serializable]
 public sealed class TradePrepareCommitData
 {
@@ -92,6 +95,128 @@ public sealed class TradePrepareCommitData
         }
 
         return result;
+    }
+
+    private static long AddClamped(long left, long right)
+    {
+        left = NormalizeMoney(left);
+        right = NormalizeMoney(right);
+        return left > long.MaxValue - right ? long.MaxValue : left + right;
+    }
+}
+
+// Runtime-only purchase receipt for one TradePrepare session. Cargo remains owned by
+// Framework SaveData; this store keeps only purchases paid during the current session.
+public sealed class TradePreparePurchaseDeltaStore
+{
+    private sealed class PurchaseDelta
+    {
+        public long purchaseCost;
+        public readonly List<TradeItemBundle> purchasedItems = new List<TradeItemBundle>();
+    }
+
+    private readonly Dictionary<string, PurchaseDelta> deltasByCaravanId =
+        new Dictionary<string, PurchaseDelta>(StringComparer.Ordinal);
+
+    public void RecordPurchase(string caravanId, long purchaseCost, IEnumerable<TradeItemBundle> purchasedItems)
+    {
+        string key = NormalizeId(caravanId);
+        if (string.IsNullOrEmpty(key) || purchaseCost < 0L)
+            return;
+
+        if (!deltasByCaravanId.TryGetValue(key, out PurchaseDelta delta))
+        {
+            delta = new PurchaseDelta();
+            deltasByCaravanId.Add(key, delta);
+        }
+
+        delta.purchaseCost = AddClamped(delta.purchaseCost, purchaseCost);
+        if (purchasedItems == null)
+            return;
+
+        foreach (TradeItemBundle item in purchasedItems)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(item.itemId) || item.quantity <= 0)
+                continue;
+
+            string itemId = item.itemId.Trim();
+            long unitPrice = NormalizeMoney(item.purchaseUnitPrice);
+            TradeItemBundle existing = delta.purchasedItems.Find(candidate =>
+                candidate != null
+                && string.Equals(candidate.itemId, itemId, StringComparison.Ordinal)
+                && candidate.purchaseUnitPrice == unitPrice);
+            if (existing != null)
+            {
+                existing.quantity = existing.quantity > int.MaxValue - item.quantity
+                    ? int.MaxValue
+                    : existing.quantity + item.quantity;
+                continue;
+            }
+
+            delta.purchasedItems.Add(new TradeItemBundle
+            {
+                itemId = itemId,
+                quantity = item.quantity,
+                purchaseUnitPrice = unitPrice,
+                sellUnitPrice = NormalizeMoney(item.sellUnitPrice)
+            });
+        }
+    }
+
+    public bool TryGet(string caravanId, out long purchaseCost, out TradeItemBundle[] purchasedItems)
+    {
+        purchaseCost = 0L;
+        purchasedItems = new TradeItemBundle[0];
+        string key = NormalizeId(caravanId);
+        if (string.IsNullOrEmpty(key) || !deltasByCaravanId.TryGetValue(key, out PurchaseDelta delta))
+            return false;
+
+        purchaseCost = delta.purchaseCost;
+        purchasedItems = ClonePurchasedItems(delta.purchasedItems);
+        return true;
+    }
+
+    public void Clear(string caravanId)
+    {
+        string key = NormalizeId(caravanId);
+        if (!string.IsNullOrEmpty(key))
+            deltasByCaravanId.Remove(key);
+    }
+
+    public void ClearAll()
+    {
+        deltasByCaravanId.Clear();
+    }
+
+    private static TradeItemBundle[] ClonePurchasedItems(IReadOnlyList<TradeItemBundle> source)
+    {
+        if (source == null || source.Count == 0)
+            return new TradeItemBundle[0];
+
+        var result = new TradeItemBundle[source.Count];
+        for (int index = 0; index < source.Count; index++)
+        {
+            TradeItemBundle item = source[index];
+            result[index] = item == null ? null : new TradeItemBundle
+            {
+                itemId = item.itemId ?? string.Empty,
+                quantity = Math.Max(0, item.quantity),
+                purchaseUnitPrice = NormalizeMoney(item.purchaseUnitPrice),
+                sellUnitPrice = NormalizeMoney(item.sellUnitPrice)
+            };
+        }
+
+        return result;
+    }
+
+    private static string NormalizeId(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    }
+
+    private static long NormalizeMoney(long value)
+    {
+        return value > 0L ? value : 0L;
     }
 
     private static long AddClamped(long left, long right)

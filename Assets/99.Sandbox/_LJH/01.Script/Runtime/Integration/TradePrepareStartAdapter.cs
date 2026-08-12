@@ -17,6 +17,7 @@ public sealed class TradePrepareStartAdapter
     private readonly ITradePrepareStartGateway startGateway;
     private readonly TradePrepareViewDataBuilder viewDataBuilder;
     private readonly ITradePrepareCommitSink commitSink;
+    private readonly TradePreparePurchaseDeltaStore purchaseDeltaStore;
 
     public TradePrepareStartAdapter(ND.Framework.TradeStartService tradeStartService)
         : this(CreateFrameworkGateway(tradeStartService), new TradePrepareViewDataBuilder(), null)
@@ -42,10 +43,20 @@ public sealed class TradePrepareStartAdapter
         ITradePrepareStartGateway startGateway,
         TradePrepareViewDataBuilder viewDataBuilder,
         ITradePrepareCommitSink commitSink)
+        : this(startGateway, viewDataBuilder, commitSink, null)
+    {
+    }
+
+    public TradePrepareStartAdapter(
+        ITradePrepareStartGateway startGateway,
+        TradePrepareViewDataBuilder viewDataBuilder,
+        ITradePrepareCommitSink commitSink,
+        TradePreparePurchaseDeltaStore purchaseDeltaStore)
     {
         this.startGateway = startGateway;
         this.viewDataBuilder = viewDataBuilder ?? new TradePrepareViewDataBuilder();
         this.commitSink = commitSink;
+        this.purchaseDeltaStore = purchaseDeltaStore;
     }
 
     /// <summary>Runs projected departure checks without mutating SaveData or invoking start.</summary>
@@ -179,8 +190,12 @@ public sealed class TradePrepareStartAdapter
             viewData,
             tradeId.Trim(),
             route.RouteId,
-            caravan.caravanId);
-        if ((commitData.mercenaryCost > 0L || commitData.purchasedItems.Length > 0) && commitSink == null)
+            caravan.caravanId,
+            purchaseDeltaStore);
+        if ((commitData.purchaseCost > 0L
+            || commitData.mercenaryCost > 0L
+            || commitData.purchasedItems.Length > 0)
+            && commitSink == null)
         {
             return CreateFailure(
                 ErrorCommitSinkMissing,
@@ -259,6 +274,10 @@ public sealed class TradePrepareStartAdapter
                 commitData);
         }
 
+        // Preserve paid purchases across validation and start failures. The receipt is consumed
+        // only after settlement staging and Framework trade start both succeed.
+        purchaseDeltaStore?.Clear(caravan.caravanId);
+
         return new TradePrepareStartResult
         {
             succeeded = true,
@@ -297,8 +316,8 @@ public sealed class TradePrepareStartAdapter
             draft.selectedDestinationTownId?.Trim()
             ?? string.Empty;
 
-        // 선택 Caravan이 최신 SaveData에도 존재하는지 확인하고,
-        // 저장된 실제 위치와 Draft 위치를 비교한다.
+        // Confirm the selected Caravan still exists in the latest SaveData and that its saved
+        // location still matches the Draft before starting the route.
         if (!string.IsNullOrEmpty(caravanId))
         {
             if (!ND.Framework.SaveDataLookup.TryGetCaravan(
@@ -532,13 +551,18 @@ public sealed class TradePrepareStartAdapter
         TradePrepareViewData viewData,
         string tradeId,
         string routeId,
-        string departureCaravanId)
+        string departureCaravanId,
+        TradePreparePurchaseDeltaStore purchaseDeltaStore)
     {
         var mercenaryIds = new string[draft.SelectedMercenaryIds.Count];
         for (int index = 0; index < draft.SelectedMercenaryIds.Count; index++)
         {
             mercenaryIds[index] = draft.SelectedMercenaryIds[index];
         }
+
+        long purchaseCost = 0L;
+        TradeItemBundle[] purchasedItems = new TradeItemBundle[0];
+        purchaseDeltaStore?.TryGet(departureCaravanId, out purchaseCost, out purchasedItems);
 
         return new TradePrepareCommitData
         {
@@ -550,42 +574,16 @@ public sealed class TradePrepareStartAdapter
             routeId = routeId,
             selectedWagonId = draft.selectedWagonId,
             selectedAnimals = CreateSelectedAnimalSnapshots(draft),
-            // Cargo and draft-animal food are committed by the Market transaction before
-            // departure. The journey commit records only non-market preparation costs; carrying
-            // these values forward would charge the selected Caravan's purchase a second time.
-            // Purchase money was already applied by Market. Keep the amount and item lines in
-            // the persisted preparation snapshot for receipt reconstruction only.
-            purchaseCost = viewData.totalPurchaseCost > 0L ? viewData.totalPurchaseCost : 0L,
+            // Market already charged currency. Persist only this preparation session's paid
+            // purchase receipt; the authoritative Cargo plan may also contain older cargo.
+            purchaseCost = purchaseCost,
             foodCost = 0L,
             mercenaryCost = viewData.mercenaryCost > 0L ? viewData.mercenaryCost : 0L,
             // Arrival sales are also Market-owned and must not be projected into departure.
             estimatedSellRevenue = 0L,
-            purchasedItems = CreatePurchasedItemSnapshots(draft),
+            purchasedItems = purchasedItems,
             selectedMercenaryIds = mercenaryIds
         };
-    }
-
-    private static TradeItemBundle[] CreatePurchasedItemSnapshots(TradePrepareDraft draft)
-    {
-        if (draft == null || draft.selectedBuyItems == null)
-        {
-            return new TradeItemBundle[0];
-        }
-
-        var result = new TradeItemBundle[draft.selectedBuyItems.Count];
-        for (int index = 0; index < draft.selectedBuyItems.Count; index++)
-        {
-            TradeItemBundle item = draft.selectedBuyItems[index];
-            result[index] = item == null ? null : new TradeItemBundle
-            {
-                itemId = item.itemId ?? string.Empty,
-                quantity = Math.Max(0, item.quantity),
-                purchaseUnitPrice = Math.Max(0L, item.purchaseUnitPrice),
-                sellUnitPrice = Math.Max(0L, item.sellUnitPrice)
-            };
-        }
-
-        return result;
     }
 
     private static DraftAnimalSelectionData[] CreateSelectedAnimalSnapshots(

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using ND.Framework;
+using ND.Framework.CargoLoading;
 using FrameworkSaveData = ND.Framework.SaveData;
 
 /// <summary>
@@ -32,6 +33,8 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     private ICaravanLoadSettingViewDataProvider caravanCargoPlanProvider;
     private ITradePrepareCaravanOptionProvider caravanOptionProvider;
     private TradePrepareBuildContext buildContext;
+    private readonly TradePreparePurchaseDeltaStore purchaseDeltaStore =
+        new TradePreparePurchaseDeltaStore();
 
     public TradePrepareFlowController FlowController => flowController;
     public TradePrepareViewData CurrentViewData => flowController?.CurrentViewData;
@@ -69,6 +72,7 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         // Synchronize the transition baseline as well as data because the provider may enable
         // before FrameworkRoot has loaded a Traveling or SettlementPending save.
         currentScreenState = InGameScreenStateRouter.MapFromSaveData(saveData);
+        purchaseDeltaStore.ClearAll();
         TryInitialize(saveData);
     }
 
@@ -147,6 +151,36 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
     public void ClearCargoDraft() => flowController?.ClearCargo();
     public void SelectMercenary(string mercenaryId) => flowController?.SelectMercenary(mercenaryId);
     public void DeselectMercenary(string mercenaryId) => flowController?.DeselectMercenary(mercenaryId);
+
+    /// <summary>
+    /// Records successfully paid Market purchases for one Caravan's current preparation session.
+    /// Cargo ownership remains in SaveData; this records only the receipt used by settlement.
+    /// </summary>
+    public void RecordPurchaseDelta(string caravanId, MarketTransactionResult result)
+    {
+        if (result == null || !result.Success || result.PurchaseCost < 0L)
+            return;
+
+        var purchasedItems = new List<TradeItemBundle>();
+        if (result.Items != null)
+        {
+            foreach (MarketTransactionItemSummary item in result.Items)
+            {
+                if (item == null || item.BuyQuantity <= 0 || string.IsNullOrWhiteSpace(item.ItemId))
+                    continue;
+
+                long itemCost = Math.Max(0L, item.PurchaseCost);
+                purchasedItems.Add(new TradeItemBundle
+                {
+                    itemId = item.ItemId,
+                    quantity = item.BuyQuantity,
+                    purchaseUnitPrice = itemCost / item.BuyQuantity
+                });
+            }
+        }
+
+        purchaseDeltaStore.RecordPurchase(caravanId, result.PurchaseCost, purchasedItems);
+    }
 
     public void SetCaravanCargoPlanProvider(ICaravanLoadSettingViewDataProvider provider)
     {
@@ -414,7 +448,11 @@ public sealed class TradePrepareRuntimeContextProvider : MonoBehaviour
         ITradePrepareCommitSink commitSink = commitSinkBehaviour as ITradePrepareCommitSink;
         if (commitSink == null)
             commitSink = root.TradePrepareCommitStore;
-        startAdapter = new TradePrepareStartAdapter(root.TradeStart, new TradePrepareViewDataBuilder(), commitSink);
+        startAdapter = new TradePrepareStartAdapter(
+            new FrameworkTradePrepareStartGateway(root.TradeStart),
+            new TradePrepareViewDataBuilder(),
+            commitSink,
+            purchaseDeltaStore);
         flowController = new TradePrepareFlowController(buildContext);
         flowController.ViewDataChanged += HandleViewDataChanged;
         // TradePrepare has no location until a Caravan is selected. The immutable
